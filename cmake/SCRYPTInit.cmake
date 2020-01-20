@@ -100,16 +100,8 @@ function(scryptDefineDynamicAPI)
   configure_file(${DYNAMIC_LIBRARY_API_HPP_IN} ${DYNAMIC_LIBRARY_API_HPP})
 
   include_directories("${SCRYPT_GENERATED_HPP_DIR}")
-  if(BUILD_ALL_STATIC_LIBS)
-    set(LIBS_BUILD_TYPE STATIC CACHE INTERNAL "Build type for all libraries")
-    add_definitions(-DBUILD_ALL_STATIC_LIBS)
-  else()
-    set(LIBS_BUILD_TYPE SHARED CACHE INTERNAL "Build type for all libraries")
-  endif()
 
   message(STATUS "API definitions file created [${DYNAMIC_LIBRARY_API_HPP}]")
-  message(STATUS "  Use \${LIBS_BUILD_TYPE} instead of SHARED or STATIC in add_library for general propose")
-  message(STATUS "  Run cmake with option -DBUILD_ALL_STATIC_LIBS=ON to build all libraries in STATIC. Otherwise all libraries will be built in SHARED")
   install(FILES "${DYNAMIC_LIBRARY_API_HPP}" DESTINATION "include" COMPONENT Files)
 endfunction()
 
