@@ -1,0 +1,59 @@
+#################################################################
+#  Date             20/01/2020                                  #
+#  Author           Chi Thanh NGUYEN                            #
+#                                                               #
+#  Copyright (c) 2020 nChain Limited. All rights reserved       #
+#################################################################
+if(SCRYPTCPackConfig_Include)## Include guard
+  return()
+endif()
+set(SCRYPTCPackConfig_Include TRUE)
+
+message(STATUS "SCRYPT Configure Packaging ...  ") ##
+
+set(CPACK_PACKAGE_VENDOR "nChain")
+set(CPACK_PACKAGE_VERSION_MAJOR ${SCRYPT_VERSION_MAJOR})
+set(CPACK_PACKAGE_VERSION_MINOR ${SCRYPT_VERSION_MINOR})
+set(CPACK_PACKAGE_VERSION_PATCH ${SCRYPT_VERSION_PATCH})
+set(CPACK_PACKAGE_VERSION ${SCRYPT_VERSION_STRING})
+
+set(CPACK_COMPONENTS_ALL Files core PyModules WASMModules Examples Documentation)
+
+if(NOT CUSTOM_SYSTEM_OS_NAME)## Add -DCUSTOM_SYSTEM_OS_NAME=Ubuntu for example to make the installer name
+  set(SCRYPT_CPACK_OS_NAME ${SCRYPT_SYSTEM_OS})
+else()
+  set(SCRYPT_CPACK_OS_NAME ${CUSTOM_SYSTEM_OS_NAME})
+endif()
+
+set(SCRYPT_BASE_PACKAGE_NAME "${CMAKE_PROJECT_NAME}-v${SCRYPT_VERSION_STRING}_${SOURCE_GIT_COMMIT_BRANCH}-${SOURCE_GIT_COMMIT_HASH}")
+string(REPLACE "/" "_" SCRYPT_BASE_PACKAGE_FIXEDNAME "${SCRYPT_BASE_PACKAGE_NAME}") ## Fix the package name in case the branch name contains "/"
+if(CMAKE_CONFIGURATION_TYPES)
+  set(CPACK_PACKAGE_FILE_NAME "${SCRYPT_BASE_PACKAGE_FIXEDNAME}_${SCRYPT_CPACK_OS_NAME}-x${SCRYPT_SYSTEM_BUILD_ARCHI}-\${CPACK_BUILD_CONFIG}")
+else()
+  set(CPACK_PACKAGE_FILE_NAME "${SCRYPT_BASE_PACKAGE_FIXEDNAME}_${SCRYPT_CPACK_OS_NAME}-x${SCRYPT_SYSTEM_BUILD_ARCHI}-${CMAKE_BUILD_TYPE}")
+endif()
+
+# If -DSCRYPT_IS_BETA=ON
+if(SCRYPT_IS_BETA)
+  set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_FILE_NAME}_BETA")
+endif()
+
+set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/LICENCE.txt")
+#set(CPACK_RESOURCE_FILE_README "${CMAKE_SOURCE_DIR}/README.md")
+#set(CPACK_RESOURCE_FILE_WELCOME "${CMAKE_SOURCE_DIR}/README.md")
+set(CPACK_PACKAGE_NAME "${CMAKE_PROJECT_NAME}")
+#set(CPACK_PACKAGE_DESCRIPTION_FILE "${CMAKE_SOURCE_DIR}/README.md")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "${CMAKE_PROJECT_NAME} ${SCRYPT_VERSION_STRING} Software Development Kit for advanced cryptographic functionalities")
+set(CPACK_PACKAGE_INSTALL_DIRECTORY "${CMAKE_PROJECT_NAME}-${SCRYPT_VERSION_STRING}")
+#set(CPACK_PACKAGE_ICON "${CMAKE_SOURCE_DIR}/misc/SCRYPTLogo.ico")
+
+
+## Specific NSIS ##################################
+set(CPACK_NSIS_MUI_ICON "${CMAKE_SOURCE_DIR}/misc/SCRYPTLogo.ico")
+#set(CPACK_NSIS_MUI_UNIICON "${CMAKE_SOURCE_DIR}/misc/SCRYPTLogo.ico")
+set(CPACK_NSIS_DISPLAY_NAME "${CMAKE_PROJECT_NAME} version ${SCRYPT_VERSION_STRING}")
+set(CPACK_NSIS_PACKAGE_NAME "${CMAKE_PROJECT_NAME} ${SCRYPT_VERSION_STRING}")
+
+## Specific source ##################################
+set(CPACK_SOURCE_IGNORE_FILES "demo/;jenkins/;misc/;tests/;/\\\\.git/")
+set(CPACK_SOURCE_PACKAGE_FILE_NAME "${SCRYPT_BASE_PACKAGE_FIXEDNAME}_source")
