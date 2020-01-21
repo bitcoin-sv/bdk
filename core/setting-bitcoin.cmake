@@ -6,10 +6,10 @@
 #################################################################
 
 ## Build scrypt requires locating bsv source code
-if(NOT DEFINED SCRYPT_BSV_SRC_ROOT)#
-    message(FATAL_ERROR "Unable to locate bsv source code by SCRYPT_BSV_SRC_ROOT")
+if(NOT DEFINED SCRYPT_BSV_SOURCE_ROOT)#
+    message(FATAL_ERROR "Unable to locate bsv source code by SCRYPT_BSV_SOURCE_ROOT")
 endif()
-# This file is mainly copied from ${SCRYPT_BSV_SRC_ROOT}/sv/src/config/CMakeLists.txt with slightl modifications
+# This file is mainly copied from ${SCRYPT_BSV_SOURCE_ROOT}/sv/src/config/CMakeLists.txt with slightl modifications
 #######################################################################
 
 
@@ -149,8 +149,6 @@ check_symbol_exists(daemon "unistd.h" HAVE_DECL_DAEMON)
 #set(ENABLE_ZMQ ${BUILD_BITCOIN_ZMQ})
 
 # Generate the config
-set(BITCOIN_CONFIG_IN "${SCRYPT_BSV_SRC_ROOT}/src/config/bitcoin-config.h.cmake.in")
-set(BITCOIN_CONFIG "${SCRYPT_GENERATED_HPP_DIR}/config/bitcoin-config.h")
-configure_file("${BITCOIN_CONFIG_IN}" "${BITCOIN_CONFIG}" ESCAPE_QUOTES)
-#configure_file(bitcoin-config.h.cmake.in bitcoin-config.h ESCAPE_QUOTES)
-
+set(BITCOIN_CONFIG_IN "${SCRYPT_BSV_SOURCE_ROOT}/src/config/bitcoin-config.h.cmake.in")
+set(BITCOIN_CONFIG_FILE "${SCRYPT_GENERATED_HPP_DIR}/config/bitcoin-config.h")
+configure_file("${BITCOIN_CONFIG_IN}" "${BITCOIN_CONFIG_FILE}" ESCAPE_QUOTES)

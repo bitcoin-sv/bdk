@@ -6,10 +6,10 @@
 #################################################################
 
 ## Build secp256k1 requires locating bsv source code
-if(NOT DEFINED SCRYPT_BSV_SRC_ROOT)#
-    message(FATAL_ERROR "Unable to locate bsv source code by SCRYPT_BSV_SRC_ROOT")
+if(NOT DEFINED SCRYPT_BSV_SOURCE_ROOT)#
+    message(FATAL_ERROR "Unable to locate bsv source code by SCRYPT_BSV_SOURCE_ROOT")
 endif()
-# This file is mainly copied from ${SCRYPT_BSV_SRC_ROOT}/sv/src/secp256k1/CMakeLists.txt with slightl modifications
+# This file is mainly copied from ${SCRYPT_BSV_SOURCE_ROOT}/sv/src/secp256k1/CMakeLists.txt with slightl modifications
 #######################################################################
 
 
@@ -77,22 +77,23 @@ function(link_secp256k1_internal NAME)
   target_compile_definitions(${NAME} PRIVATE HAVE_CONFIG_H SECP256K1_BUILD)
 endfunction(link_secp256k1_internal)
 
-## Build secp256k1 libraries ===============================================
-set(SECP256K1_ROOT "${SCRYPT_BSV_SRC_ROOT}/src/secp256k1")
+################################################################################
+## Build secp256k1 libraries ###################################################
+set(SECP256K1_ROOT "${SCRYPT_BSV_SOURCE_ROOT}/src/secp256k1")
 set(SECP256K1_CPP_FILE "${SECP256K1_ROOT}/src/secp256k1.c")
 set(SECP256K1_PUBLIC_HEADER_DIR "${SECP256K1_ROOT}/include")
 
 # Generate the config
-set(LIBSECP256K1_CONFIG_IN "${SECP256K1_ROOT}/src/libsecp256k1-config.h.cmake.in")
-set(LIBSECP256K1_CONFIG "${SCRYPT_GENERATED_HPP_DIR}/libsecp256k1-config.h")
-configure_file(${LIBSECP256K1_CONFIG_IN} ${LIBSECP256K1_CONFIG} ESCAPE_QUOTES)
+set(LIBSECP256K1_CONFIG_FILE_IN "${SECP256K1_ROOT}/src/libsecp256k1-config.h.cmake.in")
+set(LIBSECP256K1_CONFIG_FILE "${SCRYPT_GENERATED_HPP_DIR}/libsecp256k1-config.h")
+configure_file(${LIBSECP256K1_CONFIG_FILE_IN} ${LIBSECP256K1_CONFIG_FILE} ESCAPE_QUOTES)
 
 ### Install and nice presentation in IDE
 file(GLOB_RECURSE SECP256K1_PUBLIC_HEADERS "${SECP256K1_PUBLIC_HEADER_DIR}/*.h") # TO INSTALL
-file(GLOB_RECURSE SECP256K1_PRIVATE_HEADERS "${SECP256K1_ROOT}/src/*.h")
+file(GLOB SECP256K1_PRIVATE_HEADERS "${SECP256K1_ROOT}/src/*.h")
 #SECP256K1_CPP_FILE
 
-add_library(secp256k1 "${SECP256K1_CPP_FILE}" ${SECP256K1_PUBLIC_HEADERS} ${SECP256K1_PRIVATE_HEADERS} ${LIBSECP256K1_CONFIG})
+add_library(secp256k1 "${SECP256K1_CPP_FILE}" "${LIBSECP256K1_CONFIG_FILE}" ${SECP256K1_PUBLIC_HEADERS} ${SECP256K1_PRIVATE_HEADERS} ${LIBSECP256K1_CONFIG_FILE})
 target_include_directories(secp256k1 PRIVATE "${SECP256K1_ROOT}" "${SECP256K1_ROOT}/src")
 target_include_directories(secp256k1 INTERFACE "${SECP256K1_PUBLIC_HEADER_DIR}")
 target_compile_definitions(secp256k1 PRIVATE HAVE_CONFIG_H SECP256K1_BUILD)
@@ -100,19 +101,28 @@ set_property(TARGET secp256k1 PROPERTY FOLDER "core")
 
 ## Log list of secp256k1 source files
 message(STATUS "Build secp256k1 source code in ${SECP256K1_ROOT}")
+get_filename_component(_SECP256K1_PARENT_DIR "${SECP256K1_ROOT}" DIRECTORY)
 foreach(_secp256k1_file ${SECP256K1_PUBLIC_HEADERS} ${SECP256K1_PRIVATE_HEADERS} ${SECP256K1_CPP_FILE})
   message(STATUS "    [${_secp256k1_file}]")
   ## Set the nice structure in IDE
   get_filename_component(_file_ext "${_secp256k1_file}" EXT)
   if(${_file_ext} MATCHES ".cpp" OR ${_file_ext} MATCHES ".c")
-    source_group(TREE ${SECP256K1_ROOT} PREFIX "Headers" FILES "${_secp256k1_file}")
+    source_group(TREE ${_SECP256K1_PARENT_DIR} PREFIX "SECP256K1 SRCS" FILES "${_secp256k1_file}")
   else()
-    source_group(TREE ${SECP256K1_ROOT} PREFIX "Sources" FILES "${_secp256k1_file}")
+    source_group(TREE ${_SECP256K1_PARENT_DIR} PREFIX "SECP256K1 HDRS" FILES "${_secp256k1_file}")
   endif()
 endforeach()
-source_group("config" FILES "${LIBSECP256K1_CONFIG}")
-## Build secp256k1 libraries ===============================================
+source_group("_generated" FILES "${LIBSECP256K1_CONFIG_FILE}")
+###############################################
 
+#######################################################################################################################
+## Install secp256k1 the *.h header files should be kept as secp256k1 structure    ####################################
+install(FILES ${LIBSECP256K1_CONFIG_FILE} DESTINATION "include/secp256k1" COMPONENT secp256k1)
+foreach(_secp256k1_pubhdr ${SECP256K1_PUBLIC_HEADERS})
+  install(FILES ${_secp256k1_pubhdr} DESTINATION "include/secp256k1/include" COMPONENT secp256k1)
+endforeach()
+install(TARGETS secp256k1 DESTINATION "lib" COMPONENT secp256k1)
+###############################################
 
 
 if(NOT MSVC)
