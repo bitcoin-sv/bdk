@@ -12,13 +12,13 @@
 ## Run to build/test/install
 ##
 ## On Windows
-##   cmake -G"Visual Studio 15 2017" -A x64 ..\scrypt && cmake --build . --target ALL_BUILD --config Debug && cmake --build . --target ALL_BUILD --config Release && ctest -C Debug && ctest -C Release && cpack -G NSIS -C Release
+##   cmake -G"Visual Studio 15 2017" -A x64 ..\bscrypt && cmake --build . --target ALL_BUILD --config Debug && cmake --build . --target ALL_BUILD --config Release && ctest -C Debug && ctest -C Release && cpack -G NSIS -C Release
 ## Windows alternative with MSBuild parallele:
-##   cmake -G"Visual Studio 15 2017" -A x64 ..\scrypt && msbuild scrypt.sln -maxcpucount:4 /p:Configuration=Debug && msbuild scrypt.sln -maxcpucount:4 /p:Configuration=Release
-##   cmake -G"Visual Studio 15 2017" -A x64 ..\scrypt && msbuild scrypt.sln -v:q -maxcpucount:4 /p:Configuration=Debug && msbuild scrypt.sln  -v:q -maxcpucount:4 /p:Configuration=Release
+##   cmake -G"Visual Studio 15 2017" -A x64 ..\bscrypt && msbuild bscrypt.sln -maxcpucount:4 /p:Configuration=Debug && msbuild bscrypt.sln -maxcpucount:4 /p:Configuration=Release
+##   cmake -G"Visual Studio 15 2017" -A x64 ..\bscrypt && msbuild bscrypt.sln -v:q -maxcpucount:4 /p:Configuration=Debug && msbuild bscrypt.sln  -v:q -maxcpucount:4 /p:Configuration=Release
 ##
 ## On Linux (Ubuntu)
-##   cmake ../scrypt -DCMAKE_BUILD_TYPE=Debug -DCUSTOM_SYSTEM_OS_NAME=Ubuntu; time -p make -j8 ; ctest ; make install; cpack -G TGZ
+##   cmake ../bscrypt -DCMAKE_BUILD_TYPE=Debug -DCUSTOM_SYSTEM_OS_NAME=Ubuntu; time -p make -j8 ; ctest ; make install; cpack -G TGZ
 ##
 ## Packaging :
 ##   Windows : cpack -G NSIS -C Release ## Require to install NSIS
@@ -27,18 +27,18 @@
 ##             cpack --config CPackSourceConfig.cmake -G TGZ
 
 cmake_minimum_required(VERSION 3.13)
-project(scrypt)
+project(bscrypt)
 
-## scrypt built is based on source files from bsv code.
+## bscrypt built is based on source files from bsv code.
 ## Use -DSCRYPT_BSV_SRC_ROOT=/path/to/sv_root
 include(cmake/modules/FindBSVSourceHelper.cmake)
 HelpFindBSVSource()
 #scryptPrintBSVSourceInfo()#Print help to debug
 
 
-set(SCRYPT_VERSION_MAJOR "0" CACHE INTERNAL "scrypt major version")
-set(SCRYPT_VERSION_MINOR "0" CACHE INTERNAL "scrypt minor version")
-set(SCRYPT_VERSION_PATCH "1" CACHE INTERNAL "scrypt patch version")
+set(SCRYPT_VERSION_MAJOR "0" CACHE INTERNAL "bscrypt major version")
+set(SCRYPT_VERSION_MINOR "0" CACHE INTERNAL "bscrypt minor version")
+set(SCRYPT_VERSION_PATCH "1" CACHE INTERNAL "bscrypt patch version")
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)## Always include the current directory
 
