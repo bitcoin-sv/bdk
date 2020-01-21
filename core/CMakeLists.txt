@@ -24,7 +24,6 @@ message(STATUS "Build using bsv source code in ${SCRYPT_BSV_SRC_ROOT}")
 get_filename_component(_BSV_PARENT_DIR "${SCRYPT_BSV_SRC_ROOT}" DIRECTORY )
 foreach(_sv_file ${BSV_MINIMAL_SRC_FILES})
   message(STATUS "    [${_sv_file}]")
-
   ## Set the nice structure in IDE
   get_filename_component(_file_ext "${_sv_file}" EXT)
   if(${_file_ext} MATCHES ".cpp" OR ${_file_ext} MATCHES ".c")
@@ -37,10 +36,10 @@ endforeach()
 ## Build core-scrypt as a library using bsv source code
 add_library(core-scrypt ${BSV_MINIMAL_SRC_FILES})
 target_include_directories(core-scrypt PUBLIC ${BSV_INCLUDE_DIRS})
+link_secp256k1_internal(core-scrypt)
 target_link_libraries(core-scrypt OpenSSL::Crypto OpenSSL::SSL ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT})
 scryptLinkTargetToBoost(core-scrypt Boost::boost)
 
-## Compile flag setting used for secp256k1 files
-target_compile_definitions(core-scrypt PRIVATE HAVE_CONFIG_H SECP256K1_BUILD)
+
 
 set_property(TARGET core-scrypt PROPERTY FOLDER "core")

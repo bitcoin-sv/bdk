@@ -59,16 +59,11 @@ macro(cryptGetMinimumListBSVSource)#############################################
       src/script/limitedstack.cpp
       src/script/script.cpp
       src/script/script_num.cpp
-      src/secp256k1/src/modules/recovery/main_impl.h
-      src/secp256k1/src/secp256k1.c
   )
 
   scryptAppendToGlobalSet(BSV_INCLUDE_DIRS "${SCRYPT_BSV_SRC_ROOT}/src")
   scryptAppendToGlobalSet(BSV_INCLUDE_DIRS "${SCRYPT_BSV_SRC_ROOT}/src/crypto")
   scryptAppendToGlobalSet(BSV_INCLUDE_DIRS "${SCRYPT_BSV_SRC_ROOT}/src/script")
-  scryptAppendToGlobalSet(BSV_INCLUDE_DIRS "${SCRYPT_BSV_SRC_ROOT}/src/secp256k1")
-  scryptAppendToGlobalSet(BSV_INCLUDE_DIRS "${SCRYPT_BSV_SRC_ROOT}/src/secp256k1/include")
-  scryptAppendToGlobalSet(BSV_INCLUDE_DIRS "${SCRYPT_BSV_SRC_ROOT}/src/secp256k1/src")
 
   foreach(rel_file ${_minimal_files})
     scryptAppendToGlobalSet(BSV_MINIMAL_SRC_FILES "${SCRYPT_BSV_SRC_ROOT}/${rel_file}")

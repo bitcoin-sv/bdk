@@ -18,7 +18,7 @@ macro(scryptSetCompilationOptions)## This has to be macro instead of a function 
     set(CMAKE_DEBUG_POSTFIX d CACHE INTERNAL "Use d as debug postfix for  targets" FORCE)
 
     if (MSVC)
-      scryptAddCompilerFlags(/Gm- /MP /wd4251 /wd4244 /wd4307)## TODO test if DNOMINMAX can move here
+      scrypt_add_compiler_flag(/Gm- /MP /wd4251 /wd4244 /wd4307)## TODO test if DNOMINMAX can move here
       ## Using MSVC STATIC RUNTIME)
       ##foreach(flag_var CMAKE_CXX_FLAGS CMAKE_CXX_FLAGS_DEBUG CMAKE_CXX_FLAGS_RELEASE CMAKE_CXX_FLAGS_MINSIZEREL CMAKE_CXX_FLAGS_RELWITHDEBINFO)
       ##  if(${flag_var} MATCHES "/MD")

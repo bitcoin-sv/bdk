@@ -13,9 +13,10 @@ endif()
 #######################################################################
 
 
-if(UNIX)
+if(NOT MSVC)
   ## secp256k1 use a different set of compilation flags
-  scryptAddCompilerFlags(-pedantic -Wshadow -Wno-unused-function -Wno-nonnull -Wno-nonnull-compare -fPIC -fvisibility=default)
+  scrypt_add_compiler_flag(-pedantic -Wshadow -Wno-unused-function -Wno-nonnull -Wno-overlength-strings)
+  scrypt_add_c_compiler_flag(-std=c89 -Wno-long-long)
 endif()
 
 # Default visibility is hidden on all targets.
@@ -71,19 +72,50 @@ endif()
 ## Executable internal to secp256k1 need to have the HAVE_CONFIG_H define set.
 ## For convenience, we wrap this into a function.
 ## TODO : might require latter
-#function(link_secp256k1_internal NAME)
-#	target_link_libraries(${NAME} secp256k1)
-#	target_compile_definitions(${NAME} PRIVATE HAVE_CONFIG_H SECP256K1_BUILD)
-#endfunction(link_secp256k1_internal)
+function(link_secp256k1_internal NAME)
+  target_link_libraries(${NAME} secp256k1)
+  target_compile_definitions(${NAME} PRIVATE HAVE_CONFIG_H SECP256K1_BUILD)
+endfunction(link_secp256k1_internal)
 
-
+## Build secp256k1 libraries ===============================================
+set(SECP256K1_ROOT "${SCRYPT_BSV_SRC_ROOT}/src/secp256k1")
+set(SECP256K1_CPP_FILE "${SECP256K1_ROOT}/src/secp256k1.c")
+set(SECP256K1_PUBLIC_HEADER_DIR "${SECP256K1_ROOT}/include")
 
 # Generate the config
-set(LIBSECP256K1_CONFIG_IN "${SCRYPT_BSV_SRC_ROOT}/src/secp256k1/src/libsecp256k1-config.h.cmake.in")
+set(LIBSECP256K1_CONFIG_IN "${SECP256K1_ROOT}/src/libsecp256k1-config.h.cmake.in")
 set(LIBSECP256K1_CONFIG "${SCRYPT_GENERATED_HPP_DIR}/libsecp256k1-config.h")
 configure_file(${LIBSECP256K1_CONFIG_IN} ${LIBSECP256K1_CONFIG} ESCAPE_QUOTES)
 
-if(UNIX)
-  ## restore the old compiler flags
-  scryptRecoverCompilerFlags()
+### Install and nice presentation in IDE
+file(GLOB_RECURSE SECP256K1_PUBLIC_HEADERS "${SECP256K1_PUBLIC_HEADER_DIR}/*.h") # TO INSTALL
+file(GLOB_RECURSE SECP256K1_PRIVATE_HEADERS "${SECP256K1_ROOT}/src/*.h")
+#SECP256K1_CPP_FILE
+
+add_library(secp256k1 "${SECP256K1_CPP_FILE}" ${SECP256K1_PUBLIC_HEADERS} ${SECP256K1_PRIVATE_HEADERS} ${LIBSECP256K1_CONFIG})
+target_include_directories(secp256k1 PRIVATE "${SECP256K1_ROOT}" "${SECP256K1_ROOT}/src")
+target_include_directories(secp256k1 INTERFACE "${SECP256K1_PUBLIC_HEADER_DIR}")
+target_compile_definitions(secp256k1 PRIVATE HAVE_CONFIG_H SECP256K1_BUILD)
+set_property(TARGET secp256k1 PROPERTY FOLDER "core")
+
+## Log list of secp256k1 source files
+message(STATUS "Build secp256k1 source code in ${SECP256K1_ROOT}")
+foreach(_secp256k1_file ${SECP256K1_PUBLIC_HEADERS} ${SECP256K1_PRIVATE_HEADERS} ${SECP256K1_CPP_FILE})
+  message(STATUS "    [${_secp256k1_file}]")
+  ## Set the nice structure in IDE
+  get_filename_component(_file_ext "${_secp256k1_file}" EXT)
+  if(${_file_ext} MATCHES ".cpp" OR ${_file_ext} MATCHES ".c")
+    source_group(TREE ${SECP256K1_ROOT} PREFIX "Headers" FILES "${_secp256k1_file}")
+  else()
+    source_group(TREE ${SECP256K1_ROOT} PREFIX "Sources" FILES "${_secp256k1_file}")
+  endif()
+endforeach()
+source_group("config" FILES "${LIBSECP256K1_CONFIG}")
+## Build secp256k1 libraries ===============================================
+
+
+
+if(NOT MSVC)
+  ## Remove specific compiler flags added at the begining of this file
+  scrypt_remove_compiler_flags(-pedantic -Wshadow -Wno-unused-function -Wno-nonnull -Wno-overlength-strings -std=c89 -Wno-long-long)
 endif()

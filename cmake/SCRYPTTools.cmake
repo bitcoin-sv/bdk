@@ -16,6 +16,42 @@ include(CheckCCompilerFlag)
 ####  Tools are functions to be reusable  ####
 ## TODO add tests for all cmake functions here
 
+# Allow to easily add flags for C and C++
+include(CheckCXXCompilerFlag)
+include(CheckCCompilerFlag)
+function(scrypt_add_c_compiler_flag)
+  foreach(f ${ARGN})
+    CHECK_C_COMPILER_FLAG(${f} FLAG_IS_SUPPORTED)
+    if(FLAG_IS_SUPPORTED)
+      string(APPEND CMAKE_C_FLAGS " ${f}")
+    endif()
+  endforeach()
+  set(CMAKE_C_FLAGS ${CMAKE_C_FLAGS} PARENT_SCOPE)
+endfunction()
+
+function(scrypt_add_cxx_compiler_flag)
+  foreach(f ${ARGN})
+    CHECK_CXX_COMPILER_FLAG(${f} FLAG_IS_SUPPORTED)
+    if(FLAG_IS_SUPPORTED)
+      string(APPEND CMAKE_CXX_FLAGS " ${f}")
+    endif()
+  endforeach()
+  set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} PARENT_SCOPE)
+endfunction()
+
+macro(scrypt_add_compiler_flag)
+  scrypt_add_c_compiler_flag(${ARGN})
+  scrypt_add_cxx_compiler_flag(${ARGN})
+endmacro()
+
+macro(scrypt_remove_compiler_flags)
+  foreach(f ${ARGN})
+    string(REGEX REPLACE "${f}( |^)" "" CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
+    string(REGEX REPLACE "${f}( |^)" "" CMAKE_C_FLAGS ${CMAKE_C_FLAGS})
+  endforeach()
+endmacro()
+
+
 #### Print OS Info
 function(scryptPrintOSInfo)##############################################################################
   #### TODO print more read-only information like compiler, default compiler flags ...
@@ -33,42 +69,6 @@ function(scryptPrintOSInfo)#####################################################
     endforeach()
   endforeach()
 
-endfunction()
-
-## scryptAddCompilerFlags modify the system buidl flags, add custom flags temporarily inside a scode
-## When the script go outside of the scope, users should call scryptRecoverCompilerFlags to recover the original flags
-function(scryptAddCompilerFlags)
-  #### push flags to some holder variables
-  set(_BUILD_TYPE_LIST "" _DEBUG _RELEASE)
-  foreach(_LANG C CXX)
-    foreach(_TYPE IN LISTS _BUILD_TYPE_LIST)
-      #message(STATUS "         CMAKE_${_LANG}_FLAGS${_TYPE}[${CMAKE_${_LANG}_FLAGS${_TYPE}}]")# Debug Log
-      set(scryptOLD_CMAKE_${_LANG}_FLAGS${_TYPE} ${CMAKE_${_LANG}_FLAGS${_TYPE}} CACHE INTERNAL "Hold old CMAKE_${_LANG}_FLAGS${_TYPE}" FORCE)
-
-      foreach(_flag ${ARGN})
-        if("${CMAKE_${_LANG}_FLAGS${_TYPE}}" MATCHES "${_flag}")
-          continue()
-        endif()
-        check_cxx_compiler_flag(${_flag} _is_CXX_supported)
-        check_c_compiler_flag(${_flag} _is_C_supported)
-        if(_is_${_LANG}_supported)
-          set(CMAKE_${_LANG}_FLAGS${_TYPE} "${CMAKE_${_LANG}_FLAGS${_TYPE}} ${_flag}" CACHE INTERNAL "CMAKE_${_LANG}_FLAGS${_TYPE}" FORCE)
-        endif()
-      endforeach()
-    endforeach()
-  endforeach()
-endfunction()
-
-## Pop out the compilation flags that was previously saved for a temporary scope
-## Don't for get to call it after calling scryptAddCompilerFlags and finish the scope
-function(scryptRecoverCompilerFlags)
-  set(_BUILD_TYPE_LIST "" _DEBUG _RELEASE)
-  foreach(_LANG C CXX)
-    foreach(_TYPE IN LISTS _BUILD_TYPE_LIST)
-      set(CMAKE_${_LANG}_FLAGS${_TYPE} ${scryptOLD_CMAKE_${_LANG}_FLAGS${_TYPE}} CACHE INTERNAL "Hold old CMAKE_${_LANG}_FLAGS${_TYPE}" FORCE)
-      #message(STATUS "         CMAKE_${_LANG}_FLAGS${_TYPE}[${CMAKE_${_LANG}_FLAGS${_TYPE}}]")# Debug Log
-    endforeach()
-  endforeach()
 endfunction()
 
 #### Check if the shared library is imported
