@@ -55,6 +55,7 @@ include_directories(${CMAKE_SOURCE_DIR}/core)
 
 ## Build scrypt-core
 add_subdirectory(${CMAKE_SOURCE_DIR}/core)
+#add_subdirectory(${CMAKE_SOURCE_DIR}/test)
 
 ## On Widows, need to download NSIS https://nsis.sourceforge.io/Download
 ## Possible to do WIX generator for MSI installer

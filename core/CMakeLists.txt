@@ -35,23 +35,23 @@ foreach(_sv_file ${BSV_MINIMAL_FILES})
 endforeach()
 source_group("_generated" FILES "${BITCOIN_CONFIG_FILE}")
 
-## Build core-scrypt as a library using bsv source code
-add_library(core-scrypt ${BITCOIN_CONFIG_FILE} ${BSV_MINIMAL_HDR_FILES} ${BSV_MINIMAL_SRC_FILES})
-target_include_directories(core-scrypt PUBLIC ${BSV_INCLUDE_DIRS})
-link_secp256k1_internal(core-scrypt)
-target_link_libraries(core-scrypt OpenSSL::Crypto OpenSSL::SSL ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT})
-scryptLinkTargetToBoost(core-scrypt Boost::boost)
+## Build scrypt-core as a library using bsv source code
+add_library(scrypt-core ${BITCOIN_CONFIG_FILE} ${BSV_MINIMAL_HDR_FILES} ${BSV_MINIMAL_SRC_FILES})
+target_include_directories(scrypt-core PUBLIC ${BSV_INCLUDE_DIRS})
+link_secp256k1_internal(scrypt-core)
+target_link_libraries(scrypt-core OpenSSL::Crypto OpenSSL::SSL ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT})
+scryptLinkTargetToBoost(scrypt-core Boost::boost)
 
-set_property(TARGET core-scrypt PROPERTY FOLDER "core")
+set_property(TARGET scrypt-core PROPERTY FOLDER "core")
 
-## Install core-scrypt : the *.h header files should be kept as bsv structure
-install(FILES ${BITCOIN_CONFIG_FILE} DESTINATION "include/sv/config" COMPONENT core-scrypt)
+## Install scrypt-core : the *.h header files should be kept as bsv structure
+install(FILES ${BITCOIN_CONFIG_FILE} DESTINATION "include/sv/config" COMPONENT scrypt-core)
 foreach(_bsv_hdr ${BSV_MINIMAL_HDR_FILES})
   get_filename_component(_dir ${_bsv_hdr} DIRECTORY)
   get_filename_component(_dir ${_bsv_hdr} DIRECTORY)
   string(REPLACE "${SCRYPT_BSV_SOURCE_ROOT}/" "" _relative_dir "${_dir}")
   set(_install_dest "include/sv/${_relative_dir}")
   #message("install file [${_bsv_hdr}]  _install_dest[${_install_dest}]")
-  install(FILES ${_bsv_hdr} DESTINATION "${_install_dest}" COMPONENT core-scrypt)
+  install(FILES ${_bsv_hdr} DESTINATION "${_install_dest}" COMPONENT scrypt-core)
 endforeach()
-install(TARGETS core-scrypt DESTINATION "lib" COMPONENT core-scrypt)
+install(TARGETS scrypt-core DESTINATION "lib" COMPONENT scrypt-core)

@@ -52,71 +52,73 @@ macro(cryptGetMinimumListBSVSource)#############################################
   scryptAppendToGlobalSet(BSV_INCLUDE_DIRS "${SCRYPT_BSV_SOURCE_ROOT}/src/script")
 
   set(_minimal_hdr_files
-      "src/amount.h"  ##  Used by [block.cpp], [transaction.cpp], [interpreter.cpp]
+      "src/amount.h"  ##  Used by [block.cpp], [interpreter.cpp], [transaction.cpp]
       "src/big_int.h"  ##  Used by [block.cpp], [interpreter.cpp], [script.cpp], [script_num.cpp]
       "src/bloom.h"  ##  Used by [interpreter.cpp]
-      "src/compat/byteswap.h"  ##  Used by [ripemd160.cpp], [sha1.cpp], [sha512.cpp], [limitedstack.cpp], [script.cpp]
-      "src/compat/endian.h"  ##  Used by [ripemd160.cpp], [sha1.cpp], [sha512.cpp], [limitedstack.cpp], [script.cpp]
+      "src/compat/byteswap.h"  ##  Used by [chacha20.cpp], [limitedstack.cpp], [ripemd160.cpp], [script.cpp], [sha1.cpp], [sha512.cpp]
+      "src/compat/endian.h"  ##  Used by [chacha20.cpp], [limitedstack.cpp], [ripemd160.cpp], [script.cpp], [sha1.cpp], [sha512.cpp]
       "src/config.h"  ##  Used by [interpreter.cpp]
-      "src/consensus/consensus.h"  ##  Used by [block.cpp], [transaction.cpp], [interpreter.cpp], [limitedstack.cpp], [script.cpp]
+      "src/consensus/consensus.h"  ##  Used by [block.cpp], [interpreter.cpp], [limitedstack.cpp], [script.cpp], [transaction.cpp]
       "src/consensus/validation.h"  ##  Used by [interpreter.cpp]
-      "src/crypto/common.h"  ##  Used by [ripemd160.cpp], [sha1.cpp], [sha512.cpp], [block.cpp], [transaction.cpp], [interpreter.cpp], [limitedstack.cpp], [script.cpp]
+      "src/crypto/chacha20.h"  ##  Used by [chacha20.cpp]
+      "src/crypto/common.h"  ##  Used by [block.cpp], [chacha20.cpp], [interpreter.cpp], [limitedstack.cpp], [ripemd160.cpp], [script.cpp], [sha1.cpp], [sha512.cpp], [transaction.cpp]
       "src/crypto/hmac_sha512.h"  ##  Used by [hmac_sha512.cpp]
-      "src/crypto/ripemd160.h"  ##  Used by [ripemd160.cpp], [interpreter.cpp], [limitedstack.cpp]
-      "src/crypto/sha1.h"  ##  Used by [sha1.cpp], [interpreter.cpp], [limitedstack.cpp]
+      "src/crypto/ripemd160.h"  ##  Used by [interpreter.cpp], [limitedstack.cpp], [ripemd160.cpp]
+      "src/crypto/sha1.h"  ##  Used by [interpreter.cpp], [limitedstack.cpp], [sha1.cpp]
       "src/crypto/sha256.h"  ##  Used by [interpreter.cpp], [limitedstack.cpp]
       "src/crypto/sha512.h"  ##  Used by [hmac_sha512.cpp], [sha512.cpp]
       "src/enum_cast.h"  ##  Used by [interpreter.cpp]
-      "src/hash.h"  ##  Used by [block.cpp], [transaction.cpp], [limitedstack.cpp]
+      "src/hash.h"  ##  Used by [block.cpp], [limitedstack.cpp], [transaction.cpp]
       "src/mining/candidates.h"  ##  Used by [interpreter.cpp]
       "src/mining/journal.h"  ##  Used by [interpreter.cpp]
       "src/mining/journal_entry.h"  ##  Used by [interpreter.cpp]
       "src/mining/legacy.h"  ##  Used by [interpreter.cpp]
       "src/prevector.h"  ##  Used by [limitedstack.cpp], [script.cpp]
       "src/primitives/block.h"  ##  Used by [block.cpp]
-      "src/primitives/transaction.h"  ##  Used by [block.cpp], [transaction.cpp], [interpreter.cpp]
+      "src/primitives/transaction.h"  ##  Used by [block.cpp], [interpreter.cpp], [transaction.cpp]
       "src/pubkey.h"  ##  Used by [interpreter.cpp]
       "src/script/int_serialization.h"  ##  Used by [interpreter.cpp], [limitedstack.cpp]
       "src/script/limitedstack.h"  ##  Used by [limitedstack.cpp]
-      "src/script/script.h"  ##  Used by [block.cpp], [transaction.cpp], [interpreter.cpp], [limitedstack.cpp]
+      "src/script/script.h"  ##  Used by [block.cpp], [interpreter.cpp], [limitedstack.cpp], [transaction.cpp]
       "src/script/script_flags.h"  ##  Used by [interpreter.cpp]
       "src/script/script_num.h"  ##  Used by [block.cpp], [interpreter.cpp]
-      "src/secp256k1/include/secp256k1.h"  ##  Used by [pubkey.cpp]
-      "src/secp256k1/include/secp256k1_recovery.h"  ##  Used by [pubkey.cpp]
+      "src/secp256k1/include/secp256k1.h"  ##  Used by [key.cpp], [pubkey.cpp]
+      "src/secp256k1/include/secp256k1_recovery.h"  ##  Used by [key.cpp], [pubkey.cpp]
       "src/serialize.h"  ##  Used by [limitedstack.cpp], [script.cpp]
       "src/taskcancellation.h"  ##  Used by [interpreter.cpp]
-      "src/tinyformat.h"  ##  Used by [block.cpp], [transaction.cpp], [script.cpp]
+      "src/tinyformat.h"  ##  Used by [block.cpp], [script.cpp], [transaction.cpp]
       "src/tx_mempool_info.h"  ##  Used by [interpreter.cpp]
-      "src/uint256.h"  ##  Used by [block.cpp], [transaction.cpp], [interpreter.cpp]
-      "src/utilstrencodings.h"  ##  Used by [block.cpp], [transaction.cpp], [script.cpp]
+      "src/uint256.h"  ##  Used by [block.cpp], [interpreter.cpp], [transaction.cpp]
+      "src/utilstrencodings.h"  ##  Used by [block.cpp], [script.cpp], [transaction.cpp]
       "src/utiltime.h"  ##  Used by [interpreter.cpp]
       "src/addrdb.h"  ##  Used by [interpreter.cpp]
       "src/addrman.h"  ##  Used by [interpreter.cpp]
-      "src/arith_uint256.h"  ##  Used by [interpreter.cpp]
+      "src/arith_uint256.h"  ##  Used by [interpreter.cpp], [key.cpp]
       "src/big_int.h"  ##  Used by [big_int.cpp]
       "src/blockstreams.h"  ##  Used by [interpreter.cpp]
       "src/blockvalidation.h"  ##  Used by [interpreter.cpp]
       "src/chain.h"  ##  Used by [interpreter.cpp]
       "src/chainparams.h"  ##  Used by [interpreter.cpp]
-      "src/chainparamsbase.h"  ##  Used by [interpreter.cpp]
+      "src/chainparamsbase.h"  ##  Used by [chainparamsbase.cpp], [interpreter.cpp], [util.cpp]
       "src/coins.h"  ##  Used by [interpreter.cpp]
-      "src/compat.h"  ##  Used by [interpreter.cpp]
-      "src/compat/byteswap.h"  ##  Used by [hash.cpp], [block.cpp], [transaction.cpp], [pubkey.cpp], [interpreter.cpp], [uint256.cpp]
-      "src/compat/endian.h"  ##  Used by [hash.cpp], [block.cpp], [transaction.cpp], [pubkey.cpp], [interpreter.cpp], [uint256.cpp]
+      "src/compat.h"  ##  Used by [chainparamsbase.cpp], [interpreter.cpp], [logging.cpp], [random.cpp], [util.cpp]
+      "src/compat/byteswap.h"  ##  Used by [block.cpp], [hash.cpp], [interpreter.cpp], [key.cpp], [pubkey.cpp], [random.cpp], [transaction.cpp], [uint256.cpp], [util.cpp]
+      "src/compat/endian.h"  ##  Used by [block.cpp], [hash.cpp], [interpreter.cpp], [key.cpp], [pubkey.cpp], [random.cpp], [transaction.cpp], [uint256.cpp], [util.cpp]
       "src/compressor.h"  ##  Used by [interpreter.cpp]
       "src/consensus/params.h"  ##  Used by [interpreter.cpp]
       "src/core_memusage.h"  ##  Used by [interpreter.cpp]
-      "src/crypto/chacha20.h"  ##  Used by [interpreter.cpp]
-      "src/crypto/common.h"  ##  Used by [hash.cpp], [pubkey.cpp], [uint256.cpp]
-      "src/crypto/hmac_sha512.h"  ##  Used by [hash.cpp]
-      "src/crypto/ripemd160.h"  ##  Used by [hash.cpp], [block.cpp], [transaction.cpp], [pubkey.cpp]
-      "src/crypto/sha256.h"  ##  Used by [hash.cpp], [block.cpp], [transaction.cpp], [pubkey.cpp]
-      "src/crypto/sha512.h"  ##  Used by [hash.cpp]
-      "src/fs.h"  ##  Used by [interpreter.cpp]
-      "src/hash.h"  ##  Used by [hash.cpp], [pubkey.cpp], [interpreter.cpp]
+      "src/crypto/chacha20.h"  ##  Used by [interpreter.cpp], [key.cpp], [random.cpp], [util.cpp]
+      "src/crypto/common.h"  ##  Used by [hash.cpp], [key.cpp], [pubkey.cpp], [random.cpp], [uint256.cpp], [util.cpp]
+      "src/crypto/hmac_sha512.h"  ##  Used by [hash.cpp], [key.cpp]
+      "src/crypto/ripemd160.h"  ##  Used by [block.cpp], [hash.cpp], [key.cpp], [pubkey.cpp], [transaction.cpp]
+      "src/crypto/sha256.h"  ##  Used by [block.cpp], [hash.cpp], [key.cpp], [pubkey.cpp], [transaction.cpp]
+      "src/crypto/sha512.h"  ##  Used by [hash.cpp], [key.cpp], [random.cpp]
+      "src/fs.h"  ##  Used by [chainparamsbase.cpp], [fs.cpp], [interpreter.cpp], [logging.cpp], [random.cpp], [util.cpp]
+      "src/hash.h"  ##  Used by [hash.cpp], [interpreter.cpp], [key.cpp], [pubkey.cpp]
       "src/indirectmap.h"  ##  Used by [interpreter.cpp]
+      "src/key.h"  ##  Used by [key.cpp]
       "src/limitedmap.h"  ##  Used by [interpreter.cpp]
-      "src/logging.h"  ##  Used by [interpreter.cpp]
+      "src/logging.h"  ##  Used by [chainparamsbase.cpp], [interpreter.cpp], [logging.cpp], [random.cpp], [util.cpp]
       "src/memusage.h"  ##  Used by [interpreter.cpp]
       "src/mining/assembler.h"  ##  Used by [interpreter.cpp]
       "src/mining/factory.h"  ##  Used by [interpreter.cpp]
@@ -125,11 +127,11 @@ macro(cryptGetMinimumListBSVSource)#############################################
       "src/netaddress.h"  ##  Used by [interpreter.cpp]
       "src/policy/policy.h"  ##  Used by [interpreter.cpp]
       "src/pow.h"  ##  Used by [interpreter.cpp]
-      "src/prevector.h"  ##  Used by [hash.cpp], [block.cpp], [transaction.cpp], [pubkey.cpp], [interpreter.cpp]
+      "src/prevector.h"  ##  Used by [block.cpp], [hash.cpp], [interpreter.cpp], [key.cpp], [pubkey.cpp], [transaction.cpp], [util.cpp]
       "src/primitives/block.h"  ##  Used by [interpreter.cpp]
-      "src/protocol.h"  ##  Used by [interpreter.cpp], [interpreter.cpp], [interpreter.cpp], [interpreter.cpp], [interpreter.cpp]
-      "src/pubkey.h"  ##  Used by [hash.cpp], [pubkey.cpp]
-      "src/random.h"  ##  Used by [interpreter.cpp]
+      "src/protocol.h"  ##  Used by [interpreter.cpp]
+      "src/pubkey.h"  ##  Used by [hash.cpp], [key.cpp], [pubkey.cpp]
+      "src/random.h"  ##  Used by [interpreter.cpp], [key.cpp], [random.cpp], [util.cpp]
       "src/script/standard.h"  ##  Used by [interpreter.cpp]
       "src/script/int_serialization.h"  ##  Used by [script.cpp], [script_num.cpp]
       "src/script/interpreter.h"  ##  Used by [interpreter.cpp]
@@ -138,55 +140,69 @@ macro(cryptGetMinimumListBSVSource)#############################################
       "src/script/script_error.h"  ##  Used by [interpreter.cpp]
       "src/script/script_num.h"  ##  Used by [script.cpp], [script_num.cpp]
       "src/script/sighashtype.h"  ##  Used by [interpreter.cpp]
-      "src/serialize.h"  ##  Used by [hash.cpp], [block.cpp], [transaction.cpp], [pubkey.cpp], [interpreter.cpp]
+      "src/serialize.h"  ##  Used by [block.cpp], [hash.cpp], [interpreter.cpp], [key.cpp], [pubkey.cpp], [transaction.cpp], [util.cpp]
       "src/streams.h"  ##  Used by [interpreter.cpp]
+      "src/support/allocators/secure.h"  ##  Used by [key.cpp]
       "src/support/allocators/zeroafterfree.h"  ##  Used by [interpreter.cpp]
-      "src/support/cleanse.h"  ##  Used by [interpreter.cpp]
-      "src/sync.h"  ##  Used by [interpreter.cpp]
+      "src/support/cleanse.h"  ##  Used by [interpreter.cpp], [key.cpp], [random.cpp]
+      "src/support/lockedpool.h"  ##  Used by [key.cpp]
+      "src/support/cleanse.h"  ##  Used by [cleanse.cpp]
+      "src/sync.h"  ##  Used by [chainparamsbase.cpp], [interpreter.cpp], [logging.cpp], [random.cpp], [util.cpp]
       "src/task.h"  ##  Used by [interpreter.cpp]
       "src/task_helpers.h"  ##  Used by [interpreter.cpp]
       "src/threadinterrupt.h"  ##  Used by [interpreter.cpp]
       "src/threadpool.h"  ##  Used by [interpreter.cpp]
       "src/threadpoolT.h"  ##  Used by [interpreter.cpp]
       "src/threadpriority.h"  ##  Used by [interpreter.cpp]
-      "src/threadsafety.h"  ##  Used by [interpreter.cpp]
+      "src/threadsafety.h"  ##  Used by [chainparamsbase.cpp], [interpreter.cpp], [logging.cpp], [random.cpp], [util.cpp]
       "src/time_locked_mempool.h"  ##  Used by [interpreter.cpp]
       "src/timedata.h"  ##  Used by [interpreter.cpp]
-      "src/tinyformat.h"  ##  Used by [interpreter.cpp], [utilstrencodings.cpp]
+      "src/tinyformat.h"  ##  Used by [chainparamsbase.cpp], [interpreter.cpp], [logging.cpp], [random.cpp], [util.cpp], [utilstrencodings.cpp]
       "src/txmempool.h"  ##  Used by [interpreter.cpp]
       "src/txn_double_spend_detector.h"  ##  Used by [interpreter.cpp]
       "src/txn_sending_details.h"  ##  Used by [interpreter.cpp]
       "src/txn_validation_config.h"  ##  Used by [interpreter.cpp]
       "src/txn_validation_data.h"  ##  Used by [interpreter.cpp]
       "src/txn_validation_result.h"  ##  Used by [interpreter.cpp]
-      "src/uint256.h"  ##  Used by [hash.cpp], [pubkey.cpp], [limitedstack.cpp], [uint256.cpp]
-      "src/util.h"  ##  Used by [interpreter.cpp]
-      "src/utilstrencodings.h"  ##  Used by [uint256.cpp], [utilstrencodings.cpp]
+      "src/uint256.h"  ##  Used by [hash.cpp], [key.cpp], [limitedstack.cpp], [pubkey.cpp], [random.cpp], [uint256.cpp], [util.cpp]
+      "src/util.h"  ##  Used by [chainparamsbase.cpp], [interpreter.cpp], [logging.cpp], [random.cpp], [util.cpp]
+      "src/utilstrencodings.h"  ##  Used by [random.cpp], [uint256.cpp], [util.cpp], [utilstrencodings.cpp]
+      "src/utiltime.h"  ##  Used by [chainparamsbase.cpp], [logging.cpp], [random.cpp], [util.cpp], [utiltime.cpp]
       "src/validation.h"  ##  Used by [interpreter.cpp]
-      "src/version.h"  ##  Used by [hash.cpp], [block.cpp], [transaction.cpp], [pubkey.cpp], [interpreter.cpp], [limitedstack.cpp]
+      "src/version.h"  ##  Used by [block.cpp], [hash.cpp], [interpreter.cpp], [key.cpp], [limitedstack.cpp], [pubkey.cpp], [transaction.cpp]
       "src/versionbits.h"  ##  Used by [interpreter.cpp]
-      ## Total number of header files : 113
+      ## Total number of header files : 119
   )
   foreach(rel_file ${_minimal_hdr_files})
     scryptAppendToGlobalSet(BSV_MINIMAL_HDR_FILES "${SCRYPT_BSV_SOURCE_ROOT}/${rel_file}")
   endforeach()
 
   set(_minimal_src_files
-      src/big_int.cpp
-      src/crypto/hmac_sha512.cpp
-      src/crypto/ripemd160.cpp
-      src/crypto/sha1.cpp
-      src/crypto/sha512.cpp
-      src/hash.cpp
-      src/primitives/block.cpp
-      src/primitives/transaction.cpp
-      src/pubkey.cpp
-      src/script/interpreter.cpp
-      src/script/limitedstack.cpp
-      src/script/script.cpp
-      src/script/script_num.cpp
-      src/uint256.cpp
-      src/utilstrencodings.cpp
+      "src/big_int.cpp"
+      "src/chainparamsbase.cpp"
+      "src/crypto/chacha20.cpp"
+      "src/crypto/hmac_sha512.cpp"
+      "src/crypto/ripemd160.cpp"
+      "src/crypto/sha1.cpp"
+      "src/crypto/sha512.cpp"
+      "src/fs.cpp"
+      "src/hash.cpp"
+      "src/key.cpp"
+      "src/logging.cpp"
+      "src/primitives/block.cpp"
+      "src/primitives/transaction.cpp"
+      "src/pubkey.cpp"
+      "src/random.cpp"
+      "src/script/interpreter.cpp"
+      "src/script/limitedstack.cpp"
+      "src/script/script.cpp"
+      "src/script/script_num.cpp"
+      "src/support/cleanse.cpp"
+      "src/uint256.cpp"
+      "src/util.cpp"
+      "src/utilstrencodings.cpp"
+      "src/utiltime.cpp"
+      ## Total number of source files : 26
   )
   foreach(rel_file ${_minimal_src_files})
     scryptAppendToGlobalSet(BSV_MINIMAL_SRC_FILES "${SCRYPT_BSV_SOURCE_ROOT}/${rel_file}")

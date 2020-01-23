@@ -100,7 +100,7 @@ def analyse_msvc_log_showheader(root_str, log_str, with_comment=True):
     print('\n\n========  LIST USED HEADER FILES RELATIVE PATH==============')
     header_files = sorted(list(map_hdr_to_src.keys()))
     for hfile in header_files:
-        list_dependend_cpp = map_hdr_to_src[hfile]
+        list_dependend_cpp = list(sorted( set(map_hdr_to_src[hfile]) ))
         comment_str = '##  Used by [{}]'.format('], ['.join(list_dependend_cpp))
         hfile_filepath = pathlib.Path(hfile)
         hfile_relative_path =  hfile_filepath.relative_to(root_path)
