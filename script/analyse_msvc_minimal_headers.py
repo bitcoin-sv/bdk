@@ -7,7 +7,7 @@
     Copy list of all lines to a string value preserving new line (triple quote)
     This script will analyse this string to get all used header files inside the bsv source code
 """
-import json
+import json, re, pathlib
 
 ## Replace the root bsv source code here
 bsv_root_dir_str = "c:\\path\\to\\bsv\\root\\dir" #
@@ -35,7 +35,7 @@ list_header_file_log_str="""1>example.c
 1>Note: including file: c:\\path\\to\\bsv\\root\\dir\\include\\src\\secp256k1\\src\\num_impl.h"""
 
 
-def analyse_msvc_log_showheader(root_str, log_str):
+def analyse_msvc_log_showheader(root_str, log_str, with_comment=True):
     """
     :param root_str:
     :param log_str:
@@ -43,28 +43,50 @@ def analyse_msvc_log_showheader(root_str, log_str):
     """
     line_list = log_str.splitlines()
     map_src_to_hdr = {}
-    current_file_name = ''
+    current_cpp_file = ''
     src_file_list = []
+    cpp_file_reg = re.compile('.*[.]cpp$')
+    hpp_file_reg = re.compile('^Note: including file:.*$')
+    root_path = pathlib.Path(root_str)
+    line_id=0
     for _line in line_list:
-        if len(_line) < 1:
+        line_id+=1
+        """ There are exclusively only 2 type of log line to consider : 
+            1>filename.cpp             --> indicating a cpp file is compiling
+            1>Note: including file:*   --> indicating the header file is being used
+        """
+        if len(_line) < 3:
+            continue
+        line_no_prefix = _line[2:len(_line)]  ## remove the '1>' part and normalized windows path to unix path
+
+        is_cpp_file = cpp_file_reg.search(line_no_prefix)
+        is_hpp_file = hpp_file_reg.search(line_no_prefix)
+        if not (is_cpp_file or is_hpp_file):
             continue
 
-        line = _line[2:len(_line)]
-        if len(line) < 20:
-            print('----------------  source file [{}]  ------'.format(line))
-            src_file_list.append(line)
-            current_file_name = line
-
-        if "Program Files (x86)" in _line or  "Note: including file:" not in _line or root_str not in _line:
+        if is_cpp_file:
+            print('----------------  source file [{}]  ------'.format(line_no_prefix))
+            src_file_list.append(line_no_prefix)
+            current_cpp_file = line_no_prefix
             continue
 
-        parts = line.rstrip().split(' ')
-        file_path = parts[-1]
-        if current_file_name not in map_src_to_hdr:
-            map_src_to_hdr[current_file_name]=[file_path]
+        ## From here, this is the hpp file. Consider only hpp file that is inside the root
+        include_file_path_str= line_no_prefix.replace('Note: including file:','').strip()
+        include_path = pathlib.Path(include_file_path_str)
+        is_inside_root = False
+        for _parent in include_path.parents:
+            if _parent == root_path:
+                is_inside_root=True
+                break
+
+        if not is_inside_root:
+            continue
+
+        if current_cpp_file not in map_src_to_hdr:
+            map_src_to_hdr[current_cpp_file]=[include_file_path_str]
         else:
-            map_src_to_hdr[current_file_name].append(file_path)
-        print('{}     [{}]'.format(line, file_path))
+            map_src_to_hdr[current_cpp_file].append(include_file_path_str)
+        print('{}     [{}]'.format(line_no_prefix, include_file_path_str))
 
     ### convert relative path and print json
     map_hdr_to_src = {}
@@ -77,14 +99,15 @@ def analyse_msvc_log_showheader(root_str, log_str):
 
     print('\n\n========  LIST USED HEADER FILES RELATIVE PATH==============')
     header_files = sorted(list(map_hdr_to_src.keys()))
-    root_str_with_slash = '{}\\'.format(root_str)
     for hfile in header_files:
         list_dependend_cpp = map_hdr_to_src[hfile]
-        comment_str = '##  Used by [{}]'.format('],[ '.join(list_dependend_cpp))
-        line_str = '      {}  {}'.format(hfile.replace(root_str_with_slash,'').replace('\\','/'), comment_str)
+        comment_str = '##  Used by [{}]'.format('], ['.join(list_dependend_cpp))
+        hfile_filepath = pathlib.Path(hfile)
+        hfile_relative_path =  hfile_filepath.relative_to(root_path)
+        line_str = '      "{}"  {}'.format(str(hfile_relative_path).replace('\\','/'), comment_str) if with_comment else '      {}'.format(hfile_relative_path)
         print(line_str)
-
+    print('      ## Total number of header files : {}'.format(len(header_files)))
 
 
 if __name__ == "__main__":
-    analyse_msvc_log_showheader(bsv_root_dir_str, list_header_file_log_str)
+    analyse_msvc_log_showheader(bsv_root_dir_str, list_header_file_log_str, True)
