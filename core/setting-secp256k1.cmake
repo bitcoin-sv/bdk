@@ -101,15 +101,14 @@ set_property(TARGET secp256k1 PROPERTY FOLDER "core")
 
 ## Log list of secp256k1 source files
 message(STATUS "Build secp256k1 source code in ${SECP256K1_ROOT}")
-get_filename_component(_SECP256K1_PARENT_DIR "${SECP256K1_ROOT}" DIRECTORY)
 foreach(_secp256k1_file ${SECP256K1_PUBLIC_HEADERS} ${SECP256K1_PRIVATE_HEADERS} ${SECP256K1_CPP_FILE})
   message(STATUS "    [${_secp256k1_file}]")
   ## Set the nice structure in IDE
   get_filename_component(_file_ext "${_secp256k1_file}" EXT)
   if(${_file_ext} MATCHES ".cpp" OR ${_file_ext} MATCHES ".c")
-    source_group(TREE ${_SECP256K1_PARENT_DIR} PREFIX "SECP256K1 SRCS" FILES "${_secp256k1_file}")
+    source_group(TREE ${SECP256K1_ROOT} PREFIX "Sources" FILES "${_secp256k1_file}")
   else()
-    source_group(TREE ${_SECP256K1_PARENT_DIR} PREFIX "SECP256K1 HDRS" FILES "${_secp256k1_file}")
+    source_group(TREE ${SECP256K1_ROOT} PREFIX "Headers" FILES "${_secp256k1_file}")
   endif()
 endforeach()
 source_group("_generated" FILES "${LIBSECP256K1_CONFIG_FILE}")

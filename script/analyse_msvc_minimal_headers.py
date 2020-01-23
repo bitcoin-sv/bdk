@@ -13,7 +13,7 @@ import json, re, pathlib
 bsv_root_dir_str = "c:\\path\\to\\bsv\\root\\dir" #
 
 ## Replace the log of MVSC here with
-list_header_file_log_str="""1>example.c
+list_header_file_log_str="""1>example1.c
 1>Note: including file: c:\\path\\to\\bsv\\root\\dir\\include/secp256k1.h
 1>Note: including file:  C:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.17763.0\\ucrt\\stddef.h
 1>Note: including file:   C:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.17763.0\\ucrt\\corecrt.h
@@ -21,7 +21,8 @@ list_header_file_log_str="""1>example.c
 1>Note: including file:     C:\\Program Files (x86)\\Microsoft Visual Studio\\2017\\Community\\VC\\Tools\\MSVC\\14.16.27023\\include\\sal.h
 1>Note: including file:      C:\\Program Files (x86)\\Microsoft Visual Studio\\2017\\Community\\VC\\Tools\\MSVC\\14.16.27023\\include\\concurrencysal.h
 1>Note: including file:     C:\\Program Files (x86)\\Microsoft Visual Studio\\2017\\Community\\VC\\Tools\\MSVC\\14.16.27023\\include\\vadefs.h
-1>Note: including file: c:\\users\\c.nguyen\\development\\sv\\src\\secp256k1\\src\\util.h
+1>example2.cpp
+1>Note: including file: c:\\path\\to\\bsv\\root\\dir\\src\\secp256k1\\src\\util.h
 1>Note: including file:  C:\\Users\\c.nguyen\\development\\buildscrypt\\generated\\hpp\\libsecp256k1-config.h
 1>Note: including file:  C:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.17763.0\\ucrt\\stdlib.h
 1>Note: including file:   C:\\Program Files (x86)\\Windows Kits\\10\\Include\\10.0.17763.0\\ucrt\\corecrt_malloc.h
@@ -45,8 +46,8 @@ def analyse_msvc_log_showheader(root_str, log_str, with_comment=True):
     map_src_to_hdr = {}
     current_cpp_file = ''
     src_file_list = []
-    cpp_file_reg = re.compile('.*[.]cpp$')
-    hpp_file_reg = re.compile('^Note: including file:.*$')
+    cpp_file_reg = re.compile('.+[.]cp*p*$')
+    hpp_file_reg = re.compile('^Note: including file:.+$')
     root_path = pathlib.Path(root_str)
     line_id=0
     for _line in line_list:
@@ -98,15 +99,20 @@ def analyse_msvc_log_showheader(root_str, log_str, with_comment=True):
                 map_hdr_to_src[hfile].append(cfile)
 
     print('\n\n========  LIST USED HEADER FILES RELATIVE PATH==============')
-    header_files = sorted(list(map_hdr_to_src.keys()))
+    header_files = list(sorted(set(map_hdr_to_src.keys())))## There are some dirty duplicates due to upper/lower windows drive name C: c:
+    rel_header_files = set()
     for hfile in header_files:
-        list_dependend_cpp = list(sorted( set(map_hdr_to_src[hfile]) ))
-        comment_str = '##  Used by [{}]'.format('], ['.join(list_dependend_cpp))
         hfile_filepath = pathlib.Path(hfile)
         hfile_relative_path =  hfile_filepath.relative_to(root_path)
+        if hfile_relative_path in rel_header_files:# Do nothing if duplicate
+            continue
+
+        rel_header_files.add(hfile_relative_path)
+        list_dependend_cpp = list(sorted( set(map_hdr_to_src[hfile]) ))
+        comment_str = '##  Used by [{}]'.format('], ['.join(list_dependend_cpp))
         line_str = '      "{}"  {}'.format(str(hfile_relative_path).replace('\\','/'), comment_str) if with_comment else '      {}'.format(hfile_relative_path)
         print(line_str)
-    print('      ## Total number of header files : {}'.format(len(header_files)))
+    print('      ## Total number of header files : {}'.format(len(rel_header_files)))
 
 
 if __name__ == "__main__":
