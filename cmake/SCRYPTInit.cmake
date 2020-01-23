@@ -144,5 +144,9 @@ macro(scryptInitCMake)
   HelpFindBoost()
   #scryptPrintProperties(Boost::random)
 
+  include(FindPythonHelper)
+  HelpFindPython()
+  #sdkPrintPythonInfo()#Debug Log
+
   enable_testing()
 endmacro()

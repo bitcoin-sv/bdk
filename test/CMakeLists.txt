@@ -32,6 +32,9 @@ macro(scrypt_add_unit_test _targetName)
   endif()
 endmacro()
 
+## Call pre setting for tests
+include("${CMAKE_CURRENT_SOURCE_DIR}/setting-test.cmake")
+
 #[[
 ## Test files *cpp here are mainly extract of bsv source code.
 add_executable(test_scrypt_core
