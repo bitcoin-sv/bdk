@@ -38,7 +38,7 @@ include("${CMAKE_CURRENT_SOURCE_DIR}/setting-test.cmake")
 #[[
 ## Test files *cpp here are mainly extract of bsv source code.
 add_executable(test_scrypt_core
-               script_tests_small.cpp
+               ${JSON_HEADERS} "${CMAKE_CURRENT_SOURCE_DIR}/script_tests_small.cpp"
                ## TODO
                #src/test/bn_op_tests.cpp
                #src/test/opcode_tests.cpp
@@ -46,7 +46,7 @@ add_executable(test_scrypt_core
                #src/test/scriptflags.cpp
 )
 
-target_link_libraries(test_scrypt_core scrypt_core)
+target_link_libraries(test_scrypt_core univalue scrypt_core ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT} Boost::thread Boost::filesystem Boost::program_options)
 set_target_properties(test_scrypt_core PROPERTIES  FOLDER "tests/unit" DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})
 scrypt_add_unit_test(test_scrypt_core)
 ]]

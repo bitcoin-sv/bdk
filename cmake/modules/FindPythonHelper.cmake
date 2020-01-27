@@ -32,9 +32,9 @@ macro(HelpFindPython)###########################################################
   find_package(Python COMPONENTS Interpreter Development)
 endmacro()
 
-function(sdkPrintPythonInfo)
-  sdkPrintProperties(Python::Interpreter)
-  sdkPrintProperties(Python::Python)
+function(scryptPrintPythonInfo)
+  scryptPrintProperties(Python::Interpreter)
+  scryptPrintProperties(Python::Python)
   message(" --")
   message(" ---------- Python_FOUND [${Python_FOUND}]")
   message(" ---------- Python_EXECUTABLE [${Python_EXECUTABLE}]")

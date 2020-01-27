@@ -55,17 +55,18 @@ macro(cryptGetMinimumListBSVSource)#############################################
       "src/amount.h"  ##  Used by [block.cpp], [interpreter.cpp], [transaction.cpp]
       "src/big_int.h"  ##  Used by [block.cpp], [interpreter.cpp], [script.cpp], [script_num.cpp]
       "src/bloom.h"  ##  Used by [interpreter.cpp]
-      "src/compat/byteswap.h"  ##  Used by [chacha20.cpp], [limitedstack.cpp], [ripemd160.cpp], [script.cpp], [sha1.cpp], [sha512.cpp]
-      "src/compat/endian.h"  ##  Used by [chacha20.cpp], [limitedstack.cpp], [ripemd160.cpp], [script.cpp], [sha1.cpp], [sha512.cpp]
+      "src/compat/byteswap.h"  ##  Used by [chacha20.cpp], [limitedstack.cpp], [ripemd160.cpp], [script.cpp], [sha1.cpp], [sha256.cpp], [sha512.cpp]
+      "src/compat/endian.h"  ##  Used by [chacha20.cpp], [limitedstack.cpp], [ripemd160.cpp], [script.cpp], [sha1.cpp], [sha256.cpp], [sha512.cpp]
       "src/config.h"  ##  Used by [interpreter.cpp]
       "src/consensus/consensus.h"  ##  Used by [block.cpp], [interpreter.cpp], [limitedstack.cpp], [script.cpp], [transaction.cpp]
       "src/consensus/validation.h"  ##  Used by [interpreter.cpp]
       "src/crypto/chacha20.h"  ##  Used by [chacha20.cpp]
-      "src/crypto/common.h"  ##  Used by [block.cpp], [chacha20.cpp], [interpreter.cpp], [limitedstack.cpp], [ripemd160.cpp], [script.cpp], [sha1.cpp], [sha512.cpp], [transaction.cpp]
+      "src/crypto/common.h"  ##  Used by [block.cpp], [chacha20.cpp], [interpreter.cpp], [limitedstack.cpp], [ripemd160.cpp], [script.cpp], [sha1.cpp], [sha256.cpp], [sha512.cpp], [transaction.cpp]
+      "src/crypto/hmac_sha256.h"  ##  Used by [hmac_sha256.cpp]
       "src/crypto/hmac_sha512.h"  ##  Used by [hmac_sha512.cpp]
       "src/crypto/ripemd160.h"  ##  Used by [interpreter.cpp], [limitedstack.cpp], [ripemd160.cpp]
       "src/crypto/sha1.h"  ##  Used by [interpreter.cpp], [limitedstack.cpp], [sha1.cpp]
-      "src/crypto/sha256.h"  ##  Used by [interpreter.cpp], [limitedstack.cpp]
+      "src/crypto/sha256.h"  ##  Used by [hmac_sha256.cpp], [interpreter.cpp], [limitedstack.cpp], [sha256.cpp]
       "src/crypto/sha512.h"  ##  Used by [hmac_sha512.cpp], [sha512.cpp]
       "src/enum_cast.h"  ##  Used by [interpreter.cpp]
       "src/hash.h"  ##  Used by [block.cpp], [limitedstack.cpp], [transaction.cpp]
@@ -146,7 +147,7 @@ macro(cryptGetMinimumListBSVSource)#############################################
       "src/validation.h"  ##  Used by [interpreter.cpp]
       "src/version.h"  ##  Used by [block.cpp], [hash.cpp], [interpreter.cpp], [key.cpp], [limitedstack.cpp], [pubkey.cpp], [transaction.cpp]
       "src/versionbits.h"  ##  Used by [interpreter.cpp]
-      ## Total number of header files : 94
+      ## Total number of header files : 95
   )
   foreach(rel_file ${_minimal_hdr_files})
     scryptAppendToGlobalSet(BSV_MINIMAL_HDR_FILES "${SCRYPT_BSV_SOURCE_ROOT}/${rel_file}")
@@ -156,9 +157,12 @@ macro(cryptGetMinimumListBSVSource)#############################################
       "src/big_int.cpp"
       "src/chainparamsbase.cpp"
       "src/crypto/chacha20.cpp"
+      "src/crypto/hmac_sha256.cpp"
       "src/crypto/hmac_sha512.cpp"
       "src/crypto/ripemd160.cpp"
       "src/crypto/sha1.cpp"
+      "src/crypto/sha256.cpp"
+      "src/crypto/sha256_sse4.cpp"
       "src/crypto/sha512.cpp"
       "src/fs.cpp"
       "src/hash.cpp"
@@ -177,7 +181,7 @@ macro(cryptGetMinimumListBSVSource)#############################################
       "src/util.cpp"
       "src/utilstrencodings.cpp"
       "src/utiltime.cpp"
-      ## Total number of source files : 26
+      ## Total number of source files : 27
   )
   foreach(rel_file ${_minimal_src_files})
     scryptAppendToGlobalSet(BSV_MINIMAL_SRC_FILES "${SCRYPT_BSV_SOURCE_ROOT}/${rel_file}")

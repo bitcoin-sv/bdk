@@ -140,6 +140,7 @@ macro(HelpFindBoost)############################################################
         filesystem
         log
         log_setup
+        program_options
         random
         system
         thread

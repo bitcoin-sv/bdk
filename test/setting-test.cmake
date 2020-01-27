@@ -30,7 +30,7 @@ function(gen_json_header NAME)
 
     add_custom_command(
       OUTPUT ${_h_file}
-      COMMAND ${PYTHON_EXECUTABLE}
+      COMMAND ${Python_EXECUTABLE}
       ARGS "${SCRYPT_BSV_TEST_HEADER_GENERATOR}" "${TEST_NAME}" "${_json_file}" > ${_h_file}
       MAIN_DEPENDENCY ${_json_file}
       DEPENDS "${SCRYPT_BSV_TEST_HEADER_GENERATOR}"

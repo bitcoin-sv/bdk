@@ -1,17 +1,31 @@
-/* This file is an extracted/modified of $BSV/src/test/script_tests.cpp
- */
-
-
 // Copyright (c) 2011-2016 The Bitcoin Core developers
 // Copyright (c) 2019 Bitcoin Association
 // Distributed under the Open BSV software license, see the accompanying file
 // LICENSE.
 
+#ifdef NDEBUG 
+#  define BOOST_TEST_MODULE scrip_tests
+#else
+#  define BOOST_TEST_MODULE scrip_testsd
+#endif
+#include <boost/test/unit_test.hpp>
+
+#include "data/script_tests.json.h"
+
+#include "core_io.h"
+#include "key.h"
+#include "keystore.h"
+#include "rpc/server.h"
 #include "script/script.h"
 #include "script/script_num.h"
 #include "script/script_error.h"
 #include "script/sighashtype.h"
+#include "script/sign.h"
 #include "taskcancellation.h"
+#include "test/jsonutil.h"
+#include "test/scriptflags.h"
+#include "test/sigutil.h"
+//#include "test/test_bitcoin.h"
 #include "util.h"
 #include "utilstrencodings.h"
 #include "config.h"
@@ -27,12 +41,24 @@
 
 #include <boost/test/unit_test.hpp>
 
-//#include <univalue.h>
+#include <univalue.h>
 
 // Uncomment if you want to output updated JSON tests.
 // #define UPDATE_JSON_TESTS
 
 static const unsigned int flags = SCRIPT_VERIFY_P2SH | SCRIPT_VERIFY_STRICTENC;
+
+/**
+ * Basic testing setup.
+ * This just configures logging and chain parameters.
+ */
+struct BasicTestingSetup {
+    ECCVerifyHandle globalVerifyHandle;
+    GlobalConfig& testConfig;
+
+    BasicTestingSetup(const std::string &chainName = CBaseChainParams::MAIN);
+    ~BasicTestingSetup();
+};
 
 struct ScriptErrorDesc {
     ScriptError_t err;
@@ -1295,7 +1321,7 @@ BOOST_AUTO_TEST_CASE(script_json_test) {
         }
     }
 }
-
+/*
 BOOST_AUTO_TEST_CASE(script_PushData) {
     // Check that PUSHDATA1, PUSHDATA2, and PUSHDATA4 create the same value on
     // the stack as the 1-75 opcodes do.
@@ -2280,5 +2306,5 @@ BOOST_AUTO_TEST_CASE(txout_IsDust) {
     BOOST_CHECK(!CTxOut(Amount(10), opFalseOpReturn).IsDust(feerate, true));
     BOOST_CHECK(CTxOut(Amount(10), opReturn).IsDust(feerate, true)); // single "OP_RETURN" is not considered data after Genesis upgrade, so it is considered dust
 }
-
+*/
 BOOST_AUTO_TEST_SUITE_END()
