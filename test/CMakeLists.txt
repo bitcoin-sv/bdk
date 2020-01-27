@@ -5,9 +5,6 @@
 #  Copyright (c) 2020 nChain Limited. All rights reserved       #
 #################################################################
 
-## Build univalue here uniquely for testing propose
-include("${CMAKE_CURRENT_SOURCE_DIR}/setting-univalue.cmake")
-
 if(NOT Boost_FOUND)
   message(STATUS "SCRYPT WARNS : Boost was not found on your system, unit tests will not be built")
   return()
@@ -32,21 +29,28 @@ macro(scrypt_add_unit_test _targetName)
   endif()
 endmacro()
 
-## Call pre setting for tests
 include("${CMAKE_CURRENT_SOURCE_DIR}/setting-test.cmake")
 
-#[[
 ## Test files *cpp here are mainly extract of bsv source code.
 add_executable(test_scrypt_core
-               ${JSON_HEADERS} "${CMAKE_CURRENT_SOURCE_DIR}/script_tests_small.cpp"
+               "${SCRYPT_BSV_TEST_ROOT}/jsonutil.h"
+               "${SCRYPT_BSV_TEST_ROOT}/scriptflags.h"
+               "${SCRYPT_BSV_TEST_ROOT}/sigutil.h"
+               "${SCRYPT_BSV_TEST_ROOT}/jsonutil.cpp"
+               "${SCRYPT_BSV_TEST_ROOT}/scriptflags.cpp"
+               "${SCRYPT_BSV_TEST_ROOT}/sigutil.cpp"
+               ${JSON_HEADERS}
+               "${CMAKE_CURRENT_SOURCE_DIR}/script_tests_small.cpp"
                ## TODO
-               #src/test/bn_op_tests.cpp
-               #src/test/opcode_tests.cpp
-               #src/test/scriptnum_tests.cpp
-               #src/test/scriptflags.cpp
+               #"${SCRYPT_BSV_TEST_ROOT}/bn_op_tests.cpp"
+               #"${SCRYPT_BSV_TEST_ROOT}/opcode_tests.cpp"
+               #"${SCRYPT_BSV_TEST_ROOT}/scriptnum_tests.cpp"
 )
 
-target_link_libraries(test_scrypt_core univalue scrypt_core ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT} Boost::thread Boost::filesystem Boost::program_options)
+target_link_libraries(test_scrypt_core univalue secp256k1 scrypt_core OpenSSL::Crypto OpenSSL::SSL ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT} Boost::thread Boost::filesystem Boost::program_options)
+if(WIN32)
+  target_link_libraries(test_scrypt_core Crypt32.lib Ws2_32)
+endif()
+target_include_directories(test_scrypt_core PUBLIC "${SCRYPT_BSV_TEST_ROOT}")
 set_target_properties(test_scrypt_core PROPERTIES  FOLDER "tests/unit" DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})
 scrypt_add_unit_test(test_scrypt_core)
-]]

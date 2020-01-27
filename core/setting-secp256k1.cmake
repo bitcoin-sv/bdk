@@ -74,7 +74,8 @@ endif()
 ## TODO : might require latter
 function(link_secp256k1_internal NAME)
   target_link_libraries(${NAME} secp256k1)
-  target_compile_definitions(${NAME} PRIVATE HAVE_CONFIG_H SECP256K1_BUILD)
+  #target_compile_definitions(${NAME} PRIVATE HAVE_CONFIG_H SECP256K1_BUILD)
+  target_compile_definitions(${NAME} PRIVATE HAVE_CONFIG_H)
 endfunction(link_secp256k1_internal)
 
 ################################################################################
@@ -96,7 +97,8 @@ file(GLOB SECP256K1_PRIVATE_HEADERS "${SECP256K1_ROOT}/src/*.h")
 add_library(secp256k1 "${SECP256K1_CPP_FILE}" "${LIBSECP256K1_CONFIG_FILE}" ${SECP256K1_PUBLIC_HEADERS} ${SECP256K1_PRIVATE_HEADERS} ${LIBSECP256K1_CONFIG_FILE})
 target_include_directories(secp256k1 PRIVATE "${SECP256K1_ROOT}" "${SECP256K1_ROOT}/src")
 target_include_directories(secp256k1 INTERFACE "${SECP256K1_PUBLIC_HEADER_DIR}")
-target_compile_definitions(secp256k1 PRIVATE HAVE_CONFIG_H SECP256K1_BUILD)
+#target_compile_definitions(secp256k1 PRIVATE HAVE_CONFIG_H SECP256K1_BUILD)
+target_compile_definitions(secp256k1 PRIVATE HAVE_CONFIG_H ENABLE_MODULE_ECDH ENABLE_MODULE_MULTISET ENABLE_MODULE_RECOVERY)
 set_property(TARGET secp256k1 PROPERTY FOLDER "core")
 
 ## Log list of secp256k1 source files

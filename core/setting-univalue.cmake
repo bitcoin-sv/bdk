@@ -15,10 +15,10 @@ endif()
 set(SCRYPT_BSV_UNIVALUE_ROOT "${SCRYPT_BSV_SOURCE_ROOT}/src/univalue")
 
 set(BSV_UNIVALUE_PUBLIC_HDR_FILES
+  "${SCRYPT_BSV_UNIVALUE_ROOT}/include/univalue_escapes.h"
   "${SCRYPT_BSV_UNIVALUE_ROOT}/include/univalue.h"
 )
 set(BSV_UNIVALUE_PRIVATE_HDR_FILES
-  "${SCRYPT_BSV_UNIVALUE_ROOT}/lib/univalue_escapes.h"
   "${SCRYPT_BSV_UNIVALUE_ROOT}/lib/univalue_utffilter.h"
 )
 set(BSV_UNIVALUE_HDR_FILES ${BSV_UNIVALUE_PUBLIC_HDR_FILES} ${BSV_UNIVALUE_PRIVATE_HDR_FILES})
@@ -36,7 +36,7 @@ target_include_directories(univalue
                           PUBLIC "${SCRYPT_BSV_UNIVALUE_ROOT}/include"
                           PRIVATE "${SCRYPT_BSV_UNIVALUE_ROOT}/lib"
 )
-set_target_properties(univalue PROPERTIES  FOLDER "tests" DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})
+set_target_properties(univalue PROPERTIES  FOLDER "core" DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})
 
 ## Log list of univalues source files
 message(STATUS "Build univalue source code in ${SCRYPT_BSV_UNIVALUE_ROOT}")

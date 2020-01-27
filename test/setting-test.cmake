@@ -42,6 +42,9 @@ function(gen_json_header NAME)
   set(${NAME} "${HEADERS}" PARENT_SCOPE)
 endfunction()
 
+## Generate directory containing generated json header file
+file(MAKE_DIRECTORY "${SCRYPT_GENERATED_HPP_DIR}/data")
+
 gen_json_header(JSON_HEADERS
   data/script_tests.json
   data/base58_keys_valid.json

@@ -53,12 +53,45 @@ static const unsigned int flags = SCRIPT_VERIFY_P2SH | SCRIPT_VERIFY_STRICTENC;
  * This just configures logging and chain parameters.
  */
 struct BasicTestingSetup {
-    ECCVerifyHandle globalVerifyHandle;
-    GlobalConfig& testConfig;
 
-    BasicTestingSetup(const std::string &chainName = CBaseChainParams::MAIN);
-    ~BasicTestingSetup();
+    ECCVerifyHandle globalVerifyHandle;
+
+    BasicTestingSetup()
+    {
+        ECC_Start();
+    }
+    ~BasicTestingSetup()
+    {
+        ECC_Stop();
+    }
 };
+
+Amount AmountFromValue(const UniValue &value) {
+    if (!value.isNum() && !value.isStr())
+        throw std::runtime_error("JSONRPCError:Amount is not a number or string");
+
+    int64_t n;
+    if (!ParseFixedPoint(value.getValStr(), 8, &n))
+        throw std::runtime_error("JSONRPCError:Invalid amount");
+
+    Amount amt(n);
+    if (!MoneyRange(amt))
+        throw std::runtime_error("JSONRPCError:Amount out of range");
+    return amt;
+}
+
+UniValue ValueFromAmount(const Amount &amount) {
+    int64_t amt = amount.GetSatoshis();
+    bool sign = amt < 0;
+    int64_t n_abs = (sign ? -amt : amt);
+    int64_t quotient = n_abs / COIN.GetSatoshis();
+    int64_t remainder = n_abs % COIN.GetSatoshis();
+    return UniValue(UniValue::VNUM, strprintf("%s%d.%08d", sign ? "-" : "",
+        quotient, remainder));
+}
+
+extern bool fRequireStandard;
+bool fRequireStandard = true;
 
 struct ScriptErrorDesc {
     ScriptError_t err;
