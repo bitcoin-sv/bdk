@@ -1,14 +1,20 @@
-// Copyright (c) 2011-2016 The Bitcoin Core developers
-// Copyright (c) 2019 Bitcoin Association
-// Distributed under the Open BSV software license, see the accompanying file
-// LICENSE.
+/* This file is a slight modification of $SV_ROOT/src/test/script_tests.cpp
+   TODO : request bsv project to add a flag #ifdef BSCRYPT_BUILD_TEST
+ */
 
+ // Copyright (c) 2011-2016 The Bitcoin Core developers
+ // Copyright (c) 2019 Bitcoin Association
+ // Distributed under the Open BSV software license, see the accompanying file
+ // LICENSE.
+
+ // BSCRYPT_BUILD_TEST ++++++++++++++++++++++++++++++++++++++++++++++++++++
 #ifdef NDEBUG 
 #  define BOOST_TEST_MODULE scrip_tests
 #else
 #  define BOOST_TEST_MODULE scrip_testsd
 #endif
 #include <boost/test/unit_test.hpp>
+// BSCRYPT_BUILD_TEST ++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 #include "data/script_tests.json.h"
 
@@ -25,6 +31,7 @@
 #include "test/jsonutil.h"
 #include "test/scriptflags.h"
 #include "test/sigutil.h"
+// BSCRYPT_BUILD_TEST ----------------------------------------------------
 //#include "test/test_bitcoin.h"
 #include "util.h"
 #include "utilstrencodings.h"
@@ -48,6 +55,7 @@
 
 static const unsigned int flags = SCRIPT_VERIFY_P2SH | SCRIPT_VERIFY_STRICTENC;
 
+// BSCRYPT_BUILD_TEST ++++++++++++++++++++++++++++++++++++++++++++++++++++
 /**
  * Basic testing setup.
  * This just configures logging and chain parameters.
@@ -55,8 +63,8 @@ static const unsigned int flags = SCRIPT_VERIFY_P2SH | SCRIPT_VERIFY_STRICTENC;
 struct BasicTestingSetup {
 
     ECCVerifyHandle globalVerifyHandle;
-
-    BasicTestingSetup()
+    GlobalConfig& testConfig;
+    BasicTestingSetup():testConfig(GlobalConfig::GetConfig())
     {
         ECC_Start();
     }
@@ -92,6 +100,7 @@ UniValue ValueFromAmount(const Amount &amount) {
 
 extern bool fRequireStandard;
 bool fRequireStandard = true;
+// BSCRYPT_BUILD_TEST ++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 struct ScriptErrorDesc {
     ScriptError_t err;
@@ -238,6 +247,7 @@ static void DoTest(const CScript &scriptPubKey, const CScript &scriptSig,
     if (libconsensus_flags == flags) {
         if (flags & bitcoinconsensus_SCRIPT_ENABLE_SIGHASH_FORKID) {
             BOOST_CHECK_MESSAGE(bitcoinconsensus_verify_script_with_amount(
+                                    config,
                                     scriptPubKey.data(), scriptPubKey.size(),
                                     txCredit.vout[0].nValue.GetSatoshis(),
                                     (const uint8_t *)&stream[0], stream.size(),
@@ -245,11 +255,13 @@ static void DoTest(const CScript &scriptPubKey, const CScript &scriptSig,
                                 message);
         } else {
             BOOST_CHECK_MESSAGE(bitcoinconsensus_verify_script_with_amount(
+                                    config,
                                     scriptPubKey.data(), scriptPubKey.size(), 0,
                                     (const uint8_t *)&stream[0], stream.size(),
                                     0, libconsensus_flags, nullptr) == expect,
                                 message);
             BOOST_CHECK_MESSAGE(bitcoinconsensus_verify_script(
+                                    config,
                                     scriptPubKey.data(), scriptPubKey.size(),
                                     (const uint8_t *)&stream[0], stream.size(),
                                     0, libconsensus_flags, nullptr) == expect,
@@ -1354,7 +1366,7 @@ BOOST_AUTO_TEST_CASE(script_json_test) {
         }
     }
 }
-/*
+
 BOOST_AUTO_TEST_CASE(script_PushData) {
     // Check that PUSHDATA1, PUSHDATA2, and PUSHDATA4 create the same value on
     // the stack as the 1-75 opcodes do.
@@ -1695,6 +1707,8 @@ BOOST_AUTO_TEST_CASE(script_CHECKMULTISIG23) {
                         ScriptErrorString(err));
 }
 
+// BSCRYPT_BUILD_TEST ----------------------------------------------------
+/*
 void TestCombineSigs(bool genesisEnabled, bool utxoAfterGenesis) {
     // Test the CombineSignatures function
     const Config& config = GlobalConfig::GetConfig();
@@ -1883,6 +1897,8 @@ BOOST_AUTO_TEST_CASE(script_combineSigs) {
     TestCombineSigs(true, false);
     TestCombineSigs(false, false);
 }
+*/
+// BSCRYPT_BUILD_TEST ----------------------------------------------------
 
 BOOST_AUTO_TEST_CASE(script_standard_push) {
     ScriptError err;
@@ -2339,5 +2355,5 @@ BOOST_AUTO_TEST_CASE(txout_IsDust) {
     BOOST_CHECK(!CTxOut(Amount(10), opFalseOpReturn).IsDust(feerate, true));
     BOOST_CHECK(CTxOut(Amount(10), opReturn).IsDust(feerate, true)); // single "OP_RETURN" is not considered data after Genesis upgrade, so it is considered dust
 }
-*/
+
 BOOST_AUTO_TEST_SUITE_END()

@@ -172,6 +172,7 @@ macro(cryptGetMinimumListBSVSource)#############################################
   endforeach()
 
   set(_minimal_src_files
+      "src/amount.cpp"
       "src/base58.cpp"
       "src/big_int.cpp"
       "src/chainparams.cpp"
@@ -201,6 +202,7 @@ macro(cryptGetMinimumListBSVSource)#############################################
       "src/script/interpreter.cpp"
       "src/script/limitedstack.cpp"
       "src/script/script.cpp"
+      "src/script/script_error.cpp"
       "src/script/script_num.cpp"
       "src/script/standard.cpp"
       "src/support/cleanse.cpp"
@@ -210,7 +212,7 @@ macro(cryptGetMinimumListBSVSource)#############################################
       "src/utilmoneystr.cpp"
       "src/utilstrencodings.cpp"
       "src/utiltime.cpp"
-      ## Total number of source files : 38
+      ## Total number of source files : 40
   )
   foreach(rel_file ${_minimal_src_files})
     scryptAppendToGlobalSet(BSV_MINIMAL_SRC_FILES "${SCRYPT_BSV_SOURCE_ROOT}/${rel_file}")

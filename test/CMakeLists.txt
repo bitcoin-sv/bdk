@@ -40,11 +40,12 @@ add_executable(test_scrypt_core
                "${SCRYPT_BSV_TEST_ROOT}/scriptflags.cpp"
                "${SCRYPT_BSV_TEST_ROOT}/sigutil.cpp"
                ${JSON_HEADERS}
-               "${CMAKE_CURRENT_SOURCE_DIR}/script_tests_small.cpp"
+               "${CMAKE_CURRENT_SOURCE_DIR}/script_tests_modified.cpp"
+               "${SCRYPT_BSV_TEST_ROOT}/bn_op_tests.cpp"
+               "${SCRYPT_BSV_TEST_ROOT}/scriptflags.cpp"
+               "${SCRYPT_BSV_TEST_ROOT}/scriptnum_tests.cpp"
                ## TODO
-               #"${SCRYPT_BSV_TEST_ROOT}/bn_op_tests.cpp"
-               #"${SCRYPT_BSV_TEST_ROOT}/opcode_tests.cpp"
-               #"${SCRYPT_BSV_TEST_ROOT}/scriptnum_tests.cpp"
+               #"${SCRYPT_BSV_TEST_ROOT}/opcode_tests.cpp
 )
 
 target_link_libraries(test_scrypt_core univalue secp256k1 scrypt_core OpenSSL::Crypto OpenSSL::SSL ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT} Boost::thread Boost::filesystem Boost::program_options)
