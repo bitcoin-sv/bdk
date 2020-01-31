@@ -29,6 +29,8 @@
 cmake_minimum_required(VERSION 3.13)
 project(bscrypt)
 
+option(SCRYPT_BUILD_LEVELDB "Activate the build of leveldb" OFF)
+
 ## bscrypt built is based on source files from bsv code.
 ## Use -DSCRYPT_BSV_SRC_ROOT=/path/to/sv_root
 include(cmake/modules/FindBSVSourceHelper.cmake)

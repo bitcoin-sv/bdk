@@ -20,6 +20,9 @@ set(BSV_MINIMAL_FILES ${BSV_MINIMAL_HDR_FILES} ${BSV_MINIMAL_SRC_FILES})
 include("${CMAKE_CURRENT_SOURCE_DIR}/setting-bitcoin.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/setting-secp256k1.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/setting-univalue.cmake")
+if(SCRYPT_BUILD_LEVELDB)
+  include("${CMAKE_CURRENT_SOURCE_DIR}/setting-leveldb.cmake")
+endif()
 
 ## Log list of bsv source files
 message(STATUS "Build core using bsv source code in ${SCRYPT_BSV_SOURCE_ROOT}")
