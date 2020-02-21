@@ -45,9 +45,9 @@ foreach(_univalue_file ${BSV_UNIVALUE_HDR_FILES} ${BSV_UNIVALUE_SRC_FILES})
   ## Set the nice structure in IDE
   get_filename_component(_file_ext "${_univalue_file}" EXT)
   if(${_file_ext} MATCHES ".cpp" OR ${_file_ext} MATCHES ".c")
-    source_group(TREE ${SCRYPT_BSV_UNIVALUE_ROOT} PREFIX "Sources" FILES "${_univalue_file}")
+    source_group(TREE ${SCRYPT_BSV_UNIVALUE_ROOT} PREFIX "bitcoin SRC" FILES "${_univalue_file}")
   else()
-    source_group(TREE ${SCRYPT_BSV_UNIVALUE_ROOT} PREFIX "Headers" FILES "${_univalue_file}")
+    source_group(TREE ${SCRYPT_BSV_UNIVALUE_ROOT} PREFIX "bitcoin HDR" FILES "${_univalue_file}")
   endif()
 endforeach()
 ###############################################

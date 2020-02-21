@@ -37,7 +37,6 @@ include(cmake/modules/FindBSVSourceHelper.cmake)
 HelpFindBSVSource()
 #scryptPrintBSVSourceInfo()#Print help to debug
 
-
 set(SCRYPT_VERSION_MAJOR "0" CACHE INTERNAL "bscrypt major version")
 set(SCRYPT_VERSION_MINOR "0" CACHE INTERNAL "bscrypt minor version")
 set(SCRYPT_VERSION_PATCH "1" CACHE INTERNAL "bscrypt patch version")

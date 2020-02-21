@@ -108,9 +108,9 @@ foreach(_secp256k1_file ${SECP256K1_PUBLIC_HEADERS} ${SECP256K1_PRIVATE_HEADERS}
   ## Set the nice structure in IDE
   get_filename_component(_file_ext "${_secp256k1_file}" EXT)
   if(${_file_ext} MATCHES ".cpp" OR ${_file_ext} MATCHES ".c")
-    source_group(TREE ${SECP256K1_ROOT} PREFIX "Sources" FILES "${_secp256k1_file}")
+    source_group(TREE ${SECP256K1_ROOT} PREFIX "bitcoin SRC" FILES "${_secp256k1_file}")
   else()
-    source_group(TREE ${SECP256K1_ROOT} PREFIX "Headers" FILES "${_secp256k1_file}")
+    source_group(TREE ${SECP256K1_ROOT} PREFIX "bitcoin HDR" FILES "${_secp256k1_file}")
   endif()
 endforeach()
 source_group("_generated" FILES "${LIBSECP256K1_CONFIG_FILE}")

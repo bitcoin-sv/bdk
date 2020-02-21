@@ -15,6 +15,7 @@ macro(scrypt_add_unit_test _targetName)
       message(FATAL_ERROR " [${_targetName}] is not a TARGET")
   endif()
   scryptLinkTargetToBoost(${_targetName} Boost::unit_test_framework)
+  set_target_properties(${_targetName} PROPERTIES  FOLDER "tests/unit" DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})
 
   if(CMAKE_CONFIGURATION_TYPES)
     set(_tpost_fix ${CMAKE_DEBUG_POSTFIX})
@@ -31,7 +32,8 @@ endmacro()
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/setting-test.cmake")
 
-## Test files *cpp here are mainly extract of bsv source code.
+####################################################################################################################
+## Test files *cpp here are mainly extract of bsv source code ######################################################
 add_executable(test_scrypt_core
                "${SCRYPT_BSV_TEST_ROOT}/jsonutil.h"
                "${SCRYPT_BSV_TEST_ROOT}/scriptflags.h"
@@ -48,10 +50,25 @@ add_executable(test_scrypt_core
                #"${SCRYPT_BSV_TEST_ROOT}/opcode_tests.cpp
 )
 
-target_link_libraries(test_scrypt_core univalue secp256k1 scrypt_core OpenSSL::Crypto OpenSSL::SSL ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT} Boost::thread Boost::filesystem Boost::program_options)
+target_link_libraries(test_scrypt_core ${CMAKE_DL_LIBS} scrypt_core OpenSSL::Crypto OpenSSL::SSL)
 if(WIN32)
   target_link_libraries(test_scrypt_core Crypt32.lib Ws2_32)
 endif()
-target_include_directories(test_scrypt_core PUBLIC "${SCRYPT_BSV_TEST_ROOT}")
-set_target_properties(test_scrypt_core PROPERTIES  FOLDER "tests/unit" DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})
+target_include_directories(test_scrypt_core PRIVATE "${SCRYPT_BSV_TEST_ROOT}")
 scrypt_add_unit_test(test_scrypt_core)
+
+####################################################################################################################
+## Test extra c++ source files in core (wrapper to bsv code) #######################################################
+add_executable(test_core_extra
+               "${SCRYPT_BSV_TEST_ROOT}/jsonutil.h"
+               "${SCRYPT_BSV_TEST_ROOT}/scriptflags.h"
+               "${SCRYPT_BSV_TEST_ROOT}/sigutil.h"
+               "${SCRYPT_BSV_TEST_ROOT}/jsonutil.cpp"
+               "${SCRYPT_BSV_TEST_ROOT}/scriptflags.cpp"
+               "${SCRYPT_BSV_TEST_ROOT}/sigutil.cpp"
+               ${JSON_HEADERS}
+               "${CMAKE_CURRENT_SOURCE_DIR}/test_core_FlagMap.cpp"
+               "${CMAKE_CURRENT_SOURCE_DIR}/test_core_ScriptHelper.cpp"
+)
+target_link_libraries(test_core_extra ${CMAKE_DL_LIBS} scrypt_core OpenSSL::Crypto OpenSSL::SSL)
+scrypt_add_unit_test(test_core_extra)
