@@ -1,0 +1,157 @@
+/*
+   The master pipeline aim to build for every change on the main repository. It can build on any branch that is specified in the jenkins job configuration
+   The build is normally kicked off by bitbucket push to the repository. User can also manually kickoff the build by 'Build Now'
+   User can also clone the jenkins pipeline job, modify the configuration so it can build on their repository, their branch
+*/
+
+// Define a common groovy's tool holder
+def chainkins
+
+pipeline {
+  agent any
+  options { disableConcurrentBuilds() } // Strangely this option allow the parallel build
+
+  // Set the build trigger filter using Bitbucket Push And Pull Request Plugin on Created/Updated. To make it work, it need to be 'build now' manually for a first time
+  triggers {
+    bitBucketTrigger([
+      [$class: 'BitBucketPPRRepositoryTriggerFilter' , actionFilter: [$class: 'BitBucketPPRRepositoryPushActionFilter', allowedBranches: '', triggerAlsoIfTagPush: false]]
+      /*,[$class: 'BitBucketPPRPullRequestTriggerFilter', actionFilter: [$class: 'BitBucketPPRPullRequestMergedActionFilter']]*/
+    ])
+  }
+
+  stages {
+    // Setting common environment variables for the whole pipeline -----------------------------------------------------------------------
+    stage('MASTER ENV'){
+      agent any
+      steps {
+        script {
+
+          chainkins = load("${env.WORKSPACE}/contrib/chainkins/chainkins.groovy")
+
+          def main_env_file = "${env.WORKSPACE}/contrib/chainkins/master_env.groovy"
+          chainkins.dump_env_main_repo(main_env_file)
+          CHAINKINS_MASTER_ENV = load(main_env_file)
+          sh label:"Show env variables", script:"cat ${main_env_file} ; printenv"
+        }
+      }
+
+      post { always { deleteDir() } }
+    }
+
+    // TODO :
+    //   move more code block from here to groovy jTool
+    //   migrate the pipeline pull-request
+
+stage('Distributed Build') { parallel { // =====================================
+
+    stage('Window Build'){ //---------------------------------------------
+      agent { label 'slave_vm_win10pro_x64_mvsc2017' }
+      options { skipDefaultCheckout true }//TODO add timeout
+
+      steps {
+        step([$class: 'WsCleanup'])
+        checkout scm
+        script {
+            def windows_env_file = "${env.WORKSPACE}\\jenkins\\windows_env.groovy"
+            chainkins.dump_buildenv_windows(windows_env_file)
+            CHAINKINS_WINDOWS_ENV = load(windows_env_file)
+            bat label:"Show env variables", script:"type ${windows_env_file} && set"
+
+            // Update bitbucket build status (in process)
+            withCredentials([usernamePassword(credentialsId: 'sdklibraries_bitbucket', usernameVariable: 'SDK_USERNAME', passwordVariable: 'SDK_PASSWORD')]) {
+              bat label:"Set bitbucket build status in progress", script:"""
+                python %WINDOWS_CHAINKINS_FILE% --update_bitbucket_build_status --bb_username=${SDK_USERNAME} --bb_password=${SDK_PASSWORD} --target_repo=${env.CHAINKINS_TARGET_REPO_HTTP} --target_commit=${env.CHAINKINS_TARGET_COMMIT} --jenkins_status=NOT_BUILT
+              """
+            }
+
+            bat label:"Checkout checkout branch", script:"git checkout ${env.CHAINKINS_TARGET_BRANCH}"
+			bat label:"Git log", script:"git git log -5"
+            //chainkins.build_on_windows()
+            //chainkins.runtest_on_windows()
+            //chainkins.pack_on_windows()
+        }
+      }
+
+      post {
+        always {
+          script{
+
+            //chainkins.consolidate_test_on_windows()
+
+            junit "${env.CHAINKINS_POSTBUILD_DIRNAME}/*junit*.xml"
+
+            emailext ( // TODO send html msg to slack sdk channel
+              to: "${env.CHAINKINS_EMAIL_TO_SEND}",
+              subject: "${currentBuild.result} - ${env.JOB_BASE_NAME} branch [${env.CHAINKINS_TARGET_BRANCH}] ${env.JENKINS_SLAVE_OS}",
+              body: '${FILE,path="buildpost/email.html"}' // TODO : use generic env instead of hardcoded buildpost
+            )
+
+            // Update bitbucket build status
+            withCredentials([usernamePassword(credentialsId: 'sdklibraries_bitbucket', usernameVariable: 'SDK_USERNAME', passwordVariable: 'SDK_PASSWORD')]) {
+              bat label:"Update bitbucket build status result", script:"""
+                python %WINDOWS_CHAINKINS_FILE% --update_bitbucket_build_status --bb_username=${SDK_USERNAME} --bb_password=${SDK_PASSWORD} --target_repo=${env.CHAINKINS_TARGET_REPO_HTTP} --target_commit=${env.CHAINKINS_TARGET_COMMIT} --jenkins_status=${currentBuild.result}
+              """
+            }
+
+          }
+        }
+      }
+    }
+
+
+    stage('Linux Build'){ //---------------------------------------------
+      agent { label 'slave_vm_Ubuntu18_x64_gcc730'}
+      options { skipDefaultCheckout true }//TODO add timeout
+
+      steps {
+        step([$class: 'WsCleanup'])
+        checkout scm
+        script {
+            def linux_env_file = "${env.WORKSPACE}/contrib/chainkins/linux_env.groovy"
+            chainkins.dump_buildenv_linux(linux_env_file)
+            CHAINKINS_LINUX_ENV = load(linux_env_file)
+            sh label:"Show env variables", script:"cat ${linux_env_file} ; printenv"
+
+            // Update bitbucket build status (in process)
+            withCredentials([usernamePassword(credentialsId: 'sdklibraries_bitbucket', usernameVariable: 'SDK_USERNAME', passwordVariable: 'SDK_PASSWORD')]) {
+              sh label:"Set bitbucket build status in progress", script:"""
+                python $LINUX_CHAINKINS_FILE --update_bitbucket_build_status --bb_username=${SDK_USERNAME} --bb_password=${SDK_PASSWORD} --target_repo=${env.CHAINKINS_TARGET_REPO_HTTP} --target_commit=${env.CHAINKINS_TARGET_COMMIT} --jenkins_status=NOT_BUILT
+              """
+            }
+
+            sh label:"Git checkout branch", script:"git checkout ${env.CHAINKINS_TARGET_BRANCH}"
+			bat label:"Git log", script:"git git log -5"
+            //chainkins.build_on_linux()
+            //chainkins.runtest_on_linux()
+            //chainkins.pack_on_linux()
+        }
+      }
+      post {
+        always {
+          script{
+
+            //chainkins.consolidate_test_on_linux()
+
+            junit "${env.CHAINKINS_POSTBUILD_DIRNAME}/*junit*.xml"
+
+            emailext ( // TODO send html msg to slack sdk channel
+              to: "${env.CHAINKINS_EMAIL_TO_SEND}",
+              subject: "${currentBuild.result} - ${env.JOB_BASE_NAME} branch [${env.CHAINKINS_TARGET_BRANCH}] ${env.JENKINS_SLAVE_OS}",
+              body: '${FILE,path="buildpost/email.html"}' // TODO : use generic env instead of hardcoded buildpost
+            )
+
+            // Update bitbucket build status
+            withCredentials([usernamePassword(credentialsId: 'sdklibraries_bitbucket', usernameVariable: 'SDK_USERNAME', passwordVariable: 'SDK_PASSWORD')]) {
+              sh label:"Update bitbucket build status result", script:"""
+                python $LINUX_CHAINKINS_FILE --update_bitbucket_build_status --bb_username=${SDK_USERNAME} --bb_password=${SDK_PASSWORD} --target_repo=${env.CHAINKINS_TARGET_REPO_HTTP} --target_commit=${env.CHAINKINS_TARGET_COMMIT} --jenkins_status=${currentBuild.result}
+              """
+            }
+          }
+        }
+      }
+    }
+
+}} // parallelized stage ========================================================
+
+  }
+}
