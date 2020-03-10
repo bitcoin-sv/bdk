@@ -315,14 +315,29 @@ endfunction()###################################################################
 
 #### Get The source Branch from git
 #### Usage :
-####     scryptGetGitBranch(myVar)
-function(scryptGetGitBranch result)
+####     scryptGetGitBranch(myVar)                             # will investigate in ${CMAKE_SOURCE_DIR}
+####     scryptGetGitBranch(myVar "${OTHER_SOURCE_REPO_DIR}")
+function(scryptGetGitBranch)
+    list(LENGTH ARGN _NB_ARGS)
+    list(GET ARGN 0 result)
+    if(_NB_ARGS GREATER 1)
+        list(GET ARGN 1 _CUSTOM_REPO)
+        if(NOT EXISTS "${_CUSTOM_REPO}")
+            message(FATAL_ERROR "scryptGetGitBranch call for inexisting directory [${_CUSTOM_REPO}]")
+        endif()
+    endif()
+
+    if(EXISTS "${_CUSTOM_REPO}")
+        set(_REPO_DIR ${_CUSTOM_REPO})
+    else()
+        set(_REPO_DIR ${CMAKE_SOURCE_DIR})
+    endif()
     ### get git branch and commit hash
     ### http://xit0.org/2013/04/cmake-use-git-branch-and-commit-details-in-project/
     # Get the current working branch
     execute_process(
       COMMAND git rev-parse --abbrev-ref HEAD
-      WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+      WORKING_DIRECTORY ${_REPO_DIR}
       OUTPUT_VARIABLE _Source_Branch
       OUTPUT_STRIP_TRAILING_WHITESPACE
     )
@@ -331,12 +346,28 @@ endfunction()###################################################################
 
 #### Get abreviation git commit hash of the last commit
 #### Usage :
-####     scryptGetGitCommitHash(myVar)
-function(scryptGetGitCommitHash result)
+####     scryptGetGitCommitHash(myVar)                             # will investigate in ${CMAKE_SOURCE_DIR}
+####     scryptGetGitCommitHash(myVar "${OTHER_SOURCE_REPO_DIR}")
+function(scryptGetGitCommitHash)
+    list(LENGTH ARGN _NB_ARGS)
+    list(GET ARGN 0 result)
+    if(_NB_ARGS GREATER 1)
+        list(GET ARGN 1 _CUSTOM_REPO)
+        if(NOT EXISTS "${_CUSTOM_REPO}")
+            message(FATAL_ERROR "scryptGetGitBranch call for inexisting directory [${_CUSTOM_REPO}]")
+        endif()
+    endif()
+
+    if(EXISTS "${_CUSTOM_REPO}")
+        set(_REPO_DIR ${_CUSTOM_REPO})
+    else()
+        set(_REPO_DIR ${CMAKE_SOURCE_DIR})
+    endif()
+
      # check if the working directory is dirty. If it is, set the commit hash to the string "dirty"
      execute_process(
        COMMAND git status --untracked-files=no --porcelain
-       WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+       WORKING_DIRECTORY ${_REPO_DIR}
        OUTPUT_VARIABLE _is_Dirty_Working_Source
        OUTPUT_STRIP_TRAILING_WHITESPACE
      )
@@ -349,7 +380,7 @@ function(scryptGetGitCommitHash result)
      # Get the latest abbreviated commit hash of the working branch
      execute_process(
        COMMAND git log -1 --format=%h
-       WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+       WORKING_DIRECTORY ${_REPO_DIR}
        OUTPUT_VARIABLE _Source_Commit_Hash
        OUTPUT_STRIP_TRAILING_WHITESPACE
      )
@@ -358,12 +389,28 @@ endfunction()###################################################################
 
 #### Get last commit date time from git
 #### Usage :
-####     scryptGetGitCommitDateTime(myVar)
-function(scryptGetGitCommitDateTime result)
+####     scryptGetGitCommitDateTime(myVar)                             # will investigate in ${CMAKE_SOURCE_DIR}
+####     scryptGetGitCommitDateTime(myVar "${OTHER_SOURCE_REPO_DIR}")
+function(scryptGetGitCommitDateTime)
+    list(LENGTH ARGN _NB_ARGS)
+    list(GET ARGN 0 result)
+    if(_NB_ARGS GREATER 1)
+        list(GET ARGN 1 _CUSTOM_REPO)
+        if(NOT EXISTS "${_CUSTOM_REPO}")
+            message(FATAL_ERROR "scryptGetGitBranch call for inexisting directory [${_CUSTOM_REPO}]")
+        endif()
+    endif()
+
+    if(EXISTS "${_CUSTOM_REPO}")
+        set(_REPO_DIR ${_CUSTOM_REPO})
+    else()
+        set(_REPO_DIR ${CMAKE_SOURCE_DIR})
+    endif()
+
     # Get the latest commit datetime
     execute_process(
       COMMAND git log -1 --date=short --pretty=format:%ci
-      WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+      WORKING_DIRECTORY ${_REPO_DIR}
       OUTPUT_VARIABLE _Source_commit_datetime
       OUTPUT_STRIP_TRAILING_WHITESPACE
     )

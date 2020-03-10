@@ -6,18 +6,18 @@
 #################################################################
 
 ## Test setting requires locating bsv source code
-if(NOT DEFINED SCRYPT_BSV_SOURCE_ROOT)#
-  message(FATAL_ERROR "Unable to locate bsv source code by SCRYPT_BSV_SOURCE_ROOT")
+if(NOT DEFINED SCRYPT_BSV_ROOT_DIR)#
+  message(FATAL_ERROR "Unable to locate bsv source code by SCRYPT_BSV_ROOT_DIR")
 endif()
-# This file is mainly copied from ${SCRYPT_BSV_SOURCE_ROOT}/sv/src/test/CMakeLists.txt with slightl modifications
+# This file is mainly copied from ${SCRYPT_BSV_ROOT_DIR}/sv/src/test/CMakeLists.txt with slightl modifications
 #######################################################################
 
 if(NOT TARGET Python::Interpreter)
   message(FATAL_ERROR "Python Interpreter is required to build tests")
 endif()
 
-set(SCRYPT_BSV_TEST_ROOT "${SCRYPT_BSV_SOURCE_ROOT}/src/test")
-set(SCRYPT_BSV_TESTSUITE_MODULE "${SCRYPT_BSV_SOURCE_ROOT}/cmake/modules/TestSuite.cmake")
+set(SCRYPT_BSV_TEST_ROOT "${SCRYPT_BSV_ROOT_DIR}/src/test")
+set(SCRYPT_BSV_TESTSUITE_MODULE "${SCRYPT_BSV_ROOT_DIR}/cmake/modules/TestSuite.cmake")
 set(SCRYPT_BSV_TEST_HEADER_GENERATOR "${SCRYPT_BSV_TEST_ROOT}/data/generate_header.py")
 
 function(gen_json_header NAME)

@@ -29,7 +29,13 @@ const static std::string SCRYPT_BUILD_DATETIME_UTC = "${SCRYPT_BUILD_DATETIME_UT
 /*! As the scrypt code is built using bsv code. It need to track what version of bsv code has been used
  *
  */
-const static std::string BSV_GIT_BRANCH   = "To be populated at cmake time";
-const static std::string BSV_GIT_HASH     = "To be populated at cmake time";
+const static int BSV_CLIENT_VERSION_MAJOR = ${BSV_CLIENT_VERSION_MAJOR};
+const static int BSV_CLIENT_VERSION_MINOR = ${BSV_CLIENT_VERSION_MINOR};
+const static int BSV_CLIENT_VERSION_REVISION = ${BSV_CLIENT_VERSION_REVISION};
+
+const static std::string BSV_GIT_COMMIT_BRANCH   = "${BSV_GIT_COMMIT_BRANCH}";
+const static std::string BSV_GIT_COMMIT_HASH     = "${BSV_GIT_COMMIT_HASH}";
+const static std::string BSV_GIT_COMMIT_DATETIME = "${BSV_GIT_COMMIT_DATETIME}";
+const static std::string BSV_VERSION_STRING      = "${BSV_VERSION_STRING}";
 
 *endif /* SCRYPTVersion_hpp */

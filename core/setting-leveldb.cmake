@@ -6,8 +6,8 @@
 #################################################################
 
 ## Build leveldb requires locating bsv source code
-if(NOT DEFINED SCRYPT_BSV_SOURCE_ROOT)#
-    message(FATAL_ERROR "Unable to locate bsv source code by SCRYPT_BSV_SOURCE_ROOT")
+if(NOT DEFINED SCRYPT_BSV_ROOT_DIR)#
+    message(FATAL_ERROR "Unable to locate bsv source code by SCRYPT_BSV_ROOT_DIR")
 endif()
 
 macro(FindSHLWAPI)
@@ -29,7 +29,7 @@ macro(FindSHLWAPI)
   set(SHLWAPI_INCLUDE_DIRS ${SHLWAPI_INCLUDE_DIR})
 endmacro()
 
-# This file is mainly copied from ${SCRYPT_BSV_SOURCE_ROOT}/sv/src/leveldb/CMakeLists.txt with slightl modifications
+# This file is mainly copied from ${SCRYPT_BSV_ROOT_DIR}/sv/src/leveldb/CMakeLists.txt with slightl modifications
 #######################################################################
 
 if(NOT MSVC)
@@ -39,7 +39,7 @@ if(NOT MSVC)
   scrypt_remove_compiler_flags(-Wstrict-prototypes)
 endif()
 
-set(SCRYPT_BSV_LEVELDB_ROOT "${SCRYPT_BSV_SOURCE_ROOT}/src/leveldb")
+set(SCRYPT_BSV_LEVELDB_ROOT "${SCRYPT_BSV_ROOT_DIR}/src/leveldb")
 
 include(CheckIncludeFileCXX)
 check_include_file_cxx("atomic" LEVELDB_ATOMIC_PRESENT)

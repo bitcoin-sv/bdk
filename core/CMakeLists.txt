@@ -10,8 +10,8 @@ if (NOT (Boost_FOUND AND OPENSSL_FOUND))
 endif()
 
 ## Build scrypt requires locating bsv source code
-if(NOT DEFINED SCRYPT_BSV_SOURCE_ROOT)#
-  message(FATAL_ERROR "Unable to locate bsv source code by SCRYPT_BSV_SOURCE_ROOT")
+if(NOT DEFINED SCRYPT_BSV_ROOT_DIR)#
+  message(FATAL_ERROR "Unable to locate bsv source code by SCRYPT_BSV_ROOT_DIR")
 endif()
 set(BSV_MINIMAL_FILES ${BSV_MINIMAL_HDR_FILES} ${BSV_MINIMAL_SRC_FILES})
 #scryptPrintList("BSV_MINIMAL_FILES" "${BSV_MINIMAL_FILES}")## Help to debug
@@ -25,15 +25,17 @@ if(SCRYPT_BUILD_LEVELDB)
 endif()
 
 ## Log list of bsv source files
-message(STATUS "Build core using bsv source code in ${SCRYPT_BSV_SOURCE_ROOT}")
+message(STATUS "Build core using bsv source code in ${SCRYPT_BSV_ROOT_DIR}")
 foreach(_bitcoin_file ${BSV_MINIMAL_FILES})
-  message(STATUS "    [${_bitcoin_file}]")
+  if(SCRYPT_LOG_BSV_FILES)
+    message(STATUS "    [${_bitcoin_file}]")
+  endif()
   ## Set the nice structure in IDE
   get_filename_component(_file_ext "${_bitcoin_file}" EXT)
   if(${_file_ext} MATCHES ".cpp" OR ${_file_ext} MATCHES ".c")
-    source_group(TREE ${SCRYPT_BSV_SOURCE_ROOT} PREFIX "bitcoin SRC" FILES "${_bitcoin_file}")
+    source_group(TREE ${SCRYPT_BSV_ROOT_DIR} PREFIX "bitcoin SRC" FILES "${_bitcoin_file}")
   else()
-    source_group(TREE ${SCRYPT_BSV_SOURCE_ROOT} PREFIX "bitcoin HDR" FILES "${_bitcoin_file}")
+    source_group(TREE ${SCRYPT_BSV_ROOT_DIR} PREFIX "bitcoin HDR" FILES "${_bitcoin_file}")
   endif()
 endforeach()
 source_group("_generated" FILES "${BITCOIN_CONFIG_FILE}")
@@ -62,8 +64,8 @@ install(FILES ${BITCOIN_CONFIG_FILE} DESTINATION "include/core/sv/config" COMPON
 set(default_install_include_core_dir "include/core")
 foreach(_bsv_hdr ${BSCRYPT_CORE_HDR_FILES})
   get_filename_component(_dir ${_bsv_hdr} DIRECTORY)
-  if("${_dir}" MATCHES "${SCRYPT_BSV_SOURCE_ROOT}/")
-    string(REPLACE "${SCRYPT_BSV_SOURCE_ROOT}/" "" _relative_dir "${_dir}")
+  if("${_dir}" MATCHES "${SCRYPT_BSV_ROOT_DIR}/")
+    string(REPLACE "${SCRYPT_BSV_ROOT_DIR}/" "" _relative_dir "${_dir}")
     set(_install_dest "${default_install_include_core_dir}/sv/${_relative_dir}")
   else()
     set(_install_dest "${default_install_include_core_dir}")

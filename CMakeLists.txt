@@ -29,6 +29,7 @@
 cmake_minimum_required(VERSION 3.13)
 project(bscrypt)
 
+option(SCRYPT_LOG_BSV_FILES "Log used bitcoin sv file to build" ON)
 option(SCRYPT_BUILD_LEVELDB "Activate the build of leveldb" OFF)
 
 ## bscrypt built is based on source files from bsv code.

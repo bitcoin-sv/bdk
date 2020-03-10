@@ -20,42 +20,75 @@ include(${CMAKE_SOURCE_DIR}/cmake/SCRYPTTools.cmake)
 ## ./configure --with-boost=/path/to/boost_1_63_0 --disable-ccache --disable-maintainer-mode --disable-dependency-tracking --enable-glibc-back-compat --enable-reduce-exports --disable-bench ; make -j4
 
 
-## TODO : if fail, it might clone/checkout from internet
-##
-macro(cryptFindBSVDir)########################################################################################
-  ## Try to determine BSV source root. The priorities are in the order below:
-  ##   If user define -DSCRYPT_BSV_SOURCE_ROOT, it will be use
-  ##   If user define environment variable SCRYPT_BSV_SOURCE_ROOT, it will be used
-  ##   If alongside the scrypt project, there are a directory 'sv', then it will be used
-  if(NOT DEFINED SCRYPT_BSV_SOURCE_ROOT)
-    if(DEFINED ENV{SCRYPT_BSV_SOURCE_ROOT})
-      file(TO_CMAKE_PATH "$ENV{SCRYPT_BSV_SOURCE_ROOT}" _CMAKE_PATH)
-      set(SCRYPT_BSV_SOURCE_ROOT "${_CMAKE_PATH}" CACHE PATH "Root directory for BSV source code" FORCE)
-      message(STATUS "Environment variable SCRYPT_BSV_SOURCE_ROOT[${SCRYPT_BSV_SOURCE_ROOT}] is used to look for bsv source files")
+function(_checkprint_SCRYPT_BSV_ROOT_DIR)
+  if(DEFINED SCRYPT_BSV_ROOT_DIR)
+    if(EXISTS "${SCRYPT_BSV_ROOT_DIR}")
+        message(STATUS "Use Bitcoin SV source code at SCRYPT_BSV_ROOT_DIR=[${SCRYPT_BSV_ROOT_DIR}]")
+    else()
+        message(FATAL_ERROR "Used inexisting directory SCRYPT_BSV_ROOT_DIR=[${SCRYPT_BSV_ROOT_DIR}]")
     endif()
+  else()
+    message(FATAL_ERROR "Variable SCRYPT_BSV_ROOT_DIR is not defined")
+  endif()
+endfunction()
+
+function(cryptFindBSVDir)########################################################################################
+  ## Function try to find the BSV source code and set the cache variable SCRYPT_BSV_ROOT_DIR
+  ##   If user define -DBSV_ROOT, it will be use
+  ##   If user define environment variable BSV_ROOT, it will be used
+  ##   If inside the bscrypt project, there are a directory '${CMAKE_SOURCE_DIR}/bitcoin-sv', then it will be used      ## jenkins build
+  ##   If alongside the bscrypt project, there are a directory ${CMAKE_SOURCE_DIR}/../bitcoin-sv, then it will be used  ## local development
+  ##   If non of them exist, then it will be clone from source into '${CMAKE_SOURCE_DIR}/bitcoin-sv'
+  if(DEFINED BSV_ROOT)
+    file(TO_CMAKE_PATH "${BSV_ROOT}" _CMAKE_PATH)
+    set(SCRYPT_BSV_ROOT_DIR "${_CMAKE_PATH}" CACHE PATH "Root directory for BSV source code" FORCE)
+    _checkprint_SCRYPT_BSV_ROOT_DIR()
+    return()
   endif()
 
-  if(NOT DEFINED SCRYPT_BSV_SOURCE_ROOT)# Failed to look up for environment variable
-    get_filename_component(_BSV_ABS_PATH "${CMAKE_SOURCE_DIR}/../sv" ABSOLUTE)
-    if(EXISTS "${_BSV_ABS_PATH}")
-      set(SCRYPT_BSV_SOURCE_ROOT "${_BSV_ABS_PATH}" CACHE PATH "Root directory for BSV source code" FORCE)
-      message(STATUS "[${SCRYPT_BSV_SOURCE_ROOT}] is used to look for bsv source files")
-    endif()
+  if(DEFINED ENV{BSV_ROOT})
+    file(TO_CMAKE_PATH "$ENV{BSV_ROOT}" _CMAKE_PATH)
+    set(SCRYPT_BSV_ROOT_DIR "${_CMAKE_PATH}" CACHE PATH "Root directory for BSV source code" FORCE)
+    _checkprint_SCRYPT_BSV_ROOT_DIR()
+    return()
   endif()
 
-  if(NOT DEFINED SCRYPT_BSV_SOURCE_ROOT)# If till the end cannot find the bsv source code, then fails the build
-      message(FATAL_ERROR "Unable to locate bsv source code for SCRYPT_BSV_SOURCE_ROOT")
-  endif()
-endmacro()
-
-macro(cryptGetMinimumListBSVSource)########################################################################################
-  if(NOT DEFINED SCRYPT_BSV_SOURCE_ROOT)#
-      message(FATAL_ERROR "Unable to locate bsv source code for SCRYPT_BSV_SOURCE_ROOT")
+  if(EXISTS "${CMAKE_SOURCE_DIR}/bitcoin-sv")
+    set(SCRYPT_BSV_ROOT_DIR "${CMAKE_SOURCE_DIR}/bitcoin-sv" CACHE PATH "Root directory for BSV source code" FORCE)
+    _checkprint_SCRYPT_BSV_ROOT_DIR()
+    return()
   endif()
 
-  scryptAppendToGlobalSet(BSV_INCLUDE_DIRS "${SCRYPT_BSV_SOURCE_ROOT}/src")
-  scryptAppendToGlobalSet(BSV_INCLUDE_DIRS "${SCRYPT_BSV_SOURCE_ROOT}/src/crypto")
-  scryptAppendToGlobalSet(BSV_INCLUDE_DIRS "${SCRYPT_BSV_SOURCE_ROOT}/src/script")
+  if(EXISTS "${CMAKE_SOURCE_DIR}/../bitcoin-sv")
+    get_filename_component(_ABS_PATH "${CMAKE_SOURCE_DIR}/../bitcoin-sv" ABSOLUTE)
+    set(SCRYPT_BSV_ROOT_DIR "${_ABS_PATH}" CACHE PATH "Root directory for BSV source code" FORCE)
+    _checkprint_SCRYPT_BSV_ROOT_DIR()
+    return()
+  endif()
+
+  message(STATUS "Unable to find bsv source code on local machine. It will be clone to [${CMAKE_SOURCE_DIR}/bitcoin-sv]")
+  execute_process(
+    COMMAND git clone https://github.com/bitcoin-sv/bitcoin-sv.git
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
+  if(NOT EXISTS "${CMAKE_SOURCE_DIR}/bitcoin-sv")
+    message(FATAL_ERROR "Unable to clone [https://github.com/bitcoin-sv/bitcoin-sv.git] into [${CMAKE_SOURCE_DIR}/bitcoin-sv]. Check internet connection")
+  else()
+    message(STATUS "Successfully cloned [https://github.com/bitcoin-sv/bitcoin-sv.git] into [${CMAKE_SOURCE_DIR}/bitcoin-sv]")
+    set(SCRYPT_BSV_ROOT_DIR "${CMAKE_SOURCE_DIR}/bitcoin-sv" CACHE PATH "Root directory for BSV source code" FORCE)
+    _checkprint_SCRYPT_BSV_ROOT_DIR()
+  endif()
+endfunction()##cryptFindBSVDir
+
+function(cryptGetMinimumListBSVSource)########################################################################################
+  if(NOT (DEFINED SCRYPT_BSV_ROOT_DIR AND EXISTS "${SCRYPT_BSV_ROOT_DIR}"))
+      message(FATAL_ERROR "Unable to locate bsv source code for SCRYPT_BSV_ROOT_DIR")
+  endif()
+
+  scryptAppendToGlobalSet(BSV_INCLUDE_DIRS "${SCRYPT_BSV_ROOT_DIR}/src")
+  scryptAppendToGlobalSet(BSV_INCLUDE_DIRS "${SCRYPT_BSV_ROOT_DIR}/src/crypto")
+  scryptAppendToGlobalSet(BSV_INCLUDE_DIRS "${SCRYPT_BSV_ROOT_DIR}/src/script")
 
   set(_minimal_hdr_files
       "src/amount.h"  ##  Used by [block.cpp], [interpreter.cpp], [merkle.cpp], [standard.cpp], [transaction.cpp]
@@ -168,7 +201,7 @@ macro(cryptGetMinimumListBSVSource)#############################################
       ## Total number of header files : 107
   )
   foreach(rel_file ${_minimal_hdr_files})
-    scryptAppendToGlobalSet(BSV_MINIMAL_HDR_FILES "${SCRYPT_BSV_SOURCE_ROOT}/${rel_file}")
+    scryptAppendToGlobalSet(BSV_MINIMAL_HDR_FILES "${SCRYPT_BSV_ROOT_DIR}/${rel_file}")
   endforeach()
 
   set(_minimal_src_files
@@ -215,9 +248,9 @@ macro(cryptGetMinimumListBSVSource)#############################################
       ## Total number of source files : 40
   )
   foreach(rel_file ${_minimal_src_files})
-    scryptAppendToGlobalSet(BSV_MINIMAL_SRC_FILES "${SCRYPT_BSV_SOURCE_ROOT}/${rel_file}")
+    scryptAppendToGlobalSet(BSV_MINIMAL_SRC_FILES "${SCRYPT_BSV_ROOT_DIR}/${rel_file}")
   endforeach()
-endmacro()
+endfunction()
 
 
 
@@ -228,7 +261,8 @@ endmacro()
 
 function(scryptPrintBSVSourceInfo)
   message("BSV Source info :")
-  message("SCRYPT_BSV_SOURCE_ROOT  [${SCRYPT_BSV_SOURCE_ROOT}]")
+  message("SCRYPT_BSV_ROOT_DIR  [${SCRYPT_BSV_ROOT_DIR}]")
+
   scryptPrintList("BSV_MINIMAL_HDR_FILES" "${BSV_MINIMAL_HDR_FILES}")
   scryptPrintList("BSV_MINIMAL_SRC_FILES" "${BSV_MINIMAL_SRC_FILES}")
   scryptPrintList("BSV_INCLUDE_DIRS" "${BSV_INCLUDE_DIRS}")

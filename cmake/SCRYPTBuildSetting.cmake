@@ -89,6 +89,31 @@ function(scryptSetOutputDirectories)
   #scryptPrintList("scryptOUTPUT_DIRECTORIES" "${scryptOUTPUT_DIRECTORIES}")## Debug Log
 endfunction()
 
+#### Get bsv versions in the "${SCRYPT_BSV_ROOT_DIR}/src/clientversion.h"
+function(scryptCalculateBSVVersion clientversionFile)###############################################################
+  ## #define CLIENT_VERSION_MAJOR 1
+  ## #define CLIENT_VERSION_MINOR 0
+  ## #define CLIENT_VERSION_REVISION 2
+
+  if(NOT EXISTS "${clientversionFile}")
+    message(FATAL_ERROR "BSV version file [${clientversionFile}] does not exist")
+  endif()
+
+  file(STRINGS ${clientversionFile} _CLIENT_VERSION_MAJOR_TMP REGEX "^#define CLIENT_VERSION_MAJOR[ \t]+[0-9]+$")
+  file(STRINGS ${clientversionFile} _CLIENT_VERSION_MINOR_TMP REGEX "^#define CLIENT_VERSION_MINOR[ \t]+[0-9]+$")
+  file(STRINGS ${clientversionFile} _CLIENT_VERSION_REVISION_TMP REGEX "^#define CLIENT_VERSION_REVISION[ \t]+[0-9]+$")
+
+  string(REPLACE "#define CLIENT_VERSION_MAJOR " "" _CLIENT_VERSION_MAJOR ${_CLIENT_VERSION_MAJOR_TMP})
+  string(REPLACE "#define CLIENT_VERSION_MINOR " "" _CLIENT_VERSION_MINOR ${_CLIENT_VERSION_MINOR_TMP})
+  string(REPLACE "#define CLIENT_VERSION_REVISION " "" _CLIENT_VERSION_REVISION ${_CLIENT_VERSION_REVISION_TMP})
+
+  set(BSV_CLIENT_VERSION_MAJOR ${_CLIENT_VERSION_MAJOR} CACHE INTERNAL "BSV CLIENT_VERSION_MAJOR")
+  set(BSV_CLIENT_VERSION_MINOR ${_CLIENT_VERSION_MINOR} CACHE INTERNAL "BSV CLIENT_VERSION_MINOR")
+  set(BSV_CLIENT_VERSION_REVISION ${_CLIENT_VERSION_REVISION} CACHE INTERNAL "BSV CLIENT_VERSION_REVISION")
+
+  set(BSV_VERSION_STRING "${BSV_CLIENT_VERSION_MAJOR}.${BSV_CLIENT_VERSION_MINOR}.${BSV_CLIENT_VERSION_REVISION}" CACHE INTERNAL "BSV version string")
+endfunction()
+
 function(scryptSetBuildVersion)
   if(SCRYPT_SET_BUILD_VERSION_DONE)
     return()
@@ -108,19 +133,42 @@ function(scryptSetBuildVersion)
   set(SCRYPT_VERSION_STRING "${SCRYPT_VERSION_MAJOR}.${SCRYPT_VERSION_MINOR}.${SCRYPT_VERSION_PATCH}" CACHE INTERNAL "scrypt version string")
 
   # Get branch
-  scryptGetGitBranch(_SOURCE_GIT_COMMIT_BRANCH)
+  scryptGetGitBranch(_SOURCE_GIT_COMMIT_BRANCH "${CMAKE_SOURCE_DIR}")
   set(SOURCE_GIT_COMMIT_BRANCH ${_SOURCE_GIT_COMMIT_BRANCH} CACHE INTERNAL "Source commit hash")
 
-  scryptGetGitCommitHash(_SOURCE_GIT_COMMIT_HASH)
+  scryptGetGitCommitHash(_SOURCE_GIT_COMMIT_HASH "${CMAKE_SOURCE_DIR}")
   set(SOURCE_GIT_COMMIT_HASH ${_SOURCE_GIT_COMMIT_HASH} CACHE INTERNAL "Source commit hash")
 
   # Get the latest commit datetime
-  scryptGetGitCommitDateTime(_SOURCE_GIT_COMMIT_DATETIME)
+  scryptGetGitCommitDateTime(_SOURCE_GIT_COMMIT_DATETIME "${CMAKE_SOURCE_DIR}")
   set(SOURCE_GIT_COMMIT_DATETIME ${_SOURCE_GIT_COMMIT_DATETIME} CACHE INTERNAL "Source commit datetime")
 
   # Get the build date time
   scryptGetBuildDateTime(_SCRYPT_BUILD_DATETIME_UTC)
   set(SCRYPT_BUILD_DATETIME_UTC ${_SCRYPT_BUILD_DATETIME_UTC} CACHE INTERNAL "Build datetime UTC")
+
+
+  ## Go to "${SCRYPT_BSV_ROOT_DIR}" and find bsv repository informations:
+  ##   Repo url
+  ##   Repo branch
+  ##   Repo git hash
+  ##   Repo commit date time
+  if(NOT (DEFINED SCRYPT_BSV_ROOT_DIR AND EXISTS "${SCRYPT_BSV_ROOT_DIR}"))
+      message(FATAL_ERROR "Unable to find local bsv repository")
+  endif()
+
+  # Get branch
+  scryptGetGitBranch(_BSV_GIT_COMMIT_BRANCH "${SCRYPT_BSV_ROOT_DIR}")
+  set(BSV_GIT_COMMIT_BRANCH ${_BSV_GIT_COMMIT_BRANCH} CACHE INTERNAL "BSV commit branch")
+
+  scryptGetGitCommitHash(_BSV_GIT_COMMIT_HASH "${SCRYPT_BSV_ROOT_DIR}")
+  set(BSV_GIT_COMMIT_HASH ${_BSV_GIT_COMMIT_HASH} CACHE INTERNAL "BSV commit hash")
+
+  # Get the latest commit datetime
+  scryptGetGitCommitDateTime(_BSV_GIT_COMMIT_DATETIME "${SCRYPT_BSV_ROOT_DIR}")
+  set(BSV_GIT_COMMIT_DATETIME ${_BSV_GIT_COMMIT_DATETIME} CACHE INTERNAL "BSV commit datetime")
+
+  scryptCalculateBSVVersion("${SCRYPT_BSV_ROOT_DIR}/src/clientversion.h")
 
   #### Generate version C++  #####
   set(SCRYPT_VERSION_HPP_IN ${SCRYPT_ROOT_CMAKE_MODULE_PATH}/SCRYPTVersion.hpp.in CACHE INTERNAL "Template File for framework version config")
