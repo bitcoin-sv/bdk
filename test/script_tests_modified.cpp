@@ -9,9 +9,9 @@
 
  // BSCRYPT_BUILD_TEST ++++++++++++++++++++++++++++++++++++++++++++++++++++
 #ifdef NDEBUG 
-#  define BOOST_TEST_MODULE scrip_tests
+#  define BOOST_TEST_MODULE test_scrypt_core
 #else
-#  define BOOST_TEST_MODULE scrip_testsd
+#  define BOOST_TEST_MODULE test_scrypt_cored
 #endif
 #include <boost/test/unit_test.hpp>
 // BSCRYPT_BUILD_TEST ++++++++++++++++++++++++++++++++++++++++++++++++++++
