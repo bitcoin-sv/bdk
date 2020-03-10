@@ -39,6 +39,7 @@ def dump_env_pr(pr_groovy_file) {
 
     sh label : "Dump common env variables for scm", script : """
         export pr_destination_repo_ssh=\"\$(python contrib/chainkins/chainkins.py --get_pr_destination_repository)\"
+        export pr_destination_branch=\"\$(python contrib/chainkins/chainkins.py --get_bbpayload_info --key_path=pullrequest:destination:branch:name)\"
         export pr_destination_commit=\"\$(python contrib/chainkins/chainkins.py --get_bbpayload_info --key_path=pullrequest:destination:commit:hash)\"
         export pr_source_repo_ssh=\"\$(python contrib/chainkins/chainkins.py --get_pr_source_repository)\"
         export pr_source_commit=\"\$(python contrib/chainkins/chainkins.py --get_bbpayload_info --key_path=pullrequest:source:commit:hash)\"
@@ -53,6 +54,7 @@ def dump_env_pr(pr_groovy_file) {
         echo env.CHAINKINS_TARGET_COMMIT_SHORT=\\\"\$(python contrib/chainkins/chainkins.py --get_short_hash --git_hash=\$pr_source_commit)\\\">>${pr_groovy_file}
 
         echo env.CHAINKINS_PR_BITBUCKET_DESTINATION_REPO_HTTP=\\\"\$(python contrib/chainkins/chainkins.py --get_http_repo --ssh_repo=\$pr_destination_repo_ssh)\\\">>${pr_groovy_file}
+        echo env.CHAINKINS_PR_BITBUCKET_DESTINATION_BRANCH=\\\"\$pr_destination_branch\\\">>${pr_groovy_file}
         echo env.CHAINKINS_PR_BITBUCKET_DESTINATION_COMMIT=\\\"\$pr_destination_commit\\\">>${pr_groovy_file}
         echo env.CHAINKINS_PR_BITBUCKET_SOURCE_REPO_SSH=\\\"\$pr_source_repo_ssh\\\">>${pr_groovy_file}
         echo env.CHAINKINS_PR_BITBUCKET_SOURCE_BRANCH=\\\"\$pr_source_branch\\\">>${pr_groovy_file}
@@ -78,8 +80,8 @@ def pr_checkout_and_rebase_windows(nb_log = "20"){
     // Checkout master, then rebase on the pr branch
     // TODO : git fetch here doesn't use credential because the build machine already have set the ssh key of sdklibraries
     //        In future, need to make it independant of build machine, so need to use sdklibraries credential
-    bat label : "Checkout master and rebase on pull request branch", script : """
-        git checkout master
+    bat label : "Checkout destination and rebase on pull request branch", script : """
+        git checkout $CHAINKINS_PR_BITBUCKET_DESTINATION_BRANCH
         git remote add pr_$BITBUCKET_PULL_REQUEST_ID $CHAINKINS_PR_BITBUCKET_SOURCE_REPO_SSH
         git fetch pr_$BITBUCKET_PULL_REQUEST_ID $CHAINKINS_PR_BITBUCKET_SOURCE_BRANCH
         git rebase pr_$BITBUCKET_PULL_REQUEST_ID/$CHAINKINS_PR_BITBUCKET_SOURCE_BRANCH
@@ -100,7 +102,7 @@ def dump_buildenv_windows(win_env_groovy_file) {
 def build_on_windows() {
     bat label : "Compile Release and Debug on Windows", script : '''
         mkdir %WINDOWS_BUILD_DIR%'
-        cmake -B%WINDOWS_BUILD_DIR% -H%WORKSPACE% -G"Visual Studio 15 2017" -A x64 -DBUILD_WEBASSEMBLY=ON
+        cmake -B%WINDOWS_BUILD_DIR% -H%WORKSPACE% -G"Visual Studio 15 2017" -A x64
         cmake --build %WINDOWS_BUILD_DIR% --target ALL_BUILD --config Debug --parallel 4
         cmake --build %WINDOWS_BUILD_DIR% --target ALL_BUILD --config Release --parallel 4
     '''
@@ -149,8 +151,8 @@ def pr_checkout_and_rebase_linux(nb_log = "20"){
     // Checkout master, then rebase on the pr branch
     // TODO : git fetch here doesn't use credential because the build machine already have set the ssh key of sdklibraries
     //        In future, need to make it independant of build machine, so need to use sdklibraries credential
-    sh label : "Checkout master and rebase on pull request branch", script : """
-        git checkout master
+    sh label : "Checkout destination branch and rebase on pull request branch", script : """
+        git checkout $CHAINKINS_PR_BITBUCKET_DESTINATION_BRANCH
         git remote add pr_$BITBUCKET_PULL_REQUEST_ID $CHAINKINS_PR_BITBUCKET_SOURCE_REPO_SSH
         git fetch pr_$BITBUCKET_PULL_REQUEST_ID $CHAINKINS_PR_BITBUCKET_SOURCE_BRANCH
         git rebase pr_$BITBUCKET_PULL_REQUEST_ID/$CHAINKINS_PR_BITBUCKET_SOURCE_BRANCH
@@ -173,9 +175,9 @@ def build_on_linux() {
     sh label : "Compile Release and Debug on Linux", script : '''
         mkdir $LINUX_BUILD_DIR_RELEASE
         mkdir $LINUX_BUILD_DIR_DEBUG
-        cmake -B$LINUX_BUILD_DIR_RELEASE -H$WORKSPACE -DBUILD_WEBASSEMBLY=ON -DCUSTOM_SYSTEM_OS_NAME=Ubuntu
+        cmake -B$LINUX_BUILD_DIR_RELEASE -H$WORKSPACE -DCUSTOM_SYSTEM_OS_NAME=Ubuntu -DCMAKE_BUILD_TYPE=Release
         cmake --build $LINUX_BUILD_DIR_RELEASE --target all --parallel 4
-        cmake -B$LINUX_BUILD_DIR_DEBUG -H$WORKSPACE -DBUILD_WEBASSEMBLY=ON -DCUSTOM_SYSTEM_OS_NAME=Ubuntu -DCMAKE_BUILD_TYPE=Debug
+        cmake -B$LINUX_BUILD_DIR_DEBUG -H$WORKSPACE -DCUSTOM_SYSTEM_OS_NAME=Ubuntu -DCMAKE_BUILD_TYPE=Debug
         cmake --build $LINUX_BUILD_DIR_DEBUG --target all --parallel 4
     '''
 }
