@@ -89,7 +89,7 @@ def pr_checkout_and_rebase_windows(nb_log = "20"){
 
 def dump_buildenv_windows(win_env_groovy_file) {
     bat label : "Dump env variables for windows build", script : """
-        echo env.WINDOWS_CHAINKINS_FILE=/${env.WORKSPACE}\\jenkins\\chainkins.py/        >>${win_env_groovy_file}
+        echo env.WINDOWS_CHAINKINS_FILE=/${env.WORKSPACE}\\contrib\\chainkins\\chainkins.py/      >>${win_env_groovy_file}
         echo env.WINDOWS_BUILD_DIR=/${env.WORKSPACE}\\${env.CHAINKINS_BUILD_DIRNAME}/             >>${win_env_groovy_file}
         echo env.WINDOWS_POSTBUILD_DIR=/${env.WORKSPACE}\\${env.CHAINKINS_POSTBUILD_DIRNAME}/     >>${win_env_groovy_file}
         echo env.WINDOWS_TESTRESULT_DIR_RELEASE=/${env.WORKSPACE}\\${env.CHAINKINS_BUILD_DIRNAME}\\x64\\release/ >>${win_env_groovy_file}
@@ -137,9 +137,9 @@ def pack_on_windows() {
         cpack --config %WINDOWS_BUILD_DIR%\\CPackConfig.cmake -G NSIS -C Debug
         cpack --config %WINDOWS_BUILD_DIR%\\CPackConfig.cmake -G NSIS -C Release
         cpack --config %WINDOWS_BUILD_DIR%\\CPackSourceConfig.cmake -G ZIP
-        move SDKLibraries-v*Windows*.exe %WINDOWS_POSTBUILD_DIR%
+        move bscrypt-v*Windows*.exe %WINDOWS_POSTBUILD_DIR%
         dir %WINDOWS_POSTBUILD_DIR%\\*.exe
-        move SDKLibraries-v*source*.zip %WINDOWS_POSTBUILD_DIR%
+        move bscrypt-v*source*.zip %WINDOWS_POSTBUILD_DIR%
         dir %WINDOWS_POSTBUILD_DIR%\\*.zip
     '''
 }
@@ -210,9 +210,9 @@ def pack_on_linux() {
         mkdir -p $LINUX_POSTBUILD_DIR
         cpack --config $LINUX_BUILD_DIR_DEBUG/CPackConfig.cmake -G TGZ
         cpack --config $LINUX_BUILD_DIR_RELEASE/CPackConfig.cmake -G TGZ
-        mv SDKLibraries-v*Ubuntu*.tar.gz $LINUX_POSTBUILD_DIR
+        mv bscrypt-v*Ubuntu*.tar.gz $LINUX_POSTBUILD_DIR
         cpack --config $LINUX_BUILD_DIR_RELEASE/CPackSourceConfig.cmake -G TGZ
-        mv SDKLibraries-v*source*.tar.gz $LINUX_POSTBUILD_DIR
+        mv bscrypt-v*source*.tar.gz $LINUX_POSTBUILD_DIR
         ls -Ss1pq --block-size=M $LINUX_POSTBUILD_DIR/*.tar.gz
     '''
 }

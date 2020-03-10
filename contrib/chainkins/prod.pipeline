@@ -52,7 +52,7 @@ stage('Distributed Build') { parallel { // =====================================
         step([$class: 'WsCleanup'])
         checkout scm
         script {
-            def windows_env_file = "${env.WORKSPACE}\\jenkins\\windows_env.groovy"
+            def windows_env_file = "${env.WORKSPACE}\\contrib\\chainkins\\windows_env.groovy"
             chainkins.dump_buildenv_windows(windows_env_file)
             CHAINKINS_WINDOWS_ENV = load(windows_env_file)
             bat label:"Show env variables", script:"type ${windows_env_file} && set"
@@ -65,10 +65,10 @@ stage('Distributed Build') { parallel { // =====================================
             }
 
             bat label:"Checkout checkout branch", script:"git checkout ${env.CHAINKINS_TARGET_BRANCH}"
-			bat label:"Git log", script:"git git log -5"
-            //chainkins.build_on_windows()
-            //chainkins.runtest_on_windows()
-            //chainkins.pack_on_windows()
+			bat label:"Last 5 commits", script:" git log -5"
+            chainkins.build_on_windows()
+            chainkins.runtest_on_windows()
+            chainkins.pack_on_windows()
         }
       }
 
@@ -76,9 +76,9 @@ stage('Distributed Build') { parallel { // =====================================
         always {
           script{
 
-            //chainkins.consolidate_test_on_windows()
+            chainkins.consolidate_test_on_windows()
 
-            junit "${env.CHAINKINS_POSTBUILD_DIRNAME}/*junit*.xml"
+            junit allowEmptyResults: true, testResults: "${env.CHAINKINS_POSTBUILD_DIRNAME}/*junit*.xml"
 
             emailext ( // TODO send html msg to slack sdk channel
               to: "${env.CHAINKINS_EMAIL_TO_SEND}",
@@ -120,19 +120,19 @@ stage('Distributed Build') { parallel { // =====================================
             }
 
             sh label:"Git checkout branch", script:"git checkout ${env.CHAINKINS_TARGET_BRANCH}"
-			bat label:"Git log", script:"git git log -5"
-            //chainkins.build_on_linux()
-            //chainkins.runtest_on_linux()
-            //chainkins.pack_on_linux()
+			sh label:"Last 5 commits", script:" git log -5"
+            chainkins.build_on_linux()
+            chainkins.runtest_on_linux()
+            chainkins.pack_on_linux()
         }
       }
       post {
         always {
           script{
 
-            //chainkins.consolidate_test_on_linux()
+            chainkins.consolidate_test_on_linux()
 
-            junit "${env.CHAINKINS_POSTBUILD_DIRNAME}/*junit*.xml"
+            junit allowEmptyResults: true, testResults: "${env.CHAINKINS_POSTBUILD_DIRNAME}/*junit*.xml"
 
             emailext ( // TODO send html msg to slack sdk channel
               to: "${env.CHAINKINS_EMAIL_TO_SEND}",
