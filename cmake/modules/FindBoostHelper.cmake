@@ -80,7 +80,7 @@ endmacro()
 
 function(_CopyAndInstallSharedBoostComp _Boost_Comp)############################################################
   isStaticImported(_IS_STATIC_IMPORTED Boost ${_Boost_Comp})
-  if(${_IS_STATIC_IMPORTED})
+  if(Boost_USE_STATIC_LIBS OR ${_IS_STATIC_IMPORTED})
     message(STATUS "  - [Boost::${_Boost_Comp}] is imported as static library, don't need a special fix")
     return()
   endif()
@@ -137,6 +137,7 @@ macro(HelpFindBoost)############################################################
   ## Add a required component here  ======================
   if(NOT Project_Required_BOOST_COMPONENTS)
     set(Project_Required_BOOST_COMPONENTS
+        chrono
         filesystem
         log
         log_setup
@@ -161,8 +162,10 @@ macro(HelpFindBoost)############################################################
       continue()
     endif()
 
-    scryptFixImportedTargetSymlink(Boost ${_Boost_Comp})
-    _CopyAndInstallSharedBoostComp(${_Boost_Comp})
+    if(NOT Boost_USE_STATIC_LIBS)
+      scryptFixImportedTargetSymlink(Boost ${_Boost_Comp})
+      _CopyAndInstallSharedBoostComp(${_Boost_Comp})
+    endif()
   endforeach()
 
   #TODO add message if BOOST_FOUND to show user how to add boost linking to a target
