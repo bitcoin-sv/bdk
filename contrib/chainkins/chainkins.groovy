@@ -102,7 +102,7 @@ def dump_buildenv_windows(win_env_groovy_file) {
 def build_on_windows() {
     bat label : "Compile Release and Debug on Windows", script : '''
         mkdir %WINDOWS_BUILD_DIR%'
-        cmake -B%WINDOWS_BUILD_DIR% -H%WORKSPACE% -G"Visual Studio 15 2017" -A x64
+        cmake -B%WINDOWS_BUILD_DIR% -H%WORKSPACE% -G"Visual Studio 16 2019" -A x64
         cmake --build %WINDOWS_BUILD_DIR% --target ALL_BUILD --config Debug --parallel 4
         cmake --build %WINDOWS_BUILD_DIR% --target ALL_BUILD --config Release --parallel 4
     '''

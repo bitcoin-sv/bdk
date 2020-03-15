@@ -12,10 +12,10 @@
 ## Run to build/test/install
 ##
 ## On Windows
-##   cmake -G"Visual Studio 15 2017" -A x64 ..\bscrypt && cmake --build . --target ALL_BUILD --config Debug && cmake --build . --target ALL_BUILD --config Release && ctest -C Debug && ctest -C Release && cpack -G NSIS -C Release
+##   cmake -G"Visual Studio 16 2019" -A x64 ..\bscrypt && cmake --build . --target ALL_BUILD --config Debug && cmake --build . --target ALL_BUILD --config Release && ctest -C Debug && ctest -C Release && cpack -G NSIS -C Release
 ## Windows alternative with MSBuild parallele:
-##   cmake -G"Visual Studio 15 2017" -A x64 ..\bscrypt && msbuild bscrypt.sln -maxcpucount:4 /p:Configuration=Debug && msbuild bscrypt.sln -maxcpucount:4 /p:Configuration=Release
-##   cmake -G"Visual Studio 15 2017" -A x64 ..\bscrypt && msbuild bscrypt.sln -v:q -maxcpucount:4 /p:Configuration=Debug && msbuild bscrypt.sln  -v:q -maxcpucount:4 /p:Configuration=Release
+##   cmake -G"Visual Studio 16 2019" -A x64 ..\bscrypt && msbuild bscrypt.sln -maxcpucount:4 /p:Configuration=Debug && msbuild bscrypt.sln -maxcpucount:4 /p:Configuration=Release
+##   cmake -G"Visual Studio 16 2019" -A x64 ..\bscrypt && msbuild bscrypt.sln -v:q -maxcpucount:4 /p:Configuration=Debug && msbuild bscrypt.sln  -v:q -maxcpucount:4 /p:Configuration=Release
 ##
 ## On Linux (Ubuntu)
 ##   cmake ../bscrypt -DCMAKE_BUILD_TYPE=Debug -DCUSTOM_SYSTEM_OS_NAME=Ubuntu; time -p make -j8 ; ctest ; make install; cpack -G TGZ

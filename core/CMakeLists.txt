@@ -50,7 +50,7 @@ set(BSCRYPT_CORE_SRC_FILES ${BSCRYPT_CORE_EXTRA_SRC_FILES} ${BSV_MINIMAL_SRC_FIL
 ## Build scrypt_core as a library using bsv source code
 add_library(scrypt_core ${BITCOIN_CONFIG_FILE} ${BSCRYPT_CORE_HDR_FILES} ${BSCRYPT_CORE_SRC_FILES})
 target_include_directories(scrypt_core PUBLIC ${BSV_INCLUDE_DIRS} ${CMAKE_SOURCE_DIR})
-target_link_libraries(scrypt_core ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT} univalue secp256k1 OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options)
+target_link_libraries(scrypt_core ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT} univalue secp256k1 OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono)
 if(WIN32)
   target_link_libraries(scrypt_core Crypt32.lib Ws2_32)
 endif()
