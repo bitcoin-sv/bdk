@@ -30,6 +30,7 @@ cmake_minimum_required(VERSION 3.13)
 project(bscrypt)
 
 option(SCRYPT_LOG_BSV_FILES "Log used bitcoin sv file to build" ON)
+option(SCRYPT_BUILD_IDE "Activate the build of bscrypt_ide" ON)
 option(SCRYPT_BUILD_LEVELDB "Activate the build of leveldb" OFF)
 
 ## bscrypt built is based on source files from bsv code.
@@ -58,6 +59,7 @@ include_directories(${CMAKE_SOURCE_DIR}/core)
 ## Build scrypt_core
 add_subdirectory(${CMAKE_SOURCE_DIR}/core)
 add_subdirectory(${CMAKE_SOURCE_DIR}/test)
+add_subdirectory(${CMAKE_SOURCE_DIR}/module)
 
 ## On Widows, need to download NSIS https://nsis.sourceforge.io/Download
 ## Possible to do WIX generator for MSI installer
