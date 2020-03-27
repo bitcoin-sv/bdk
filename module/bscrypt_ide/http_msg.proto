@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package ide_proto;
+package http_msg;
 
 //// MetaMsg contain the message type name and the serialization of the primary message.
 message MetaMsg
@@ -20,13 +20,13 @@ message StackOp
   }
 
   StackOptype op_type = 1 ; // apply type
-  bytes  data         = 2 ; // apply data
+  bytes          data = 2 ; // apply data
 }
 
 message ScriptEvalRequest {
-  string hash     = 1 ; // Hashed the entired script tokens, will be used to double check data integrity
-  optional repeated string init_stack = 2 ; // Initial values of stack data. List of hex string
-  required repeated string     tokens = 3 ; // Script tokens are op codes or binary hex string (as data)
+  string                     hash = 1 ; // Hashed the entired script tokens, will be used to double check data integrity
+  repeated string      init_stack = 2 ; // Initial values of stack data. List of hex string
+  repeated string tokens = 3 ; // Script tokens are op codes or binary hex string (as data)
 }
 
 message ScriptEvalReply {

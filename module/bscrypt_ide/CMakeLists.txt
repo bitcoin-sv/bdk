@@ -6,6 +6,7 @@
 #################################################################
 
 message("Building bscrypt IDE")
-## TODO add protobuf generation for both c++ and flutter
+
+include("${CMAKE_CURRENT_SOURCE_DIR}/http_msg.cmake")
 #add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/client)
 #add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/server)

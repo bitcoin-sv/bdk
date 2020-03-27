@@ -148,5 +148,9 @@ macro(scryptInitCMake)
   HelpFindPython()
   #scryptPrintPythonInfo()#Debug Log
 
+  include(FindProtobufHelper)
+  HelpFindProtobuf()
+  #scryptPrintProtobufInfo()#Debug Log
+
   enable_testing()
 endmacro()
