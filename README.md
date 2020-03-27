@@ -10,3 +10,5 @@ Update to use flutter web [https://flutter.dev/docs/get-started/web]
   flutter channel beta
   flutter upgrade
   flutter config --enable-web
+  flutter pub global activate protoc_plugin
+  #Add Pub/Cache/bin to system path environment variable
