@@ -5,8 +5,6 @@
 #  Copyright (c) 2020 nChain Limited. All rights reserved       #
 #################################################################
 
-message("Building bscrypt IDE")
-
-include("${CMAKE_CURRENT_SOURCE_DIR}/http_msg.cmake")
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/client)
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/server)
+include_directories("${CMAKE_CURRENT_SOURCE_DIR}/src")
+#add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/src)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/test)

@@ -152,5 +152,9 @@ macro(scryptInitCMake)
   HelpFindProtobuf()
   #scryptPrintProtobufInfo()#Debug Log
 
+  include(FindFlutterHelper)
+  HelpFindFlutter()
+  #scryptPrintFlutterInfo()#Debug Log
+
   enable_testing()
 endmacro()

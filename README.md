@@ -1,14 +1,9 @@
-To install flutter web
+Project dependencies (minimum):
 
-Install regular flutter [https://flutter.dev/docs/get-started/install]
-  git clone https://github.com/flutter/flutter.git -b stable
-  cd flutter
-  bin/flutter doctor
-  #Add $flutter/bin to system path environment variable
-
-Update to use flutter web [https://flutter.dev/docs/get-started/web]
-  flutter channel beta
-  flutter upgrade
-  flutter config --enable-web
-  flutter pub global activate protoc_plugin
-  #Add Pub/Cache/bin to system path environment variable
+bitcoin-sv  1.0.2 (source from github)
+cmake       3.16
+boost       1.69.0
+python      3.7.3
+openssl     1.1.b
+protobuf    3.11.0
+flutter     1.14.6 (beta channel)

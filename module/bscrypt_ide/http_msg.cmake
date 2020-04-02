@@ -23,8 +23,8 @@ endif()
 get_filename_component(protoc_FileName_WE ${protoFile} NAME_WE)
 
 ## Get information about output for protobuf generation files
-set(protoc_OUT_DIR_CPP ${CMAKE_CURRENT_SOURCE_DIR}/server CACHE INTERNAL "Directory to include for generating protobuf c++ files")
-set(protoc_OUT_DIR_DART ${CMAKE_CURRENT_SOURCE_DIR}/client/bscrypt/lib CACHE INTERNAL "Directory to include for generating protobuf dart files")
+set(protoc_OUT_DIR_CPP ${CMAKE_CURRENT_SOURCE_DIR}/server/src CACHE INTERNAL "Directory to include for generating protobuf c++ files")
+set(protoc_OUT_DIR_DART ${CMAKE_CURRENT_SOURCE_DIR}/client/bscrypt_ide/lib CACHE INTERNAL "Directory to include for generating protobuf dart files")
 foreach(_dir ${protoc_OUT_DIR_CPP} ${protoc_OUT_DIR_DART})## Prepare directories to generate protoc files
   if(NOT EXISTS ${_dir})
     file(MAKE_DIRECTORY ${_dir})
@@ -58,4 +58,3 @@ set_source_files_properties(${protoc_CPP_FILES} ${protoc_DART_FILES} PROPERTIES 
 add_library(http_msg STATIC ${protoc_CPP_FILES} ${protoc_DART_FILES})
 target_link_libraries(http_msg protobuf::libprotobuf)
 set_property(TARGET http_msg PROPERTY FOLDER "module/bscrypt_ide")
-
