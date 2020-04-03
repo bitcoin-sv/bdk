@@ -20,7 +20,7 @@ set(FindBoostHelper_Include TRUE)
 
 #### Preset some variable to find and import boost dynamically
 function(presetBoostVariable)##########################################################################
-  set(boost_MINIMUM_REQUIRED 1.63 CACHE INTERNAL "Preset variable to find boost" FORCE)
+  set(boost_MINIMUM_REQUIRED 1.72 CACHE INTERNAL "Preset variable to find boost" FORCE)
   ## http://stackoverflow.com/questions/6646405/how-do-you-add-boost-libraries-in-cmakelists-txt
   if(NOT Boost_USE_STATIC_LIBS)
     set(Boost_USE_STATIC_LIBS ON CACHE BOOL "Preset variable to find boost" FORCE)
@@ -31,6 +31,8 @@ function(presetBoostVariable)###################################################
   if(NOT Boost_USE_MULTITHREADED)
     set(Boost_USE_MULTITHREADED ON CACHE BOOL "Preset variable to find boost" FORCE)
   endif()
+
+  set(Boost_NO_BOOST_CMAKE ON CACHE BOOL "Prevent usage of cmake from boost (dodgy)" FORCE)## Fix for boost 1.72 MVSC 2019. Maybe later version can work without this setting
 endfunction()
 
 #### Linking with found boost

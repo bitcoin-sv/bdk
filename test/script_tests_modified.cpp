@@ -24,6 +24,8 @@
 #include "rpc/server.h"
 #include "script/script.h"
 #include "script/script_num.h"
+#include "script/scriptcache.h"
+#include "script/sigcache.h"
 #include "script/script_error.h"
 #include "script/sighashtype.h"
 #include "script/sign.h"
@@ -66,7 +68,13 @@ struct BasicTestingSetup {
     GlobalConfig& testConfig;
     BasicTestingSetup():testConfig(GlobalConfig::GetConfig())
     {
+        SHA256AutoDetect();
+        RandomInit();
         ECC_Start();
+        SetupEnvironment();
+        SetupNetworking();
+        InitSignatureCache();
+        InitScriptExecutionCache();
     }
     ~BasicTestingSetup()
     {

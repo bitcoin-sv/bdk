@@ -20,6 +20,7 @@
 ##
 ## On Linux (Ubuntu)
 ##   cmake ../bscrypt -DCMAKE_BUILD_TYPE=Debug -DCUSTOM_SYSTEM_OS_NAME=Ubuntu; time -p make -j8 ; ctest ; make install; cpack -G TGZ
+##   R_=buildrelease;D_=builddebug;OS_=Ubuntu; mkdir $R_ $D_;cd $R_; cmake ../../bscrypt -DCUSTOM_SYSTEM_OS_NAME=$OS_;time -p make -j8;cd ../$D_;cmake ../../bscrypt -DCMAKE_BUILD_TYPE=Debug -DCUSTOM_SYSTEM_OS_NAME=$OS_;time -p make -j8;ctest;cd ../$R_;ctest;cpack -G TGZ;cd ../$D_;cpack -G TGZ;cd ..;
 ##
 ## Packaging :
 ##   Windows : cpack -G NSIS -C Release ## Require to install NSIS
@@ -31,8 +32,11 @@ cmake_minimum_required(VERSION 3.16)
 project(bscrypt)
 
 option(SCRYPT_LOG_BSV_FILES "Log used bitcoin sv file to build" ON)
-option(SCRYPT_BUILD_IDE "Activate the build of bscrypt_ide" ON)
-option(SCRYPT_BUILD_LEVELDB "Activate the build of leveldb" OFF)
+option(SCRYPT_BUILD_LEVELDB "Activate the build of leveldb" ON)
+
+option(SCRYPT_BUILD_TESTS "Activate the build of tests" ON)
+option(SCRYPT_BUILD_MODULES "Activate the build of bscrypt_ide" OFF)
+
 
 ## bscrypt built is based on source files from bsv code.
 ## Use -DSCRYPT_BSV_SRC_ROOT=/path/to/sv_root
@@ -59,8 +63,13 @@ include_directories(${CMAKE_SOURCE_DIR}/core)
 
 ## Build scrypt_core
 add_subdirectory(${CMAKE_SOURCE_DIR}/core)
-add_subdirectory(${CMAKE_SOURCE_DIR}/test)
-add_subdirectory(${CMAKE_SOURCE_DIR}/module)
+
+if(SCRYPT_BUILD_TESTS)
+  add_subdirectory(${CMAKE_SOURCE_DIR}/test)
+endif()
+if(SCRYPT_BUILD_MODULES)
+  add_subdirectory(${CMAKE_SOURCE_DIR}/module)
+endif()
 
 ## On Widows, need to download NSIS https://nsis.sourceforge.io/Download
 ## Possible to do WIX generator for MSI installer

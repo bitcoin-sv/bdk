@@ -5,6 +5,8 @@
 #  Copyright (c) 2020 nChain Limited. All rights reserved       #
 #################################################################
 
-if(SCRYPT_BUILD_IDE)
+if(SCRYPT_BUILD_MODULES)
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/bscrypt_ide)
+else()
+  message(WARNING "Deactivated building modules. Set SCRYPT_BUILD_MODULES=ON to activate.")
 endif()

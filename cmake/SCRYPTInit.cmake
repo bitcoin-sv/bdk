@@ -136,6 +136,11 @@ macro(scryptInitCMake)
   scryptGetInstallRootDir(_install_root_dir)
   set(SCRYPT_COMMON_INSTALL_PREFIX "${_install_root_dir}" CACHE PATH "Common directory used for installation")
 
+  find_package(Threads)
+  if(NOT Threads_FOUND)
+    message(FATAL_ERROR "Unable to find Threads library")
+  endif()
+
   include(FindOpenSSLHelper)
   HelpFindOpenSSL()
   #scryptPrintOpenSSLInfo()#Debug Log

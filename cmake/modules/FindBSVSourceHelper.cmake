@@ -123,6 +123,8 @@ function(cryptGetMinimumListBSVSource)##########################################
       "src/script/script.h"  ##  Used by [block.cpp], [interpreter.cpp], [limitedstack.cpp], [merkle.cpp], [standard.cpp], [transaction.cpp]
       "src/script/script_flags.h"  ##  Used by [interpreter.cpp], [standard.cpp]
       "src/script/script_num.h"  ##  Used by [block.cpp], [interpreter.cpp], [standard.cpp]
+      "src/script/scriptcache.h"  ##  Used by test init
+      "src/script/sigcache.h"  ##  Used by test init
       "src/script/standard.h"  ##  Used by [standard.cpp]
       "src/script_config.h"  ##  Used by [interpreter.cpp]
       "src/serialize.h"  ##  Used by [limitedstack.cpp], [script.cpp]
@@ -237,6 +239,8 @@ function(cryptGetMinimumListBSVSource)##########################################
       "src/script/script.cpp"
       "src/script/script_error.cpp"
       "src/script/script_num.cpp"
+      "src/script/scriptcache.cpp"
+      "src/script/sigcache.cpp"
       "src/script/standard.cpp"
       "src/support/cleanse.cpp"
       "src/support/lockedpool.cpp"
