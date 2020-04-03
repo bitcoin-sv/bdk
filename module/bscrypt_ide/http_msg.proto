@@ -12,14 +12,14 @@ message MetaMsg
 /// Operations to apply on a stack
 message StackOp
 {
-  enum StackOptype
+  enum StackOpType
   {
     NOTHING = 0; // do nothing
     POP     = 1; // pop the stack , will require the poped element to double check
     PUSH    = 2; // push the stack, will require the element to push
   }
 
-  StackOptype op_type = 1 ; // apply type
+  StackOpType op_type = 1 ; // apply type
   bytes          data = 2 ; // apply data
 }
 
