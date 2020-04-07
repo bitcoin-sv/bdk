@@ -53,6 +53,7 @@ def dump_env_pr(pr_groovy_file) {
         echo env.CHAINKINS_TARGET_COMMIT=\\\"\$pr_source_commit\\\">>${pr_groovy_file}
         echo env.CHAINKINS_TARGET_COMMIT_SHORT=\\\"\$(python contrib/chainkins/chainkins.py --get_short_hash --git_hash=\$pr_source_commit)\\\">>${pr_groovy_file}
 
+        echo env.CHAINKINS_PR_BITBUCKET_DESTINATION_REPO_SSH=\\\"\$(python contrib/chainkins/chainkins.py --get_pr_destination_repository)\\\">>${pr_groovy_file}
         echo env.CHAINKINS_PR_BITBUCKET_DESTINATION_REPO_HTTP=\\\"\$(python contrib/chainkins/chainkins.py --get_http_repo --ssh_repo=\$pr_destination_repo_ssh)\\\">>${pr_groovy_file}
         echo env.CHAINKINS_PR_BITBUCKET_DESTINATION_BRANCH=\\\"\$pr_destination_branch\\\">>${pr_groovy_file}
         echo env.CHAINKINS_PR_BITBUCKET_DESTINATION_COMMIT=\\\"\$pr_destination_commit\\\">>${pr_groovy_file}
@@ -77,14 +78,23 @@ def dump_env_main_repo(master_groovy_file) {
 }
 
 def pr_checkout_and_rebase_windows(nb_log = "20"){
-    // Checkout master, then rebase on the pr branch
-    // TODO : git fetch here doesn't use credential because the build machine already have set the ssh key of sdklibraries
-    //        In future, need to make it independant of build machine, so need to use sdklibraries credential
-    bat label : "Checkout destination and rebase on pull request branch", script : """
+    checkout([
+        label : "Clone pull request from fork",
+        $class: "GitSCM",
+        branches: [[name: "pr_$BITBUCKET_PULL_REQUEST_ID/$CHAINKINS_PR_BITBUCKET_SOURCE_BRANCH"]],
+        doGenerateSubmoduleConfigurations: false,
+        extensions: [[$class: "CloneOption", honorRefspec : true]],
+        userRemoteConfigs: [
+            [credentialsId: "sdklibraries_ssh", refspec: "+refs/heads/$CHAINKINS_PR_BITBUCKET_SOURCE_BRANCH:refs/remotes/origin/pr_$BITBUCKET_PULL_REQUEST_ID/$CHAINKINS_PR_BITBUCKET_SOURCE_BRANCH", url:"$CHAINKINS_PR_BITBUCKET_SOURCE_REPO_SSH"]
+        ]
+    ])
+
+    bat label : "Checkout destination branch and rebase on pull request branch", script : """
         git checkout $CHAINKINS_PR_BITBUCKET_DESTINATION_BRANCH
-        git remote add pr_$BITBUCKET_PULL_REQUEST_ID $CHAINKINS_PR_BITBUCKET_SOURCE_REPO_SSH
-        git fetch pr_$BITBUCKET_PULL_REQUEST_ID $CHAINKINS_PR_BITBUCKET_SOURCE_BRANCH
-        git rebase pr_$BITBUCKET_PULL_REQUEST_ID/$CHAINKINS_PR_BITBUCKET_SOURCE_BRANCH
+        git log -2
+        git checkout pr_$BITBUCKET_PULL_REQUEST_ID/$CHAINKINS_PR_BITBUCKET_SOURCE_BRANCH
+        git branch -a
+        git rebase pr_$BITBUCKET_PULL_REQUEST_ID/$CHAINKINS_PR_BITBUCKET_SOURCE_BRANCH $CHAINKINS_PR_BITBUCKET_DESTINATION_BRANCH
         git log -${nb_log}
     """
 }
@@ -148,14 +158,23 @@ def pack_on_windows() {
 
 
 def pr_checkout_and_rebase_linux(nb_log = "20"){
-    // Checkout master, then rebase on the pr branch
-    // TODO : git fetch here doesn't use credential because the build machine already have set the ssh key of sdklibraries
-    //        In future, need to make it independant of build machine, so need to use sdklibraries credential
+    checkout([
+        label : "Clone pull request from fork",
+        $class: "GitSCM",
+        branches: [[name: "pr_$BITBUCKET_PULL_REQUEST_ID/$CHAINKINS_PR_BITBUCKET_SOURCE_BRANCH"]],
+        doGenerateSubmoduleConfigurations: false,
+        extensions: [[$class: "CloneOption", honorRefspec : true]],
+        userRemoteConfigs: [
+            [credentialsId: "sdklibraries_ssh", refspec: "+refs/heads/$CHAINKINS_PR_BITBUCKET_SOURCE_BRANCH:refs/remotes/origin/pr_$BITBUCKET_PULL_REQUEST_ID/$CHAINKINS_PR_BITBUCKET_SOURCE_BRANCH", url:"$CHAINKINS_PR_BITBUCKET_SOURCE_REPO_SSH"]
+        ]
+    ])
+
     sh label : "Checkout destination branch and rebase on pull request branch", script : """
         git checkout $CHAINKINS_PR_BITBUCKET_DESTINATION_BRANCH
-        git remote add pr_$BITBUCKET_PULL_REQUEST_ID $CHAINKINS_PR_BITBUCKET_SOURCE_REPO_SSH
-        git fetch pr_$BITBUCKET_PULL_REQUEST_ID $CHAINKINS_PR_BITBUCKET_SOURCE_BRANCH
-        git rebase pr_$BITBUCKET_PULL_REQUEST_ID/$CHAINKINS_PR_BITBUCKET_SOURCE_BRANCH
+        git log -2
+        git checkout pr_$BITBUCKET_PULL_REQUEST_ID/$CHAINKINS_PR_BITBUCKET_SOURCE_BRANCH
+        git branch -a
+        git rebase pr_$BITBUCKET_PULL_REQUEST_ID/$CHAINKINS_PR_BITBUCKET_SOURCE_BRANCH $CHAINKINS_PR_BITBUCKET_DESTINATION_BRANCH
         git log -${nb_log}
     """
 }
