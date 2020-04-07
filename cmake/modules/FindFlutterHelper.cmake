@@ -10,13 +10,19 @@ if(FindFlutterHelper_Include)
 endif()
 set(FindFlutterHelper_Include TRUE)
 
+#### Note that to install on build machine, it is recommended to install as
+##        SYSTEM on slave windows
+##        root   on slave linux
+##   because those are users that's run the build job
+##
 #### Flutter web setup  https://flutter.dev/docs/get-started/web
 ##
 #### Install regular flutter [https://flutter.dev/docs/get-started/install]
 ##     git clone https://github.com/flutter/flutter.git -b stable
+##     # Define environment variable PUB_CACHE pointing to $flutter/.pub-cache  (do not forget the dot)
 ##     cd flutter
 ##     bin/flutter doctor
-##     #Add $flutter/bin to system path environment variable
+##     # to system path environment variable $flutter/bin $flutter/bin/cache/dart-sdk/bin $PUB_CACHE/bin
 ##
 #### Update to use flutter web [https://flutter.dev/docs/get-started/web]
 ##     flutter channel beta
@@ -27,8 +33,12 @@ set(FindFlutterHelper_Include TRUE)
 ##   Install additional packages
 ##     flutter pub global activate protoc_plugin
 ##     flutter pub global activate junitreport
-##     #Add Pub/Cache/bin to system path environment variable
 ##     flutter doctor
+##
+#### TO Uninstall
+##      remove the $flutter directory
+##      remove the $PUB_CACHE directory
+##      unset environemnt variable previously set during installation
 
 #### Help to find Flutter
 macro(HelpFindFlutter)########################################################################################
