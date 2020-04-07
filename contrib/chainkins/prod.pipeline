@@ -50,7 +50,16 @@ stage('Distributed Build') { parallel { // =====================================
 
       steps {
         step([$class: 'WsCleanup'])
-        checkout scm
+
+        checkout([
+            label : "Clone main repository branch ${env.CHAINKINS_TARGET_BRANCH}",
+            $class: "GitSCM",
+            branches: [[name: "${env.CHAINKINS_TARGET_BRANCH}"]],
+            userRemoteConfigs: [
+                    [credentialsId: "sdklibraries_ssh", refspec: "+refs/heads/${env.CHAINKINS_TARGET_BRANCH}:refs/remotes/origin/${env.CHAINKINS_TARGET_BRANCH}",url: "${env.GIT_URL}"]
+            ]
+        ])
+
         script {
             def windows_env_file = "${env.WORKSPACE}\\contrib\\chainkins\\windows_env.groovy"
             chainkins.dump_buildenv_windows(windows_env_file)
@@ -65,7 +74,8 @@ stage('Distributed Build') { parallel { // =====================================
             }
 
             bat label:"Checkout checkout branch", script:"git checkout ${env.CHAINKINS_TARGET_BRANCH}"
-			bat label:"Last 5 commits", script:" git log -5"
+            bat label:"Last commits", script:" git log -5"
+            bat label:"Show branches ", script:" git branch -a"
             chainkins.build_on_windows()
             chainkins.runtest_on_windows()
             chainkins.pack_on_windows()
@@ -105,7 +115,16 @@ stage('Distributed Build') { parallel { // =====================================
 
       steps {
         step([$class: 'WsCleanup'])
-        checkout scm
+
+        checkout([
+            label : "Clone main repository branch ${env.CHAINKINS_TARGET_BRANCH}",
+            $class: "GitSCM",
+            branches: [[name: "${env.CHAINKINS_TARGET_BRANCH}"]],
+            userRemoteConfigs: [
+                    [credentialsId: "sdklibraries_ssh", refspec: "+refs/heads/${env.CHAINKINS_TARGET_BRANCH}:refs/remotes/origin/${env.CHAINKINS_TARGET_BRANCH}",url: "${env.GIT_URL}"]
+            ]
+        ])
+
         script {
             def linux_env_file = "${env.WORKSPACE}/contrib/chainkins/linux_env.groovy"
             chainkins.dump_buildenv_linux(linux_env_file)
@@ -120,7 +139,8 @@ stage('Distributed Build') { parallel { // =====================================
             }
 
             sh label:"Git checkout branch", script:"git checkout ${env.CHAINKINS_TARGET_BRANCH}"
-			sh label:"Last 5 commits", script:" git log -5"
+            sh label:"Last 5 commits", script:" git log -5"
+            sh label:"Show branches ", script:" git branch -a"
             chainkins.build_on_linux()
             chainkins.runtest_on_linux()
             chainkins.pack_on_linux()

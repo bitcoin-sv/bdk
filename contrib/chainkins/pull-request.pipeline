@@ -52,7 +52,16 @@ stage('Distributed Build') { parallel { // =====================================
 
       steps {
         step([$class: 'WsCleanup'])
-        checkout scm
+
+        checkout([
+            label : "Clone main repository branch ${env.CHAINKINS_PR_BITBUCKET_DESTINATION_BRANCH}",
+            $class: "GitSCM",
+            branches: [[name: "${env.CHAINKINS_PR_BITBUCKET_DESTINATION_BRANCH}"]],
+            userRemoteConfigs: [
+                    [credentialsId: "sdklibraries_ssh", refspec: "+refs/heads/${env.CHAINKINS_PR_BITBUCKET_DESTINATION_BRANCH}:refs/remotes/origin/${env.CHAINKINS_PR_BITBUCKET_DESTINATION_BRANCH}",url: "${env.CHAINKINS_PR_BITBUCKET_DESTINATION_REPO_SSH}"]
+            ]
+        ])
+
         script {
             def windows_env_file = "${env.WORKSPACE}\\contrib\\chainkins\\windows_env.groovy"
             chainkins.dump_buildenv_windows(windows_env_file)
@@ -72,7 +81,6 @@ stage('Distributed Build') { parallel { // =====================================
             chainkins.build_on_windows()
             chainkins.runtest_on_windows()
             chainkins.pack_on_windows()
-
         }
       }
 
@@ -110,7 +118,16 @@ stage('Distributed Build') { parallel { // =====================================
 
       steps {
         step([$class: 'WsCleanup'])
-        checkout scm
+
+        checkout([
+            label : "Clone main repository branch ${env.CHAINKINS_PR_BITBUCKET_DESTINATION_BRANCH}",
+            $class: "GitSCM",
+            branches: [[name: "${env.CHAINKINS_PR_BITBUCKET_DESTINATION_BRANCH}"]],
+            userRemoteConfigs: [
+                    [credentialsId: "sdklibraries_ssh", refspec: "+refs/heads/${env.CHAINKINS_PR_BITBUCKET_DESTINATION_BRANCH}:refs/remotes/origin/${env.CHAINKINS_PR_BITBUCKET_DESTINATION_BRANCH}",url: "${env.CHAINKINS_PR_BITBUCKET_DESTINATION_REPO_SSH}"]
+            ]
+        ])
+
         script {
             def linux_env_file = "${env.WORKSPACE}/contrib/chainkins/linux_env.groovy"
             chainkins.dump_buildenv_linux(linux_env_file)
@@ -130,7 +147,6 @@ stage('Distributed Build') { parallel { // =====================================
             chainkins.build_on_linux()
             chainkins.runtest_on_linux()
             chainkins.pack_on_linux()
-
         }
       }
 
