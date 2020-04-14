@@ -195,16 +195,16 @@ def build_on_linux() {
         mkdir $LINUX_BUILD_DIR_RELEASE
         mkdir $LINUX_BUILD_DIR_DEBUG
         cmake -B$LINUX_BUILD_DIR_RELEASE -H$WORKSPACE -DCUSTOM_SYSTEM_OS_NAME=Ubuntu -DCMAKE_BUILD_TYPE=Release
-        cmake --build $LINUX_BUILD_DIR_RELEASE --target all --parallel 4
+        cmake --build $LINUX_BUILD_DIR_RELEASE --target all // --parallel 4
         cmake -B$LINUX_BUILD_DIR_DEBUG -H$WORKSPACE -DCUSTOM_SYSTEM_OS_NAME=Ubuntu -DCMAKE_BUILD_TYPE=Debug
-        cmake --build $LINUX_BUILD_DIR_DEBUG --target all --parallel 4
+        cmake --build $LINUX_BUILD_DIR_DEBUG --target all // --parallel 4
     '''
 }
 
 def runtest_on_linux() {
     sh label : "Run test Release and Debug on Linux", script : '''
-       cmake --build $LINUX_BUILD_DIR_DEBUG --target test
        cmake --build $LINUX_BUILD_DIR_RELEASE --target test
+       cmake --build $LINUX_BUILD_DIR_DEBUG --target test
     '''
 }
 
