@@ -214,6 +214,6 @@ install(TARGETS leveldb leveldb-sse4.2 memenv DESTINATION "lib" COMPONENT leveld
 
 if(NOT MSVC)
   ## leveldb restore compiler flags as it is
-  scrypt_add_compiler_flag(-Wstrict-prototypes)
+  scrypt_add_c_compiler_flag(-Wstrict-prototypes)
   scrypt_remove_compiler_flags(-Wno-sign-compare -Wno-implicit-fallthrough -Wno-strict-prototypes)
 endif()

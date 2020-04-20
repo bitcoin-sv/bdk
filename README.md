@@ -1,5 +1,6 @@
 Project dependencies (minimum):
 
+C++         std 17 (gcc 9.3.0 or MSVC 2019)
 bitcoin-sv  1.0.2 (source from github)
 cmake       3.16
 boost       1.72.0

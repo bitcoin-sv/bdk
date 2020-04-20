@@ -113,15 +113,16 @@ def build_on_windows() {
     bat label : "Compile Release and Debug on Windows", script : '''
         mkdir %WINDOWS_BUILD_DIR%'
         cmake -B%WINDOWS_BUILD_DIR% -H%WORKSPACE% -G"Visual Studio 16 2019" -A x64
-        cmake --build %WINDOWS_BUILD_DIR% --target ALL_BUILD --config Debug --parallel 4
-        cmake --build %WINDOWS_BUILD_DIR% --target ALL_BUILD --config Release --parallel 4
+        cmake --build %WINDOWS_BUILD_DIR% --target ALL_BUILD --config Release --parallel 2
+        cmake --build %WINDOWS_BUILD_DIR% --target ALL_BUILD --config Debug --parallel 2
     '''
 }
 
 def runtest_on_windows() {
     bat label : "Run test Release and Debug on Windows", script : '''
-        cmake --build %WINDOWS_BUILD_DIR% --target RUN_TESTS --config Debug
-        cmake --build %WINDOWS_BUILD_DIR% --target RUN_TESTS --config Release
+        cd %WINDOWS_BUILD_DIR% && ctest -C Release -F --output-on-failure
+        cd %WINDOWS_BUILD_DIR% && ctest -C Debug -F --output-on-failure
+        cd %WORKSPACE%
     '''
 }
 
@@ -195,16 +196,17 @@ def build_on_linux() {
         mkdir $LINUX_BUILD_DIR_RELEASE
         mkdir $LINUX_BUILD_DIR_DEBUG
         cmake -B$LINUX_BUILD_DIR_RELEASE -H$WORKSPACE -DCUSTOM_SYSTEM_OS_NAME=Ubuntu -DCMAKE_BUILD_TYPE=Release
-        cmake --build $LINUX_BUILD_DIR_RELEASE --target all --parallel 4
+        cmake --build $LINUX_BUILD_DIR_RELEASE --target all --parallel 2
         cmake -B$LINUX_BUILD_DIR_DEBUG -H$WORKSPACE -DCUSTOM_SYSTEM_OS_NAME=Ubuntu -DCMAKE_BUILD_TYPE=Debug
-        cmake --build $LINUX_BUILD_DIR_DEBUG --target all --parallel 4
+        cmake --build $LINUX_BUILD_DIR_DEBUG --target all --parallel 2
     '''
 }
 
 def runtest_on_linux() {
     sh label : "Run test Release and Debug on Linux", script : '''
-       cmake --build $LINUX_BUILD_DIR_DEBUG --target test
-       cmake --build $LINUX_BUILD_DIR_RELEASE --target test
+       cd $LINUX_BUILD_DIR_RELEASE ; ctest -F --output-on-failure
+       cd $LINUX_BUILD_DIR_DEBUG ; ctest -F --output-on-failure
+       cd $WORKSPACE
     '''
 }
 
