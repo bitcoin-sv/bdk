@@ -161,5 +161,10 @@ macro(scryptInitCMake)
   HelpFindFlutter()
   #scryptPrintFlutterInfo()#Debug Log
 
+  ## To call inside the java binding module, not here
+  #include(FindJavaJDKHelper)
+  #HelpFindJavaJDK()
+  #scryptPrintJavaJDKInfo()#Debug Log
+
   enable_testing()
 endmacro()
