@@ -17,7 +17,10 @@ set(CPACK_PACKAGE_VERSION_MINOR ${SCRYPT_VERSION_MINOR})
 set(CPACK_PACKAGE_VERSION_PATCH ${SCRYPT_VERSION_PATCH})
 set(CPACK_PACKAGE_VERSION ${SCRYPT_VERSION_STRING})
 
-set(CPACK_COMPONENTS_ALL Files scrypt_core secp256k1 univalue)# To add Examples Documentation, univalue if test is activated
+set(CPACK_COMPONENTS_ALL Files scrypt_core secp256k1)# To add Examples Documentation
+if(SCRYPT_BUILD_UNIVALUE)
+  set(CPACK_COMPONENTS_ALL ${CPACK_COMPONENTS_ALL} univalue)
+endif()
 if(SCRYPT_BUILD_LEVELDB)
   set(CPACK_COMPONENTS_ALL ${CPACK_COMPONENTS_ALL} leveldb)
 endif()

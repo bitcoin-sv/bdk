@@ -32,10 +32,12 @@ cmake_minimum_required(VERSION 3.16)
 project(bscrypt)
 
 option(SCRYPT_LOG_BSV_FILES "Log used bitcoin sv file to build" ON)
-option(SCRYPT_BUILD_LEVELDB "Activate the build of leveldb" ON)
+option(SCRYPT_BUILD_LEVELDB "Activate the build of leveldb" OFF)
+option(SCRYPT_BUILD_UNIVALUE "Activate the build of univalue" OFF)
 
-option(SCRYPT_BUILD_TESTS "Activate the build of tests" ON)
 option(SCRYPT_BUILD_MODULES "Activate the build of bscrypt_ide" ON)
+option(SCRYPT_BUILD_TESTS "Activate the build of tests" OFF)
+
 
 
 ## bscrypt built is based on source files from bsv code.
@@ -64,11 +66,12 @@ include_directories(${CMAKE_SOURCE_DIR}/core)
 ## Build scrypt_core
 add_subdirectory(${CMAKE_SOURCE_DIR}/core)
 
-if(SCRYPT_BUILD_TESTS)
-  add_subdirectory(${CMAKE_SOURCE_DIR}/test)
-endif()
 if(SCRYPT_BUILD_MODULES)
   add_subdirectory(${CMAKE_SOURCE_DIR}/module)
+endif()
+
+if(SCRYPT_BUILD_TESTS)
+  add_subdirectory(${CMAKE_SOURCE_DIR}/test)
 endif()
 
 ## On Widows, need to download NSIS https://nsis.sourceforge.io/Download

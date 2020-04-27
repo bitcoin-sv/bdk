@@ -92,19 +92,6 @@ macro(scryptForceInstallDir)
   message(STATUS "SCRYPT WARNING: Forced CMAKE_INSTALL_PREFIX[${CMAKE_INSTALL_PREFIX}]")
 endmacro()
 
-#### Create API definition file
-function(scryptDefineDynamicAPI)
-  #Copy the API definition file
-  set(DYNAMIC_LIBRARY_API_HPP_IN ${SCRYPT_ROOT_CMAKE_MODULE_PATH}/DYNAMIC_LIBRARY_API.hpp.in)
-  set(DYNAMIC_LIBRARY_API_HPP ${SCRYPT_GENERATED_HPP_DIR}/DYNAMIC_LIBRARY_API.hpp)
-  configure_file(${DYNAMIC_LIBRARY_API_HPP_IN} ${DYNAMIC_LIBRARY_API_HPP})
-
-  include_directories("${SCRYPT_GENERATED_HPP_DIR}")
-
-  message(STATUS "API definitions file created [${DYNAMIC_LIBRARY_API_HPP}]")
-  install(FILES "${DYNAMIC_LIBRARY_API_HPP}" DESTINATION "include" COMPONENT Files)
-endfunction()
-
 #### Initialize all setting for using CMake
 macro(scryptInitCMake)
 
@@ -129,7 +116,6 @@ macro(scryptInitCMake)
   scryptSetCompilationOptions()
   scryptSetOutputDirectories()
   scryptSetBuildVersion()
-  scryptDefineDynamicAPI()
   install(FILES "${SCRYPT_VERSION_HPP}" DESTINATION "include" COMPONENT Files)
 
   ## Precalculate variable for installation
@@ -148,18 +134,6 @@ macro(scryptInitCMake)
   include(FindBoostHelper)
   HelpFindBoost()
   #scryptPrintProperties(Boost::program_options)
-
-  include(FindPythonHelper)
-  HelpFindPython()
-  #scryptPrintPythonInfo()#Debug Log
-
-  include(FindProtobufHelper)
-  HelpFindProtobuf()
-  #scryptPrintProtobufInfo()#Debug Log
-
-  include(FindFlutterHelper)
-  HelpFindFlutter()
-  #scryptPrintFlutterInfo()#Debug Log
 
   ## To call inside the java binding module, not here
   #include(FindJavaJDKHelper)

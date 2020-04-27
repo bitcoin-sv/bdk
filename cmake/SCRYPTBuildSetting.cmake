@@ -171,7 +171,7 @@ function(scryptSetBuildVersion)
   scryptCalculateBSVVersion("${SCRYPT_BSV_ROOT_DIR}/src/clientversion.h")
 
   #### Generate version C++  #####
-  set(SCRYPT_VERSION_HPP_IN ${SCRYPT_ROOT_CMAKE_MODULE_PATH}/SCRYPTVersion.hpp.in CACHE INTERNAL "Template File for framework version config")
-  set(SCRYPT_VERSION_HPP ${SCRYPT_GENERATED_HPP_DIR}/SCRYPTVersion.hpp CACHE INTERNAL "HPP File for framework version config")
+  set(SCRYPT_VERSION_HPP_IN ${SCRYPT_ROOT_CMAKE_MODULE_PATH}/ScryptVersion.hpp.in CACHE INTERNAL "Template File for framework version config")
+  set(SCRYPT_VERSION_HPP ${SCRYPT_GENERATED_HPP_DIR}/ScryptVersion.hpp CACHE INTERNAL "HPP File for framework version config")
   configure_file(${SCRYPT_VERSION_HPP_IN} ${SCRYPT_VERSION_HPP})
 endfunction()
