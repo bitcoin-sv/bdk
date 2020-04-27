@@ -5,6 +5,18 @@
 #  Copyright (c) 2020 nChain Limited. All rights reserved       #
 #################################################################
 
+include(FindPythonHelper)
+HelpFindPython()
+#scryptPrintPythonInfo()#Debug Log
+
+include(FindProtobufHelper)
+HelpFindProtobuf()
+#scryptPrintProtobufInfo()#Debug Log
+
+include(FindFlutterHelper)
+HelpFindFlutter()
+#scryptPrintFlutterInfo()#Debug Log
+
 message("Building bscrypt IDE")
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/http_msg.cmake")

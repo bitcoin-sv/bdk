@@ -19,7 +19,12 @@ set(BSV_MINIMAL_FILES ${BSV_MINIMAL_HDR_FILES} ${BSV_MINIMAL_SRC_FILES})
 ## Helper files activate some settings for bsv and secp256k1 native source codes
 include("${CMAKE_CURRENT_SOURCE_DIR}/setting-bitcoin.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/setting-secp256k1.cmake")
-include("${CMAKE_CURRENT_SOURCE_DIR}/setting-univalue.cmake")
+if(SCRYPT_BUILD_UNIVALUE)
+  include("${CMAKE_CURRENT_SOURCE_DIR}/setting-univalue.cmake")
+  set(UNIVALUE_LIB univalue)
+else()
+  set(UNIVALUE_LIB "")
+endif()
 if(SCRYPT_BUILD_LEVELDB)
   include("${CMAKE_CURRENT_SOURCE_DIR}/setting-leveldb.cmake")
 endif()
@@ -40,6 +45,7 @@ foreach(_bitcoin_file ${BSV_MINIMAL_FILES})
 endforeach()
 source_group("_generated" FILES "${BITCOIN_CONFIG_FILE}")
 
+## any .cpp .hpp file added here will be added group with bsv file to build the core.
 file(GLOB_RECURSE BSCRYPT_CORE_EXTRA_HDR_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp")
 file(GLOB_RECURSE BSCRYPT_CORE_EXTRA_SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
 
@@ -50,7 +56,7 @@ set(BSCRYPT_CORE_SRC_FILES ${BSCRYPT_CORE_EXTRA_SRC_FILES} ${BSV_MINIMAL_SRC_FIL
 ## Build scrypt_core as a library using bsv source code
 add_library(scrypt_core ${BITCOIN_CONFIG_FILE} ${BSCRYPT_CORE_HDR_FILES} ${BSCRYPT_CORE_SRC_FILES})
 target_include_directories(scrypt_core PUBLIC ${BSV_INCLUDE_DIRS} ${CMAKE_SOURCE_DIR})
-target_link_libraries(scrypt_core ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT} univalue secp256k1 OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono)
+target_link_libraries(scrypt_core ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT} secp256k1 ${UNIVALUE_LIB} OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono)
 
 if(WIN32)
   target_link_libraries(scrypt_core Crypt32.lib Ws2_32)

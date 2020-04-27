@@ -6,7 +6,10 @@
 #################################################################
 
 if(SCRYPT_BUILD_MODULES)
-  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/bscrypt_ide)
+  if(SCRYPT_BUILD_IDE)# add -DSCRYPT_BUILD_IDE=ON to activate build IDE
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/bscrypt_ide)
+  endif()
+
 else()
   message(WARNING "Deactivated building modules. Set SCRYPT_BUILD_MODULES=ON to activate.")
 endif()
