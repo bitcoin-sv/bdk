@@ -36,9 +36,8 @@ option(SCRYPT_BUILD_LEVELDB "Activate the build of leveldb" OFF)
 option(SCRYPT_BUILD_UNIVALUE "Activate the build of univalue" OFF)
 
 option(SCRYPT_BUILD_MODULES "Activate the build of bscrypt_ide" ON)
-option(SCRYPT_BUILD_TESTS "Activate the build of tests" OFF)
-
-
+option(SCRYPT_BUILD_EXAMPLES "Activate the build of examples" ON)
+option(SCRYPT_BUILD_BSV_TESTS "Activate the build of bsv tests" OFF)
 
 ## bscrypt built is based on source files from bsv code.
 ## Use -DSCRYPT_BSV_SRC_ROOT=/path/to/sv_root
@@ -70,8 +69,10 @@ if(SCRYPT_BUILD_MODULES)
   add_subdirectory(${CMAKE_SOURCE_DIR}/module)
 endif()
 
-if(SCRYPT_BUILD_TESTS)
-  add_subdirectory(${CMAKE_SOURCE_DIR}/test)
+add_subdirectory(${CMAKE_SOURCE_DIR}/test)
+
+if(SCRYPT_BUILD_EXAMPLES)
+  add_subdirectory(${CMAKE_SOURCE_DIR}/example)
 endif()
 
 ## On Widows, need to download NSIS https://nsis.sourceforge.io/Download

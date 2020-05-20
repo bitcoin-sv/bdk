@@ -5,10 +5,6 @@
 #  Copyright (c) 2020 nChain Limited. All rights reserved       #
 #################################################################
 
-include(FindPythonHelper)
-HelpFindPython()
-#scryptPrintPythonInfo()#Debug Log
-
 include(FindProtobufHelper)
 HelpFindProtobuf()
 #scryptPrintProtobufInfo()#Debug Log

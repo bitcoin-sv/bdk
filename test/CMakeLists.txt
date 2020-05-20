@@ -10,6 +10,10 @@ if(NOT Boost_FOUND)
   return()
 endif()
 
+if(NOT TARGET Python::Interpreter)
+  message(FATAL_ERROR "Python Interpreter is required to run tests on CI")
+endif()
+
 macro(scrypt_add_unit_test _targetName)
   if(NOT TARGET ${_targetName})
       message(FATAL_ERROR " [${_targetName}] is not a TARGET")
@@ -30,45 +34,10 @@ macro(scrypt_add_unit_test _targetName)
   endif()
 endmacro()
 
-include("${CMAKE_CURRENT_SOURCE_DIR}/setting-test.cmake")
-
-####################################################################################################################
-## Test files *cpp here are mainly extract of bsv source code ######################################################
-add_executable(test_scrypt_core
-               "${SCRYPT_BSV_TEST_ROOT}/jsonutil.h"
-               "${SCRYPT_BSV_TEST_ROOT}/scriptflags.h"
-               "${SCRYPT_BSV_TEST_ROOT}/sigutil.h"
-               "${SCRYPT_BSV_TEST_ROOT}/jsonutil.cpp"
-               "${SCRYPT_BSV_TEST_ROOT}/scriptflags.cpp"
-               "${SCRYPT_BSV_TEST_ROOT}/sigutil.cpp"
-               ${JSON_HEADERS}
-               "${CMAKE_CURRENT_SOURCE_DIR}/script_tests_modified.cpp"
-               "${SCRYPT_BSV_TEST_ROOT}/bn_op_tests.cpp"
-               "${SCRYPT_BSV_TEST_ROOT}/scriptflags.cpp"
-               "${SCRYPT_BSV_TEST_ROOT}/scriptnum_tests.cpp"
-               ## TODO
-               #"${SCRYPT_BSV_TEST_ROOT}/opcode_tests.cpp
-)
-
-target_link_libraries(test_scrypt_core ${CMAKE_DL_LIBS} scrypt_core OpenSSL::Crypto OpenSSL::SSL)
-if(WIN32)
-  target_link_libraries(test_scrypt_core Crypt32.lib Ws2_32)
+if(SCRYPT_BUILD_BSV_TESTS)## Broken now as dependencies has been reduce to minimal
+  add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/bsv")
 endif()
-target_include_directories(test_scrypt_core PRIVATE "${SCRYPT_BSV_TEST_ROOT}")
-scrypt_add_unit_test(test_scrypt_core)
 
-####################################################################################################################
-## Test extra c++ source files in core (wrapper to bsv code) #######################################################
-add_executable(test_core_extra
-               "${SCRYPT_BSV_TEST_ROOT}/jsonutil.h"
-               "${SCRYPT_BSV_TEST_ROOT}/scriptflags.h"
-               "${SCRYPT_BSV_TEST_ROOT}/sigutil.h"
-               "${SCRYPT_BSV_TEST_ROOT}/jsonutil.cpp"
-               "${SCRYPT_BSV_TEST_ROOT}/scriptflags.cpp"
-               "${SCRYPT_BSV_TEST_ROOT}/sigutil.cpp"
-               ${JSON_HEADERS}
-               "${CMAKE_CURRENT_SOURCE_DIR}/test_core_FlagMap.cpp"
-               "${CMAKE_CURRENT_SOURCE_DIR}/test_core_ScriptHelper.cpp"
-)
-target_link_libraries(test_core_extra ${CMAKE_DL_LIBS} scrypt_core OpenSSL::Crypto OpenSSL::SSL)
-scrypt_add_unit_test(test_core_extra)
+add_executable(test_foo "${CMAKE_CURRENT_SOURCE_DIR}/test_foo.cpp")
+target_link_libraries(test_foo ${CMAKE_DL_LIBS} scrypt_core OpenSSL::Crypto OpenSSL::SSL)
+scrypt_add_unit_test(test_foo)
