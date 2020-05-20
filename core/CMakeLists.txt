@@ -52,9 +52,9 @@ file(GLOB_RECURSE BSCRYPT_CORE_EXTRA_SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.cp
 set(BSCRYPT_CORE_HDR_FILES ${BSCRYPT_CORE_EXTRA_HDR_FILES} ${BSV_MINIMAL_HDR_FILES})
 set(BSCRYPT_CORE_SRC_FILES ${BSCRYPT_CORE_EXTRA_SRC_FILES} ${BSV_MINIMAL_SRC_FILES})
 
-
 ## Build scrypt_core as a library using bsv source code
 add_library(scrypt_core ${BITCOIN_CONFIG_FILE} ${BSCRYPT_CORE_HDR_FILES} ${BSCRYPT_CORE_SRC_FILES})
+#set_target_properties(scrypt_core PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS 1)
 target_include_directories(scrypt_core PUBLIC ${BSV_INCLUDE_DIRS} ${CMAKE_SOURCE_DIR})
 target_link_libraries(scrypt_core ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT} secp256k1 ${UNIVALUE_LIB} OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono)
 
