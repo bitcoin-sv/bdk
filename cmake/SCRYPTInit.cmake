@@ -135,6 +135,10 @@ macro(scryptInitCMake)
   HelpFindBoost()
   #scryptPrintProperties(Boost::program_options)
 
+  include(FindPythonHelper)
+  HelpFindPython()
+  #scryptPrintPythonInfo()#Debug Log
+
   ## To call inside the java binding module, not here
   #include(FindJavaJDKHelper)
   #HelpFindJavaJDK()
