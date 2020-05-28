@@ -19,7 +19,7 @@ macro(scrypt_add_unit_test _targetName)
       message(FATAL_ERROR " [${_targetName}] is not a TARGET")
   endif()
   scryptLinkTargetToBoost(${_targetName} Boost::unit_test_framework)
-  set_target_properties(${_targetName} PROPERTIES  FOLDER "tests/unit" DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})
+  set_target_properties(${_targetName} PROPERTIES  FOLDER "test/unit" DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})
 
   if(CMAKE_CONFIGURATION_TYPES)
     set(_tpost_fix ${CMAKE_DEBUG_POSTFIX})
