@@ -33,11 +33,10 @@ project(bscrypt)
 
 option(SCRYPT_LOG_BSV_FILES "Log used bitcoin sv file to build" ON)
 option(SCRYPT_BUILD_LEVELDB "Activate the build of leveldb" OFF)
-option(SCRYPT_BUILD_UNIVALUE "Activate the build of univalue" OFF)
+option(SCRYPT_BUILD_UNIVALUE "Activate the build of univalue" ON)
 
-option(SCRYPT_BUILD_MODULES "Activate the build of bscrypt_ide" ON)
-option(SCRYPT_BUILD_EXAMPLES "Activate the build of examples" ON)
-option(SCRYPT_BUILD_BSV_TESTS "Activate the build of bsv tests" OFF)
+option(SCRYPT_BUILD_MODULES "Activate the build of modules" ON)
+option(SCRYPT_BUILD_BSV_TESTS "Activate the build of bsv tests" ON)
 
 ## bscrypt built is based on source files from bsv code.
 ## Use -DSCRYPT_BSV_SRC_ROOT=/path/to/sv_root
@@ -70,10 +69,6 @@ if(SCRYPT_BUILD_MODULES)
 endif()
 
 add_subdirectory(${CMAKE_SOURCE_DIR}/test)
-
-if(SCRYPT_BUILD_EXAMPLES)
-  add_subdirectory(${CMAKE_SOURCE_DIR}/example)
-endif()
 
 ## On Widows, need to download NSIS https://nsis.sourceforge.io/Download
 ## Possible to do WIX generator for MSI installer

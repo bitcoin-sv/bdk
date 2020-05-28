@@ -105,9 +105,6 @@ UniValue ValueFromAmount(const Amount &amount) {
     return UniValue(UniValue::VNUM, strprintf("%s%d.%08d", sign ? "-" : "",
         quotient, remainder));
 }
-
-extern bool fRequireStandard;
-bool fRequireStandard = true;
 // BSCRYPT_BUILD_TEST ++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 struct ScriptErrorDesc {
