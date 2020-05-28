@@ -79,19 +79,3 @@ if(WIN32)
 endif()
 target_include_directories(test_scrypt_core PRIVATE "${SCRYPT_BSV_TEST_ROOT}")
 scrypt_add_unit_test(test_scrypt_core)
-
-####################################################################################################################
-## Test extra c++ source files in core (wrapper to bsv code) #######################################################
-add_executable(test_core_extra
-               "${SCRYPT_BSV_TEST_ROOT}/jsonutil.h"
-               "${SCRYPT_BSV_TEST_ROOT}/scriptflags.h"
-               "${SCRYPT_BSV_TEST_ROOT}/sigutil.h"
-               "${SCRYPT_BSV_TEST_ROOT}/jsonutil.cpp"
-               "${SCRYPT_BSV_TEST_ROOT}/scriptflags.cpp"
-               "${SCRYPT_BSV_TEST_ROOT}/sigutil.cpp"
-               ${JSON_HEADERS}
-               "${CMAKE_CURRENT_SOURCE_DIR}/test_core_FlagMap.cpp"
-               "${CMAKE_CURRENT_SOURCE_DIR}/test_core_ScriptHelper.cpp"
-)
-target_link_libraries(test_core_extra ${CMAKE_DL_LIBS} scrypt_core OpenSSL::Crypto OpenSSL::SSL)
-scrypt_add_unit_test(test_core_extra)
