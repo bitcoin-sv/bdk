@@ -27,7 +27,7 @@ def _dump_post_email_info(groovy_file) {
     else{
         sh label : "Dump common env variables for email", script : """
             echo env.CHAINKINS_BUILD_TRIGGER=\\\"Bitbucket webhook\\\">>${groovy_file}
-            echo env.CHAINKINS_EMAIL_TO_SEND=\\\"c.nguyen@nchain.com\\\">>${groovy_file}
+            echo env.CHAINKINS_EMAIL_TO_SEND=\\\"j.murphy@nchain.com,c.nguyen@nchain.com,m.prakash@nchain.com,cc:s.okane@nchain.com,cc:r.balagourouche@nchain.com\\\">>${groovy_file}
         """
     }
 }
