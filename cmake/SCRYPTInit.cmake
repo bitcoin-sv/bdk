@@ -73,6 +73,8 @@ endmacro()
 macro(scryptCreateGeneratedToolsDir)
   set(SCRYPT_GENERATED_TOOLS_DIR "${CMAKE_BINARY_DIR}/generated/tools" CACHE STRING "Directory containing all generated tools")
   file(MAKE_DIRECTORY "${SCRYPT_GENERATED_TOOLS_DIR}")
+  set(SCRYPT_GENERATED_BIN_DIR "${SCRYPT_GENERATED_TOOLS_DIR}/bin" CACHE STRING "Directory containing all executable utilities")
+  file(MAKE_DIRECTORY "${SCRYPT_GENERATED_BIN_DIR}")
 endmacro()
 
 #### Check consistency of CMAKE_BUILD_TYPE vs CMAKE_CONFIGURATION_TYPES

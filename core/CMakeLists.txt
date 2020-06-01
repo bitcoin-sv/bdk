@@ -55,7 +55,7 @@ set(BSCRYPT_CORE_SRC_FILES ${BSCRYPT_CORE_EXTRA_SRC_FILES} ${BSV_MINIMAL_SRC_FIL
 ## Build scrypt_core as a library using bsv source code
 add_library(scrypt_core ${BITCOIN_CONFIG_FILE} ${BSCRYPT_CORE_HDR_FILES} ${BSCRYPT_CORE_SRC_FILES})
 #set_target_properties(scrypt_core PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS 1)
-target_include_directories(scrypt_core PUBLIC ${BSV_INCLUDE_DIRS} ${CMAKE_SOURCE_DIR})
+target_include_directories(scrypt_core PUBLIC ${BSV_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(scrypt_core ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT} secp256k1 ${UNIVALUE_LIB} OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono)
 
 if(WIN32)
@@ -81,3 +81,5 @@ foreach(_bsv_hdr ${BSCRYPT_CORE_HDR_FILES})
   install(FILES ${_bsv_hdr} DESTINATION "${_install_dest}" COMPONENT scrypt_core)
 endforeach()
 install(TARGETS scrypt_core DESTINATION "lib" COMPONENT scrypt_core)
+
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/doc)

@@ -1,0 +1,44 @@
+## To build this documentation using mkdocs :
+##    python -m pip install mkdocs pymdown-extensions plantuml_markdown
+## On linux, go to this directory, then
+##    chmod +x plantuml
+##    export PATH=$LD_LIBRARY_PATH:/path/to/directory/containing/plantuml
+## On windows, go to this directory, then
+##    set PATH=%PATH%;%C:\path\to\directory\containing\plantuml%
+## Then build & run the doc using mkdocs 
+##    mkdocs build ; mkdocs serve
+##    # Open the browsers http://localhost:8000
+##
+##
+site_name: script engine
+
+nav:
+    - About : index.md
+    - Architecture : Architecture.md
+    - Development : DeveloperSetup.md
+    - Object Model : ObjectModel.md
+
+markdown_extensions:
+  - toc:
+  - pymdownx.arithmatex
+  - plantuml_markdown:
+
+extra_javascript:
+    - 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-MML-AM_CHTML' # mathjax
+
+theme: readthedocs
+
+extra_css:
+    - css/theme_extra.css
+
+## To build this documentation using mkdocs :
+## python -m pip install --upgrade pip setuptools
+## python -m pip install WeasyPrint
+## python -m pip install mkpdfs-mkdocs
+## python -m weasyprint C:\path\to\index.html mypage.pdf
+## or 
+## python -m http.server&
+## python -m weasyprint http://127.0.0.1:8000 mypage.pdf
+#plugins:
+#  - search
+#  - mkpdfs
