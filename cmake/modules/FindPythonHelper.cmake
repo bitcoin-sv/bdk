@@ -32,6 +32,40 @@ macro(HelpFindPython)###########################################################
   find_package(Python COMPONENTS Interpreter Development)
 endmacro()
 
+#### Main function helping to find mkdocs executable
+macro(HelpFindMkdocs)########################################################################################
+  if(mkdocs_FOUND)
+    return()
+  endif()
+
+  find_program(mkdocs_EXECUTABLE
+               NAMES mkdocs
+               PATH_SUFFIXES bin)
+
+  # handle the QUIETLY and REQUIRED arguments and set mkdocs_FOUND to TRUE if
+  # all listed variables are TRUE
+  include(FindPackageHandleStandardArgs)
+  find_package_handle_standard_args (mkdocs FOUND_VAR mkdocs_FOUND REQUIRED_VARS mkdocs_EXECUTABLE)
+
+  mark_as_advanced(mkdocs_FOUND mkdocs_EXECUTABLE)
+endmacro()
+
+function(HelpFindPythonPackage package_name output)# ouput YES/NO
+  #python -m pip show ${package_name}
+  execute_process(
+    COMMAND ${Python_EXECUTABLE} -m pip show "${package_name}"
+    RESULT_VARIABLE _CMD_RETURN
+    OUTPUT_VARIABLE _STD_OUTPUT
+    ERROR_VARIABLE  _STD_ERROR
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+  )
+  if(${_CMD_RETURN} EQUAL 0 AND NOT _STD_ERROR)
+    set (${output} TRUE PARENT_SCOPE)
+  else()
+    set (${output} FALSE PARENT_SCOPE)
+  endif()
+endfunction()
+
 function(scryptPrintPythonInfo)
   scryptPrintProperties(Python::Interpreter)
   scryptPrintProperties(Python::Python)
