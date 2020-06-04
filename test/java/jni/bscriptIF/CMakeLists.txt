@@ -19,8 +19,16 @@ set(JAVA_PACKAGE_NAME "jni.bscriptIF")
 set(PROJECT_DIRECTORY ${CMAKE_SOURCE_DIR})
 set(SOURCE_DIRECTORY  ${PROJECT_DIRECTORY}/module/java/jni/bscriptIF)
 set(TEST_DIRECTORY  ${PROJECT_DIRECTORY}/test/java/jni/bscriptIF)
-set(BIN_DIRECTORY  bin)
 
+if(WIN32)
+    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+        set(BIN_DIRECTORY  ${CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG})
+    elseif()
+        set(BIN_DIRECTORY  ${CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE})
+    endif(CMAKE_BUILD_TYPE)
+else()
+    set(BIN_DIRECTORY  ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+endif(WIN32)
 
 #include all directoried req for test execution
 include_directories(${SOURCE_DIRECTORY})
@@ -46,7 +54,7 @@ foreach(_ftest_file ${_FUNCTIONAL_TEST_FILES})
   set(TEST_FILE ${BIN_DIRECTORY}/${_ftest_file_name}) 
  
   add_custom_command(OUTPUT ${TEST_FILE}
-     COMMAND ${Java_JAVAC_EXECUTABLE} -d ${BIN_DIRECTORY} -s ${SOURCE_DIRECTORY} ${TEST_DIRECTORY}/${_ftest_file_name}.java
+     COMMAND ${Java_JAVAC_EXECUTABLE} -d ${BIN_DIRECTORY} ${SOURCE_DIRECTORY}/BScriptJNI.java ${TEST_DIRECTORY}/${_ftest_file_name}.java
      COMMENT "Creating ${TEST_FILE}")
  
   add_custom_target(${_ftest_file_name} ALL
