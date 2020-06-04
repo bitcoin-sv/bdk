@@ -5,20 +5,11 @@
 #  Copyright (c) 2020 nChain Limited. All rights reserved       #
 #################################################################
 
-cmake_minimum_required (VERSION 3.15)
-
-
-project (BSCriptJNITest)
-
-
 find_package(Java REQUIRED)
 include(UseJava)
 
 find_jar(JUNIT_JAR NAMES junit4 PATHS $ENV{JUNIT_HOME} $ENV{JAVA_HOME} $ENV{JAVA_ROOT})
 find_jar(HAMCREST_JAR NAME hamcrest-core PATHS $ENV{JUNIT_HOME} $ENV{JAVA_HOME} $ENV{JAVA_ROOT})
-
-enable_testing()
-
 
 #set commands
 set(CMAKE_INCLUDE_CURRENT_DIR ON)## Always include the current directory by default is off
@@ -28,7 +19,7 @@ set(JAVA_PACKAGE_NAME "jni.bscriptIF")
 set(PROJECT_DIRECTORY ${CMAKE_SOURCE_DIR})
 set(SOURCE_DIRECTORY  ${PROJECT_DIRECTORY}/module/java/jni/bscriptIF)
 set(TEST_DIRECTORY  ${PROJECT_DIRECTORY}/test/java/jni/bscriptIF)
-set(BIN_DIRECTORY  ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+set(BIN_DIRECTORY  bin)
 
 
 #include all directoried req for test execution
@@ -36,10 +27,8 @@ include_directories(${SOURCE_DIRECTORY})
 include_directories(${TEST_DIRECTORY})
 include_directories(${BIN_DIRECTORY})
 
-
 ## Get all test scripts
 file(GLOB _FUNCTIONAL_TEST_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.java")
-
 
 set(JAVA_LIB_PATH ${CMAKE_BINARY_DIR}/x64/release)
 set(JAVA_DEBUG_FLAG "-Ddebug=0")
@@ -57,13 +46,15 @@ foreach(_ftest_file ${_FUNCTIONAL_TEST_FILES})
   set(TEST_FILE ${BIN_DIRECTORY}/${_ftest_file_name}) 
  
   add_custom_command(OUTPUT ${TEST_FILE}
-     COMMAND ${Java_JAVAC_EXECUTABLE} -d ${BIN_DIRECTORY} ${SOURCE_DIRECTORY}/BScriptJNI.java ${TEST_DIRECTORY}/${_ftest_file_name}.java
+     COMMAND ${Java_JAVAC_EXECUTABLE} -d ${BIN_DIRECTORY} -s ${SOURCE_DIRECTORY} ${TEST_DIRECTORY}/${_ftest_file_name}.java
      COMMENT "Creating ${TEST_FILE}")
  
   add_custom_target(${_ftest_file_name} ALL
     COMMAND echo "Java class files"
     DEPENDS ${TEST_FILE}
- )
+  )
+
+  set_target_properties(${_ftest_file_name} PROPERTIES  FOLDER "test/java")
   add_test(NAME ${TEST_NAME} COMMAND ${Java_JAVA_EXECUTABLE} -Djava.library.path=${JAVA_LIB_PATH} ${JAVA_DEBUG_FLAG} -cp ${BIN_DIRECTORY}:${JUNIT_JAR}:${HAMCREST_JAR} org.junit.runner.JUnitCore ${JAVA_PACKAGE_NAME}.${_ftest_file_name})
 
 endforeach()
