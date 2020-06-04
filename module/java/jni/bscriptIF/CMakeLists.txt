@@ -26,6 +26,7 @@ endif()
 target_include_directories(jniBSCript PUBLIC ${JNI_INCLUDE_DIRS} ${JAVA_INCLUDE_PATH2})
 target_link_libraries(jniBSCript ScriptEngineIF OpenSSL::Crypto OpenSSL::SSL BSVUtilsJNI-native)
 set_target_properties(jniBSCript PROPERTIES  FOLDER "module/java" DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})
+set_target_properties(BScriptJNI PROPERTIES  FOLDER "module/java")
 
 install(TARGETS jniBSCript DESTINATION "lib" COMPONENT module)
 install_jar(BScriptJNI DESTINATION "lib" COMPONENT module)
