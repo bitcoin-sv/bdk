@@ -71,6 +71,8 @@ endif()
 
 add_subdirectory(${CMAKE_SOURCE_DIR}/test)
 
+add_subdirectory(${CMAKE_SOURCE_DIR}/documentation)
+
 ## On Widows, need to download NSIS https://nsis.sourceforge.io/Download
 ## Possible to do WIX generator for MSI installer
 set(SCRYPT_CPACK_CONFIG_IN "${CMAKE_SOURCE_DIR}/cmake/SCRYPTCPackConfig.cpack.in")
