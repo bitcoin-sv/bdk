@@ -37,6 +37,7 @@ option(SCRYPT_BUILD_UNIVALUE "Activate the build of univalue" ON)
 
 option(SCRYPT_BUILD_MODULES "Activate the build of modules" ON)
 option(SCRYPT_BUILD_BSV_TESTS "Activate the build of bsv tests" ON)
+option(BSCRYPT_BUILD_JAVA "Build the JNI interface and associated unit tests" ON)
 
 ## bscrypt built is based on source files from bsv code.
 ## Use -DSCRYPT_BSV_SRC_ROOT=/path/to/sv_root
