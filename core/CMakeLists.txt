@@ -81,5 +81,3 @@ foreach(_bsv_hdr ${BSCRYPT_CORE_HDR_FILES})
   install(FILES ${_bsv_hdr} DESTINATION "${_install_dest}" COMPONENT scrypt_core)
 endforeach()
 install(TARGETS scrypt_core DESTINATION "lib" COMPONENT scrypt_core)
-
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/doc)
