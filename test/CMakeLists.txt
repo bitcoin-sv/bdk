@@ -48,3 +48,5 @@ scrypt_add_unit_test(test_scriptengineif)
 if(BSCRYPT_BUILD_JAVA)
     add_subdirectory(java)
 endif()
+
+add_subdirectory(python)
