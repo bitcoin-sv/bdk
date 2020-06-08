@@ -37,6 +37,7 @@ option(SCRYPT_BUILD_UNIVALUE "Activate the build of univalue" ON)
 
 option(SCRYPT_BUILD_MODULES "Activate the build of modules" ON)
 option(SCRYPT_BUILD_BSV_TESTS "Activate the build of bsv tests" ON)
+option(BSCRYPT_BUILD_JAVA "Build the JNI interface and associated unit tests" ON)
 
 ## bscrypt built is based on source files from bsv code.
 ## Use -DSCRYPT_BSV_SRC_ROOT=/path/to/sv_root
@@ -69,6 +70,8 @@ if(SCRYPT_BUILD_MODULES)
 endif()
 
 add_subdirectory(${CMAKE_SOURCE_DIR}/test)
+
+add_subdirectory(${CMAKE_SOURCE_DIR}/documentation)
 
 ## On Widows, need to download NSIS https://nsis.sourceforge.io/Download
 ## Possible to do WIX generator for MSI installer

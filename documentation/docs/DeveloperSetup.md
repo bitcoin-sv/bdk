@@ -6,6 +6,11 @@ In order to develop/ contribute to bscrypt, it is required to install and prepar
 
 ---
 
+## Getting the source code
+Working with bscrypt development requires having the source code of bscrypt and bsv repositories. The best way to do is to have your bitbucket account setup with [ssh key access](https://confluence.atlassian.com/bitbucket/set-up-an-ssh-key-728138079.html).
+
+If you don't have access to bitbucket repositories, you can download the source code from bsv and bscrypt, then manually put them in the directory structure as explained in [Architecture](Architecture.md)
+
 ## Prerequisite Tools
 - [Python 3.8 (64-bit)](https://www.python.org/downloads/release/python-380/) - 
 As part of the Python Windows installer, ensure to check the installation options for the "Download debugging symbols" and the "Download debug binaries" checkboxes. There are some additional python package that need to be installed for building documentation and running test.
@@ -23,8 +28,6 @@ C:\nchain> python -m pip install mkdocs pymdown-extensions plantuml_markdown jun
 ## Dependencies
 Dependencies marked optional apply if you wish to run the unit tests. See [Tests](#Tests) for more details.
 
----
-
 ## Build Environments
 
 - Make sure the directory of CMake executable to the environment variable PATH
@@ -33,6 +36,8 @@ Dependencies marked optional apply if you wish to run the unit tests. See [Tests
 - Make sure the environment variable BOOST_ROOT is set to the location where boost is installed
 - Download or clone the sv source code beside the bscrypt source code (bsv and bscrypt same parent directory level)
 - Create a build directory **build_dir** outside of bscrypt
+
+---
 
 **On Windows**
 

@@ -20,7 +20,6 @@ namespace ScriptEngineIF
             testConfig, true,
             source->GetToken(),
             directStack,
-            //CScript(&direct[0], &direct[sizeof(direct)]),
             CScript(&script.get()[0],&script.get()[scriptLen]),
             SCRIPT_VERIFY_P2SH,
             BaseSignatureChecker(),
@@ -43,18 +42,22 @@ namespace ScriptEngineIF
         auto source = task::CCancellationSource::Make();
         const GlobalConfig& testConfig = GlobalConfig::GetConfig();
         
-        CScript in = ParseScript(inputScript);
-        auto res = EvalScript(
-            testConfig, true,
-            source->GetToken(),
-            directStack,
-            in,
-            SCRIPT_VERIFY_P2SH,
-            BaseSignatureChecker(),
-            &err);
-            
-        if(res.has_value()){
-            return res.value();
+        try{
+            CScript in = ParseScript(inputScript);
+            auto res = EvalScript(
+                testConfig, true,
+                source->GetToken(),
+                directStack,
+                in,
+                SCRIPT_VERIFY_P2SH,
+                BaseSignatureChecker(),
+                &err);
+                
+            if(res.has_value()){
+                return res.value();
+            }
+        }catch(std::exception& e){
+            throw std::runtime_error(e.what()); 
         }
         return false;
     }

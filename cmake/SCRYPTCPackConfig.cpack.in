@@ -24,7 +24,7 @@ endif()
 if(SCRYPT_BUILD_LEVELDB)
   set(CPACK_COMPONENTS_ALL ${CPACK_COMPONENTS_ALL} leveldb)
 endif()
-set(CPACK_COMPONENTS_ALL ${CPACK_COMPONENTS_ALL} Documentation)
+set(CPACK_COMPONENTS_ALL ${CPACK_COMPONENTS_ALL} Documentation module)
 
 
 if(NOT CUSTOM_SYSTEM_OS_NAME)## Add -DCUSTOM_SYSTEM_OS_NAME=Ubuntu for example to make the installer name

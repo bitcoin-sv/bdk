@@ -8,3 +8,5 @@ python      3.8.2
 openssl     1.1.b
 protobuf    3.11.0
 flutter     1.17.0 (beta channel)
+JAVA	    V11 or V12
+JDK	    V12
