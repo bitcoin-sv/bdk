@@ -30,7 +30,7 @@ Dependencies marked optional apply if you wish to run the unit tests. See [Tests
 
 ### Environment Variables
 
-- Make sure the CMake directory is included in the PATH environment variable
+- Make sure the CMake bin directory is included in the PATH environment variable
 - Make sure the Python3 directory is included in the PATH environment variable
 - Make sure the OPENSSL_ROOT_DIR environment variable is set to the location where OpenSSL is installed
 - Make sure the BOOST_ROOT environment variable is set to the location where boost is installed
