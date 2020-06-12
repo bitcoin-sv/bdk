@@ -9,7 +9,7 @@ For nChain developers, the best way to do this is to have a BitBucket account se
 **Windows**: If using the executable installer, ensure the "Download debugging symbols" and the "Download debug binaries" installation options are selected. 
 - The following python packages are needed to install and build documentation and to run tests.
 ```console
-python -m pip install mkdocs pymdown-extensions plantuml_markdown junitparser
+python -m pip install pytest junitparser mkdocs pymdown-extensions plantuml_markdown
 ```
 - [CMake 3.16](https://cmake.org/download/) or later
 - [Boost 1.72](https://www.boost.org/doc/libs/1_72_0/) or later. 
