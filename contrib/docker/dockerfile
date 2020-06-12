@@ -1,0 +1,72 @@
+FROM ubuntu:18.04
+
+LABEL author="Chris Gibson"
+
+RUN apt update && apt install -y \
+    wget \
+    vim  \
+    git \
+    tmux \
+    build-essential  \
+    manpages-dev  \
+    software-properties-common \
+    apt g++-9 
+
+RUN add-apt-repository ppa:ubuntu-toolchain-r/test
+
+# openssl
+WORKDIR /root
+RUN wget https://openssl.org/source/old/1.1.1/openssl-1.1.1d.tar.gz 
+RUN tar -xf openssl-1.1.1d.tar.gz
+WORKDIR openssl-1.1.1d
+RUN ./config
+RUN make
+RUN make test
+RUN make install 
+ENV OPEN_SSL_ROOT=/root/openssl-1.1.1b
+
+# cmake
+WORKDIR /root
+RUN wget https://github.com/kitware/cmake/releases/download/v3.16.8/cmake-3.16.8.tar.gz
+RUN tar -xf cmake-3.16.8.tar.gz
+WORKDIR cmake-3.16.8
+RUN ./bootstrap && make && make install
+
+# boost
+WORKDIR /root
+RUN wget https://dl.bintray.com/boostorg/release/1.72.0/source/boost_1_72_0.tar.bz2 --no-check-certificate
+RUN tar --bzip2 -xf boost_1_72_0.tar.bz2
+WORKDIR boost_1_72_0
+RUN apt install -y python-dev
+RUN ./bootstrap.sh
+RUN ./b2 cxxflags=-fPIC
+ENV BOOST_ROOT=/root/boost_1_72_0
+
+# Python
+WORKDIR /root
+RUN wget https://www.python.org/ftp/python/3.8.3/Python-3.8.3.tar.xz --no-check-certificate
+RUN tar -xf Python-3.8.3.tar.xz
+WORKDIR Python-3.8.3
+RUN ./configure
+RUN make
+#RUN make test
+RUN apt install -y zlib1g-dev libncurses5-dev libgdbm-dev libnss3-dev libssl-dev libreadline-dev libffi-dev libsqlite3-dev libbz2-dev
+RUN make install
+RUN python3 -m pip install --upgrade pip
+RUN python3 -m pip install mkdocs pymdown-extensions plantuml_markdown junitparser
+RUN python3 -m pip install pytest
+
+# Java
+RUN apt install -y default-jdk
+RUN apt install -y openjdk-8-jdk
+RUN apt install -y junit4
+ENV JAVA_TOOLS=/usr/share/java
+
+# Create build dir for CMake   
+WORKDIR /root
+RUN mkdir build
+WORKDIR /root/build
+
+RUN echo "cmake ../bscrypt -DCMAKE_BUILD_TYPE=Debug -DCUSTOM_SYSTEM_OS_NAME=Ubuntu; time -p make -j8" > build.sh
+RUN chmod +x ./build.sh
+
