@@ -51,9 +51,10 @@ gen_json_header(JSON_HEADERS
   data/tx_valid.json
   data/sighash.json
 )
-message("JSON_HEADERS[${JSON_HEADERS}]")
-
-
+message(STATUS "JSON_HEADERS generated for BSV tests")
+foreach(_f ${JSON_HEADERS})
+  message("       [${_f}]")
+endforeach()
 
 ####################################################################################################################
 ## Test files *cpp here are mainly extract of bsv source code ######################################################

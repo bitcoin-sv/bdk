@@ -6,14 +6,27 @@
 #################################################################
 
 find_package(Java REQUIRED)
+find_package(JNI REQUIRED)
 include(UseJava)
 
-if(NOT DEFINED ENV{JAVA_TOOLS})
-  message(FATAL_ERROR "It is required to set the environment variable JAVA_TOOLS to the location of junit and hamcrest jar files")
+if(NOT (JNI_FOUND AND Java_FOUND AND DEFINED ENV{JAVA_TOOLS}))
+    message(WARNING "Unable to find Java JDK on the system or environment variable JAVA_TOOLS. Skip building Java tests")
+    message(STATUS "       JNI_FOUND  [${JNI_FOUND}]")
+    message(STATUS "       Java_FOUND [${Java_FOUND}]")
+    message(STATUS "       JAVA_TOOLS [$ENV{JAVA_TOOLS}]")
+    return()
 endif()
 
 find_jar(JUNIT_JAR NAMES junit4 PATHS $ENV{JAVA_TOOLS} $ENV{JAVA_HOME} $ENV{JAVA_ROOT})
-find_jar(HAMCREST_JAR NAME hamcrest-core PATHS $ENV{JAVA_TOOLS} $ENV{JAVA_HOME} $ENV{JAVA_ROOT})
+find_jar(HAMCREST_JAR NAMES hamcrest hamcrest-core PATHS $ENV{JAVA_TOOLS} $ENV{JAVA_HOME} $ENV{JAVA_ROOT})
+
+if(NOT (JUNIT_JAR AND HAMCREST_JAR))
+    message(WARNING "Unable to find Java packages junit and hamcrest. Skip building Java tests")
+    message(STATUS "       JUNIT_JAR    [${JUNIT_JAR}]")
+    message(STATUS "       HAMCREST_JAR [${HAMCREST_JAR}]")
+    return()
+endif()
+
 
 #set commands
 set(CMAKE_INCLUDE_CURRENT_DIR ON)## Always include the current directory by default is off
@@ -40,7 +53,6 @@ endif()
 ## Execute each test from the tests folder
 foreach(_ftest_file ${_FUNCTIONAL_TEST_FILES})
   get_filename_component(_ftest_file_name "${_ftest_file}" NAME_WE)
-  message(_ftest_file_name " ${_ftest_file_name} ")
 
   set(TEST_NAME test_java_${_ftest_file_name})
 
@@ -68,7 +80,7 @@ foreach(_ftest_file ${_FUNCTIONAL_TEST_FILES})
     )
     add_test(NAME ${TEST_NAME}
              CONFIGURATIONS Release
-             COMMAND ${Java_JAVA_EXECUTABLE} -Djava.library.path=${CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE} ${JAVA_DEBUG_FLAG} -cp "${CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG}\$<SEMICOLON>${JUNIT_JAR}\$<SEMICOLON>${HAMCREST_JAR}" org.junit.runner.JUnitCore ${JAVA_PACKAGE_NAME}.${_ftest_file_name}
+             COMMAND ${Java_JAVA_EXECUTABLE} -Djava.library.path=${CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE} ${JAVA_DEBUG_FLAG} -cp "${CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE}\$<SEMICOLON>${JUNIT_JAR}\$<SEMICOLON>${HAMCREST_JAR}" org.junit.runner.JUnitCore ${JAVA_PACKAGE_NAME}.${_ftest_file_name}
              WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE}
     )
   else()

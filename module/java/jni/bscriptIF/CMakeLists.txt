@@ -1,8 +1,12 @@
-cmake_minimum_required(VERSION 3.12)
 project(JNIScriptIF)
 find_package(JNI REQUIRED)
 find_package(OpenSSL REQUIRED)
-FIND_PACKAGE(Java REQUIRED)
+find_package(Java REQUIRED)
+
+if(NOT (JNI_FOUND AND Java_FOUND))
+    message(WARNING "Unable to find Java JDK on the system. Skip building java binding module")
+    return()
+endif()
 
 INCLUDE(UseJava)
 
