@@ -1,4 +1,5 @@
 #include <ScriptEngineIF.h>
+
 #include <script/interpreter.h>
 #include <script/script.h>
 #include <script/script_error.h>
@@ -6,10 +7,10 @@
 #include <config.h>
 #include <core_io.h>
 
-
 namespace ScriptEngineIF
 {
-    bool executeScript(const std::unique_ptr<unsigned char[]>& script, const size_t& scriptLen ){
+    bool executeScript(const bsv::span<const uint8_t> script)
+    {
         CScript scr;
         ScriptError err;
         LimitedStack directStack(UINT32_MAX);
@@ -20,7 +21,7 @@ namespace ScriptEngineIF
             testConfig, true,
             source->GetToken(),
             directStack,
-            CScript(&script.get()[0],&script.get()[scriptLen]),
+            CScript(script.begin(), script.end()),
             SCRIPT_VERIFY_P2SH,
             BaseSignatureChecker(),
             &err);
