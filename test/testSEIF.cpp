@@ -16,18 +16,9 @@ BOOST_AUTO_TEST_SUITE(test_scriptengine_suite)
 
 BOOST_AUTO_TEST_CASE(test_case_1)
 {
-   static const uint8_t direct[] = {0x00, 0x6b, 0x54, 0x55, 0x93, 0x59,0x87};
+    const uint8_t direct[] = {0x00, 0x6b, 0x54, 0x55, 0x93, 0x59,0x87};
     
-    std::unique_ptr<unsigned char []> script(new unsigned char [sizeof(direct)]);
-    for(int i=0; i<sizeof(direct); ++i){
-        script.get()[i] = direct[i];
-    }
-    
-    const size_t& directLen(sizeof(direct));
-    
-    BOOST_TEST(ScriptEngineIF::executeScript(script, directLen));
-
-               
+    BOOST_TEST(ScriptEngineIF::executeScript(direct));
         
     std::string scriptString("0x00 0x6b 0x54 0x55 0x93 0x59 0x87");
     BOOST_TEST(ScriptEngineIF::executeScript(scriptString));
