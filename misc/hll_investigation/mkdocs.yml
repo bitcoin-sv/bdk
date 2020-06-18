@@ -1,0 +1,18 @@
+site_name: High Level Language
+
+nav:
+    - About : index.md
+    - Investigation : Investigation.md
+
+markdown_extensions:
+  - toc:
+  - pymdownx.arithmatex
+  - plantuml_markdown:
+
+extra_javascript:
+    - 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-MML-AM_CHTML' # mathjax
+
+theme: readthedocs
+
+extra_css:
+ - 'css/table.css'
