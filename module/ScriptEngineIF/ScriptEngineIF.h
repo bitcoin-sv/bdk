@@ -10,9 +10,9 @@
 namespace ScriptEngineIF
 {
     ScriptError executeScript(bsv::span<const uint8_t>);
-    bool executeScript(const std::string&) ;
+    ScriptError executeScript(const std::string&) ;
 
-    ScriptError verifyScript(bsv::span<const uint8_t>);
+    bool verifyScript(bsv::span<const uint8_t>);
     bool verifyScript(const std::string&);
 };
 

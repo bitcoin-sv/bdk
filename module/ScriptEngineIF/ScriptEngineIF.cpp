@@ -29,8 +29,6 @@ namespace ScriptEngineIF
     }
 
     ScriptError executeScript(const std::string& inputScript){
-
-    bool executeScript(const std::string& inputScript){
         CScript scr;
         ScriptError err;
         LimitedStack directStack(UINT32_MAX);
