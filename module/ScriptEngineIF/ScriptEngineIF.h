@@ -5,13 +5,15 @@
 
 #include <string>
 #include <memory>
+#include <script_error.h>
+#include <script/script_error.h>
 
 namespace ScriptEngineIF
 {
-    bool executeScript(bsv::span<const uint8_t>);
-    bool verifyScript(const std::unique_ptr<unsigned char[]>&, const size_t& ); 
-    
-    bool executeScript(const std::string& ) ; 
+    ScriptError executeScript(bsv::span<const uint8_t>);
+    bool verifyScript(const std::unique_ptr<unsigned char[]>&, const size_t& );
+
+    ScriptError executeScript(const std::string& ) ;
     bool verifyScript(const std::string& );
 };
 
