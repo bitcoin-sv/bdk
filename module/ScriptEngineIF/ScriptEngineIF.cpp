@@ -16,7 +16,7 @@ namespace ScriptEngineIF
         auto source = task::CCancellationSource::Make();
         const GlobalConfig& testConfig = GlobalConfig::GetConfig();
 
-        auto res = EvalScript(
+        EvalScript(
             testConfig, true,
             source->GetToken(),
             directStack,
@@ -42,7 +42,8 @@ namespace ScriptEngineIF
 
         try{
             CScript in = ParseScript(inputScript);
-            auto res = EvalScript(
+
+            EvalScript(
                 testConfig, true,
                 source->GetToken(),
                 directStack,

@@ -21,6 +21,20 @@ public class BScriptJNITest {
 	}
 
 	@Test
+    public void ScriptExecuteTestMessage() {
+    	int[] intArray = new int[] {0x00, 0x6b, 0x54, 0x55, 0x93, 0x59,0x87};
+    	final byte[] var = new byte[intArray.length];
+    	for (int i = 0; i < intArray.length; i++){
+            var[i] = (byte) intArray[i];
+         }
+
+         BScriptJNIResult result = jniIF.EvalScript(var);
+
+         Assert.assertEquals(result.getStatusMessage(), "No error");
+    }
+
+
+	@Test
 	public void ScriptExecuteSimple(){
 	     String[] ScriptArray = new String[] {"0x00 0x6b 0x54 0x55 0x93 0x59 0x87","0x00 0x6b 0x54 0x55 0x93 0x59 0x87"};
 
@@ -28,6 +42,8 @@ public class BScriptJNITest {
 
 	     Assert.assertEquals(result[0].getStatusCode(), 0);
 	}
+
+
 
 	@Test
 	public void ScriptExecuteLessSimple(){
