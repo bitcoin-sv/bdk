@@ -40,6 +40,7 @@ option(SCRYPT_BUILD_BSV_TESTS "Activate the build of bsv tests" ON)
 option(BSCRYPT_BUILD_JAVA "Build the JNI interface and associated unit tests" ON)
 option(BSCRYPT_BUILD_PYTHON "Build the python interface and associated unit tests" ON)
 
+option(SCRYPT_BUILD_MISC_ONLY "Build only misc directory" OFF)
 
 ## bscrypt built is based on source files from bsv code.
 ## Use -DSCRYPT_BSV_SRC_ROOT=/path/to/sv_root
@@ -61,19 +62,25 @@ endif()
 include(cmake/SCRYPTInit.cmake)
 scryptInitCMake()
 
-## Everything in core should be includable from everywhere
-include_directories(${CMAKE_SOURCE_DIR}/core)
-
-## Build scrypt_core
-add_subdirectory(${CMAKE_SOURCE_DIR}/core)
-
-if(SCRYPT_BUILD_MODULES)
-  add_subdirectory(${CMAKE_SOURCE_DIR}/module)
+if(SCRYPT_BUILD_MISC_ONLY)
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/misc)
+  message(STATUS "Build misc only and skip all other components as SCRYPT_BUILD_MISC_ONLY=${SCRYPT_BUILD_MISC_ONLY}")
+  return()
 endif()
 
-add_subdirectory(${CMAKE_SOURCE_DIR}/test)
+## Everything in core should be includable from everywhere
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/core)
 
-add_subdirectory(${CMAKE_SOURCE_DIR}/documentation)
+## Build scrypt_core
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/core)
+
+if(SCRYPT_BUILD_MODULES)
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/module)
+endif()
+
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/test)
+
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/documentation)
 
 ## On Widows, need to download NSIS https://nsis.sourceforge.io/Download
 ## Possible to do WIX generator for MSI installer
