@@ -17,19 +17,19 @@ BOOST_AUTO_TEST_SUITE(test_scriptengine_suite)
 BOOST_AUTO_TEST_CASE(test_case_1)
 {
     const uint8_t direct[] = {0x00, 0x6b, 0x54, 0x55, 0x93, 0x59,0x87};
-    
-    BOOST_TEST(ScriptEngineIF::executeScript(direct) == SCRIPT_ERR_OK);
+
+    BOOST_CHECK_EQUAL(ScriptEngineIF::executeScript(direct), SCRIPT_ERR_OK);
         
     std::string scriptString("0x00 0x6b 0x54 0x55 0x93 0x59 0x87");
-    BOOST_TEST(ScriptEngineIF::executeScript(scriptString) == SCRIPT_ERR_OK);
+    BOOST_CHECK_EQUAL(ScriptEngineIF::executeScript(direct), SCRIPT_ERR_OK);
         
         
     std::string scriptHashExample ("'abcdefghijklmnopqrstuvwxyz' 0xaa 0x4c 0x20 0xca139bc10c2f660da42666f72e89a225936fc60f193c161124a672050c434671 0x88");
-    BOOST_TEST(ScriptEngineIF::executeScript(scriptHashExample) == SCRIPT_ERR_OK);
+    BOOST_CHECK_EQUAL(ScriptEngineIF::executeScript(scriptHashExample), SCRIPT_ERR_OK);
         
         
     std::string scriptHash ("'abcdefghijklmnopqrstuvwxyz' OP_HASH256 OP_PUSHDATA1 0x20 0xca139bc10c2f660da42666f72e89a225936fc60f193c161124a672050c434671 OP_EQUALVERIFY");
-    BOOST_TEST(ScriptEngineIF::executeScript(scriptHash) == SCRIPT_ERR_OK);
+    BOOST_CHECK_EQUAL(ScriptEngineIF::executeScript(scriptHash), SCRIPT_ERR_OK);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
