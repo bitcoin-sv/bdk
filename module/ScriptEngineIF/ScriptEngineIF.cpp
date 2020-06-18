@@ -31,10 +31,6 @@ namespace ScriptEngineIF
         }
         return false;
     }
-    bool verifyScript(const std::unique_ptr<unsigned char[]>& script, const size_t& scriptLen ){
-        return false;
-    }
-    
     
     bool executeScript(const std::string& inputScript){
         CScript scr;
@@ -62,9 +58,13 @@ namespace ScriptEngineIF
         }
         return false;
     }
+    
+    bool verifyScript(bsv::span<const uint8_t>){
+        return false;
+    }
+    
     bool verifyScript(const std::string& inputScript){
         return false; 
     }
- 
 }
 
