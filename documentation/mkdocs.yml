@@ -16,15 +16,25 @@ nav:
     - About : index.md
     - Architecture : Architecture.md
     - Development : DeveloperSetup.md
+    - Git Working Flow : GitWorkingFlow.md
     - Object Model : ObjectModel.md
 
 markdown_extensions:
   - toc:
   - pymdownx.arithmatex
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_div_format
   - plantuml_markdown:
 
 extra_javascript:
-    - 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-MML-AM_CHTML' # mathjax
+  - 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-MML-AM_CHTML' # mathjax
+  - 'https://unpkg.com/mermaid@8.4.6/dist/mermaid.min.js'
+
+extra_css:
+  
 
 theme: readthedocs
 

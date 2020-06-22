@@ -1,5 +1,8 @@
 site_name: High Level Language
 
+copyright:
+  nChain
+
 nav:
     - About : index.md
     - Investigation : Investigation.md
@@ -8,9 +11,21 @@ markdown_extensions:
   - toc:
   - pymdownx.arithmatex
   - plantuml_markdown:
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_div_format
 
 extra_javascript:
     - 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-MML-AM_CHTML' # mathjax
+    - https://unpkg.com/mermaid@8.4.8/dist/mermaid.min.js
+
+plugins:
+  - search
+  - git-revision-date-localized: #https://github.com/timvink/mkdocs-git-revision-date-localized-plugin
+      type: datetime
+      fallback_to_build_date: true
 
 theme: readthedocs
 
