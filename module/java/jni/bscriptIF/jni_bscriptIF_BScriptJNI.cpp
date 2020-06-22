@@ -12,8 +12,11 @@ JNIEXPORT jobject JNICALL Java_jni_bscriptIF_BScriptJNI_EvalScript
     std::vector<uint8_t> script(len);
     env->GetByteArrayRegion(arr,0,len,reinterpret_cast<jbyte*>(script.data()));
 
-    //exeute the script
-    ScriptError scriptResult = ScriptEngineIF::executeScript(script);
+    //exeute the script. unhandled exceptions are treated as UNKNOWN_ERROR
+    ScriptError scriptResult = SCRIPT_ERR_UNKNOWN_ERROR;
+    try {
+        scriptResult = ScriptEngineIF::executeScript(script);
+    } catch (std::exception &ex) {}
 
     //class we want to call
     jclass clazz = env->FindClass("jni/bscriptIF/BScriptJNIResult");
@@ -51,8 +54,12 @@ JNIEXPORT jobjectArray JNICALL Java_jni_bscriptIF_BScriptJNI_EvalScriptString
         jstring strval = (jstring) (env->GetObjectArrayElement(strScript, i));
         const char *rawScript = env->GetStringUTFChars(strval, 0);
 
-        //execute the script and add the result to the return array
-        ScriptError scriptResult = ScriptEngineIF::executeScript(std::string{rawScript});
+        //execute the script and add the result to the return array. Uncaught failures are treated as an UNKNOWN_ERROR
+        ScriptError scriptResult = SCRIPT_ERR_UNKNOWN_ERROR;
+        try {
+            scriptResult = ScriptEngineIF::executeScript(std::string{rawScript});
+        } catch(std::exception &ex){}
+
         jobject result = env->NewObject(clazz, methodId, scriptResult, env->NewStringUTF(ScriptErrorString(scriptResult)));
         //add the result of the execution to the return array
         env->SetObjectArrayElement(scriptResultArray, i, result);
