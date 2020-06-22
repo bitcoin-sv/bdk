@@ -31,7 +31,7 @@ static PyObject* wrap_ExecuteScript(PyObject* self, PyObject *args){
         return NULL;
 
     try{
-        const bool ret = ScriptEngineIF::executeScript(std::string{script});
+        const ScriptError ret = ScriptEngineIF::executeScript(std::string{script});
         return Py_BuildValue("i", ret);
     }catch(std::exception& e){
         PyErr_SetString(PyExc_TypeError, e.what());
