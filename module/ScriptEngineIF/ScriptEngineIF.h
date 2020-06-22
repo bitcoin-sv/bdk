@@ -4,13 +4,15 @@
 #include "span.h"
 
 #include <string>
+#include <script_error.h>
+#include <script/script_error.h>
 
 namespace ScriptEngineIF
 {
-    bool executeScript(bsv::span<const uint8_t>);
-    bool executeScript(const std::string&) ; 
-    
-    bool verifyScript(bsv::span<const uint8_t>); 
+    ScriptError executeScript(bsv::span<const uint8_t>);
+    ScriptError executeScript(const std::string&) ;
+
+    bool verifyScript(bsv::span<const uint8_t>);
     bool verifyScript(const std::string&);
 };
 
