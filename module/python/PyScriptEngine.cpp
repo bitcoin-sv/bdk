@@ -21,17 +21,41 @@ static struct module_state _state;
 
 static PyObject* wrap_VerifyScript(PyObject* self, PyObject *args){
 
-    return Py_BuildValue("i", false);
+    char* scriptsigptr;
+    char* scriptpubkeyptr;
+   
+    int concensus(true);
+    unsigned int scriptflags(0);
+    char* hextxptr; 
+    int nIndex(0);
+    int64_t amount(0); 
     
+    if(!PyArg_ParseTuple(args,"ssiIsii", &scriptsigptr,&scriptpubkeyptr,&concensus, &scriptflags,&hextxptr,&nIndex,&amount))
+        return NULL;
+        
+    try{
+        const ScriptError ret = ScriptEngineIF::verifyScript(std::string{scriptsigptr},std::string{scriptpubkeyptr}, concensus, scriptflags, std::string{hextxptr},nIndex,amount);
+        return Py_BuildValue("i", ret);
+    }catch(std::exception& e){
+        PyErr_SetString(PyExc_TypeError, e.what());
+        return(PyObject *) NULL;
+    }
 }
 
 static PyObject* wrap_ExecuteScript(PyObject* self, PyObject *args){
-    char* script;
-    if(!PyArg_ParseTuple(args,"s", &script))
+    char* scriptptr;
+    int concensus(true);
+    unsigned int scriptflags(0);
+    char* hextxptr; 
+    int nIndex(0);
+    int64_t amount(0); 
+
+    if(!PyArg_ParseTuple(args,"siIsii", &scriptptr,&concensus, &scriptflags,&hextxptr,&nIndex,&amount))
         return NULL;
 
+    
     try{
-        const bool ret = ScriptEngineIF::executeScript(script);
+        const ScriptError ret = ScriptEngineIF::executeScript(std::string{scriptptr},concensus, scriptflags, std::string{hextxptr},nIndex,amount);
         return Py_BuildValue("i", ret);
     }catch(std::exception& e){
         PyErr_SetString(PyExc_TypeError, e.what());

@@ -60,11 +60,11 @@ foreach(_ftest_file ${_FUNCTIONAL_TEST_FILES})
 
   if(CMAKE_CONFIGURATION_TYPES)
     add_custom_command(TARGET ${_ftest_file_name}
-       COMMAND ${Java_JAVAC_EXECUTABLE} -d $<IF:$<CONFIG:Debug>,${CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG},${CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE}> -cp "${JUNIT_JAR}\$<SEMICOLON>${HAMCREST_JAR}" ${SOURCE_DIRECTORY}/BScriptJNI.java ${TEST_DIRECTORY}/${_ftest_file_name}.java
+       COMMAND ${Java_JAVAC_EXECUTABLE} -d $<IF:$<CONFIG:Debug>,${CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG},${CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE}> -cp "${JUNIT_JAR}\$<SEMICOLON>${HAMCREST_JAR}" ${SOURCE_DIRECTORY}/*.java ${TEST_DIRECTORY}/${_ftest_file_name}.java
        COMMENT "Compiling ${TEST_FILE}")
   else()
     add_custom_command(TARGET ${_ftest_file_name}
-       COMMAND ${Java_JAVAC_EXECUTABLE} -d ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} -cp "${JUNIT_JAR}:${HAMCREST_JAR}" ${SOURCE_DIRECTORY}/BScriptJNI.java ${TEST_DIRECTORY}/${_ftest_file_name}.java
+       COMMAND ${Java_JAVAC_EXECUTABLE} -d ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} -cp "${JUNIT_JAR}:${HAMCREST_JAR}" ${SOURCE_DIRECTORY}/*.java ${TEST_DIRECTORY}/${_ftest_file_name}.java
        COMMENT "Compiling ${TEST_FILE}")
   endif()
 

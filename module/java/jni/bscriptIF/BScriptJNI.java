@@ -1,8 +1,5 @@
 package jni.bscriptIF;
-import java.util.Arrays;
 
-
-// javac -h . BScriptJNI.java
 public class BScriptJNI {
 
     private final static int DEBUG = Integer.getInteger("debug", 0);
@@ -16,11 +13,11 @@ public class BScriptJNI {
          }
     }
 
-    public native boolean EvalScript(byte[] script);
+    public native BScriptJNIResult EvalScript(byte[] script,boolean concensus, int scriptflags,String txHex, int nIndex, int amount);
     public native boolean VerifyScript(byte[] script);
     
-    public native boolean EvalScriptString(String[] script);
-    public native boolean VerifyScriptString(String[] script);
-    
+    public native BScriptJNIResult EvalScriptString(String script,boolean concensus, int scriptflags, String txHex, int nIndex, int amount);
+    public native BScriptJNIResult VerifyScriptString(String scriptsig,String scriptpub, boolean concensus, int scriptflags, String txHex, int nIndex, int amount);
+
 }
     

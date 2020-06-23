@@ -13,15 +13,15 @@ python -m pip install pytest junitparser mkdocs pymdown-extensions plantuml_mark
 ```
 - [CMake 3.16](https://cmake.org/download/) or later
 - [Boost 1.72](https://www.boost.org/doc/libs/1_72_0/) or later. 
-**Linux**: static libraries and must be compiled with fPIC on.
-- OpenSSL 1.1.1d or later
+**Linux**: static libraries and must be compiled with `fPIC` on.
+- OpenSSL 1.1.1b or later
 - C++ 17 compatible compiler
 **Windows**: Visual Studio Community Edition 2019 on windows
 **Linux**: g++9 on Linux
 ##### Java module
 - Java JDK 8 or later
-- junit4.jar and hamcrest.jar. (Rename if necessary)
-- The JAVA_TOOLS environment variable must be setup to point to junit4.jar and hamcrest.jar
+- `junit4.jar` and `hamcrest.jar`. (Rename if necessary)
+- The `JAVA_TOOLS` environment variable must be setup to point to junit4.jar and hamcrest.jar
 ##### Python module
 - No additional requirements if Python is installed with Debug symbols
 
@@ -30,12 +30,12 @@ Dependencies marked optional apply if you wish to run the unit tests. See [Tests
 
 ### Environment Variables
 
-- Make sure the CMake bin directory is included in the PATH environment variable
-- Make sure the Python3 directory is included in the PATH environment variable
-- Make sure the OPENSSL_ROOT_DIR environment variable is set to the location where OpenSSL is installed
-- Make sure the BOOST_ROOT environment variable is set to the location where boost is installed
+- Make sure the CMake bin directory is included in the `PATH` environment variable
+- Make sure the Python3 directory is included in the `PATH` environment variable
+- Make sure the `OPENSSL_ROOT_DIR` environment variable is set to the location where OpenSSL is installed
+- Make sure the `BOOST_ROOT` environment variable is set to the location where boost is installed
 ##### Java module
-- Make sure the JAVA_TOOLS environment variable is set to the location of junit4.jar and hamcreast.jar
+- Make sure the `JAVA_TOOLS` environment variable is set to the location of `junit4.jar` and `hamcreast.jar`
 
 ## Building bscrypt
 It is recommended that a build directory **build** is created outside of bscrypt source code directory. See [Architecture](Architecture.md).
