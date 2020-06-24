@@ -7,38 +7,10 @@
 #include <chainparams.h>
 #include <base58.h>
 #include <core_io.h>
+#include <ecc_guard.h>
 
 namespace ScriptEngineIF
 {
-
-
-    class Secp256k1Init{
-    
-        public:
-            Secp256k1Init() : m_ECCStarted(false){
-                if(!ECC_IsStarted()){
-                    ECC_Start();
-                    m_ECCStarted = true; 
-                }
-            }
-            
-            ~Secp256k1Init(){
-                if(m_ECCStarted)
-                    ECC_Stop();
-            }
-        private:
-            
-            
-            ECCVerifyHandle VerifyHandle;
-            bool m_ECCStarted; 
-            Secp256k1Init(const Secp256k1Init&); 
-            Secp256k1Init& operator=(const Secp256k1Init&);
-            Secp256k1Init(const Secp256k1Init&&); 
-            Secp256k1Init& operator=(const Secp256k1Init&&); 
-    };
-    
-    
-    
     ScriptError executeScript(const bsv::span<const uint8_t> script,const bool& consensus, const unsigned int& scriptflag,const std::string& txhex, const int& vinIndex, const int64_t& amount )
     {
         CScript scr;
@@ -47,8 +19,8 @@ namespace ScriptEngineIF
         auto source = task::CCancellationSource::Make();
         const GlobalConfig& testConfig = GlobalConfig::GetConfig();
 
-
-        Secp256k1Init eccval;
+        ECCVerifyHandle verifyHandle;
+        ecc_guard guard;
         
         CMutableTransaction mtx;
         std::unique_ptr<BaseSignatureChecker> sigCheck ( new BaseSignatureChecker() ); 
@@ -90,8 +62,8 @@ namespace ScriptEngineIF
         auto source = task::CCancellationSource::Make();
         const GlobalConfig& testConfig = GlobalConfig::GetConfig();
 
-        Secp256k1Init eccval;
-        
+        ECCVerifyHandle verifyHandle;
+        ecc_guard guard;
         
         try{
             CScript in = ParseScript(inputScript);
@@ -142,8 +114,8 @@ namespace ScriptEngineIF
             throw std::runtime_error ("No script pubkey provided to evalutate in ScirptEngine::executeScript");
         }
         
-
-        Secp256k1Init eccval;
+        ECCVerifyHandle verifyHandle;
+        ecc_guard guard;
         
         try{
             CScript inSig = ParseScript(scriptsig);
