@@ -22,8 +22,11 @@ JNIEXPORT jobject JNICALL Java_jni_bscriptIF_BScriptJNI_EvalScript
     ScriptError scriptResult = SCRIPT_ERR_UNKNOWN_ERROR;
     try {
         scriptResult = ScriptEngineIF::executeScript(script,concensus,scriptflags,hextxptr,nidx,amount);
-    } catch(std::runtime_error &ex){
+    } catch(const std::runtime_error &ex){
         env->ThrowNew(env->FindClass("java/lang/RuntimeException"), ex.what());
+        return NULL;
+    } catch(const std::exception &ex) {
+        env->ThrowNew(env->FindClass("java/lang/Exception"), ex.what());
         return NULL;
     } catch (...) {
         env->ThrowNew(env->FindClass("java/lang/Exception"), ScriptErrorString(scriptResult));
@@ -80,8 +83,11 @@ JNIEXPORT jobject JNICALL Java_jni_bscriptIF_BScriptJNI_EvalScriptString
     ScriptError scriptResult = SCRIPT_ERR_UNKNOWN_ERROR;
     try {
         scriptResult = ScriptEngineIF::executeScript(std::string{rawScript},concensus,scriptflags, hextxptr,nidx,amount);
-    }catch(std::runtime_error &ex){
+    } catch(const std::runtime_error &ex){
         env->ThrowNew(env->FindClass("java/lang/RuntimeException"), ex.what());
+        return NULL;
+    } catch(const std::exception &ex) {
+        env->ThrowNew(env->FindClass("java/lang/Exception"), ex.what());
         return NULL;
     } catch (...) {
         env->ThrowNew(env->FindClass("java/lang/Exception"), ScriptErrorString(scriptResult));
@@ -123,8 +129,11 @@ JNIEXPORT jobject JNICALL Java_jni_bscriptIF_BScriptJNI_VerifyScriptString
         scriptResult = ScriptEngineIF::verifyScript(std::string{rawScriptSig}, std::string{rawScriptpubkey},
                                                     concensus, scriptflags, std::string{hextxptr}, nidx,
                                                     amount);
-    } catch(std::runtime_error &err){
-        env->ThrowNew(env->FindClass("java/lang/RuntimeException"), err.what());
+    } catch(const std::runtime_error &ex){
+        env->ThrowNew(env->FindClass("java/lang/RuntimeException"), ex.what());
+        return NULL;
+    } catch(const std::exception &ex) {
+        env->ThrowNew(env->FindClass("java/lang/Exception"), ex.what());
         return NULL;
     } catch (...) {
         env->ThrowNew(env->FindClass("java/lang/Exception"), ScriptErrorString(scriptResult));
