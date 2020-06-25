@@ -4,18 +4,34 @@
 #include "span.h"
 
 #include <string>
-#include <script_error.h>
 #include <script/script_error.h>
 
 namespace ScriptEngineIF
 {
-    ScriptError executeScript(bsv::span<const uint8_t>,const bool&, const unsigned int&, const std::string&, const int&, const int64_t&);
-    ScriptError executeScript(const std::string&, const bool&, const unsigned int&, const std::string&, const int&, const int64_t&) ;
+    ScriptError executeScript(bsv::span<const uint8_t> script,
+                              bool consensus,
+                              unsigned int flags,
+                              const std::string& transaction,
+                              int tx_input_index,
+                              int64_t amount);
+    ScriptError executeScript(const std::string& script,
+                              bool consensus,
+                              unsigned int flags,
+                              const std::string& transaction,
+                              int tx_input_index,
+                              int64_t amount);
 
     bool verifyScript(bsv::span<const uint8_t>);
-    ScriptError verifyScript(const std::string&,const std::string&, const bool&, const unsigned int&, const std::string&, const int&, const int64_t&);
-    
-     std::string formatScript(const std::string&);
+    ScriptError verifyScript(const std::string& script_sig,
+                             const std::string& script_pub_key,
+                             bool consensus,
+                             unsigned int flags,
+                             const std::string& transaction,
+                             int tx_input_index,
+                             int64_t amount);
+
+    std::string formatScript(const std::string& script);
 };
 
-#endif//#ifnde __SCRIPT_ENGINE_IF_H__
+#endif
+
