@@ -31,7 +31,7 @@ if(WIN32) #https://github.com/openssl/openssl/pull/1062
   set_target_properties(jniBSCript PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS 1)
 endif()
 target_include_directories(jniBSCript PUBLIC ${JNI_INCLUDE_DIRS} ${JAVA_INCLUDE_PATH2})
-target_link_libraries(jniBSCript ScriptEngineIF OpenSSL::Crypto OpenSSL::SSL BSVUtilsJNI-native)
+target_link_libraries(jniBSCript scrypt_core OpenSSL::Crypto OpenSSL::SSL BSVUtilsJNI-native)
 set_target_properties(jniBSCript PROPERTIES  FOLDER "module/java" DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})
 set_target_properties(BScriptJNI PROPERTIES  FOLDER "module/java")
 

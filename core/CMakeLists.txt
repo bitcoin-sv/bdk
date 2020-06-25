@@ -46,11 +46,15 @@ endforeach()
 source_group("_generated" FILES "${BITCOIN_CONFIG_FILE}")
 
 ## any .cpp .hpp file added here will be added group with bsv file to build the core.
-file(GLOB_RECURSE BSCRYPT_CORE_EXTRA_HDR_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp")
+file(GLOB_RECURSE BSCRYPT_CORE_EXTRA_HDR_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp" "${CMAKE_CURRENT_SOURCE_DIR}/*.h")
 file(GLOB_RECURSE BSCRYPT_CORE_EXTRA_SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
 
 set(BSCRYPT_CORE_HDR_FILES ${BSCRYPT_CORE_EXTRA_HDR_FILES} ${BSV_MINIMAL_HDR_FILES})
 set(BSCRYPT_CORE_SRC_FILES ${BSCRYPT_CORE_EXTRA_SRC_FILES} ${BSV_MINIMAL_SRC_FILES})
+message(STATUS "Extra c++ file in ${CMAKE_CURRENT_SOURCE_DIR}")
+foreach(_extra_file ${BSCRYPT_CORE_HDR_FILES} ${BSCRYPT_CORE_SRC_FILES})
+    message(STATUS "    [${_extra_file}]")
+endforeach()
 
 ## Build scrypt_core as a library using bsv source code
 add_library(scrypt_core ${BITCOIN_CONFIG_FILE} ${BSCRYPT_CORE_HDR_FILES} ${BSCRYPT_CORE_SRC_FILES})
@@ -69,6 +73,7 @@ set_property(TARGET scrypt_core PROPERTY FOLDER "core")
 ## Install scrypt_core : the *.h header files should be kept as bsv structure
 install(FILES ${BITCOIN_CONFIG_FILE} DESTINATION "include/core/sv/config" COMPONENT scrypt_core)
 set(default_install_include_core_dir "include/core")
+# Install bsv header files
 foreach(_bsv_hdr ${BSCRYPT_CORE_HDR_FILES})
   get_filename_component(_dir ${_bsv_hdr} DIRECTORY)
   if("${_dir}" MATCHES "${SCRYPT_BSV_ROOT_DIR}/")
@@ -80,4 +85,10 @@ foreach(_bsv_hdr ${BSCRYPT_CORE_HDR_FILES})
   #message("install file [${_bsv_hdr}]  _install_dest[${_install_dest}]")
   install(FILES ${_bsv_hdr} DESTINATION "${_install_dest}" COMPONENT scrypt_core)
 endforeach()
+# Install extra core header files
+foreach(_extra_hdr ${BSCRYPT_CORE_EXTRA_HDR_FILES})
+  install(FILES ${_extra_hdr} DESTINATION "${default_install_include_core_dir}" COMPONENT scrypt_core)
+endforeach()
+
+
 install(TARGETS scrypt_core DESTINATION "lib" COMPONENT scrypt_core)

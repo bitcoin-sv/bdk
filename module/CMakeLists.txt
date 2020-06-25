@@ -18,8 +18,7 @@ endif()
 
 message(STATUS "Building modules ...")
 
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/example)
-add_subdirectory(ScriptEngineIF)
+add_subdirectory(example)
 
 if(BSCRYPT_BUILD_JAVA)
   add_subdirectory(java)
