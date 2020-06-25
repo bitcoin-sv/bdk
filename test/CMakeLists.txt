@@ -43,7 +43,7 @@ target_link_libraries(test_foo ${CMAKE_DL_LIBS} scrypt_core OpenSSL::Crypto Open
 scrypt_add_unit_test(test_foo)
 
 add_executable(test_scriptengineif "${CMAKE_CURRENT_SOURCE_DIR}/testSEIF.cpp")
-target_link_libraries(test_scriptengineif ${CMAKE_DL_LIBS} ScriptEngineIF OpenSSL::Crypto OpenSSL::SSL)
+target_link_libraries(test_scriptengineif ${CMAKE_DL_LIBS} scrypt_core OpenSSL::Crypto OpenSSL::SSL)
 scrypt_add_unit_test(test_scriptengineif)
 if(BSCRYPT_BUILD_JAVA)
     add_subdirectory(java)
