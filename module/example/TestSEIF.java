@@ -1,4 +1,4 @@
-import jni.bscriptIF.*;
+package com.nchain.bsv.scriptengine.*;
 
 //java -Djava.library.path=<PATH TO SHARED LIBRARIES> -cp "<PATH TO JAR FILE>/BScriptJNI.jar" TestSEIF.java
 

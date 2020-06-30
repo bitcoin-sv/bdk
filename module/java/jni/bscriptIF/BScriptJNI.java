@@ -1,4 +1,4 @@
-package jni.bscriptIF;
+package com.nchain.bsv.scriptengine;
 
 public class BScriptJNI {
 
