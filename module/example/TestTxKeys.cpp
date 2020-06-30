@@ -236,7 +236,7 @@ int main(int argc, char * argv[]){
     
     std::string scr = FormatScript(finalScript) ; 
     std::cout << scr << std::endl; 
-    if(bsv::executeScript(scr,true, 0,hextx,0,amt)){
+    if(bsv::evaluate(scr,true, 0,hextx,0,amt)){
         std::cout << "Successfully executed script with a checksig" << std::endl;
     }
     
