@@ -8,18 +8,18 @@
 
 namespace bsv
 {
-    ScriptError executeScript(bsv::span<const uint8_t> script,
-                              bool consensus,
-                              unsigned int flags,
-                              const std::string& transaction,
-                              int tx_input_index,
-                              int64_t amount);
-    ScriptError executeScript(const std::string& script,
-                              bool consensus,
-                              unsigned int flags,
-                              const std::string& transaction,
-                              int tx_input_index,
-                              int64_t amount);
+    ScriptError evaluate(bsv::span<const uint8_t> script,
+                         bool consensus,
+                         unsigned int flags,
+                         const std::string& transaction,
+                         int tx_input_index,
+                         int64_t amount);
+    ScriptError evaluate(const std::string& script,
+                         bool consensus,
+                         unsigned int flags,
+                         const std::string& transaction,
+                         int tx_input_index,
+                         int64_t amount);
 
     bool verifyScript(bsv::span<const uint8_t>);
     ScriptError verifyScript(const std::string& script_sig,
