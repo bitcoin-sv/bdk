@@ -9,7 +9,7 @@
 #include <script/script.h>
 #include <taskcancellation.h>
 
-ScriptError ScriptEngineIF::executeScript(const bsv::span<const uint8_t> script,
+ScriptError bsv::executeScript(const bsv::span<const uint8_t> script,
                                           const bool consensus,
                                           const unsigned int scriptflag,
                                           const std::string& txhex,
@@ -49,7 +49,7 @@ ScriptError ScriptEngineIF::executeScript(const bsv::span<const uint8_t> script,
     return err;
 }
 
-ScriptError ScriptEngineIF::executeScript(const std::string& inputScript,
+ScriptError bsv::executeScript(const std::string& inputScript,
                                           const bool consensus,
                                           const unsigned int scriptflag,
                                           const std::string& txhex,
@@ -106,7 +106,7 @@ ScriptError ScriptEngineIF::executeScript(const std::string& inputScript,
     }
 }
 
-ScriptError ScriptEngineIF::verifyScript(const std::string& scriptsig,
+ScriptError bsv::verifyScript(const std::string& scriptsig,
                                          const std::string& scriptpubkey,
                                          const bool consensus,
                                          const unsigned int scriptflag,
@@ -172,12 +172,12 @@ ScriptError ScriptEngineIF::verifyScript(const std::string& scriptsig,
     }
 }
 
-bool ScriptEngineIF::verifyScript(const bsv::span<const uint8_t>)
+bool bsv::verifyScript(const bsv::span<const uint8_t>)
 {
     return false;
 }
 
-std::string ScriptEngineIF::formatScript(const std::string& inputScript)
+std::string bsv::formatScript(const std::string& inputScript)
 {
     if(inputScript.empty() ||
        inputScript.find_first_not_of(" /n/t/f") == std::string::npos)
