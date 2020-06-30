@@ -1,16 +1,16 @@
 package com.nchain.bsv.scriptengine;
 
-public class BScriptJNIResult {
+public class Status {
 
     private int statusCode;
     private String statusMessage;
 
-    public BScriptJNIResult(int statusCode, String statusMessage){
+    public Status(int statusCode, String statusMessage){
         this.statusCode = statusCode;
         this.statusMessage = statusMessage;
     }
 
-    public BScriptJNIResult(){
+    public Status(){
     }
 
     public int getStatusCode(){

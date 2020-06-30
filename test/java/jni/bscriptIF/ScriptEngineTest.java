@@ -3,9 +3,9 @@ package com.nchain.bsv.scriptengine;
 import org.junit.Assert;
 import org.junit.Test;
 
-public class BScriptJNITest {
+public class ScriptEngineTest {
 	
-	public BScriptJNI jniIF = new BScriptJNI();
+	public ScriptEngine jniIF = new ScriptEngine();
 
 	@Test
 	public void ScriptExecute() {
@@ -15,7 +15,7 @@ public class BScriptJNITest {
             var[i] = (byte) intArray[i];
         }
 
-        BScriptJNIResult result = jniIF.EvalScript(var,true,0,"",0,0);
+        Status result = jniIF.Evaluate(var,true,0,"",0,0);
 
         Assert.assertEquals(result.getStatusCode(), 0);
 
@@ -29,7 +29,7 @@ public class BScriptJNITest {
             var[i] = (byte) intArray[i];
          }
 
-         BScriptJNIResult result = jniIF.EvalScript(var,true,0,"",0,0);
+         Status result = jniIF.Evaluate(var,true,0,"",0,0);
 
          Assert.assertEquals(result.getStatusMessage(), "No error");
     }
@@ -38,7 +38,7 @@ public class BScriptJNITest {
 	@Test
 	public void ScriptExecuteSimple(){
 	     String ScriptArray = "0x00 0x6b 0x54 0x55 0x93 0x59 0x87";
-	     BScriptJNIResult result = jniIF.EvalScriptString(ScriptArray,true,0,"",0,0);
+	     Status result = jniIF.EvaluateString(ScriptArray,true,0,"",0,0);
 	     Assert.assertEquals(result.getStatusCode(), 0);
 	}
 
@@ -47,14 +47,14 @@ public class BScriptJNITest {
 	@Test
 	public void ScriptExecuteLessSimple(){
 	     String ScriptArray = new String("'abcdefghijklmnopqrstuvwxyz' 0xaa 0x4c 0x20 0xca139bc10c2f660da42666f72e89a225936fc60f193c161124a672050c434671 0x88");
-	     BScriptJNIResult result = jniIF.EvalScriptString(ScriptArray,true,0,"",0,0);
+	     Status result = jniIF.EvaluateString(ScriptArray,true,0,"",0,0);
 	     Assert.assertEquals(result.getStatusCode(), 0);
 	}
 
 	@Test
 	public void ScriptExecuteLessSimpleOpCodes(){
 	     String ScriptArray = new String ("'abcdefghijklmnopqrstuvwxyz' OP_HASH256 OP_PUSHDATA1 0x20 0xca139bc10c2f660da42666f72e89a225936fc60f193c161124a672050c434671 OP_EQUALVERIFY");
-	     BScriptJNIResult result = jniIF.EvalScriptString(ScriptArray,true,0,"",0,0);
+	     Status result = jniIF.EvaluateString(ScriptArray,true,0,"",0,0);
          Assert.assertEquals(result.getStatusCode(), 0);
 	}
 
@@ -65,7 +65,8 @@ public class BScriptJNITest {
 	     String HexID = new String ("0100000001d92670dd4ad598998595be2f1bec959de9a9f8b1fd97fb832965c96cd55145e20000000000ffffffff010a000000000000000000000000");
 
 	     int amt = 10;
-	     BScriptJNIResult result = jniIF.EvalScriptString(ScriptArray,true,0,HexID,0,amt);
+
+	     Status result = jniIF.EvaluateString(ScriptArray,true,0,HexID,0,amt);
          Assert.assertEquals(result.getStatusCode(), 0);
 	}
 
@@ -79,7 +80,7 @@ public class BScriptJNITest {
 	     String HexID = new String ("0100000001d92670dd4ad598998595be2f1bec959de9a9f8b1fd97fb832965c96cd55145e20000000000ffffffff010a000000000000000000000000");
 
 	     int amt = 10;
-	     BScriptJNIResult result = jniIF.VerifyScriptString(ScriptSig,ScriptPubKey,true,0,HexID,0,amt);
+	     Status result = jniIF.VerifyString(ScriptSig,ScriptPubKey,true,0,HexID,0,amt);
          Assert.assertEquals(result.getStatusCode(), 0);
 	}
 }
