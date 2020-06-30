@@ -29,7 +29,7 @@ BOOST_AUTO_TEST_CASE(script_status)
     };
     for(const auto& [script, exp_status] : test_data)
     {
-        const auto status{executeScript(script, true, 0, std::string{}, 0, 0)};
+        const auto status{evaluate(script, true, 0, std::string{}, 0, 0)};
         BOOST_CHECK_EQUAL(exp_status, status);
     }
 }
@@ -38,7 +38,7 @@ BOOST_AUTO_TEST_CASE(test_case_1)
 {
     // OP_0, OP_TOALTSTACK, OP_4, OP_5, OP_ADD, OP_9, OP_EQUAL   
     std::string scriptString("0x00 0x6b 0x54 0x55 0x93 0x59 0x87");
-    BOOST_CHECK_EQUAL(bsv::executeScript(scriptString, true, 0,
+    BOOST_CHECK_EQUAL(bsv::evaluate(scriptString, true, 0,
                                                     std::string(), 0, 0),
                       SCRIPT_ERR_OK);
 
@@ -46,7 +46,7 @@ BOOST_AUTO_TEST_CASE(test_case_1)
     std::string scriptHashExample("'abcdefghijklmnopqrstuvwxyz' 0xaa 0x4c 0x20 "
                                   "0xca139bc10c2f660da42666f72e89a225936fc60f19"
                                   "3c161124a672050c434671 0x88");
-    BOOST_CHECK_EQUAL(bsv::executeScript(scriptHashExample, true, 0,
+    BOOST_CHECK_EQUAL(bsv::evaluate(scriptHashExample, true, 0,
                                                     std::string(), 0, 0),
                       SCRIPT_ERR_OK);
 
@@ -55,7 +55,7 @@ BOOST_AUTO_TEST_CASE(test_case_1)
         "0xca139bc10c2f660da42666f72e89a225936fc60f193c161124a672050c434671 "
         "OP_EQUALVERIFY");
     BOOST_CHECK_EQUAL(
-        bsv::executeScript(scriptHash, true, 0, std::string(), 0, 0),
+        bsv::evaluate(scriptHash, true, 0, std::string(), 0, 0),
         SCRIPT_ERR_OK);
 }
 
@@ -82,7 +82,7 @@ BOOST_AUTO_TEST_CASE(test_case_2)
     int64_t amt = 10;
 
     BOOST_CHECK_EQUAL(
-        bsv::executeScript(fullscript, true, 0, txhex, 0, amt),
+        bsv::evaluate(fullscript, true, 0, txhex, 0, amt),
         SCRIPT_ERR_OK);
 }
 

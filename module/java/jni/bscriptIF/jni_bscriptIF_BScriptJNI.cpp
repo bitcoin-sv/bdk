@@ -21,7 +21,7 @@ JNIEXPORT jobject JNICALL Java_jni_bscriptIF_BScriptJNI_EvalScript
     //execute the script
     ScriptError scriptResult = SCRIPT_ERR_UNKNOWN_ERROR;
     try {
-        scriptResult = bsv::executeScript(script,concensus,scriptflags,hextxptr,nidx,amount);
+        scriptResult = bsv::evaluate(script,concensus,scriptflags,hextxptr,nidx,amount);
     } catch(const std::runtime_error &ex){
         env->ThrowNew(env->FindClass("java/lang/RuntimeException"), ex.what());
         return NULL;
@@ -82,7 +82,7 @@ JNIEXPORT jobject JNICALL Java_jni_bscriptIF_BScriptJNI_EvalScriptString
     // run the script
     ScriptError scriptResult = SCRIPT_ERR_UNKNOWN_ERROR;
     try {
-        scriptResult = bsv::executeScript(std::string{rawScript},concensus,scriptflags, hextxptr,nidx,amount);
+        scriptResult = bsv::evaluate(std::string{rawScript},concensus,scriptflags, hextxptr,nidx,amount);
     } catch(const std::runtime_error &ex){
         env->ThrowNew(env->FindClass("java/lang/RuntimeException"), ex.what());
         return NULL;

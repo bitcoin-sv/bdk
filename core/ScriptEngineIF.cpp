@@ -9,12 +9,12 @@
 #include <script/script.h>
 #include <taskcancellation.h>
 
-ScriptError bsv::executeScript(const bsv::span<const uint8_t> script,
-                                          const bool consensus,
-                                          const unsigned int scriptflag,
-                                          const std::string& txhex,
-                                          const int vinIndex,
-                                          const int64_t amount)
+ScriptError bsv::evaluate(const bsv::span<const uint8_t> script,
+                          const bool consensus,
+                          const unsigned int scriptflag,
+                          const std::string& txhex,
+                          const int vinIndex,
+                          const int64_t amount)
 {
     ECCVerifyHandle verifyHandle;
     ecc_guard guard;
@@ -49,12 +49,12 @@ ScriptError bsv::executeScript(const bsv::span<const uint8_t> script,
     return err;
 }
 
-ScriptError bsv::executeScript(const std::string& inputScript,
-                                          const bool consensus,
-                                          const unsigned int scriptflag,
-                                          const std::string& txhex,
-                                          const int vinIndex,
-                                          const int64_t amount)
+ScriptError bsv::evaluate(const std::string& inputScript,
+                          const bool consensus,
+                          const unsigned int scriptflag,
+                          const std::string& txhex,
+                          const int vinIndex,
+                          const int64_t amount)
 {
     if(inputScript.empty() ||
        inputScript.find_first_not_of(" /n/t/f") == std::string::npos)
