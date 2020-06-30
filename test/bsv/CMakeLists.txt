@@ -53,7 +53,9 @@ gen_json_header(JSON_HEADERS
 )
 message(STATUS "JSON_HEADERS generated for BSV tests")
 foreach(_f ${JSON_HEADERS})
-  message("       [${_f}]")
+  if(SCRYPT_LOG_BSV_FILES)
+    message("       [${_f}]")
+  endif()
 endforeach()
 
 ####################################################################################################################

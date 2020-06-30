@@ -14,7 +14,7 @@ After unpacking the bscrypt installer to the local machine, the content of the i
 |-- bscrypt_install
 |       |-- include
 |              |-- core
-|                    |-- bsv
+|                    |-- sv
 |              |-- secp256k1
 |              |-- univalue
 |       |-- lib
@@ -23,18 +23,10 @@ After unpacking the bscrypt installer to the local machine, the content of the i
 ```
 
 - File `include/core/ScryptVersion.hpp` contains full version's information of how and when the installer was built.
-- `include/core/bsv` directory contains all `*.h` and `*.hpp` files from bsv source code.
+- `include/core/sv` directory contains all `*.h` and `*.hpp` files from bsv source code.
 - `include/core` directory contains all extra `*.h` and `*.hpp` files declaring additional functionalities in bscrypt core.
 - lib directory contains all archives (static) and runtime (shared) libraries.
 - Documentation directory contains html documents.
-
-
-## Documentation
-Documentations are build and delivered as html contents. To visualize it:
-```
-python -m http.server -d /path/to/bscrypt_install/Documentation/core_doc
-```
-Then use a web browser to open the address `localhost:8000`
 
 ## Usages
 BScrypt is a multi languages library, it allows users to work with `C++`, `Java` and `Python`.
@@ -43,10 +35,19 @@ BScrypt is a multi languages library, it allows users to work with `C++`, `Java`
 To build a C++ program using bscrypt, it needs to link with the installed bscrypt:
 
 - Let compiler know additional include directories are
-    - `/path/to/bscrypt_install/include/core`
+    - `/path/to/bscrypt_install/include`
     - `/path/to/bscrypt_install/include/secp256k1`
     - `/path/to/bscrypt_install/include/univalue`
+    - `/path/to/bscrypt_install/include/core`
+    - `/path/to/bscrypt_install/include/core/sv`
 - Let the compiler know additional library directory is `/path/to/bscrypt_install/lib`
+
+In the C++ code there are only one single file to include
+```c++
+#include <bscrypt>
+```
+This will include all header files delivered by the package. Note that it is simplified, but not optimal for compilation time.
+
 
 #### Java
 Java library `.jar` was build with `JNI`, it depend to a shared library, which is delivered in the same directory. To be able to correctly load the `.jar` library, it is required to set in the IDE
@@ -55,3 +56,11 @@ Java library `.jar` was build with `JNI`, it depend to a shared library, which i
 
 #### Python
 Similar to Java, python module need to load the shared library interface. In order to allow python loading the binding module, it require to set _PYTHONPATH_ environment pointing to `/path/to/bscrypt_install/lib`.
+
+
+#### Documentation
+Documentations are build and delivered as html contents. To visualize it:
+```
+python -m http.server -d /path/to/bscrypt_install/Documentation/core_doc
+```
+Then use a web browser to open the address `localhost:8000`
