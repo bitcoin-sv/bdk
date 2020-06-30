@@ -236,7 +236,7 @@ int main(int argc, char * argv[]){
     
     std::string scr = FormatScript(finalScript) ; 
     std::cout << scr << std::endl; 
-    if(ScriptEngineIF::executeScript(scr,true, 0,hextx,0,amt)){
+    if(bsv::executeScript(scr,true, 0,hextx,0,amt)){
         std::cout << "Successfully executed script with a checksig" << std::endl;
     }
     
@@ -269,7 +269,7 @@ int main(int argc, char * argv[]){
     std::string spkstr = FormatScript(spk);
     std::string ssigstr = FormatScript(scriptSigNoVerify); 
     
-    if(ScriptEngineIF::verifyScript(spkstr,ssigstr,true, 0,hextx,0,amt)){
+    if(bsv::verifyScript(spkstr,ssigstr,true, 0,hextx,0,amt)){
         std::cout << "Verified script sig & script pub with hex tx" << std::endl;
     }
     

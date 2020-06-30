@@ -6,7 +6,7 @@
 #include <string>
 #include <script/script_error.h>
 
-namespace ScriptEngineIF
+namespace bsv
 {
     ScriptError executeScript(bsv::span<const uint8_t> script,
                               bool consensus,
