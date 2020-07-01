@@ -1,6 +1,4 @@
-import jni.bscriptIF.*;
-
-//java -Djava.library.path=<PATH TO SHARED LIBRARIES> -cp "<PATH TO JAR FILE>/BScriptJNI.jar" TestSEIF.java
+package com.nchain.bsv.scriptengine.*;
 
 public class TestSEIF {
   public static void main(String[] args){
@@ -10,8 +8,8 @@ public class TestSEIF {
         var[i] = (byte) intArray[i];
     }
 
-    BScriptJNI jniIF = new BScriptJNI();
-    if(jniIF.EvalScript(var,true,0,"",0,0).getStatusCode() == 0){
+    ScriptEngine jniIF = new ScriptEngine();
+    if(jniIF.Evaluate(var,true,0,"",0,0).getStatusCode() == 0){
         System.out.println("...Successful script evaluation");
     }else{
         System.out.println("...Failure of script evaluation");
@@ -19,7 +17,7 @@ public class TestSEIF {
 
     
     String ScriptArray = new String ("0x00 0x6b 0x54 0x55 0x93 0x59 0x87");
-    if(jniIF.EvalScriptString(ScriptArray,true, 0,"",0,0).getStatusCode() == 0){
+    if(jniIF.Evaluate(ScriptArray,true, 0,"",0,0).getStatusCode() == 0){
         System.out.println("...Successful script evaluation from String Type");
     }else{
         System.out.println("...Failure of script evaluation from String Type");
@@ -27,14 +25,14 @@ public class TestSEIF {
     
     
     String PubKeyStyle = new String("'abcdefghijklmnopqrstuvwxyz' 0xaa 0x4c 0x20 0xca139bc10c2f660da42666f72e89a225936fc60f193c161124a672050c434671 0x88");
-    if(jniIF.EvalScriptString(PubKeyStyle,true, 0,"",0,0).getStatusCode() == 0){
+    if(jniIF.Evaluate(PubKeyStyle,true, 0,"",0,0).getStatusCode() == 0){
         System.out.println("...Successful script evaluation from String Type PubKey Style");
     }else{
         System.out.println("...Failure of script evaluation from String Type PubKey Style");
     }
     
     PubKeyStyle = new String ("'abcdefghijklmnopqrstuvwxyz' OP_HASH256 OP_PUSHDATA1 0x20 0xca139bc10c2f660da42666f72e89a225936fc60f193c161124a672050c434671 OP_EQUALVERIFY");
-    if(jniIF.EvalScriptString(PubKeyStyle,true, 0,"",0,0).getStatusCode() == 0){
+    if(jniIF.Evaluate(PubKeyStyle,true, 0,"",0,0).getStatusCode() == 0){
         System.out.println("...Successful script evaluation from String Type PubKey Style with op codes");
     }else{
         System.out.println("...Failure of script evaluation from String Type PubKey Style with op codes");
@@ -46,7 +44,7 @@ public class TestSEIF {
     String HexID = new String ("0100000001d92670dd4ad598998595be2f1bec959de9a9f8b1fd97fb832965c96cd55145e20000000000ffffffff010a000000000000000000000000");
 	     
     int amt = 10; 
-    if(jniIF.EvalScriptString(pkh,true,0,HexID,0,amt).getStatusCode() == 0){
+    if(jniIF.Evaluate(pkh,true,0,HexID,0,amt).getStatusCode() == 0){
         System.out.println("...Successful script evaluation Pubkey,signature & tx info");
     }else{
         System.out.println("...Failure script evaluation Pubkey,signature & tx info");
@@ -56,7 +54,7 @@ public class TestSEIF {
     String ScriptPubKey = new String ("DUP HASH160 0x14 0xff197b14e502ab41f3bc8ccb48c4abac9eab35bc EQUALVERIFY CHECKSIG");
      
     
-     if(jniIF.VerifyScriptString(ScriptSig,ScriptPubKey,true,0,HexID,0,amt).getStatusCode() == 0){
+     if(jniIF.Verify(ScriptSig,ScriptPubKey,true,0,HexID,0,amt).getStatusCode() == 0){
         System.out.println("...Successful script verify Pubkey,signature & tx info");
     }else{
         System.out.println("...Failure script verify Pubkey,signature & tx info");
