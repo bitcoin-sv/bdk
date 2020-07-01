@@ -56,8 +56,15 @@ endforeach()
 
 #######################################################################################################################
 ## Install univalue the *.h header files should be kept as univalue structure    ####################################
+
+set(UNIFIED_INSTALL_HEADERS_STR "${UNIFIED_INSTALL_HEADERS_STR}\n// Include files for univalue\n")
 foreach(_univalue_pubhdr ${BSV_UNIVALUE_PUBLIC_HDR_FILES})
   install(FILES ${_univalue_pubhdr} DESTINATION "include/univalue" COMPONENT univalue)
+
+  ## Calculate the relative path for include file in installer
+  get_filename_component(_f ${_univalue_pubhdr} NAME)
+  set(_install_rl "univalue/${_f}")
+  set(UNIFIED_INSTALL_HEADERS_STR "${UNIFIED_INSTALL_HEADERS_STR}#include \"${_install_rl}\"\n")
 endforeach()
 install(TARGETS univalue DESTINATION "lib" COMPONENT univalue)
 ###############################################

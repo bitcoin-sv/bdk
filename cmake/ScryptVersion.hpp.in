@@ -38,4 +38,4 @@ const static std::string BSV_GIT_COMMIT_HASH     = "${BSV_GIT_COMMIT_HASH}";
 const static std::string BSV_GIT_COMMIT_DATETIME = "${BSV_GIT_COMMIT_DATETIME}";
 const static std::string BSV_VERSION_STRING      = "${BSV_VERSION_STRING}";
 
-*endif /* SCRYPTVersion_hpp */
+#endif /* SCRYPTVersion_hpp */

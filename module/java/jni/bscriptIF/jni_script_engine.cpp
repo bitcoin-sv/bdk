@@ -2,7 +2,7 @@
 #include <functional>
 #include <iostream>
 #include <jni.h>                      // JNI header provided by JDK
-#include <jni_bscriptIF_BScriptJNI.h> // Generated
+#include <com_nchain_bsv_scriptengine_ScriptEngine.h> // Generated
 #include <memory>
 #include <vector>
 
@@ -25,7 +25,7 @@ namespace
     }
 }
 
-JNIEXPORT jobject JNICALL Java_jni_bscriptIF_BScriptJNI_EvalScript(JNIEnv* env,
+JNIEXPORT jobject JNICALL Java_com_nchain_bsv_scriptengine_ScriptEngine_Evaluate(JNIEnv* env,
                                                                    jobject obj,
                                                                    jbyteArray arr,
                                                                    jboolean concensus,
@@ -43,7 +43,7 @@ JNIEXPORT jobject JNICALL Java_jni_bscriptIF_BScriptJNI_EvalScript(JNIEnv* env,
     const unique_jstring_ptr hextxptr = make_unique_jstring(hextx, env);
 
     // class we want to call
-    jclass clazz = env->FindClass("jni/bscriptIF/BScriptJNIResult");
+    jclass clazz = env->FindClass("com/nchain/bsv/scriptengine/Status");
     if(env->ExceptionCheck())
     {
         return NULL;
@@ -85,13 +85,13 @@ JNIEXPORT jobject JNICALL Java_jni_bscriptIF_BScriptJNI_EvalScript(JNIEnv* env,
     return result;
 }
 
-JNIEXPORT jboolean JNICALL Java_jni_bscriptIF_BScriptJNI_VerifyScript(JNIEnv*, jobject, jbyteArray)
+JNIEXPORT jboolean JNICALL Java_com_nchain_bsv_scriptengine_ScriptEngine_Verify(JNIEnv*, jobject, jbyteArray)
 {
 
     return false;
 }
 
-JNIEXPORT jobject JNICALL Java_jni_bscriptIF_BScriptJNI_EvalScriptString(JNIEnv* env,
+JNIEXPORT jobject JNICALL Java_com_nchain_bsv_scriptengine_ScriptEngine_EvaluateString(JNIEnv* env,
                                                                          jobject obj,
                                                                          jstring script,
                                                                          jboolean concensus,
@@ -106,7 +106,7 @@ JNIEXPORT jobject JNICALL Java_jni_bscriptIF_BScriptJNI_EvalScriptString(JNIEnv*
     const unique_jstring_ptr hextxptr = make_unique_jstring(hextx, env);
 
     // class we want to call
-    jclass clazz = env->FindClass("jni/bscriptIF/BScriptJNIResult");
+    jclass clazz = env->FindClass("com/nchain/bsv/scriptengine/Status");
     if(env->ExceptionCheck())
     {
         return NULL;
@@ -148,7 +148,7 @@ JNIEXPORT jobject JNICALL Java_jni_bscriptIF_BScriptJNI_EvalScriptString(JNIEnv*
     return result;
 }
 
-JNIEXPORT jobject JNICALL Java_jni_bscriptIF_BScriptJNI_VerifyScriptString(JNIEnv* env,
+JNIEXPORT jobject JNICALL Java_com_nchain_bsv_scriptengine_ScriptEngine_VerifyString(JNIEnv* env,
                                                                            jobject obj,
                                                                            jstring scriptsig,
                                                                            jstring scriptpubkey,
@@ -165,7 +165,7 @@ JNIEXPORT jobject JNICALL Java_jni_bscriptIF_BScriptJNI_VerifyScriptString(JNIEn
     const unique_jstring_ptr hextxptr = make_unique_jstring(hextx, env);
 
     // class we want to return
-    jclass clazz = env->FindClass("jni/bscriptIF/BScriptJNIResult");
+    jclass clazz = env->FindClass("com/nchain/bsv/scriptengine/Status");
     if(env->ExceptionCheck())
     {
         return NULL;

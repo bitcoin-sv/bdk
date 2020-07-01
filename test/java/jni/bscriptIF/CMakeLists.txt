@@ -31,7 +31,7 @@ endif()
 #set commands
 set(CMAKE_INCLUDE_CURRENT_DIR ON)## Always include the current directory by default is off
 
-set(JAVA_PACKAGE_NAME "jni.bscriptIF")
+set(JAVA_PACKAGE_NAME "com.nchain.bsv.scriptengine")
 
 set(PROJECT_DIRECTORY ${CMAKE_SOURCE_DIR})
 set(SOURCE_DIRECTORY  ${PROJECT_DIRECTORY}/module/java/jni/bscriptIF)
