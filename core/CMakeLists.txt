@@ -14,6 +14,7 @@ if(NOT DEFINED SCRYPT_BSV_ROOT_DIR)#
   message(FATAL_ERROR "Unable to locate bsv source code by SCRYPT_BSV_ROOT_DIR")
 endif()
 set(BSV_MINIMAL_FILES ${BSV_MINIMAL_HDR_FILES} ${BSV_MINIMAL_SRC_FILES})
+set(UNIFIED_INSTALL_HEADERS_STR "\n#include \"core/ScryptVersion.hpp\"\n\n")
 #scryptPrintList("BSV_MINIMAL_FILES" "${BSV_MINIMAL_FILES}")## Help to debug
 
 ## Helper files activate some settings for bsv and secp256k1 native source codes
@@ -46,11 +47,17 @@ endforeach()
 source_group("_generated" FILES "${BITCOIN_CONFIG_FILE}")
 
 ## any .cpp .hpp file added here will be added group with bsv file to build the core.
-file(GLOB_RECURSE BSCRYPT_CORE_EXTRA_HDR_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp")
+file(GLOB_RECURSE BSCRYPT_CORE_EXTRA_HDR_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp" "${CMAKE_CURRENT_SOURCE_DIR}/*.h")
 file(GLOB_RECURSE BSCRYPT_CORE_EXTRA_SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
 
 set(BSCRYPT_CORE_HDR_FILES ${BSCRYPT_CORE_EXTRA_HDR_FILES} ${BSV_MINIMAL_HDR_FILES})
 set(BSCRYPT_CORE_SRC_FILES ${BSCRYPT_CORE_EXTRA_SRC_FILES} ${BSV_MINIMAL_SRC_FILES})
+message(STATUS "Extra c++ file in ${CMAKE_CURRENT_SOURCE_DIR}")
+foreach(_extra_file ${BSCRYPT_CORE_EXTRA_HDR_FILES} ${BSCRYPT_CORE_EXTRA_SRC_FILES})
+  if(SCRYPT_LOG_BSV_FILES)
+    message(STATUS "      +[${_extra_file}]")
+  endif()
+endforeach()
 
 ## Build scrypt_core as a library using bsv source code
 add_library(scrypt_core ${BITCOIN_CONFIG_FILE} ${BSCRYPT_CORE_HDR_FILES} ${BSCRYPT_CORE_SRC_FILES})
@@ -66,10 +73,20 @@ scryptLinkTargetToBoost(scrypt_core Boost::boost)
 
 set_property(TARGET scrypt_core PROPERTY FOLDER "core")
 
+## Install the binary library
+install(TARGETS scrypt_core DESTINATION "lib" COMPONENT scrypt_core)
+
+set(UNIFIED_INSTALL_HEADERS_STR "${UNIFIED_INSTALL_HEADERS_STR}\n// Include files in bsv\n")
 ## Install scrypt_core : the *.h header files should be kept as bsv structure
 install(FILES ${BITCOIN_CONFIG_FILE} DESTINATION "include/core/sv/config" COMPONENT scrypt_core)
+ 
+## Calculate the relative path for include file in installer
+get_filename_component(__f ${BITCOIN_CONFIG_FILE} NAME)
+set(__install_rl "core/sv/config/${__f}")
+set(UNIFIED_INSTALL_HEADERS_STR "${UNIFIED_INSTALL_HEADERS_STR}#include \"${__install_rl}\"\n")
 set(default_install_include_core_dir "include/core")
-foreach(_bsv_hdr ${BSCRYPT_CORE_HDR_FILES})
+# Install bsv header files
+foreach(_bsv_hdr ${BSV_MINIMAL_HDR_FILES})
   get_filename_component(_dir ${_bsv_hdr} DIRECTORY)
   if("${_dir}" MATCHES "${SCRYPT_BSV_ROOT_DIR}/")
     string(REPLACE "${SCRYPT_BSV_ROOT_DIR}/" "" _relative_dir "${_dir}")
@@ -79,5 +96,23 @@ foreach(_bsv_hdr ${BSCRYPT_CORE_HDR_FILES})
   endif()
   #message("install file [${_bsv_hdr}]  _install_dest[${_install_dest}]")
   install(FILES ${_bsv_hdr} DESTINATION "${_install_dest}" COMPONENT scrypt_core)
+
+  ## Calculate the relative path for include file in installer
+  get_filename_component(_f ${_bsv_hdr} NAME)
+  set(_install_rl "core/sv/${_relative_dir}/${_f}")
+  set(UNIFIED_INSTALL_HEADERS_STR "${UNIFIED_INSTALL_HEADERS_STR}#include \"${_install_rl}\"\n")
 endforeach()
-install(TARGETS scrypt_core DESTINATION "lib" COMPONENT scrypt_core)
+# Install extra core header files
+set(UNIFIED_INSTALL_HEADERS_STR "${UNIFIED_INSTALL_HEADERS_STR}\n// Include extra bscrypt files in core\n")
+foreach(_extra_hdr ${BSCRYPT_CORE_EXTRA_HDR_FILES})
+  install(FILES ${_extra_hdr} DESTINATION "${default_install_include_core_dir}" COMPONENT scrypt_core)
+
+  ## Calculate the relative path for include file in installer
+  get_filename_component(_f ${_extra_hdr} NAME)
+  set(_install_rl "core/${_f}")
+  set(UNIFIED_INSTALL_HEADERS_STR "${UNIFIED_INSTALL_HEADERS_STR}#include \"${_install_rl}\"\n")
+endforeach()
+
+set(BSCRYPT_UNIFIED_HEADER_FILE "${SCRYPT_GENERATED_TOOLS_DIR}/bscrypt") 
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/bscrypt.in" ${BSCRYPT_UNIFIED_HEADER_FILE})
+install(FILES ${BSCRYPT_UNIFIED_HEADER_FILE} DESTINATION "include" COMPONENT scrypt_core)

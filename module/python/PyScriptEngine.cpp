@@ -34,7 +34,7 @@ static PyObject* wrap_VerifyScript(PyObject* self, PyObject *args){
         return NULL;
         
     try{
-        const ScriptError ret = ScriptEngineIF::verifyScript(std::string{scriptsigptr},std::string{scriptpubkeyptr}, concensus, scriptflags, std::string{hextxptr},nIndex,amount);
+        const ScriptError ret = bsv::verifyScript(std::string{scriptsigptr},std::string{scriptpubkeyptr}, concensus, scriptflags, std::string{hextxptr},nIndex,amount);
         return Py_BuildValue("i", ret);
     }catch(std::exception& e){
         PyErr_SetString(PyExc_TypeError, e.what());
@@ -55,7 +55,7 @@ static PyObject* wrap_ExecuteScript(PyObject* self, PyObject *args){
 
     
     try{
-        const ScriptError ret = ScriptEngineIF::executeScript(std::string{scriptptr},concensus, scriptflags, std::string{hextxptr},nIndex,amount);
+        const ScriptError ret = bsv::evaluate(std::string{scriptptr},concensus, scriptflags, std::string{hextxptr},nIndex,amount);
         return Py_BuildValue("i", ret);
     }catch(std::exception& e){
         PyErr_SetString(PyExc_TypeError, e.what());
