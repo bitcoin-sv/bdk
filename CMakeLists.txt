@@ -40,8 +40,6 @@ option(SCRYPT_BUILD_BSV_TESTS "Activate the build of bsv tests" ON)
 option(BSCRYPT_BUILD_JAVA "Build the JNI interface and associated unit tests" ON)
 option(BSCRYPT_BUILD_PYTHON "Build the python interface and associated unit tests" ON)
 
-option(SCRYPT_BUILD_MISC_ONLY "Build only misc directory" OFF)
-
 ## bscrypt built is based on source files from bsv code.
 ## Use -DSCRYPT_BSV_SRC_ROOT=/path/to/sv_root
 include(cmake/modules/FindBSVSourceHelper.cmake)
@@ -61,12 +59,6 @@ endif()
 ## Init CMake, find all external packages and eventually build them if necessary
 include(cmake/SCRYPTInit.cmake)
 scryptInitCMake()
-
-if(SCRYPT_BUILD_MISC_ONLY)
-  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/misc)
-  message(STATUS "Build misc only and skip all other components as SCRYPT_BUILD_MISC_ONLY=${SCRYPT_BUILD_MISC_ONLY}")
-  return()
-endif()
 
 ## Everything in core should be includable from everywhere
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/core)

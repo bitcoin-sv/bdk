@@ -1,7 +1,7 @@
 ## Getting the source code
 Building bscrypt requires the source for both bscrypt and bsv repositories. 
 
-For nChain developers, the best way to do this is to have a BitBucket account setup with [ssh key access](https://confluence.atlassian.com/bitbucket/set-up-an-ssh-key-728138079.html). If other access is available, the source code should be organised as per the directory structure outlined in [Architecture](Architecture.md)
+For nChain developers, the best way to do this is to have a BitBucket account setup with [ssh key access](https://confluence.atlassian.com/bitbucket/set-up-an-ssh-key-728138079.html). If other access is available, the source code should be organised as per the directory structure outlined in [directories structure](directories.md)
 
 ## Prerequisites
 ##### General
@@ -38,7 +38,7 @@ Dependencies marked optional apply if you wish to run the unit tests. See [Tests
 - Make sure the `JAVA_TOOLS` environment variable is set to the location of `junit4.jar` and `hamcreast.jar`
 
 ## Building bscrypt
-It is recommended that a build directory **build** is created outside of bscrypt source code directory. See [Architecture](Architecture.md).
+It is recommended that a build directory **build** is created outside of bscrypt source code directory. See [directories structure](directories.md).
 
 ##### Windows
 
