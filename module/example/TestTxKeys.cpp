@@ -239,43 +239,8 @@ int main(int argc, char * argv[]){
     if(bsv::evaluate(scr,true, 0,hextx,0,amt)){
         std::cout << "Successfully executed script with a checksig" << std::endl;
     }
-    
-    std::cout << "Testing call to VerifyScript" << std::endl;
-    
-    //CScript scriptsig; 
-    // Change the signature to sign only the ScriptSig
-    // 
-    ECC_Start();
-    
-    CScript scriptSigNoVerify ; 
-    scriptSigNoVerify << OP_DUP << OP_HASH160 << ToByteVector(pubkey1.GetID())
-                                          << OP_EQUALVERIFY << OP_CHECKSIG;
-    
-    if(DecodeHexTx(rebuilttx, hextx)){
-        
-        CTransaction t(rebuilttx);
-        
-        
-        uint256 hash = SignatureHash(scriptSigNoVerify,stx, 0,
-                                 SigHashType(), Amount(10), nullptr, SCRIPT_ENABLE_SIGHASH_FORKID);
-                                 
-    
-        if(pubkey1.Verify(hash, sig))
-            std::cout << "Sig hash verified - value of hash is " << hash.ToString() << std::endl;
-    }
-    std::vector<uint8_t> sigNew = MakeSig(scriptSigNoVerify,key1,spendTx); 
-    CScript spk; 
-    spk << sigNew << ToByteVector(pubkey1);
-    std::string spkstr = FormatScript(spk);
-    std::string ssigstr = FormatScript(scriptSigNoVerify); 
-    
-    if(bsv::verifyScript(spkstr,ssigstr,true, 0,hextx,0,amt)){
-        std::cout << "Verified script sig & script pub with hex tx" << std::endl;
-    }
-    
-    
-    
-    ECC_Stop();
+
+
     std::cout << "Finishing" << std::endl;
     return 0;
 }

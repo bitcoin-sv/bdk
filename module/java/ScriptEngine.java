@@ -14,10 +14,7 @@ public class ScriptEngine {
     }
 
     public native Status Evaluate(byte[] script,boolean concensus, int scriptflags,String txHex, int nIndex, int amount);
-    public native boolean Verify(byte[] script);
-    
     public native Status EvaluateString(String script,boolean concensus, int scriptflags, String txHex, int nIndex, int amount);
-    public native Status VerifyString(String scriptsig,String scriptpub, boolean concensus, int scriptflags, String txHex, int nIndex, int amount);
 
 }
     
