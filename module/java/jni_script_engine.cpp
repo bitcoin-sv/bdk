@@ -12,6 +12,11 @@ namespace
 
     unique_jstring_ptr make_unique_jstring(jstring& str, JNIEnv* env)
     {
+        if(str == NULL){
+            env->ThrowNew(env->FindClass("java/lang/IllegalArgumentException"), "jstring cannot be null");
+            return NULL;
+        }
+
         const char* str_value = env->GetStringUTFChars(str, 0);
 
         if(str_value == NULL)
