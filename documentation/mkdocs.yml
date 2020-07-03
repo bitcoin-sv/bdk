@@ -14,9 +14,8 @@ site_name: script engine
 
 nav:
     - About : index.md
-    - Architecture : Architecture.md
-    - Development : DeveloperSetup.md
-    - Git Working Flow : GitWorkingFlow.md
+    - Directory Structure : directories.md
+    - Development Build : build.md
     - Object Model : ObjectModel.md
 
 markdown_extensions:

@@ -19,29 +19,6 @@ static struct module_state _state;
 #endif
 
 
-static PyObject* wrap_VerifyScript(PyObject* self, PyObject *args){
-
-    char* scriptsigptr;
-    char* scriptpubkeyptr;
-   
-    int concensus(true);
-    unsigned int scriptflags(0);
-    char* hextxptr; 
-    int nIndex(0);
-    int64_t amount(0); 
-    
-    if(!PyArg_ParseTuple(args,"ssiIsii", &scriptsigptr,&scriptpubkeyptr,&concensus, &scriptflags,&hextxptr,&nIndex,&amount))
-        return NULL;
-        
-    try{
-        const ScriptError ret = bsv::verifyScript(std::string{scriptsigptr},std::string{scriptpubkeyptr}, concensus, scriptflags, std::string{hextxptr},nIndex,amount);
-        return Py_BuildValue("i", ret);
-    }catch(std::exception& e){
-        PyErr_SetString(PyExc_TypeError, e.what());
-        return(PyObject *) NULL;
-    }
-}
-
 static PyObject* wrap_ExecuteScript(PyObject* self, PyObject *args){
     char* scriptptr;
     int concensus(true);
@@ -66,7 +43,6 @@ static PyObject* wrap_ExecuteScript(PyObject* self, PyObject *args){
 static PyMethodDef ModuleMethods[] =
 {
     {"ExecuteScript", wrap_ExecuteScript,METH_VARARGS,"Execute a script"},
-    {"VerifyScript", wrap_VerifyScript,METH_VARARGS,"Verify a script"},
     {NULL, NULL, 0, NULL},
 };
  
