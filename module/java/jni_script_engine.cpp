@@ -12,6 +12,11 @@ namespace
 
     unique_jstring_ptr make_unique_jstring(jstring& str, JNIEnv* env)
     {
+        if(str == NULL){
+            env->ThrowNew(env->FindClass("java/lang/IllegalArgumentException"), "jstring cannot be null");
+            return NULL;
+        }
+
         const char* str_value = env->GetStringUTFChars(str, 0);
 
         if(str_value == NULL)
@@ -85,12 +90,6 @@ JNIEXPORT jobject JNICALL Java_com_nchain_bsv_scriptengine_ScriptEngine_Evaluate
     return result;
 }
 
-JNIEXPORT jboolean JNICALL Java_com_nchain_bsv_scriptengine_ScriptEngine_Verify(JNIEnv*, jobject, jbyteArray)
-{
-
-    return false;
-}
-
 JNIEXPORT jobject JNICALL Java_com_nchain_bsv_scriptengine_ScriptEngine_EvaluateString(JNIEnv* env,
                                                                          jobject obj,
                                                                          jstring script,
@@ -125,65 +124,6 @@ JNIEXPORT jobject JNICALL Java_com_nchain_bsv_scriptengine_ScriptEngine_Evaluate
     {
         script_result = bsv::evaluate(std::string{raw_script.get()}, concensus, scriptflags, hextxptr.get(),
                                       nidx, amount);
-    }
-    catch(const std::runtime_error& ex)
-    {
-        env->ThrowNew(env->FindClass("java/lang/RuntimeException"), ex.what());
-        return NULL;
-    }
-    catch(const std::exception& ex)
-    {
-        env->ThrowNew(env->FindClass("java/lang/Exception"), ex.what());
-        return NULL;
-    }
-    catch(...)
-    {
-        env->ThrowNew(env->FindClass("java/lang/Exception"), ScriptErrorString(script_result));
-        return NULL;
-    }
-
-    jobject result =
-        env->NewObject(clazz, method_id, script_result, env->NewStringUTF(ScriptErrorString(script_result)));
-
-    return result;
-}
-
-JNIEXPORT jobject JNICALL Java_com_nchain_bsv_scriptengine_ScriptEngine_VerifyString(JNIEnv* env,
-                                                                           jobject obj,
-                                                                           jstring scriptsig,
-                                                                           jstring scriptpubkey,
-                                                                           jboolean concensus,
-                                                                           jint scriptflags,
-                                                                           jstring hextx,
-                                                                           jint nidx,
-                                                                           jint amount)
-{
-
-    // script / public key data
-    const unique_jstring_ptr raw_script_sig = make_unique_jstring(scriptsig, env);
-    const unique_jstring_ptr raw_script_pubkey = make_unique_jstring(scriptpubkey, env);
-    const unique_jstring_ptr hextxptr = make_unique_jstring(hextx, env);
-
-    // class we want to return
-    jclass clazz = env->FindClass("com/nchain/bsv/scriptengine/Status");
-    if(env->ExceptionCheck())
-    {
-        return NULL;
-    }
-
-    //<init> = constructor, <(ZL...) method signature. See JNI documentation for symbol definitions
-    jmethodID method_id = env->GetMethodID(clazz, "<init>", "(ILjava/lang/String;)V");
-    if(env->ExceptionCheck())
-    {
-        return NULL;
-    }
-
-    ScriptError script_result = SCRIPT_ERR_UNKNOWN_ERROR;
-    try
-    {
-        script_result =
-            bsv::verifyScript(std::string{raw_script_sig.get()}, std::string{raw_script_pubkey.get()},
-                              concensus, scriptflags, std::string{hextxptr.get()}, nidx, amount);
     }
     catch(const std::runtime_error& ex)
     {
