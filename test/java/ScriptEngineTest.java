@@ -22,6 +22,17 @@ public class ScriptEngineTest {
 
 	}
 
+	@Test(expected = IllegalArgumentException.class)
+    public void TestNullHexStr() {
+    	int[] intArray = new int[] {0x00, 0x6b, 0x54, 0x55, 0x93, 0x59,0x87};
+    	    final byte[] var = new byte[intArray.length];
+    	    for (int i = 0; i < intArray.length; i++){
+                var[i] = (byte) intArray[i];
+            }
+
+            jniIF.Evaluate(var,true,0,null,0,0);
+    	}
+
 	@Test
 	public void testEvaluateTestMessage() {
 		int[] intArray = new int[] { 0x00, 0x6b, 0x54, 0x55, 0x93, 0x59, 0x87 };
@@ -93,8 +104,8 @@ public class ScriptEngineTest {
 		Assert.assertEquals(0, result.getStatusCode());
 
 	}
-	
-	/* Invalid Transaction 
+
+	/* Invalid Transaction
 	 * Above successful Transaction with invalid hexID parameter*/
 	@Test
 	public void testEvaluateStringInvalidTxn() {
@@ -105,13 +116,13 @@ public class ScriptEngineTest {
 
 		int amt = 10;
 		Status result = jniIF.EvaluateString(scriptArray, true, 524288, hexID, 0, amt);
-		
+
 		Assert.assertEquals("Script failed an OP_CHECKSIGVERIFY operation", result.getStatusMessage());
 		Assert.assertEquals(19, result.getStatusCode());
 
 	}
-	
-	/* Bad Signature 
+
+	/* Bad Signature
 	 * Above successful Transaction with Bad Signature*/
 	@Test
 	public void testEvaluateStringBadSignature() {
@@ -124,7 +135,7 @@ public class ScriptEngineTest {
 
 		int amt = 10;
 		Status result = jniIF.EvaluateString(scriptArray, true, 524288, hexID, 0, amt);
-	
+
 		Assert.assertEquals("Script failed an OP_EQUALVERIFY operation", result.getStatusMessage());
 		Assert.assertEquals(17, result.getStatusCode());
 
@@ -135,7 +146,7 @@ public class ScriptEngineTest {
 	 */
 	@Test
 	public void testEvaluateStringBadPubKey() {
-		
+
 		/*Bad PubKey*/
 		String scriptArray = new String(
 				"0x47 0x80440220172f38b9fca6c5f7f8c06dc134c0856d90311232399efb0e6b10fd86ab46c8960220782578acd276e140b6098ab365745828a48d54d9a44d67cbdb287b76fe6fc08001 0x41 0x040b4c866585dd868a9d62348a9cd008d6a312937048fff31670e7e920cfc7a7447b5f0bba9e01e6fe4735c8383e6e7a3347a0fd72381b8f797a19f694054e5a69 DUP HASH160 0x14 0xff197b14e502ab41f3bc8ccb48c4abac9eab35bc EQUALVERIFY CHECKSIGVERIFY RETURN 0x4c64 0x03030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303030303");
@@ -144,7 +155,7 @@ public class ScriptEngineTest {
 
 		int amt = 10;
 		Status result = jniIF.EvaluateString(scriptArray, true, 524288, hexID, 0, amt);
-	
+
 		Assert.assertEquals("Script failed an OP_CHECKSIGVERIFY operation", result.getStatusMessage());
 		Assert.assertEquals(19, result.getStatusCode());
 
