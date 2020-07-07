@@ -39,12 +39,11 @@ To build a C++ program using bscrypt, it needs to link with the installed bscryp
     - `/path/to/bscrypt_install/include/secp256k1`
     - `/path/to/bscrypt_install/include/univalue`
     - `/path/to/bscrypt_install/include/core`
-    - `/path/to/bscrypt_install/include/core/sv`
 - Let the compiler know additional library directory is `/path/to/bscrypt_install/lib`
 
-In the C++ code there are only one single file to include
+To simplify for C++ code there are only one single file to include
 ```c++
-#include <bscrypt>
+#include <script_engine>
 ```
 This will include all header files delivered by the package. Note that it is simplified, but not optimal for compilation time.
 
