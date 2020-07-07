@@ -6,8 +6,7 @@
 #include <core_io.h>
 #include <ecc_guard.h>
 #include <script/interpreter.h>
-#include <script/script.h>
-#include <taskcancellation.h>
+
 
 using namespace std;
 
@@ -101,7 +100,6 @@ ScriptError bsv::evaluate(const std::string& script,
     return evaluate_impl(ParseScript(script), consensus, scriptflag, txhex,
                          vinIndex, amount);
 }
-
 std::string bsv::formatScript(const std::string& inputScript)
 {
     if(inputScript.empty() ||
