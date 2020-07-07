@@ -34,8 +34,11 @@ Dependencies marked optional apply if you wish to run the unit tests. See [Tests
 - Make sure the Python3 directory is included in the `PATH` environment variable
 - Make sure the `OPENSSL_ROOT_DIR` environment variable is set to the location where OpenSSL is installed
 - Make sure the `BOOST_ROOT` environment variable is set to the location where boost is installed
+
 ##### Java module
+
 - Make sure the `JAVA_TOOLS` environment variable is set to the location of `junit4.jar` and `hamcreast.jar`
+By default all languange binding modules are built. If users want to build only java binding, add `-DBUILD_JAVA_BINDING_ONLY=ON` to cmake command, it will deactivate building all other language binding modules.
 
 ## Building bscrypt
 It is recommended that a build directory **build** is created outside of bscrypt source code directory. See [directories structure](directories.md).
