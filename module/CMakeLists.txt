@@ -20,10 +20,18 @@ message(STATUS "Building modules ...")
 
 add_subdirectory(example)
 
-if(BSCRYPT_BUILD_JAVA)
-  add_subdirectory(java)
+if(BUILD_JAVA_BINDING_ONLY AND BUILD_PYTHON_BINDING_ONLY)
+	message(FATAL_ERROR "Should not activate both BUILD_PYTHON_BINDING_ONLY[${BUILD_PYTHON_BINDING_ONLY}] and BUILD_JAVA_BINDING_ONLY[${BUILD_JAVA_BINDING_ONLY}]")
 endif()
 
-if(BSCRYPT_BUILD_PYTHON)
-  add_subdirectory(python)
+if(NOT BUILD_PYTHON_BINDING_ONLY)
+	add_subdirectory(java)
+else()
+	message(STATUS "Activation of python has disabled building java module")
+endif()
+
+if(NOT BUILD_JAVA_BINDING_ONLY)
+	add_subdirectory(python)
+else()
+	message(STATUS "Activation of java has disabled building python module")
 endif()
