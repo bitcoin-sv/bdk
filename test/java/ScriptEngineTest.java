@@ -160,6 +160,45 @@ public class ScriptEngineTest {
 		Assert.assertEquals(19, result.getStatusCode());
 
 	}
+	
+	/* Test Cases for JIRA-BS-95 */
+	/* Transaction with multiple inputs uses the 2nd input index = 1 */
+	@Test
+	public void testEvaluateStringMultipleInputs() {
+
+		String scriptArray = new String(
+				"0x47 0x304402201217437c4be1f4a11f8de3b28fe73c0ceeab54d070eef1b38b29e3e44f17505102200706107eae921558e8e58938017c584e721094ffba5ae86c7202c6c19046116101 0x41 0x040b4c866585dd868a9d62348a9cd008d6a312937048fff31670e7e920cfc7a7447b5f0bba9e01e6fe4735c8383e6e7a3347a0fd72381b8f797a19f694054e5a69 DUP HASH160 0x14 0xff197b14e502ab41f3bc8ccb48c4abac9eab35bc EQUALVERIFY CHECKSIGVERIFY");
+
+		String hexID = new String(
+				"01000000020000000000000000000000000000000000000000000000000000000000000000ffffffff00ffffffffd92670dd4ad598998595be2f1bec959de9a9f8b1fd97fb832965c96cd55145e20000000000ffffffff02ffffffffffffffff000a000000000000000000000000");
+
+		int amt = 10;
+		Status result = jniIF.EvaluateString(scriptArray, true, 0, hexID, 1, amt);
+
+		Assert.assertEquals("No error", result.getStatusMessage());
+		Assert.assertEquals(0, result.getStatusCode());
+
+	}
+
+	/*
+	 * Transaction with multiple inputs uses the 2nd input index = 1, here index = 5 is passed to check negative scenario
+	 */
+	@Test
+	public void testEvaluateStringIncorrectIndex() {
+
+		String scriptArray = new String(
+				"0x47 0x304402201217437c4be1f4a11f8de3b28fe73c0ceeab54d070eef1b38b29e3e44f17505102200706107eae921558e8e58938017c584e721094ffba5ae86c7202c6c19046116101 0x41 0x040b4c866585dd868a9d62348a9cd008d6a312937048fff31670e7e920cfc7a7447b5f0bba9e01e6fe4735c8383e6e7a3347a0fd72381b8f797a19f694054e5a69 DUP HASH160 0x14 0xff197b14e502ab41f3bc8ccb48c4abac9eab35bc EQUALVERIFY CHECKSIGVERIFY");
+
+		String hexID = new String(
+				"01000000020000000000000000000000000000000000000000000000000000000000000000ffffffff00ffffffffd92670dd4ad598998595be2f1bec959de9a9f8b1fd97fb832965c96cd55145e20000000000ffffffff02ffffffffffffffff000a000000000000000000000000");
+
+		int amt = 10;
+		Status result = jniIF.EvaluateString(scriptArray, true, 0, hexID, 5, amt);
+
+		Assert.assertEquals("Script failed an OP_CHECKSIGVERIFY operation", result.getStatusMessage());
+		Assert.assertEquals(19, result.getStatusCode());
+
+	}
 
 }
 
