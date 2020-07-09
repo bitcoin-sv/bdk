@@ -121,6 +121,7 @@ function(cryptGetMinimumListBSVSource)##########################################
       "src/script/int_serialization.h"  ##  Used by [interpreter.cpp], [limitedstack.cpp]
       "src/script/interpreter.h"  ##  Used by [standard.cpp]
       "src/script/limitedstack.h"  ##  Used by [limitedstack.cpp]
+      "src/script/opcodes.h"  ## Used by [opcodes.cpp]
       "src/script/script.h"  ##  Used by [block.cpp], [interpreter.cpp], [limitedstack.cpp], [merkle.cpp], [standard.cpp], [transaction.cpp]
       "src/script/script_flags.h"  ##  Used by [interpreter.cpp], [standard.cpp]
       "src/script/script_num.h"  ##  Used by [block.cpp], [interpreter.cpp], [standard.cpp]
@@ -246,6 +247,7 @@ function(cryptGetMinimumListBSVSource)##########################################
       "src/rpc/jsonwriter.cpp"
       "src/script/interpreter.cpp"
       "src/script/limitedstack.cpp"
+      "src/script/opcodes.cpp"
       "src/script/script.cpp"
       "src/script/script_error.cpp"
       "src/script/script_num.cpp"
