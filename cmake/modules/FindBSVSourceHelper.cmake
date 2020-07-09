@@ -129,6 +129,7 @@ function(cryptGetMinimumListBSVSource)##########################################
       "src/script/standard.h"  ##  Used by [standard.cpp]
       "src/script_config.h"  ##  Used by [interpreter.cpp]
       "src/serialize.h"  ##  Used by [limitedstack.cpp], [script.cpp]
+      "src/span.h"  ## Used by exra script engine interface 
       "src/support/cleanse.h"  ##  Used by [lockedpool.cpp]
       "src/support/lockedpool.h"  ##  Used by [lockedpool.cpp]
       "src/taskcancellation.h"  ##  Used by [interpreter.cpp]
@@ -168,6 +169,14 @@ function(cryptGetMinimumListBSVSource)##########################################
       "src/mining/journal_change_set.h"  ##  Used by [config.cpp], [dstencode.cpp]
       "src/net/net.h"  ##  Used by [config.cpp], [dstencode.cpp]
       "src/net/netaddress.h"  ##  Used by [base58.cpp], [chainparams.cpp], [config.cpp], [dstencode.cpp]
+      "src/net/association.h"      # include due to spagetti include, but not used
+      "src/net/netbase.h"          # include due to spagetti include, but not used
+      "src/net/net_message.h"      # include due to spagetti include, but not used
+      "src/net/net_processing.h"   # include due to spagetti include, but not used
+      "src/net/net_types.h"        # include due to spagetti include, but not used
+      "src/net/node_stats.h"       # include due to spagetti include, but not used
+      "src/net/send_queue_bytes.h" # include due to spagetti include, but not used
+      "src/net/stream.h"           # include due to spagetti include, but not used
       "src/policy/policy.h"  ##  Used by [chainparams.cpp], [config.cpp], [dstencode.cpp]
       "src/pow.h"  ##  Used by [config.cpp], [dstencode.cpp]
       "src/protocol.h"  ##  Used by [base58.cpp], [chainparams.cpp], [config.cpp], [dstencode.cpp]
