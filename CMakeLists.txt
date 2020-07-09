@@ -37,8 +37,10 @@ option(SCRYPT_BUILD_UNIVALUE "Activate the build of univalue" ON)
 
 option(SCRYPT_BUILD_MODULES "Activate the build of modules" ON)
 option(SCRYPT_BUILD_BSV_TESTS "Activate the build of bsv tests" ON)
-option(BSCRYPT_BUILD_JAVA "Build the JNI interface and associated unit tests" ON)
-option(BSCRYPT_BUILD_PYTHON "Build the python interface and associated unit tests" ON)
+
+# Language binding modules are all built by default. Activate one will deactivate other
+option(BUILD_JAVA_BINDING_ONLY "Build the JNI interface and associated unit tests" OFF)
+option(BUILD_PYTHON_BINDING_ONLY "Build the python interface and associated unit tests" OFF)
 
 ## bscrypt built is based on source files from bsv code.
 ## Use -DSCRYPT_BSV_SRC_ROOT=/path/to/sv_root

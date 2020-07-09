@@ -78,19 +78,19 @@ install(TARGETS scrypt_core DESTINATION "lib" COMPONENT scrypt_core)
 
 set(UNIFIED_INSTALL_HEADERS_STR "${UNIFIED_INSTALL_HEADERS_STR}\n// Include files in bsv\n")
 ## Install scrypt_core : the *.h header files should be kept as bsv structure
-install(FILES ${BITCOIN_CONFIG_FILE} DESTINATION "include/core/sv/config" COMPONENT scrypt_core)
+install(FILES ${BITCOIN_CONFIG_FILE} DESTINATION "include/core/config" COMPONENT scrypt_core)
  
 ## Calculate the relative path for include file in installer
 get_filename_component(__f ${BITCOIN_CONFIG_FILE} NAME)
-set(__install_rl "core/sv/config/${__f}")
+set(__install_rl "core/config/${__f}")
 set(UNIFIED_INSTALL_HEADERS_STR "${UNIFIED_INSTALL_HEADERS_STR}#include \"${__install_rl}\"\n")
 set(default_install_include_core_dir "include/core")
 # Install bsv header files
 foreach(_bsv_hdr ${BSV_MINIMAL_HDR_FILES})
   get_filename_component(_dir ${_bsv_hdr} DIRECTORY)
-  if("${_dir}" MATCHES "${SCRYPT_BSV_ROOT_DIR}/")
-    string(REPLACE "${SCRYPT_BSV_ROOT_DIR}/" "" _relative_dir "${_dir}")
-    set(_install_dest "${default_install_include_core_dir}/sv/${_relative_dir}")
+  if("${_dir}" STRGREATER "${SCRYPT_BSV_ROOT_DIR}/src")
+    string(REPLACE "${SCRYPT_BSV_ROOT_DIR}/src" "" _relative_dir "${_dir}")
+    set(_install_dest "${default_install_include_core_dir}${_relative_dir}")
   else()
     set(_install_dest "${default_install_include_core_dir}")
   endif()
@@ -99,7 +99,7 @@ foreach(_bsv_hdr ${BSV_MINIMAL_HDR_FILES})
 
   ## Calculate the relative path for include file in installer
   get_filename_component(_f ${_bsv_hdr} NAME)
-  set(_install_rl "core/sv/${_relative_dir}/${_f}")
+  set(_install_rl "core${_relative_dir}/${_f}")
   set(UNIFIED_INSTALL_HEADERS_STR "${UNIFIED_INSTALL_HEADERS_STR}#include \"${_install_rl}\"\n")
 endforeach()
 # Install extra core header files
@@ -113,6 +113,6 @@ foreach(_extra_hdr ${BSCRYPT_CORE_EXTRA_HDR_FILES})
   set(UNIFIED_INSTALL_HEADERS_STR "${UNIFIED_INSTALL_HEADERS_STR}#include \"${_install_rl}\"\n")
 endforeach()
 
-set(BSCRYPT_UNIFIED_HEADER_FILE "${SCRYPT_GENERATED_TOOLS_DIR}/bscrypt") 
-configure_file("${CMAKE_CURRENT_SOURCE_DIR}/bscrypt.in" ${BSCRYPT_UNIFIED_HEADER_FILE})
-install(FILES ${BSCRYPT_UNIFIED_HEADER_FILE} DESTINATION "include" COMPONENT scrypt_core)
+set(BSCRYPT_UNIFIED_HEADER_FILE "${SCRYPT_GENERATED_TOOLS_DIR}/script_engine")
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/script_engine.in" ${BSCRYPT_UNIFIED_HEADER_FILE})
+install(FILES ${BSCRYPT_UNIFIED_HEADER_FILE} DESTINATION "include/core" COMPONENT scrypt_core)

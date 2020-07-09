@@ -10,13 +10,8 @@ namespace
 {
     using unique_jstring_ptr = std::unique_ptr<char const[], std::function<void(char const*)>>;
 
-    unique_jstring_ptr make_unique_jstring(jstring& str, JNIEnv* env)
+    unique_jstring_ptr make_unique_jstring(JNIEnv* env, jstring& str)
     {
-        if(str == NULL){
-            env->ThrowNew(env->FindClass("java/lang/IllegalArgumentException"), "jstring cannot be null");
-            return NULL;
-        }
-
         const char* str_value = env->GetStringUTFChars(str, 0);
 
         if(str_value == NULL)
@@ -39,13 +34,17 @@ JNIEXPORT jobject JNICALL Java_com_nchain_bsv_scriptengine_ScriptEngine_Evaluate
                                                                    jint nidx,
                                                                    jint amount)
 {
+    if(arr == NULL || hextx == NULL){
+        env->ThrowNew(env->FindClass("java/lang/IllegalArgumentException"), "value cannot be null");
+        return NULL;
+    }
+
+    const unique_jstring_ptr hextxptr = make_unique_jstring(env, hextx);
 
     int len = env->GetArrayLength(arr);
 
     std::vector<uint8_t> script(len);
     env->GetByteArrayRegion(arr, 0, len, reinterpret_cast<jbyte*>(script.data()));
-
-    const unique_jstring_ptr hextxptr = make_unique_jstring(hextx, env);
 
     // class we want to call
     jclass clazz = env->FindClass("com/nchain/bsv/scriptengine/Status");
@@ -99,10 +98,14 @@ JNIEXPORT jobject JNICALL Java_com_nchain_bsv_scriptengine_ScriptEngine_Evaluate
                                                                          jint nidx,
                                                                          jint amount)
 {
+    if(script == NULL || hextx == NULL){
+        env->ThrowNew(env->FindClass("java/lang/IllegalArgumentException"), "value cannot be null");
+        return NULL;
+    }
 
     // tx and script data
-    const unique_jstring_ptr raw_script = make_unique_jstring(script, env);
-    const unique_jstring_ptr hextxptr = make_unique_jstring(hextx, env);
+    const unique_jstring_ptr raw_script = make_unique_jstring(env, script);
+    const unique_jstring_ptr hextxptr = make_unique_jstring(env, hextx);
 
     // class we want to call
     jclass clazz = env->FindClass("com/nchain/bsv/scriptengine/Status");
