@@ -1,31 +1,13 @@
 #include <ScriptEngineIF.h>
-#include <functional>
 #include <iostream>
 #include <jni.h>                      // JNI header provided by JDK
 #include <com_nchain_bsv_scriptengine_ScriptEngine.h> // Generated
-#include <memory>
 #include <vector>
+#include "jni_util.h"
 
-namespace
-{
-    using unique_jstring_ptr = std::unique_ptr<char const[], std::function<void(char const*)>>;
+using namespace jni;
 
-    unique_jstring_ptr make_unique_jstring(JNIEnv* env, jstring& str)
-    {
-        const char* str_value = env->GetStringUTFChars(str, 0);
-
-        if(str_value == NULL)
-        {
-            env->ThrowNew(env->FindClass("java/lang/OutOfMemoryError"), "Unable to read jstring input");
-            return NULL;
-        }
-
-        return unique_jstring_ptr(str_value,
-                                  [=](char const* p) mutable { env->ReleaseStringUTFChars(str, p); });
-    }
-}
-
-JNIEXPORT jobject JNICALL Java_com_nchain_bsv_scriptengine_ScriptEngine_Evaluate(JNIEnv* env,
+JNIEXPORT jobject JNICALL Java_com_nchain_bsv_scriptengine_ScriptEngine_evaluate(JNIEnv* env,
                                                                    jobject obj,
                                                                    jbyteArray arr,
                                                                    jboolean concensus,
@@ -89,7 +71,7 @@ JNIEXPORT jobject JNICALL Java_com_nchain_bsv_scriptengine_ScriptEngine_Evaluate
     return result;
 }
 
-JNIEXPORT jobject JNICALL Java_com_nchain_bsv_scriptengine_ScriptEngine_EvaluateString(JNIEnv* env,
+JNIEXPORT jobject JNICALL Java_com_nchain_bsv_scriptengine_ScriptEngine_evaluateString(JNIEnv* env,
                                                                          jobject obj,
                                                                          jstring script,
                                                                          jboolean concensus,
