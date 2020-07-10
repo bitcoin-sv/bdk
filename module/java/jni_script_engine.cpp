@@ -25,7 +25,7 @@ namespace
     }
 }
 
-JNIEXPORT jobject JNICALL Java_com_nchain_bsv_scriptengine_ScriptEngine_Evaluate(JNIEnv* env,
+JNIEXPORT jobject JNICALL Java_com_nchain_bsv_scriptengine_ScriptEngine_evaluate(JNIEnv* env,
                                                                    jobject obj,
                                                                    jbyteArray arr,
                                                                    jboolean concensus,
@@ -89,7 +89,7 @@ JNIEXPORT jobject JNICALL Java_com_nchain_bsv_scriptengine_ScriptEngine_Evaluate
     return result;
 }
 
-JNIEXPORT jobject JNICALL Java_com_nchain_bsv_scriptengine_ScriptEngine_EvaluateString(JNIEnv* env,
+JNIEXPORT jobject JNICALL Java_com_nchain_bsv_scriptengine_ScriptEngine_evaluateString(JNIEnv* env,
                                                                          jobject obj,
                                                                          jstring script,
                                                                          jboolean concensus,
