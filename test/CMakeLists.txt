@@ -46,6 +46,11 @@ add_executable(test_scriptengineif "${CMAKE_CURRENT_SOURCE_DIR}/testSEIF.cpp")
 target_link_libraries(test_scriptengineif ${CMAKE_DL_LIBS} scrypt_core OpenSSL::Crypto OpenSSL::SSL)
 scrypt_add_unit_test(test_scriptengineif)
 
+add_executable(test_asm "${CMAKE_CURRENT_SOURCE_DIR}/test_assembler.cpp")
+target_link_libraries(test_asm ${CMAKE_DL_LIBS} scrypt_core OpenSSL::Crypto OpenSSL::SSL)
+scrypt_add_unit_test(test_asm)
+
+
 ## Test binding modules
 if(NOT BUILD_PYTHON_BINDING_ONLY)
 	add_subdirectory(java)

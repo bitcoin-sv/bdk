@@ -1,29 +1,11 @@
 #include <ScriptEngineIF.h>
-#include <functional>
 #include <iostream>
 #include <jni.h>                      // JNI header provided by JDK
 #include <com_nchain_bsv_scriptengine_ScriptEngine.h> // Generated
-#include <memory>
 #include <vector>
+#include "jni_util.h"
 
-namespace
-{
-    using unique_jstring_ptr = std::unique_ptr<char const[], std::function<void(char const*)>>;
-
-    unique_jstring_ptr make_unique_jstring(JNIEnv* env, jstring& str)
-    {
-        const char* str_value = env->GetStringUTFChars(str, 0);
-
-        if(str_value == NULL)
-        {
-            env->ThrowNew(env->FindClass("java/lang/OutOfMemoryError"), "Unable to read jstring input");
-            return NULL;
-        }
-
-        return unique_jstring_ptr(str_value,
-                                  [=](char const* p) mutable { env->ReleaseStringUTFChars(str, p); });
-    }
-}
+using namespace jni;
 
 JNIEXPORT jobject JNICALL Java_com_nchain_bsv_scriptengine_ScriptEngine_evaluate(JNIEnv* env,
                                                                    jobject obj,
