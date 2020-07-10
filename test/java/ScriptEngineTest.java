@@ -2,6 +2,12 @@ package com.nchain.bsv.scriptengine;
 
 import org.junit.Assert;
 import org.junit.Test;
+import java.io.FileReader;
+import java.io.BufferedReader;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.io.IOException;
 
 public class ScriptEngineTest {
 
@@ -15,7 +21,7 @@ public class ScriptEngineTest {
 			var[i] = (byte) intArray[i];
 		}
 
-		Status result = jniIF.Evaluate(var, true, 0, "", 0, 0);
+		Status result = jniIF.evaluate(var, true, 0, "", 0, 0);
 
 		Assert.assertEquals(0, result.getStatusCode());
 		Assert.assertEquals("No error", result.getStatusMessage());
@@ -30,7 +36,7 @@ public class ScriptEngineTest {
                 var[i] = (byte) intArray[i];
             }
 
-            jniIF.Evaluate(var,true,0,null,0,0);
+            jniIF.evaluate(var,true,0,null,0,0);
     	}
 
 	@Test
@@ -41,7 +47,7 @@ public class ScriptEngineTest {
 			var[i] = (byte) intArray[i];
 		}
 
-		Status result = jniIF.Evaluate(var, true, 0, "", 0, 0);
+		Status result = jniIF.evaluate(var, true, 0, "", 0, 0);
 
 		Assert.assertEquals(0, result.getStatusCode());
 		Assert.assertEquals("No error", result.getStatusMessage());
@@ -50,7 +56,7 @@ public class ScriptEngineTest {
 	@Test
 	public void testEvaluateSimpleScript() {
 		String ScriptArray = "0x00 0x6b 0x54 0x55 0x93 0x59 0x87";
-		Status result = jniIF.EvaluateString(ScriptArray, true, 0, "", 0, 0);
+		Status result = jniIF.evaluateString(ScriptArray, true, 0, "", 0, 0);
 		Assert.assertEquals(0, result.getStatusCode());
 		Assert.assertEquals("No error", result.getStatusMessage());
 	}
@@ -59,7 +65,7 @@ public class ScriptEngineTest {
 	public void testEvaluateLessSimpleScript() {
 		String ScriptArray = new String(
 				"'abcdefghijklmnopqrstuvwxyz' 0xaa 0x4c 0x20 0xca139bc10c2f660da42666f72e89a225936fc60f193c161124a672050c434671 0x88");
-		Status result = jniIF.EvaluateString(ScriptArray, true, 0, "", 0, 0);
+		Status result = jniIF.evaluateString(ScriptArray, true, 0, "", 0, 0);
 		Assert.assertEquals(0, result.getStatusCode());
 		Assert.assertEquals("No error", result.getStatusMessage());
 	}
@@ -68,7 +74,7 @@ public class ScriptEngineTest {
 	public void testEvaluateLessSimpleOpCodes() {
 		String ScriptArray = new String(
 				"'abcdefghijklmnopqrstuvwxyz' OP_HASH256 OP_PUSHDATA1 0x20 0xca139bc10c2f660da42666f72e89a225936fc60f193c161124a672050c434671 OP_EQUALVERIFY");
-		Status result = jniIF.EvaluateString(ScriptArray, true, 0, "", 0, 0);
+		Status result = jniIF.evaluateString(ScriptArray, true, 0, "", 0, 0);
 		Assert.assertEquals(0, result.getStatusCode());
 		Assert.assertEquals("No error", result.getStatusMessage());
 	}
@@ -83,7 +89,7 @@ public class ScriptEngineTest {
 
 		int amt = 10;
 
-		Status result = jniIF.EvaluateString(ScriptArray, true, 0, HexID, 0, amt);
+		Status result = jniIF.evaluateString(ScriptArray, true, 0, HexID, 0, amt);
 		Assert.assertEquals(0, result.getStatusCode());
 		Assert.assertEquals("No error", result.getStatusMessage());
 	}
@@ -98,7 +104,7 @@ public class ScriptEngineTest {
 				"01000000017f7b57604038e4556debe8b1ec64531d3a84bfb4f81cb4faf9fd9939873da5350000000000ffffffff010a000000000000000000000000");
 
 		int amt = 10;
-		Status result = jniIF.EvaluateString(scriptArray, true, 524288, hexID, 0, amt);
+		Status result = jniIF.evaluateString(scriptArray, true, 524288, hexID, 0, amt);
 
 		Assert.assertEquals("No error", result.getStatusMessage());
 		Assert.assertEquals(0, result.getStatusCode());
@@ -115,7 +121,7 @@ public class ScriptEngineTest {
 				"09000000017f7b57604038e4556debe8b1ec64531d3a84bfb4f81cb4faf9fd9939873da5350000000000ffffffff010a000000000000000000000000");
 
 		int amt = 10;
-		Status result = jniIF.EvaluateString(scriptArray, true, 524288, hexID, 0, amt);
+		Status result = jniIF.evaluateString(scriptArray, true, 524288, hexID, 0, amt);
 
 		Assert.assertEquals("Script failed an OP_CHECKSIGVERIFY operation", result.getStatusMessage());
 		Assert.assertEquals(19, result.getStatusCode());
@@ -134,7 +140,7 @@ public class ScriptEngineTest {
 				"0100000001ca8e5e634222ad1dce6d4286af725cf97e31ff98922db1a467d38642a7e2cbe60000000000ffffffff010a000000000000000000000000");
 
 		int amt = 10;
-		Status result = jniIF.EvaluateString(scriptArray, true, 524288, hexID, 0, amt);
+		Status result = jniIF.evaluateString(scriptArray, true, 524288, hexID, 0, amt);
 
 		Assert.assertEquals("Script failed an OP_EQUALVERIFY operation", result.getStatusMessage());
 		Assert.assertEquals(17, result.getStatusCode());
@@ -154,13 +160,13 @@ public class ScriptEngineTest {
 				"01000000017f7b57604038e4556debe8b1ec64531d3a84bfb4f81cb4faf9fd9939873da5350000000000ffffffff010a000000000000000000000000");
 
 		int amt = 10;
-		Status result = jniIF.EvaluateString(scriptArray, true, 524288, hexID, 0, amt);
+		Status result = jniIF.evaluateString(scriptArray, true, 524288, hexID, 0, amt);
 
 		Assert.assertEquals("Script failed an OP_CHECKSIGVERIFY operation", result.getStatusMessage());
 		Assert.assertEquals(19, result.getStatusCode());
 
 	}
-	
+
 	/* Test Cases for JIRA-BS-95 */
 	/* Transaction with multiple inputs uses the 2nd input index = 1 */
 	@Test
@@ -173,7 +179,7 @@ public class ScriptEngineTest {
 				"01000000020000000000000000000000000000000000000000000000000000000000000000ffffffff00ffffffffd92670dd4ad598998595be2f1bec959de9a9f8b1fd97fb832965c96cd55145e20000000000ffffffff02ffffffffffffffff000a000000000000000000000000");
 
 		int amt = 10;
-		Status result = jniIF.EvaluateString(scriptArray, true, 0, hexID, 1, amt);
+		Status result = jniIF.evaluateString(scriptArray, true, 0, hexID, 1, amt);
 
 		Assert.assertEquals("No error", result.getStatusMessage());
 		Assert.assertEquals(0, result.getStatusCode());
@@ -193,12 +199,61 @@ public class ScriptEngineTest {
 				"01000000020000000000000000000000000000000000000000000000000000000000000000ffffffff00ffffffffd92670dd4ad598998595be2f1bec959de9a9f8b1fd97fb832965c96cd55145e20000000000ffffffff02ffffffffffffffff000a000000000000000000000000");
 
 		int amt = 10;
-		Status result = jniIF.EvaluateString(scriptArray, true, 0, hexID, 5, amt);
+		Status result = jniIF.evaluateString(scriptArray, true, 0, hexID, 5, amt);
 
 		Assert.assertEquals("Script failed an OP_CHECKSIGVERIFY operation", result.getStatusMessage());
 		Assert.assertEquals(19, result.getStatusCode());
 
 	}
+
+
+	@Test
+	public void testEvaluateInvalidTestFile() throws IOException {
+	    List<List<String>> tests = readCsvFile("invalid_tests.csv");
+
+	    tests.forEach(t -> {
+	        String scriptArray = t.get(0);
+	        int flag = Integer.valueOf(t.get(1));
+	        String txHex = t.get(2);
+
+            Status result;
+            try{
+	            result = jniIF.evaluateString(scriptArray, true, flag, txHex, 0, 0);
+	        } catch(Exception ex){
+	            return;
+	        }
+
+	        Assert.assertNotEquals(result.getStatusCode(), 0);
+	    });
+	}
+
+	@Test
+	public void testEvaluateValidTestFile() throws IOException {
+	    List<List<String>> tests = readCsvFile("valid_tests.csv");
+
+	    tests.forEach(t -> {
+	        String scriptArray = t.get(0);
+	        int flag = Integer.valueOf(t.get(1));
+	        String txHex = t.get(2);
+
+	        Status result = jniIF.evaluateString(scriptArray, true, flag, txHex, 0, 0);
+
+	        Assert.assertEquals(result.getStatusCode(), 0);
+	    });
+	}
+
+	private List<List<String>> readCsvFile(String fileName) throws IOException {
+	    List<List<String>> tests = new ArrayList<>();
+            try (BufferedReader br = new BufferedReader(new FileReader(System.getProperty("java_test_data_dir") + "/" + fileName))) {
+                String line;
+                while ((line = br.readLine()) != null) {
+                    String[] values = line.split(",");
+                    tests.add(Arrays.asList(values));
+                }
+            }
+
+        return tests;
+     }
 
 }
 

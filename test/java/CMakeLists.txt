@@ -75,12 +75,12 @@ foreach(_ftest_file ${_FUNCTIONAL_TEST_FILES})
     ## -Djava.library.path alone does not work because the jni dll depend to other dll in this directory (chained dependencies)
     add_test(NAME ${TEST_NAME}d
              CONFIGURATIONS Debug
-             COMMAND ${Java_JAVA_EXECUTABLE} -Djava.library.path=${CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG} ${JAVA_DEBUG_FLAG} -cp "${CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG}\$<SEMICOLON>${JUNIT_JAR}\$<SEMICOLON>${HAMCREST_JAR}" org.junit.runner.JUnitCore ${JAVA_PACKAGE_NAME}.${_ftest_file_name}
+             COMMAND ${Java_JAVA_EXECUTABLE} -Djava_test_data_dir=${CMAKE_CURRENT_SOURCE_DIR}/data -Djava.library.path=${CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG} ${JAVA_DEBUG_FLAG} -cp "${CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG}\$<SEMICOLON>${JUNIT_JAR}\$<SEMICOLON>${HAMCREST_JAR}" org.junit.runner.JUnitCore ${JAVA_PACKAGE_NAME}.${_ftest_file_name}
              WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG}
     )
     add_test(NAME ${TEST_NAME}
              CONFIGURATIONS Release
-             COMMAND ${Java_JAVA_EXECUTABLE} -Djava.library.path=${CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE} ${JAVA_DEBUG_FLAG} -cp "${CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE}\$<SEMICOLON>${JUNIT_JAR}\$<SEMICOLON>${HAMCREST_JAR}" org.junit.runner.JUnitCore ${JAVA_PACKAGE_NAME}.${_ftest_file_name}
+             COMMAND ${Java_JAVA_EXECUTABLE} -Djava_test_data_dir=${CMAKE_CURRENT_SOURCE_DIR}/data -Djava.library.path=${CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE} ${JAVA_DEBUG_FLAG} -cp "${CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE}\$<SEMICOLON>${JUNIT_JAR}\$<SEMICOLON>${HAMCREST_JAR}" org.junit.runner.JUnitCore ${JAVA_PACKAGE_NAME}.${_ftest_file_name}
              WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE}
     )
   else()
@@ -88,7 +88,7 @@ foreach(_ftest_file ${_FUNCTIONAL_TEST_FILES})
       set(_tpost_fix ${CMAKE_DEBUG_POSTFIX})
     endif()
     add_test(NAME ${TEST_NAME}${_tpost_fix}
-             COMMAND ${Java_JAVA_EXECUTABLE} -Djava.library.path=${CMAKE_RUNTIME_OUTPUT_DIRECTORY} ${JAVA_DEBUG_FLAG} -cp ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}:$ENV{JAVA_TOOLS}:${JUNIT_JAR}:${HAMCREST_JAR} org.junit.runner.JUnitCore ${JAVA_PACKAGE_NAME}.${_ftest_file_name}
+             COMMAND ${Java_JAVA_EXECUTABLE} -Djava_test_data_dir=${CMAKE_CURRENT_SOURCE_DIR}/data -Djava.library.path=${CMAKE_RUNTIME_OUTPUT_DIRECTORY} ${JAVA_DEBUG_FLAG} -cp ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}:$ENV{JAVA_TOOLS}:${JUNIT_JAR}:${HAMCREST_JAR} org.junit.runner.JUnitCore ${JAVA_PACKAGE_NAME}.${_ftest_file_name}
     )
   endif()
 endforeach()

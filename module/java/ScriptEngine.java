@@ -13,8 +13,8 @@ public class ScriptEngine {
          }
     }
 
-    public native Status Evaluate(byte[] script,boolean concensus, int scriptflags,String txHex, int nIndex, int amount);
-    public native Status EvaluateString(String script,boolean concensus, int scriptflags, String txHex, int nIndex, int amount);
+    public native Status evaluate(byte[] script,boolean concensus, int scriptflags,String txHex, int nIndex, int amount);
+    public native Status evaluateString(String script,boolean concensus, int scriptflags, String txHex, int nIndex, int amount);
 
 }
     
