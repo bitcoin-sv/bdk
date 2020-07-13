@@ -6,9 +6,9 @@ public class Assembler {
 
     static {
          if(DEBUG == 1){
-            System.loadLibrary("jniBSCriptd");
+            System.loadLibrary("sesdk_jnid");
          }else{
-            System.loadLibrary("jniBSCript");
+            System.loadLibrary("sesdk_jni");
          }
     }
 

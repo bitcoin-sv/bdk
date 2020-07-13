@@ -6,31 +6,31 @@
 #################################################################
 
 ## Test setting requires locating bsv source code
-if(NOT DEFINED SCRYPT_BSV_ROOT_DIR)#
-  message(FATAL_ERROR "Unable to locate bsv source code by SCRYPT_BSV_ROOT_DIR")
+if(NOT DEFINED SESDK_BSV_ROOT_DIR)#
+  message(FATAL_ERROR "Unable to locate bsv source code by SESDK_BSV_ROOT_DIR")
 endif()
-# This file is mainly copied from ${SCRYPT_BSV_ROOT_DIR}/sv/src/test/CMakeLists.txt with slightl modifications
+# This file is mainly copied from ${SESDK_BSV_ROOT_DIR}/sv/src/test/CMakeLists.txt with slightl modifications
 #######################################################################
-message("Including tests from ${SCRYPT_BSV_ROOT_DIR} ...")
+message("Including tests from ${SESDK_BSV_ROOT_DIR} ...")
 
-set(SCRYPT_BSV_TEST_ROOT "${SCRYPT_BSV_ROOT_DIR}/src/test")
-set(SCRYPT_BSV_TESTSUITE_MODULE "${SCRYPT_BSV_ROOT_DIR}/cmake/modules/TestSuite.cmake")
-set(SCRYPT_BSV_TEST_HEADER_GENERATOR "${SCRYPT_BSV_TEST_ROOT}/data/generate_header.py")
+set(SESDK_BSV_TEST_ROOT "${SESDK_BSV_ROOT_DIR}/src/test")
+set(SESDK_BSV_TESTSUITE_MODULE "${SESDK_BSV_ROOT_DIR}/cmake/modules/TestSuite.cmake")
+set(SESDK_BSV_TEST_HEADER_GENERATOR "${SESDK_BSV_TEST_ROOT}/data/generate_header.py")
 
 function(gen_json_header NAME)
   set(HEADERS "")
   foreach(f ${ARGN})
-    set(_h_file "${SCRYPT_GENERATED_HPP_DIR}/${f}.h")
-    set(_json_file "${SCRYPT_BSV_TEST_ROOT}/${f}")
+    set(_h_file "${SESDK_GENERATED_HPP_DIR}/${f}.h")
+    set(_json_file "${SESDK_BSV_TEST_ROOT}/${f}")
     # Get the proper name for the test variable.
     get_filename_component(TEST_NAME ${f} NAME_WE)
 
     add_custom_command(
       OUTPUT ${_h_file}
       COMMAND ${Python_EXECUTABLE}
-      ARGS "${SCRYPT_BSV_TEST_HEADER_GENERATOR}" "${TEST_NAME}" "${_json_file}" > ${_h_file}
+      ARGS "${SESDK_BSV_TEST_HEADER_GENERATOR}" "${TEST_NAME}" "${_json_file}" > ${_h_file}
       MAIN_DEPENDENCY ${_json_file}
-      DEPENDS "${SCRYPT_BSV_TEST_HEADER_GENERATOR}"
+      DEPENDS "${SESDK_BSV_TEST_HEADER_GENERATOR}"
       VERBATIM
     )
 
@@ -40,7 +40,7 @@ function(gen_json_header NAME)
 endfunction()
 
 ## Generate directory containing generated json header file
-file(MAKE_DIRECTORY "${SCRYPT_GENERATED_HPP_DIR}/data")
+file(MAKE_DIRECTORY "${SESDK_GENERATED_HPP_DIR}/data")
 
 gen_json_header(JSON_HEADERS
   data/script_tests.json
@@ -53,7 +53,7 @@ gen_json_header(JSON_HEADERS
 )
 message(STATUS "JSON_HEADERS generated for BSV tests")
 foreach(_f ${JSON_HEADERS})
-  if(SCRYPT_LOG_BSV_FILES)
+  if(SESDK_LOG_BSV_FILES)
     message("       [${_f}]")
   endif()
 endforeach()
@@ -61,24 +61,24 @@ endforeach()
 ####################################################################################################################
 ## Test files *cpp here are mainly extract of bsv source code ######################################################
 add_executable(test_scrypt_core
-               "${SCRYPT_BSV_TEST_ROOT}/jsonutil.h"
-               "${SCRYPT_BSV_TEST_ROOT}/scriptflags.h"
-               "${SCRYPT_BSV_TEST_ROOT}/sigutil.h"
-               "${SCRYPT_BSV_TEST_ROOT}/jsonutil.cpp"
-               "${SCRYPT_BSV_TEST_ROOT}/scriptflags.cpp"
-               "${SCRYPT_BSV_TEST_ROOT}/sigutil.cpp"
+               "${SESDK_BSV_TEST_ROOT}/jsonutil.h"
+               "${SESDK_BSV_TEST_ROOT}/scriptflags.h"
+               "${SESDK_BSV_TEST_ROOT}/sigutil.h"
+               "${SESDK_BSV_TEST_ROOT}/jsonutil.cpp"
+               "${SESDK_BSV_TEST_ROOT}/scriptflags.cpp"
+               "${SESDK_BSV_TEST_ROOT}/sigutil.cpp"
                ${JSON_HEADERS}
                "${CMAKE_CURRENT_SOURCE_DIR}/script_tests_modified.cpp"
-               "${SCRYPT_BSV_TEST_ROOT}/bn_op_tests.cpp"
-               "${SCRYPT_BSV_TEST_ROOT}/scriptflags.cpp"
-               "${SCRYPT_BSV_TEST_ROOT}/scriptnum_tests.cpp"
+               "${SESDK_BSV_TEST_ROOT}/bn_op_tests.cpp"
+               "${SESDK_BSV_TEST_ROOT}/scriptflags.cpp"
+               "${SESDK_BSV_TEST_ROOT}/scriptnum_tests.cpp"
                ## TODO
-               #"${SCRYPT_BSV_TEST_ROOT}/opcode_tests.cpp
+               #"${SESDK_BSV_TEST_ROOT}/opcode_tests.cpp
 )
 
 target_link_libraries(test_scrypt_core ${CMAKE_DL_LIBS} scrypt_core OpenSSL::Crypto OpenSSL::SSL)
 if(WIN32)
   target_link_libraries(test_scrypt_core Crypt32.lib Ws2_32)
 endif()
-target_include_directories(test_scrypt_core PRIVATE "${SCRYPT_BSV_TEST_ROOT}")
+target_include_directories(test_scrypt_core PRIVATE "${SESDK_BSV_TEST_ROOT}")
 scrypt_add_unit_test(test_scrypt_core)
