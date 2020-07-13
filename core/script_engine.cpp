@@ -1,4 +1,4 @@
-#include <ScriptEngineIF.h>
+#include <script_engine.h>
 
 #include <base58.h>
 #include <chainparams.h>
@@ -7,21 +7,15 @@
 #include <ecc_guard.h>
 #include <script/interpreter.h>
 
-
 using namespace std;
 
 using unique_sig_checker = unique_ptr<BaseSignatureChecker>;
 
 namespace
 {
-    unique_sig_checker make_unique_sig_checker()
-    {
-        return make_unique<BaseSignatureChecker>();
-    }
+    unique_sig_checker make_unique_sig_checker() { return make_unique<BaseSignatureChecker>(); }
 
-    unique_sig_checker make_unique_sig_checker(const CTransaction& tx,
-                                               const int vinIndex,
-                                               const int64_t a)
+    unique_sig_checker make_unique_sig_checker(const CTransaction& tx, const int vinIndex, const int64_t a)
     {
         Amount amount{a};
         return make_unique<TransactionSignatureChecker>(&tx, vinIndex, amount);
@@ -32,13 +26,13 @@ namespace
                               const unsigned int scriptflag,
                               BaseSignatureChecker* sigCheck)
     {
-        ECCVerifyHandle verifyHandle;
+        ECCVerifyHandle verify_handle;
         ecc_guard guard;
         auto source = task::CCancellationSource::Make();
-        LimitedStack directStack(UINT32_MAX);
+        LimitedStack direct_stack(UINT32_MAX);
         ScriptError err;
-        EvalScript(GlobalConfig::GetConfig(), consensus, source->GetToken(),
-                   directStack, script, scriptflag, *sigCheck, &err);
+        EvalScript(GlobalConfig::GetConfig(), consensus, source->GetToken(), direct_stack, script, scriptflag,
+                   *sigCheck, &err);
         return err;
     }
 
@@ -51,25 +45,23 @@ namespace
     {
         CMutableTransaction mtx;
 
-        if(!txhex.empty() &&
-           txhex.find_first_not_of(" /n/t/f") != std::string::npos)
+        if(!txhex.empty() && txhex.find_first_not_of(" /n/t/f") != std::string::npos)
         {
             if(!DecodeHexTx(mtx, txhex))
             {
-                throw std::runtime_error(
-                    "Unable to create a CMutableTransaction "
-                    "from supplied transaction hex");
+                throw std::runtime_error("Unable to create a CMutableTransaction "
+                                         "from supplied transaction hex");
             }
         }
 
-        unique_sig_checker sigCheck{make_unique_sig_checker()};
+        unique_sig_checker sig_check{make_unique_sig_checker()};
         CTransaction tx(mtx);
         if(!mtx.vin.empty() && !mtx.vout.empty())
         {
-            sigCheck = make_unique_sig_checker(tx, vinIndex, amount);
+            sig_check = make_unique_sig_checker(tx, vinIndex, amount);
         }
 
-        return evaluate_impl(script, consensus, scriptflag, sigCheck.get());
+        return evaluate_impl(script, consensus, scriptflag, sig_check.get());
     }
 }
 
@@ -80,8 +72,8 @@ ScriptError bsv::evaluate(const bsv::span<const uint8_t> script,
                           const int vinIndex,
                           const int64_t amount)
 {
-    return evaluate_impl(CScript{script.begin(), script.end()}, consensus,
-                         scriptflag, txhex, vinIndex, amount);
+    return evaluate_impl(CScript{script.begin(), script.end()}, consensus, scriptflag, txhex, vinIndex,
+                         amount);
 }
 
 ScriptError bsv::evaluate(const std::string& script,
@@ -97,20 +89,17 @@ ScriptError bsv::evaluate(const std::string& script,
     if(script.find_first_not_of(" /n/t/f") == std::string::npos)
         throw std::runtime_error("Control character in script");
 
-    return evaluate_impl(ParseScript(script), consensus, scriptflag, txhex,
-                         vinIndex, amount);
+    return evaluate_impl(ParseScript(script), consensus, scriptflag, txhex, vinIndex, amount);
 }
-std::string bsv::formatScript(const std::string& inputScript)
+std::string bsv::formatScript(const std::string& input_script)
 {
-    if(inputScript.empty() ||
-       inputScript.find_first_not_of(" /n/t/f") == std::string::npos)
+    if(input_script.empty() || input_script.find_first_not_of(" /n/t/f") == std::string::npos)
     {
-        throw std::runtime_error(
-            "No script provided to formatScript in ScirptEngine::formatScript");
+        throw std::runtime_error("No script provided to formatScript in ScirptEngine::formatScript");
     }
     try
     {
-        CScript in = ParseScript(inputScript);
+        CScript in = ParseScript(input_script);
         return FormatScript(in);
     }
     catch(std::exception& e)
@@ -118,4 +107,3 @@ std::string bsv::formatScript(const std::string& inputScript)
         throw std::runtime_error(e.what());
     }
 }
-
