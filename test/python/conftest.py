@@ -23,7 +23,7 @@ def pytest_configure(config):
     arg_module_dir_str = config.getoption("--module_dir")
     arg_module_dir_list = arg_module_dir_str.split(',')
     sys.path = arg_module_dir_list + sys.path
-    import PyScriptEngine 
+    import PySESDK 
     print('conftest.py successfully load all Py Modules')
     #print(sys.path)
 

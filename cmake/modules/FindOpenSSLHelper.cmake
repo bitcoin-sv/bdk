@@ -22,7 +22,7 @@ set(FindOpenSSLHelper_Include TRUE)
 # Emscripten build is really portable cross plateform, so it only need to build on linux (easier) then the wasm build can be used on windows (for wasm only)
 # Download and install emscrypt following emscripten documentation https://emscripten.org/docs/getting_started/downloads.html
 # set environment variables in ~/.bashrc
-#export EMSCRYPT_ROOT=/path/to/where/emscrypt/installed
+#export EMSDK_ROOT=/path/to/where/emscrypt/installed
 #export OPENSSL_WASM_ROOT_DIR=/path/to/where/openssl-1.1.1b_wasm/will/be/installed
 
 source ~/.bashrc
@@ -30,7 +30,7 @@ wget https://www.openssl.org/source/openssl-1.1.1b.tar.gz  # Download openssl-1.
 tar xvzf openssl-1.1.1b.tar.gz                             # Extract it
 mv openssl-1.1.1b openssl-1.1.1b_src                       # Rename openssl source directory
 cd openssl-1.1.1b_src                                      # Goto openssl source directory
-source $EMSCRYPT_ROOT/emscrypt_env.sh                            # Setup emscripten environment variables
+source $EMSDK_ROOT/emscrypt_env.sh                            # Setup emscripten environment variables
 ## Configure the build for openssl
 emconfigure ./Configure --openssldir=/path/to/some/tmp/build/dir --prefix=$OPENSSL_WASM_ROOT_DIR no-asm no-dso no-shared no-threads linux-x86_64-clang
 

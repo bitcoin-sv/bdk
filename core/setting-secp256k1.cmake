@@ -6,10 +6,10 @@
 #################################################################
 
 ## Build secp256k1 requires locating bsv source code
-if(NOT DEFINED SCRYPT_BSV_ROOT_DIR)#
-    message(FATAL_ERROR "Unable to locate bsv source code by SCRYPT_BSV_ROOT_DIR")
+if(NOT DEFINED SESDK_BSV_ROOT_DIR)#
+    message(FATAL_ERROR "Unable to locate bsv source code by SESDK_BSV_ROOT_DIR")
 endif()
-# This file is mainly copied from ${SCRYPT_BSV_ROOT_DIR}/sv/src/secp256k1/CMakeLists.txt with slightl modifications
+# This file is mainly copied from ${SESDK_BSV_ROOT_DIR}/sv/src/secp256k1/CMakeLists.txt with slightl modifications
 #######################################################################
 
 
@@ -80,13 +80,13 @@ endfunction(link_secp256k1_internal)
 
 ################################################################################
 ## Build secp256k1 libraries ###################################################
-set(SECP256K1_ROOT "${SCRYPT_BSV_ROOT_DIR}/src/secp256k1")
+set(SECP256K1_ROOT "${SESDK_BSV_ROOT_DIR}/src/secp256k1")
 set(SECP256K1_CPP_FILE "${SECP256K1_ROOT}/src/secp256k1.c")
 set(SECP256K1_PUBLIC_HEADER_DIR "${SECP256K1_ROOT}/include")
 
 # Generate the config
 set(LIBSECP256K1_CONFIG_FILE_IN "${SECP256K1_ROOT}/src/libsecp256k1-config.h.cmake.in")
-set(LIBSECP256K1_CONFIG_FILE "${SCRYPT_GENERATED_HPP_DIR}/libsecp256k1-config.h")
+set(LIBSECP256K1_CONFIG_FILE "${SESDK_GENERATED_HPP_DIR}/libsecp256k1-config.h")
 configure_file(${LIBSECP256K1_CONFIG_FILE_IN} ${LIBSECP256K1_CONFIG_FILE} ESCAPE_QUOTES)
 
 ### Install and nice presentation in IDE
@@ -104,7 +104,7 @@ set_property(TARGET secp256k1 PROPERTY FOLDER "core")
 ## Log list of secp256k1 source files
 message(STATUS "Build secp256k1 source code in ${SECP256K1_ROOT}")
 foreach(_secp256k1_file ${SECP256K1_PUBLIC_HEADERS} ${SECP256K1_PRIVATE_HEADERS} ${SECP256K1_CPP_FILE})
-  if(SCRYPT_LOG_BSV_FILES)
+  if(SESDK_LOG_BSV_FILES)
     message(STATUS "    [${_secp256k1_file}]")
   endif()
   ## Set the nice structure in IDE

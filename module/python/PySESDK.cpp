@@ -48,12 +48,12 @@ static PyMethodDef ModuleMethods[] =
  
 #if PY_MAJOR_VERSION >= 3
 
-static int PyScriptEngine_traverse(PyObject *m, visitproc visit, void *arg) {
+static int PySESDK_traverse(PyObject *m, visitproc visit, void *arg) {
     Py_VISIT(GETSTATE(m)->error);
     return 0;
 }
 
-static int PyScriptEngine_clear(PyObject *m) {
+static int PySESDK_clear(PyObject *m) {
     Py_CLEAR(GETSTATE(m)->error);
     return 0;
 }
@@ -61,20 +61,20 @@ static int PyScriptEngine_clear(PyObject *m) {
 
 static struct PyModuleDef moduledef = {
         PyModuleDef_HEAD_INIT,
-        "PyScriptEngine",
+        "PySESDK",
         NULL,
         sizeof(struct module_state),
         ModuleMethods,
         NULL,
-        PyScriptEngine_traverse,
-        PyScriptEngine_clear,
+        PySESDK_traverse,
+        PySESDK_clear,
         NULL
 };
 
 #define INITERROR return NULL
 
 PyMODINIT_FUNC
-PyInit_PyScriptEngine(void)
+PyInit_PySESDK(void)
 
 #else
 #define INITERROR return
@@ -86,14 +86,14 @@ initmyextension(void)
 #if PY_MAJOR_VERSION >= 3
     PyObject *module = PyModule_Create(&moduledef);
 #else
-    PyObject *module = Py_InitModule("PyScriptEngine", myextension_methods);
+    PyObject *module = Py_InitModule("PySESDK", myextension_methods);
 #endif
 
     if (module == NULL)
         INITERROR;
     struct module_state *st = GETSTATE(module);
 
-    st->error = PyErr_NewException("PyScriptEngine.Error", NULL, NULL);
+    st->error = PyErr_NewException("PySESDK.Error", NULL, NULL);
     if (st->error == NULL) {
         Py_DECREF(module);
         INITERROR;
