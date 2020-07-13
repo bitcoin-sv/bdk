@@ -1,20 +1,23 @@
 //
 // Created by m.fletcher on 10/07/2020.
 //
-
 #include "jni_util.h"
 
-using namespace jni;
+#include <cassert>
 
-unique_jstring_ptr jni::make_unique_jstring(JNIEnv* env, jstring& str)
+bsv::jni::unique_jstring_ptr bsv::jni::make_unique_jstring(JNIEnv* env,
+                                                           const jstring& jstr)
 {
-    const char* str_value = env->GetStringUTFChars(str, 0);
+    assert(env);
 
-    if(str_value == NULL)
+    const char* utf{env->GetStringUTFChars(jstr, nullptr)};
+    if(!utf)
     {
         env->ThrowNew(env->FindClass("java/lang/OutOfMemoryError"), "Unable to read jstring input");
-        return NULL;
+        return nullptr;
     }
 
-    return unique_jstring_ptr(str_value, [=](char const* p) mutable { env->ReleaseStringUTFChars(str, p); });
+    return unique_jstring_ptr(utf, [env, jstr](const char* utf) {
+        env->ReleaseStringUTFChars(jstr, utf);
+    });
 }
