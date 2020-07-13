@@ -38,7 +38,7 @@ set(SOURCE_DIRECTORY  ${PROJECT_DIRECTORY}/module/java)
 set(TEST_DIRECTORY  ${PROJECT_DIRECTORY}/test/java)
 
 ## Get all test scripts
-file(GLOB _FUNCTIONAL_TEST_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.java")
+file(GLOB _JAVA_TEST_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.java")
 
 if(CMAKE_CONFIGURATION_TYPES)
   set(JAVA_DEBUG_FLAG "\$<IF:\$<CONFIG:Debug>,-Ddebug=1,-Ddebug=0>")
@@ -51,10 +51,10 @@ else()
 endif()
 
 ## Execute each test from the tests folder
-foreach(_ftest_file ${_FUNCTIONAL_TEST_FILES})
+foreach(_ftest_file ${_JAVA_TEST_FILES})
   get_filename_component(_ftest_file_name "${_ftest_file}" NAME_WE)
 
-  set(TEST_NAME test_java_${_ftest_file_name})
+  set(TEST_NAME test_JAV${_ftest_file_name})
 
   add_custom_target(${_ftest_file_name} ALL DEPENDS ${TEST_DIRECTORY}/${_ftest_file_name}.java)
 

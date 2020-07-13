@@ -4,10 +4,10 @@
 #                                                               #
 #  Copyright (c) 2020 nChain Limited. All rights reserved       #
 #################################################################
-if(SCRYPTTools_Include)## Include guard
+if(SESDKTools_Include)## Include guard
   return()
 endif()
-set(SCRYPTTools_Include TRUE)
+set(SESDKTools_Include TRUE)
 
 include(CheckCXXCompilerFlag)
 include(CheckCCompilerFlag)
@@ -56,11 +56,11 @@ endmacro()
 function(scryptPrintOSInfo)##############################################################################
   #### TODO print more read-only information like compiler, default compiler flags ...
   message(STATUS "     OS Info:")
-  message(STATUS "         SCRYPT_SYSTEM_X64[${SCRYPT_SYSTEM_X64}]")
-  message(STATUS "         SCRYPT_SYSTEM_X86[${SCRYPT_SYSTEM_X86}]")
-  message(STATUS "         SCRYPT_SYSTEM_BUILD_ARCHI[${SCRYPT_SYSTEM_BUILD_ARCHI}]")
-  message(STATUS "         SCRYPT_SYSTEM_OS[${SCRYPT_SYSTEM_OS}]")
-  message(STATUS "         SCRYPT_GENERATED_HPP_DIR[${SCRYPT_GENERATED_HPP_DIR}]")
+  message(STATUS "         SESDK_SYSTEM_X64[${SESDK_SYSTEM_X64}]")
+  message(STATUS "         SESDK_SYSTEM_X86[${SESDK_SYSTEM_X86}]")
+  message(STATUS "         SESDK_SYSTEM_BUILD_ARCHI[${SESDK_SYSTEM_BUILD_ARCHI}]")
+  message(STATUS "         SESDK_SYSTEM_OS[${SESDK_SYSTEM_OS}]")
+  message(STATUS "         SESDK_GENERATED_HPP_DIR[${SESDK_GENERATED_HPP_DIR}]")
 
   foreach(_LANG C CXX)
     message(STATUS "         CMAKE_${_LANG}_FLAGS[${CMAKE_${_LANG}_FLAGS}]")
@@ -75,7 +75,7 @@ endfunction()
 #
 function(checkIfImported _Lib _Component)
   if(NOT TARGET ${_Lib}::${_Component})
-    message(FATAL_ERROR "SCRYPTTools.cmake::checkIfImported TARGET[${_Lib}::${_Component}] doesn't exist")
+    message(FATAL_ERROR "SESDKTools.cmake::checkIfImported TARGET[${_Lib}::${_Component}] doesn't exist")
   endif()
 endfunction()
 
@@ -83,7 +83,7 @@ endfunction()
 #### Will crash if the target is not imported
 function(isStaticImported result _Lib _Component)
   if(NOT TARGET ${_Lib}::${_Component})
-    message(FATAL_ERROR "SCRYPTTools.cmake::isStaticImported TARGET[${_Lib}::${_Component}] doesn't exist")
+    message(FATAL_ERROR "SESDKTools.cmake::isStaticImported TARGET[${_Lib}::${_Component}] doesn't exist")
   endif()
 
   get_property(_IMPORTED_TYPE TARGET ${_Lib}::${_Component} PROPERTY TYPE)
@@ -100,10 +100,10 @@ endfunction()
 function(scryptGetInstallRootDir result)
 #[[ Usage of absolute path for install will not work at CPack time
   if(CMAKE_CONFIGURATION_TYPES)
-    set(installDir \$<IF:\$<CONFIG:Debug>,${CMAKE_INSTALL_PREFIX}/x${SCRYPT_SYSTEM_BUILD_ARCHI}/debug,${CMAKE_INSTALL_PREFIX}/x${SCRYPT_SYSTEM_BUILD_ARCHI}/release>)
+    set(installDir \$<IF:\$<CONFIG:Debug>,${CMAKE_INSTALL_PREFIX}/x${SESDK_SYSTEM_BUILD_ARCHI}/debug,${CMAKE_INSTALL_PREFIX}/x${SESDK_SYSTEM_BUILD_ARCHI}/release>)
   else()
     string(TOLOWER ${CMAKE_BUILD_TYPE} _build_type)
-    set(installDir "${CMAKE_INSTALL_PREFIX}/x${SCRYPT_SYSTEM_BUILD_ARCHI}/${_build_type}")
+    set(installDir "${CMAKE_INSTALL_PREFIX}/x${SESDK_SYSTEM_BUILD_ARCHI}/${_build_type}")
   endif()
   set(${result} "${installDir}" PARENT_SCOPE)
 ]]
@@ -118,15 +118,15 @@ endfunction()###################################################################
 ####    scryptCopyFileToBuildDir(${my_file_so} "" ".")
 function(scryptCopyFileToBuildDir _file _BuildType _subDir)
   if(NOT EXISTS "${_file}")
-    message(FATAL_ERROR "SCRYPTTools.cmake::scryptCopyFileToBuildDir file[${_file}] doesn't exist")
+    message(FATAL_ERROR "SESDKTools.cmake::scryptCopyFileToBuildDir file[${_file}] doesn't exist")
   endif()
 
   if(NOT _BuildType AND CMAKE_CONFIGURATION_TYPES)
-    message(FATAL_ERROR "SCRYPTTools.cmake::scryptCopyInstallSharedLib _BuildType[${_BuildType}] empty should not be used on config-like system")
+    message(FATAL_ERROR "SESDKTools.cmake::scryptCopyInstallSharedLib _BuildType[${_BuildType}] empty should not be used on config-like system")
   endif()
 
   if(IS_SYMLINK ${_file})# symlink will not work to copy to runtime
-    message(FATAL_ERROR "SCRYPTTools.cmake::scryptCopyInstallSharedLib _file[${_file}] is a symlink, unable to copy")
+    message(FATAL_ERROR "SESDKTools.cmake::scryptCopyInstallSharedLib _file[${_file}] is a symlink, unable to copy")
   endif()
 
   if(_BuildType)
@@ -148,15 +148,15 @@ endfunction()
 function(scryptCopyInstallSharedLib _file _BuildType _subDir)
   get_filename_component(_lib_EXT "${_file}" EXT)
   if(NOT (${_lib_EXT} STREQUAL ".dll" OR ${_lib_EXT} STREQUAL ".dylib" OR ${_lib_EXT} MATCHES ".so"))
-    message(FATAL_ERROR "SCRYPTTools.cmake::scryptCopyInstallSharedLib _subDir[${_subDir}] _BuildType[${_BuildType}] File[${_file}] is not a shared library")
+    message(FATAL_ERROR "SESDKTools.cmake::scryptCopyInstallSharedLib _subDir[${_subDir}] _BuildType[${_BuildType}] File[${_file}] is not a shared library")
   endif()
 
   if(NOT _BuildType AND CMAKE_CONFIGURATION_TYPES)
-    message(FATAL_ERROR "SCRYPTTools.cmake::scryptCopyInstallSharedLib _BuildType[${_BuildType}] empty should not be used on config-like system")
+    message(FATAL_ERROR "SESDKTools.cmake::scryptCopyInstallSharedLib _BuildType[${_BuildType}] empty should not be used on config-like system")
   endif()
 
   if(IS_SYMLINK ${_file})# symlink will not work to copy to runtime and install.
-    message(FATAL_ERROR "SCRYPTTools.cmake::scryptCopyInstallSharedLib _file[${_file}] is a symlink, it will not work")
+    message(FATAL_ERROR "SESDKTools.cmake::scryptCopyInstallSharedLib _file[${_file}] is a symlink, it will not work")
   endif()
 
   if(_BuildType)
@@ -190,7 +190,7 @@ function(scryptSolveImportedSymlink _Lib _Component _PRPTY _BuildType)
   endif()
 
   if(NOT ((${_PRPTY} STREQUAL "LOCATION") OR (${_PRPTY} STREQUAL "IMPORTED_LOCATION")))
-    message(FATAL_ERROR "SCRYPTTools.cmake::scryptSolveImportedSymlink, _PRPTY [${PRPTY}] should be LOCATION or IMPORTED_LOCATION")
+    message(FATAL_ERROR "SESDKTools.cmake::scryptSolveImportedSymlink, _PRPTY [${PRPTY}] should be LOCATION or IMPORTED_LOCATION")
   endif()
 
   checkIfImported("${_Lib}" "${_Component}")
@@ -200,30 +200,30 @@ function(scryptSolveImportedSymlink _Lib _Component _PRPTY _BuildType)
   else()
     string(TOUPPER ${_BuildType} _BUILD_TYPE)
     if(NOT ((${_BUILD_TYPE} STREQUAL "DEBUG") OR (${_BUILD_TYPE} STREQUAL "RELEASE")))
-      message(FATAL_ERROR "SCRYPTTools.cmake::scryptSolveImportedSymlink, _BuildType[${_BuildType}] should be empty string, or Debug/Release")
+      message(FATAL_ERROR "SESDKTools.cmake::scryptSolveImportedSymlink, _BuildType[${_BuildType}] should be empty string, or Debug/Release")
     endif()
     set(TGT_PROPERTY ${_PRPTY}_${_BUILD_TYPE})
   endif()
 
   get_property(_lib_${_PRPTY} TARGET ${_Lib}::${_Component} PROPERTY ${TGT_PROPERTY})
   if(NOT _lib_${_PRPTY})
-    message(STATUS "WARNING : SCRYPTTools.cmake::scryptSolveImportedSymlink target property ${_Lib}::${_Component}::${TGT_PROPERTY} was not defined")
+    message(STATUS "WARNING : SESDKTools.cmake::scryptSolveImportedSymlink target property ${_Lib}::${_Component}::${TGT_PROPERTY} was not defined")
     return()
   endif()
 
-  #message("    ----  BEFORE SCRYPTTools.cmake::scryptSolveImportedSymlink ${TGT_PROPERTY}[${_lib_${_PRPTY}}]")
+  #message("    ----  BEFORE SESDKTools.cmake::scryptSolveImportedSymlink ${TGT_PROPERTY}[${_lib_${_PRPTY}}]")
   if(IS_SYMLINK ${_lib_${_PRPTY}})
     get_filename_component(_solved_symlink_file ${_lib_${_PRPTY}} REALPATH)
     if(EXISTS ${_solved_symlink_file})
       set_target_properties(${_Lib}::${_Component} PROPERTIES ${TGT_PROPERTY} ${_solved_symlink_file})
     else()
-      message(FATAL_ERROR "SCRYPTTools.cmake::scryptSolveImportedSymlink, file [${_solved_symlink_file}] doesn't exist")
+      message(FATAL_ERROR "SESDKTools.cmake::scryptSolveImportedSymlink, file [${_solved_symlink_file}] doesn't exist")
     endif()
   else()
-    message(STATUS "WARNING : SCRYPTTools.cmake::scryptSolveImportedSymlink ${_Lib}::${_Component}::${TGT_PROPERTY}[${_lib_${_PRPTY}}] is not a symlink")
+    message(STATUS "WARNING : SESDKTools.cmake::scryptSolveImportedSymlink ${_Lib}::${_Component}::${TGT_PROPERTY}[${_lib_${_PRPTY}}] is not a symlink")
   endif()
   #get_property(test_lib_${_PRPTY} TARGET ${_Lib}::${_Component} PROPERTY ${TGT_PROPERTY})
-  #message("    ----  AFTER  SCRYPTTools.cmake::solveImportedSymlink ${TGT_PROPERTY}[${test_lib_${_PRPTY}}]")
+  #message("    ----  AFTER  SESDKTools.cmake::solveImportedSymlink ${TGT_PROPERTY}[${test_lib_${_PRPTY}}]")
 endfunction()
 
 #### On linux, to make things easier, let the software link directly to the library instead of using the symlink
@@ -714,7 +714,7 @@ function(scryptPrintProperties tgt)
       #VS_SCC_LOCALPATH
       #VS_SCC_PROJECTNAME
       #VS_SCC_PROVIDER
-      #VS_SCRYPT_REFERENCES
+      #VS_SDK_REFERENCES
       #VS_USER_PROPS
       #VS_WINDOWS_TARGET_PLATFORM_MIN_VERSION
       #VS_WINRT_COMPONENT

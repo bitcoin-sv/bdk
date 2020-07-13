@@ -1,5 +1,5 @@
 /* This file is a slight modification of $SV_ROOT/src/test/script_tests.cpp
-   TODO : request bsv project to add a flag #ifdef BSCRYPT_BUILD_TEST
+   TODO : request bsv project to add a flag #ifdef SCRIPT_ENGINE_BUILD_TEST
  */
 
  // Copyright (c) 2011-2016 The Bitcoin Core developers
@@ -7,14 +7,14 @@
  // Distributed under the Open BSV software license, see the accompanying file
  // LICENSE.
 
- // BSCRYPT_BUILD_TEST ++++++++++++++++++++++++++++++++++++++++++++++++++++
+ // SCRIPT_ENGINE_BUILD_TEST ++++++++++++++++++++++++++++++++++++++++++++++++++++
 #ifdef NDEBUG 
 #  define BOOST_TEST_MODULE test_scrypt_core
 #else
 #  define BOOST_TEST_MODULE test_scrypt_cored
 #endif
 #include <boost/test/unit_test.hpp>
-// BSCRYPT_BUILD_TEST ++++++++++++++++++++++++++++++++++++++++++++++++++++
+// SCRIPT_ENGINE_BUILD_TEST ++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 #include "data/script_tests.json.h"
 
@@ -33,7 +33,7 @@
 #include "test/jsonutil.h"
 #include "test/scriptflags.h"
 #include "test/sigutil.h"
-// BSCRYPT_BUILD_TEST ----------------------------------------------------
+// SCRIPT_ENGINE_BUILD_TEST ----------------------------------------------------
 //#include "test/test_bitcoin.h"
 #include "util.h"
 #include "utilstrencodings.h"
@@ -57,7 +57,7 @@
 
 static const unsigned int flags = SCRIPT_VERIFY_P2SH | SCRIPT_VERIFY_STRICTENC;
 
-// BSCRYPT_BUILD_TEST ++++++++++++++++++++++++++++++++++++++++++++++++++++
+// SCRIPT_ENGINE_BUILD_TEST ++++++++++++++++++++++++++++++++++++++++++++++++++++
 /**
  * Basic testing setup.
  * This just configures logging and chain parameters.
@@ -105,7 +105,7 @@ UniValue ValueFromAmount(const Amount &amount) {
     return UniValue(UniValue::VNUM, strprintf("%s%d.%08d", sign ? "-" : "",
         quotient, remainder));
 }
-// BSCRYPT_BUILD_TEST ++++++++++++++++++++++++++++++++++++++++++++++++++++
+// SCRIPT_ENGINE_BUILD_TEST ++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 struct ScriptErrorDesc {
     ScriptError_t err;
@@ -1712,7 +1712,7 @@ BOOST_AUTO_TEST_CASE(script_CHECKMULTISIG23) {
                         ScriptErrorString(err));
 }
 
-// BSCRYPT_BUILD_TEST ----------------------------------------------------
+// SCRIPT_ENGINE_BUILD_TEST ----------------------------------------------------
 /*
 void TestCombineSigs(bool genesisEnabled, bool utxoAfterGenesis) {
     // Test the CombineSignatures function
@@ -1903,7 +1903,7 @@ BOOST_AUTO_TEST_CASE(script_combineSigs) {
     TestCombineSigs(false, false);
 }
 */
-// BSCRYPT_BUILD_TEST ----------------------------------------------------
+// SCRIPT_ENGINE_BUILD_TEST ----------------------------------------------------
 
 BOOST_AUTO_TEST_CASE(script_standard_push) {
     ScriptError err;
