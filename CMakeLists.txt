@@ -15,8 +15,8 @@
 ##   cmake -G"Visual Studio 16 2019" -A x64 ..\bscrypt && cmake --build . --target ALL_BUILD --config Debug && cmake --build . --target ALL_BUILD --config Release && ctest -C Debug && ctest -C Release && cpack -G NSIS -C Release
 ##
 ## Windows alternative with MSBuild parallele:
-##   cmake -G"Visual Studio 16 2019" -A x64 ..\bscrypt && msbuild bscrypt.sln -maxcpucount:4 /p:Configuration=Debug && msbuild bscrypt.sln -maxcpucount:4 /p:Configuration=Release && ctest -C Debug && ctest -C Release && cpack -G NSIS -C Release
-##   cmake -G"Visual Studio 16 2019" -A x64 ..\bscrypt && msbuild bscrypt.sln -v:q -maxcpucount:4 /p:Configuration=Debug && msbuild bscrypt.sln  -v:q -maxcpucount:4 /p:Configuration=Release && ctest -C Debug && ctest -C Release && cpack -G NSIS -C Release
+##   cmake -G"Visual Studio 16 2019" -A x64 ..\bscrypt && msbuild sesdk.sln -maxcpucount:4 /p:Configuration=Debug && msbuild sesdk.sln -maxcpucount:4 /p:Configuration=Release && ctest -C Debug && ctest -C Release && cpack -G NSIS -C Release
+##   cmake -G"Visual Studio 16 2019" -A x64 ..\bscrypt && msbuild sesdk.sln -v:q -maxcpucount:4 /p:Configuration=Debug && msbuild sesdk.sln  -v:q -maxcpucount:4 /p:Configuration=Release && ctest -C Debug && ctest -C Release && cpack -G NSIS -C Release
 ##
 ## On Linux (Ubuntu)
 ##   cmake ../bscrypt -DCMAKE_BUILD_TYPE=Debug -DCUSTOM_SYSTEM_OS_NAME=Ubuntu; time -p make -j8 ; ctest ; make install; cpack -G TGZ
@@ -29,28 +29,28 @@
 ##             cpack --config CPackSourceConfig.cmake -G TGZ
 
 cmake_minimum_required(VERSION 3.16)
-project(bscrypt)
+project(sesdk)
 
-option(SCRYPT_LOG_BSV_FILES "Log used bitcoin sv file to build" ON)
-option(SCRYPT_BUILD_LEVELDB "Activate the build of leveldb" OFF)
-option(SCRYPT_BUILD_UNIVALUE "Activate the build of univalue" ON)
+option(SESDK_LOG_BSV_FILES "Log used bitcoin sv file to build" ON)
+option(SESDK_BUILD_LEVELDB "Activate the build of leveldb" OFF)
+option(SESDK_BUILD_UNIVALUE "Activate the build of univalue" ON)
 
-option(SCRYPT_BUILD_MODULES "Activate the build of modules" ON)
-option(SCRYPT_BUILD_BSV_TESTS "Activate the build of bsv tests" ON)
+option(SESDK_BUILD_MODULES "Activate the build of modules" ON)
+option(SESDK_BUILD_BSV_TESTS "Activate the build of bsv tests" ON)
 
 # Language binding modules are all built by default. Activate one will deactivate other
 option(BUILD_JAVA_BINDING_ONLY "Build the JNI interface and associated unit tests" OFF)
 option(BUILD_PYTHON_BINDING_ONLY "Build the python interface and associated unit tests" OFF)
 
-## bscrypt built is based on source files from bsv code.
-## Use -DSCRYPT_BSV_SRC_ROOT=/path/to/sv_root
+## script engine built is based on source files from bsv code.
+## Use -DSESDK_BSV_SRC_ROOT=/path/to/sv_root
 include(cmake/modules/FindBSVSourceHelper.cmake)
 HelpFindBSVSource()
 #scryptPrintBSVSourceInfo()#Print help to debug
 
-set(SCRYPT_VERSION_MAJOR "0" CACHE INTERNAL "bscrypt major version")
-set(SCRYPT_VERSION_MINOR "0" CACHE INTERNAL "bscrypt minor version")
-set(SCRYPT_VERSION_PATCH "1" CACHE INTERNAL "bscrypt patch version")
+set(SESDK_VERSION_MAJOR "0" CACHE INTERNAL "script engine major version")
+set(SESDK_VERSION_MINOR "0" CACHE INTERNAL "script engine minor version")
+set(SESDK_VERSION_PATCH "1" CACHE INTERNAL "script engine patch version")
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)## Always include the current directory
 
@@ -59,7 +59,7 @@ if(MSVC)
 endif()
 
 ## Init CMake, find all external packages and eventually build them if necessary
-include(cmake/SCRYPTInit.cmake)
+include(cmake/SESDKInit.cmake)
 scryptInitCMake()
 
 ## Everything in core should be includable from everywhere
@@ -68,7 +68,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/core)
 ## Build scrypt_core
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/core)
 
-if(SCRYPT_BUILD_MODULES)
+if(SESDK_BUILD_MODULES)
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/module)
 endif()
 
@@ -78,11 +78,11 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/documentation)
 
 ## On Widows, need to download NSIS https://nsis.sourceforge.io/Download
 ## Possible to do WIX generator for MSI installer
-set(SCRYPT_CPACK_CONFIG_IN "${CMAKE_SOURCE_DIR}/cmake/SCRYPTCPackConfig.cpack.in")
-set(SCRYPT_CPACK_CONFIG "${CMAKE_BINARY_DIR}/SCRYPTCPackConfig.cpack")
-configure_file(${SCRYPT_CPACK_CONFIG_IN} ${SCRYPT_CPACK_CONFIG} @ONLY)
+set(SESDK_CPACK_CONFIG_IN "${CMAKE_SOURCE_DIR}/cmake/SESDKCPackConfig.cpack.in")
+set(SESDK_CPACK_CONFIG "${CMAKE_BINARY_DIR}/SESDKCPackConfig.cpack")
+configure_file(${SESDK_CPACK_CONFIG_IN} ${SESDK_CPACK_CONFIG} @ONLY)
 install(FILES "ReleaseNote.md" DESTINATION "." COMPONENT Files)
 install(FILES "LICENCE.txt" DESTINATION "." COMPONENT Files)
-include(${SCRYPT_CPACK_CONFIG})
+include(${SESDK_CPACK_CONFIG})
 include(CPack)
 message("Compile with [${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}]")

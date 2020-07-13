@@ -11,8 +11,8 @@
 ##
 ## Modules should depend ONLY scrypt-core, and NOT each other
 
-if(NOT SCRYPT_BUILD_MODULES)
-  message(WARNING "Deactivated building modules. Set SCRYPT_BUILD_MODULES=ON to activate.")
+if(NOT SESDK_BUILD_MODULES)
+  message(WARNING "Deactivated building modules. Set SESDK_BUILD_MODULES=ON to activate.")
   return()
 endif()
 

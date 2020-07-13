@@ -4,22 +4,22 @@
 #                                                               #
 #  Copyright (c) 2020 nChain Limited. All rights reserved       #
 #################################################################
-if(SCRYPTInit_Include) ## Include guard
+if(SESDKInit_Include) ## Include guard
   return()
 endif()
-set(SCRYPTInit_Include TRUE)
+set(SESDKInit_Include TRUE)
 
 #####################################################
 #### Initialize everything related to cmake here ####
 #
 
 #### Hold the directory containing this current script ####
-set(SCRYPT_ROOT_CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}" CACHE PATH "Root directory of cmake modules")
+set(SESDK_ROOT_CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}" CACHE PATH "Root directory of cmake modules")
 
 #### Set all directories/subdirectories in this root to CMAKE_MODULE_PATH
 macro(scryptInitModulePaths)
-  list(APPEND CMAKE_MODULE_PATH "${SCRYPT_ROOT_CMAKE_MODULE_PATH}")
-  scryptListSubDir(dirlist ${SCRYPT_ROOT_CMAKE_MODULE_PATH})
+  list(APPEND CMAKE_MODULE_PATH "${SESDK_ROOT_CMAKE_MODULE_PATH}")
+  scryptListSubDir(dirlist ${SESDK_ROOT_CMAKE_MODULE_PATH})
   list(APPEND CMAKE_MODULE_PATH ${dirlist})
 endmacro()
 
@@ -36,45 +36,45 @@ endfunction()
 macro(scryptGetOSInfo)
   ## Set x64/x86
   if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-    set(SCRYPT_SYSTEM_X64 ON)
-    set(SCRYPT_SYSTEM_BUILD_ARCHI 64 CACHE STRING "System archi")
+    set(SESDK_SYSTEM_X64 ON)
+    set(SESDK_SYSTEM_BUILD_ARCHI 64 CACHE STRING "System archi")
   else()
-    set(SCRYPT_SYSTEM_X86 ON)
-    set(SCRYPT_SYSTEM_BUILD_ARCHI 32 CACHE STRING "System archi")
+    set(SESDK_SYSTEM_X86 ON)
+    set(SESDK_SYSTEM_BUILD_ARCHI 32 CACHE STRING "System archi")
   endif()
 
-  ## SCRYPT_SYSTEM_OS used for package name.
+  ## SESDK_SYSTEM_OS used for package name.
   ## Users can define -DCUSTOM_SYSTEM_OS_NAME=Ubuntu for example to have the customized os name on the installer
   if(WIN32) #Windows
-    set(SCRYPT_SYSTEM_OS Windows CACHE STRING "System OS type")
+    set(SESDK_SYSTEM_OS Windows CACHE STRING "System OS type")
   else()    # UNIX
     if(APPLE)
-        set(SCRYPT_SYSTEM_OS MacOS CACHE STRING "System OS type")
+        set(SESDK_SYSTEM_OS MacOS CACHE STRING "System OS type")
     else()
-        set(SCRYPT_SYSTEM_OS Linux CACHE STRING "System OS type")
+        set(SESDK_SYSTEM_OS Linux CACHE STRING "System OS type")
     endif()
   endif()
 endmacro()
 
 #### Create directory in binary tree to put all generated files
 macro(scryptCreateGeneratedDir)
-  set(SCRYPT_GENERATED_DIR "${CMAKE_BINARY_DIR}/generated" CACHE STRING "Directory containing all generated files")
-  file(MAKE_DIRECTORY "${SCRYPT_GENERATED_DIR}")
+  set(SESDK_GENERATED_DIR "${CMAKE_BINARY_DIR}/generated" CACHE STRING "Directory containing all generated files")
+  file(MAKE_DIRECTORY "${SESDK_GENERATED_DIR}")
 endmacro()
 
 #### Create directory in binary tree to put all generated hpp files
 macro(scryptCreateGeneratedHppDir)
-  set(SCRYPT_GENERATED_HPP_DIR "${CMAKE_BINARY_DIR}/generated/hpp" CACHE STRING "Directory containing all generated hpp files")
-  file(MAKE_DIRECTORY "${SCRYPT_GENERATED_HPP_DIR}")
-  include_directories("${SCRYPT_GENERATED_HPP_DIR}")
+  set(SESDK_GENERATED_HPP_DIR "${CMAKE_BINARY_DIR}/generated/hpp" CACHE STRING "Directory containing all generated hpp files")
+  file(MAKE_DIRECTORY "${SESDK_GENERATED_HPP_DIR}")
+  include_directories("${SESDK_GENERATED_HPP_DIR}")
 endmacro()
 
 #### Create directory in binary tree to put all generated tools files
 macro(scryptCreateGeneratedToolsDir)
-  set(SCRYPT_GENERATED_TOOLS_DIR "${CMAKE_BINARY_DIR}/generated/tools" CACHE STRING "Directory containing all generated tools")
-  file(MAKE_DIRECTORY "${SCRYPT_GENERATED_TOOLS_DIR}")
-  set(SCRYPT_GENERATED_BIN_DIR "${SCRYPT_GENERATED_TOOLS_DIR}/bin" CACHE STRING "Directory containing all executable utilities")
-  file(MAKE_DIRECTORY "${SCRYPT_GENERATED_BIN_DIR}")
+  set(SESDK_GENERATED_TOOLS_DIR "${CMAKE_BINARY_DIR}/generated/tools" CACHE STRING "Directory containing all generated tools")
+  file(MAKE_DIRECTORY "${SESDK_GENERATED_TOOLS_DIR}")
+  set(SESDK_GENERATED_BIN_DIR "${SESDK_GENERATED_TOOLS_DIR}/bin" CACHE STRING "Directory containing all executable utilities")
+  file(MAKE_DIRECTORY "${SESDK_GENERATED_BIN_DIR}")
 endmacro()
 
 #### Check consistency of CMAKE_BUILD_TYPE vs CMAKE_CONFIGURATION_TYPES
@@ -91,7 +91,7 @@ endmacro()
 #### Force CMAKE_INSTALL_PREFIX if not defined
 macro(scryptForceInstallDir)
   set(CMAKE_INSTALL_PREFIX "${CMAKE_BINARY_DIR}/INSTALLATION" CACHE PATH "Cmake prefix" FORCE)
-  message(STATUS "SCRYPT WARNING: Forced CMAKE_INSTALL_PREFIX[${CMAKE_INSTALL_PREFIX}]")
+  message(STATUS "SESDK WARNING: Forced CMAKE_INSTALL_PREFIX[${CMAKE_INSTALL_PREFIX}]")
 endmacro()
 
 #### Initialize all setting for using CMake
@@ -105,7 +105,7 @@ macro(scryptInitCMake)
   set_property(GLOBAL PROPERTY USE_FOLDERS ON)#
   set_property(GLOBAL PROPERTY PREDEFINED_TARGETS_FOLDER "_CMakeTargets")
 
-  include(${SCRYPT_ROOT_CMAKE_MODULE_PATH}/SCRYPTTools.cmake)
+  include(${SESDK_ROOT_CMAKE_MODULE_PATH}/SESDKTools.cmake)
   scryptInitModulePaths()
   #scryptPrintList("CMAKE_MODULE_PATH" "${CMAKE_MODULE_PATH}") ## Debug Log
   scryptGetOSInfo()
@@ -114,15 +114,15 @@ macro(scryptInitCMake)
   scryptCreateGeneratedToolsDir()
   #scryptPrintOSInfo()#Debug Log
 
-  include(SCRYPTBuildSetting)
+  include(SESDKBuildSetting)
   scryptSetCompilationOptions()
   scryptSetOutputDirectories()
   scryptSetBuildVersion()
-  install(FILES "${SCRYPT_VERSION_HPP}" DESTINATION "include/core" COMPONENT Files)
+  install(FILES "${SESDK_VERSION_HPP}" DESTINATION "include/core" COMPONENT Files)
 
   ## Precalculate variable for installation
   scryptGetInstallRootDir(_install_root_dir)
-  set(SCRYPT_COMMON_INSTALL_PREFIX "${_install_root_dir}" CACHE PATH "Common directory used for installation")
+  set(SESDK_COMMON_INSTALL_PREFIX "${_install_root_dir}" CACHE PATH "Common directory used for installation")
 
   find_package(Threads)
   if(NOT Threads_FOUND)

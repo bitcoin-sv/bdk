@@ -6,7 +6,7 @@
 #################################################################
 
 if(NOT Boost_FOUND)
-  message(STATUS "SCRYPT WARNS : Boost was not found on your system, unit tests will not be built")
+  message(STATUS "SESDK WARNS : Boost was not found on your system, unit tests will not be built")
   return()
 endif()
 
@@ -34,7 +34,7 @@ macro(scrypt_add_unit_test _targetName)
   endif()
 endmacro()
 
-if(SCRYPT_BUILD_BSV_TESTS)## Broken now as dependencies has been reduce to minimal
+if(SESDK_BUILD_BSV_TESTS)## Broken now as dependencies has been reduce to minimal
   add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/bsv")
 endif()
 

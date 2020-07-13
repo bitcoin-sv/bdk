@@ -1,5 +1,5 @@
 ## Getting the source code
-Building bscrypt requires the source for both bscrypt and bsv repositories. 
+Building Script Engine SDK requires the source for both Script Engine SDK and bsv repositories. 
 
 For nChain developers, the best way to do this is to have a BitBucket account setup with [ssh key access](https://confluence.atlassian.com/bitbucket/set-up-an-ssh-key-728138079.html). If other access is available, the source code should be organised as per the directory structure outlined in [directories structure](directories.md)
 
@@ -40,14 +40,14 @@ Dependencies marked optional apply if you wish to run the unit tests. See [Tests
 - Make sure the `JAVA_TOOLS` environment variable is set to the location of `junit4.jar` and `hamcreast.jar`
 By default all languange binding modules are built. If users want to build only java binding, add `-DBUILD_JAVA_BINDING_ONLY=ON` to cmake command, it will deactivate building all other language binding modules.
 
-## Building bscrypt
-It is recommended that a build directory **build** is created outside of bscrypt source code directory. See [directories structure](directories.md).
+## Building Script Engine SDK
+It is recommended that a build directory **build** is created outside of Script Engine SDK source code directory. See [directories structure](directories.md).
 
 ##### Windows
 
 From the build directory:
 
-To build bscrypt
+To build Script Engine SDK
 ```console
 cmake -G"Visual Studio 16 2019" -A x64 ..\bscrypt && cmake --build . --target ALL_BUILD --config Debug && cmake --build . --target ALL_BUILD --config Release
 ```
@@ -61,7 +61,7 @@ or
 ctest -C Debug
 ```
 
-To create a Windows installer for bscrypt you will need to install [NSIS 3.04](https://nsis.sourceforge.io/Download), then
+To create a Windows installer for Script Engine SDK you will need to install [NSIS 3.04](https://nsis.sourceforge.io/Download), then
 ```console 
 cpack -G NSIS -C Release
 ```
@@ -70,7 +70,7 @@ cpack -G NSIS -C Release
 
 From the build directory:
 
-To build bscrypt
+To build Script Engine SDK
 ```console
 cmake ../bscrypt -DCMAKE_BUILD_TYPE=Debug -DCUSTOM_SYSTEM_OS_NAME=Ubuntu; time -p make -j8
 ```
@@ -86,7 +86,7 @@ cpack -G TGZ
 ```
 
 ## Tests
-Once the build tools and libraries are prepared, some post installation steps are required to let the bscrypt build system know how to find everything:
+Once the build tools and libraries are prepared, some post installation steps are required to let the Script Engine SDK build system know how to find everything:
 
 ##### Linux
 ```console
