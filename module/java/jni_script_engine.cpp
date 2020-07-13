@@ -16,9 +16,10 @@ JNIEXPORT jobject JNICALL Java_com_nchain_bsv_scriptengine_ScriptEngine_evaluate
                                                                    jint idx,
                                                                    jint amount)
 {
-    if(arr == NULL || hextx == NULL){
+    if(arr == nullptr || hextx == nullptr)
+    {
         env->ThrowNew(env->FindClass("java/lang/IllegalArgumentException"), "value cannot be null");
-        return NULL;
+        return nullptr;
     }
 
     const unique_jstring_ptr hextxptr = make_unique_jstring(env, hextx);
@@ -32,14 +33,14 @@ JNIEXPORT jobject JNICALL Java_com_nchain_bsv_scriptengine_ScriptEngine_evaluate
     jclass clazz = env->FindClass("com/nchain/bsv/scriptengine/Status");
     if(env->ExceptionCheck())
     {
-        return NULL;
+        return nullptr;
     }
 
     //<init> = constructor, <(ZL...) method signature. See JNI documentation for symbol definitions
     jmethodID method_id = env->GetMethodID(clazz, "<init>", "(ILjava/lang/String;)V");
     if(env->ExceptionCheck())
     {
-        return NULL;
+        return nullptr;
     }
 
     // execute the script
@@ -51,17 +52,17 @@ JNIEXPORT jobject JNICALL Java_com_nchain_bsv_scriptengine_ScriptEngine_evaluate
     catch(const std::runtime_error& ex)
     {
         env->ThrowNew(env->FindClass("java/lang/RuntimeException"), ex.what());
-        return NULL;
+        return nullptr;
     }
     catch(const std::exception& ex)
     {
         env->ThrowNew(env->FindClass("java/lang/Exception"), ex.what());
-        return NULL;
+        return nullptr;
     }
     catch(...)
     {
         env->ThrowNew(env->FindClass("java/lang/Exception"), ScriptErrorString(script_result));
-        return NULL;
+        return nullptr;
     }
 
     // last arguments are method parameters
@@ -80,9 +81,10 @@ JNIEXPORT jobject JNICALL Java_com_nchain_bsv_scriptengine_ScriptEngine_evaluate
                                                                          jint idx,
                                                                          jint amount)
 {
-    if(script == NULL || hextx == NULL){
+    if(script == nullptr || hextx == nullptr)
+    {
         env->ThrowNew(env->FindClass("java/lang/IllegalArgumentException"), "value cannot be null");
-        return NULL;
+        return nullptr;
     }
 
     // tx and script data
@@ -93,14 +95,14 @@ JNIEXPORT jobject JNICALL Java_com_nchain_bsv_scriptengine_ScriptEngine_evaluate
     jclass clazz = env->FindClass("com/nchain/bsv/scriptengine/Status");
     if(env->ExceptionCheck())
     {
-        return NULL;
+        return nullptr;
     }
 
     //<init> = constructor, <(ZL...) method signature. See JNI documentation for symbol definitions
     jmethodID method_id = env->GetMethodID(clazz, "<init>", "(ILjava/lang/String;)V");
     if(env->ExceptionCheck())
     {
-        return NULL;
+        return nullptr;
     }
 
     // run the script
@@ -113,17 +115,17 @@ JNIEXPORT jobject JNICALL Java_com_nchain_bsv_scriptengine_ScriptEngine_evaluate
     catch(const std::runtime_error& ex)
     {
         env->ThrowNew(env->FindClass("java/lang/RuntimeException"), ex.what());
-        return NULL;
+        return nullptr;
     }
     catch(const std::exception& ex)
     {
         env->ThrowNew(env->FindClass("java/lang/Exception"), ex.what());
-        return NULL;
+        return nullptr;
     }
     catch(...)
     {
         env->ThrowNew(env->FindClass("java/lang/Exception"), ScriptErrorString(script_result));
-        return NULL;
+        return nullptr;
     }
 
     jobject result =

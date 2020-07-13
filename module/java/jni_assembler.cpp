@@ -12,9 +12,10 @@ using namespace bsv::jni;
 JNIEXPORT jbyteArray JNICALL Java_com_nchain_bsv_scriptengine_Assembler_fromAsm
     (JNIEnv * env , jobject obj, jstring input_script_asm)
 {
-    if(input_script_asm == NULL){
+    if(input_script_asm == nullptr)
+    {
         env->ThrowNew(env->FindClass("java/lang/IllegalArgumentException"), "value cannot be null");
-        return NULL;
+        return nullptr;
     }
 
     const unique_jstring_ptr input_script_asm_unique = make_unique_jstring(env, input_script_asm);
@@ -27,17 +28,17 @@ JNIEXPORT jbyteArray JNICALL Java_com_nchain_bsv_scriptengine_Assembler_fromAsm
     catch(const std::runtime_error& ex)
     {
         env->ThrowNew(env->FindClass("java/lang/RuntimeException"), ex.what());
-        return NULL;
+        return nullptr;
     }
     catch(const std::exception& ex)
     {
         env->ThrowNew(env->FindClass("java/lang/Exception"), ex.what());
-        return NULL;
+        return nullptr;
     }
     catch(...)
     {
         env->ThrowNew(env->FindClass("java/lang/Exception"), "unable to convert to asm");
-        return NULL;
+        return nullptr;
     }
 
     jbyteArray converted_output_script = env->NewByteArray(output_script.size());
@@ -49,16 +50,17 @@ JNIEXPORT jbyteArray JNICALL Java_com_nchain_bsv_scriptengine_Assembler_fromAsm
 JNIEXPORT jstring JNICALL Java_com_nchain_bsv_scriptengine_Assembler_toAsm
     (JNIEnv * env, jobject obj, jbyteArray input_script)
 {
-    if(input_script == NULL){
+    if(input_script == nullptr)
+    {
         env->ThrowNew(env->FindClass("java/lang/IllegalArgumentException"), "value cannot be null");
-        return NULL;
+        return nullptr;
     }
 
     int input_script_length = env->GetArrayLength(input_script);
     std::vector<uint8_t> converted_input_script(input_script_length);
     env->GetByteArrayRegion(input_script, 0, input_script_length, reinterpret_cast<jbyte*>(converted_input_script.data()));
 
-    jstring asm_output_script = NULL;
+    jstring asm_output_script = nullptr;
     try
     {
         asm_output_script = env->NewStringUTF(bsv::to_asm(converted_input_script).c_str());
