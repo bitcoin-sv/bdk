@@ -3,8 +3,8 @@
 
 #include "span.h"
 
-#include <string>
 #include <script/script_error.h>
+#include <string>
 
 namespace bsv
 {
@@ -25,4 +25,3 @@ namespace bsv
 };
 
 #endif
-

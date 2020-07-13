@@ -4,10 +4,10 @@
 
 #include <jni.h>
 #include <com_nchain_bsv_scriptengine_Assembler.h> // Generated
-#include "Assembler.h"
+#include "assembler.h"
 #include "jni_util.h"
 
-using namespace jni;
+using namespace bsv::jni;
 
 JNIEXPORT jbyteArray JNICALL Java_com_nchain_bsv_scriptengine_Assembler_fromAsm
     (JNIEnv * env , jobject obj, jstring input_script_asm)
