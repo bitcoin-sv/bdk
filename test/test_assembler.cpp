@@ -6,7 +6,7 @@
 #define BOOST_TEST_MODULE test_assemblerd
 #endif
 
-#include "Assembler.h"
+#include "assembler.h"
 
 #include <boost/test/unit_test.hpp>
 
@@ -23,7 +23,7 @@ BOOST_AUTO_TEST_CASE(to_asm_from_asm)
 
     std::string converted_script_string = bsv::to_asm(converted_script);
 
-    BOOST_CHECK_EQUAL(script,converted_script_string);
+    BOOST_CHECK_EQUAL(script, converted_script_string);
 }
 
 BOOST_AUTO_TEST_CASE(to_asm_from_asm_fail)
@@ -43,7 +43,5 @@ BOOST_AUTO_TEST_CASE(from_asm_check_exception)
 
     BOOST_CHECK_THROW(bsv::from_asm(script), std::runtime_error);
 }
-
-
 
 BOOST_AUTO_TEST_SUITE_END()
