@@ -5,7 +5,7 @@
 #include <vector>
 #include "jni_util.h"
 
-using namespace jni;
+using namespace bsv::jni;
 
 JNIEXPORT jobject JNICALL Java_com_nchain_bsv_scriptengine_ScriptEngine_evaluate(JNIEnv* env,
                                                                    jobject obj,
