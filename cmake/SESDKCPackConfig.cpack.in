@@ -1,0 +1,67 @@
+#################################################################
+#  Date             20/01/2020                                  #
+#  Author           Chi Thanh NGUYEN                            #
+#                                                               #
+#  Copyright (c) 2020 nChain Limited. All rights reserved       #
+#################################################################
+if(SESDKCPackConfig_Include)## Include guard
+  return()
+endif()
+set(SESDKCPackConfig_Include TRUE)
+
+message(STATUS "SESDK Configure Packaging ...  ") ##
+
+set(CPACK_PACKAGE_VENDOR "nChain")
+set(CPACK_PACKAGE_VERSION_MAJOR ${SESDK_VERSION_MAJOR})
+set(CPACK_PACKAGE_VERSION_MINOR ${SESDK_VERSION_MINOR})
+set(CPACK_PACKAGE_VERSION_PATCH ${SESDK_VERSION_PATCH})
+set(CPACK_PACKAGE_VERSION ${SESDK_VERSION_STRING})
+
+set(CPACK_COMPONENTS_ALL Files scrypt_core secp256k1)# To add Examples
+if(SESDK_BUILD_UNIVALUE)
+  set(CPACK_COMPONENTS_ALL ${CPACK_COMPONENTS_ALL} univalue)
+endif()
+if(SESDK_BUILD_LEVELDB)
+  set(CPACK_COMPONENTS_ALL ${CPACK_COMPONENTS_ALL} leveldb)
+endif()
+set(CPACK_COMPONENTS_ALL ${CPACK_COMPONENTS_ALL} Documentation module)
+
+
+if(NOT CUSTOM_SYSTEM_OS_NAME)## Add -DCUSTOM_SYSTEM_OS_NAME=Ubuntu for example to make the installer name
+  set(SESDK_CPACK_OS_NAME ${SESDK_SYSTEM_OS})
+else()
+  set(SESDK_CPACK_OS_NAME ${CUSTOM_SYSTEM_OS_NAME})
+endif()
+
+set(SESDK_BASE_PACKAGE_NAME "${CMAKE_PROJECT_NAME}-v${SESDK_VERSION_STRING}_${SOURCE_GIT_COMMIT_BRANCH}-${SOURCE_GIT_COMMIT_HASH}")
+string(REPLACE "/" "_" SESDK_BASE_PACKAGE_FIXEDNAME "${SESDK_BASE_PACKAGE_NAME}") ## Fix the package name in case the branch name contains "/"
+if(CMAKE_CONFIGURATION_TYPES)
+  set(CPACK_PACKAGE_FILE_NAME "${SESDK_BASE_PACKAGE_FIXEDNAME}_${SESDK_CPACK_OS_NAME}-x${SESDK_SYSTEM_BUILD_ARCHI}-\${CPACK_BUILD_CONFIG}")
+else()
+  set(CPACK_PACKAGE_FILE_NAME "${SESDK_BASE_PACKAGE_FIXEDNAME}_${SESDK_CPACK_OS_NAME}-x${SESDK_SYSTEM_BUILD_ARCHI}-${CMAKE_BUILD_TYPE}")
+endif()
+
+# If -DSESDK_IS_BETA=ON
+if(SESDK_IS_BETA)
+  set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_FILE_NAME}_BETA")
+endif()
+
+set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/LICENCE.txt")
+#set(CPACK_RESOURCE_FILE_README "${CMAKE_SOURCE_DIR}/README.md")
+#set(CPACK_RESOURCE_FILE_WELCOME "${CMAKE_SOURCE_DIR}/README.md")
+set(CPACK_PACKAGE_NAME "${CMAKE_PROJECT_NAME}")
+#set(CPACK_PACKAGE_DESCRIPTION_FILE "${CMAKE_SOURCE_DIR}/README.md")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "${CMAKE_PROJECT_NAME} ${SESDK_VERSION_STRING} Software Development Kit for advanced cryptographic functionalities")
+set(CPACK_PACKAGE_INSTALL_DIRECTORY "${CMAKE_PROJECT_NAME}-${SESDK_VERSION_STRING}")
+#set(CPACK_PACKAGE_ICON "${CMAKE_SOURCE_DIR}/contrib/SESDKLogo.ico")
+
+
+## Specific NSIS ##################################
+set(CPACK_NSIS_MUI_ICON "${CMAKE_SOURCE_DIR}/contrib/SESDKLogo.ico")
+#set(CPACK_NSIS_MUI_UNIICON "${CMAKE_SOURCE_DIR}/contrib/SESDKLogo.ico")
+set(CPACK_NSIS_DISPLAY_NAME "${CMAKE_PROJECT_NAME} version ${SESDK_VERSION_STRING}")
+set(CPACK_NSIS_PACKAGE_NAME "${CMAKE_PROJECT_NAME} ${SESDK_VERSION_STRING}")
+
+## Specific source ##################################
+set(CPACK_SOURCE_IGNORE_FILES "contrib/;tests/;/\\\\.git/")
+set(CPACK_SOURCE_PACKAGE_FILE_NAME "${SESDK_BASE_PACKAGE_FIXEDNAME}_source")

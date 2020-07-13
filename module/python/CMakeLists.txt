@@ -10,8 +10,8 @@ if(NOT (Python_FOUND AND Python_EXECUTABLE AND Python_Development_FOUND))
     return()
 endif()
 
-set(_PY_MODULE_NAME PyScriptEngine)
-set(_PY_MODULE_SOURCE_FILES ${CMAKE_CURRENT_SOURCE_DIR}/PyScriptEngine.cpp)
+set(_PY_MODULE_NAME PySESDK)
+set(_PY_MODULE_SOURCE_FILES ${CMAKE_CURRENT_SOURCE_DIR}/PySESDK.cpp)
 
 Python_add_library(${_PY_MODULE_NAME} ${_PY_MODULE_SOURCE_FILES})
 target_link_libraries(${_PY_MODULE_NAME} PRIVATE scrypt_core OpenSSL::Crypto OpenSSL::SSL)

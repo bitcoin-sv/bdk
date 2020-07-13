@@ -1,6 +1,6 @@
 ## Getting started
 
-Bscrypt provides a facilities to work with Bitcoin SV scripts with different languages. It has the core part building all fundamental script's functionalities as a C++ library and different modules imlementing extras features. Those modules can be language binding (Java, Python) allowing developers from these programming background to develop scripts. Users are able to extend the functionalities by implementing their own modules.
+Script engine SDK provides a facilities to work with Bitcoin SV scripts with different languages. It has the core part building all fundamental script's functionalities as a C++ library and different modules imlementing extras features. Those modules can be language binding (Java, Python) allowing developers from these programming background to develop scripts. Users are able to extend the functionalities by implementing their own modules.
 
 - [Directories Structure](directories.md)
 - [Development build](build.md)
@@ -8,10 +8,10 @@ Bscrypt provides a facilities to work with Bitcoin SV scripts with different lan
 
 ---
 
-After unpacking the bscrypt installer to the local machine, the content of the installation directory looks as below
+After unpacking the Script Engine SDK installer to the local machine, the content of the installation directory looks as below
 
 ```
-|-- bscrypt_install
+|-- sesdk_install
 |       |-- include
 |              |-- core
 |                    |-- sv
@@ -22,24 +22,24 @@ After unpacking the bscrypt installer to the local machine, the content of the i
 |               |-- core_doc
 ```
 
-- File `include/core/ScryptVersion.hpp` contains full version's information of how and when the installer was built.
+- File `include/core/SESDKVersion.hpp` contains full version's information of how and when the installer was built.
 - `include/core/sv` directory contains all `*.h` and `*.hpp` files from bsv source code.
-- `include/core` directory contains all extra `*.h` and `*.hpp` files declaring additional functionalities in bscrypt core.
+- `include/core` directory contains all extra `*.h` and `*.hpp` files declaring additional functionalities in Script Engine SDK core.
 - lib directory contains all archives (static) and runtime (shared) libraries.
 - Documentation directory contains html documents.
 
 ## Usages
-BScrypt is a multi languages library, it allows users to work with `C++`, `Java` and `Python`.
+Script Engine SDK is a multi languages library, it allows users to work with `C++`, `Java` and `Python`.
 
 #### C++
-To build a C++ program using bscrypt, it needs to link with the installed bscrypt:
+To build a C++ program using Script Engine SDK, it needs to link with the installed Script Engine SDK:
 
 - Let compiler know additional include directories are
-    - `/path/to/bscrypt_install/include`
-    - `/path/to/bscrypt_install/include/secp256k1`
-    - `/path/to/bscrypt_install/include/univalue`
-    - `/path/to/bscrypt_install/include/core`
-- Let the compiler know additional library directory is `/path/to/bscrypt_install/lib`
+    - `/path/to/sesdk_install/include`
+    - `/path/to/sesdk_install/include/secp256k1`
+    - `/path/to/sesdk_install/include/univalue`
+    - `/path/to/sesdk_install/include/core`
+- Let the compiler know additional library directory is `/path/to/sesdk_install/lib`
 
 To simplify for C++ code there are only one single file to include
 ```c++
@@ -51,15 +51,15 @@ This will include all header files delivered by the package. Note that it is sim
 #### Java
 Java library `.jar` was build with `JNI`, it depend to a shared library, which is delivered in the same directory. To be able to correctly load the `.jar` library, it is required to set in the IDE
 
-- _java.library.path_=`/path/to/bscrypt_install/lib`
+- _java.library.path_=`/path/to/sesdk_install/lib`
 
 #### Python
-Similar to Java, python module need to load the shared library interface. In order to allow python loading the binding module, it require to set _PYTHONPATH_ environment pointing to `/path/to/bscrypt_install/lib`.
+Similar to Java, python module need to load the shared library interface. In order to allow python loading the binding module, it require to set _PYTHONPATH_ environment pointing to `/path/to/sesdk_install/lib`.
 
 
 #### Documentation
 Documentations are build and delivered as html contents. To visualize it:
 ```
-python -m http.server -d /path/to/bscrypt_install/Documentation/core_doc
+python -m http.server -d /path/to/sesdk_install/Documentation/core_doc
 ```
 Then use a web browser to open the address `localhost:8000`
