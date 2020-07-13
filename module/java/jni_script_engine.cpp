@@ -1,11 +1,11 @@
-#include <ScriptEngineIF.h>
+#include <script_engine.h>
 #include <iostream>
 #include <jni.h>                      // JNI header provided by JDK
 #include <com_nchain_bsv_scriptengine_ScriptEngine.h> // Generated
 #include <vector>
 #include "jni_util.h"
 
-using namespace jni;
+using namespace bsv::jni;
 
 JNIEXPORT jobject JNICALL Java_com_nchain_bsv_scriptengine_ScriptEngine_evaluate(JNIEnv* env,
                                                                    jobject obj,
@@ -13,7 +13,7 @@ JNIEXPORT jobject JNICALL Java_com_nchain_bsv_scriptengine_ScriptEngine_evaluate
                                                                    jboolean concensus,
                                                                    jint scriptflags,
                                                                    jstring hextx,
-                                                                   jint nidx,
+                                                                   jint idx,
                                                                    jint amount)
 {
     if(arr == NULL || hextx == NULL){
@@ -46,7 +46,7 @@ JNIEXPORT jobject JNICALL Java_com_nchain_bsv_scriptengine_ScriptEngine_evaluate
     ScriptError script_result = SCRIPT_ERR_UNKNOWN_ERROR;
     try
     {
-        script_result = bsv::evaluate(script, concensus, scriptflags, hextxptr.get(), nidx, amount);
+        script_result = bsv::evaluate(script, concensus, scriptflags, hextxptr.get(), idx, amount);
     }
     catch(const std::runtime_error& ex)
     {
@@ -77,7 +77,7 @@ JNIEXPORT jobject JNICALL Java_com_nchain_bsv_scriptengine_ScriptEngine_evaluate
                                                                          jboolean concensus,
                                                                          jint scriptflags,
                                                                          jstring hextx,
-                                                                         jint nidx,
+                                                                         jint idx,
                                                                          jint amount)
 {
     if(script == NULL || hextx == NULL){
@@ -108,7 +108,7 @@ JNIEXPORT jobject JNICALL Java_com_nchain_bsv_scriptengine_ScriptEngine_evaluate
     try
     {
         script_result = bsv::evaluate(std::string{raw_script.get()}, concensus, scriptflags, hextxptr.get(),
-                                      nidx, amount);
+                                      idx, amount);
     }
     catch(const std::runtime_error& ex)
     {

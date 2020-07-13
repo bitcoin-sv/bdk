@@ -38,11 +38,11 @@ if(SESDK_BUILD_BSV_TESTS)## Broken now as dependencies has been reduce to minima
   add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/bsv")
 endif()
 
-add_executable(test_foo "${CMAKE_CURRENT_SOURCE_DIR}/test_foo.cpp")
-target_link_libraries(test_foo ${CMAKE_DL_LIBS} scrypt_core OpenSSL::Crypto OpenSSL::SSL)
-scrypt_add_unit_test(test_foo)
+add_executable(test_simple "${CMAKE_CURRENT_SOURCE_DIR}/test_simple.cpp")
+target_link_libraries(test_simple ${CMAKE_DL_LIBS} scrypt_core OpenSSL::Crypto OpenSSL::SSL)
+scrypt_add_unit_test(test_simple)
 
-add_executable(test_scriptengineif "${CMAKE_CURRENT_SOURCE_DIR}/testSEIF.cpp")
+add_executable(test_scriptengineif "${CMAKE_CURRENT_SOURCE_DIR}/test_script_engine.cpp")
 target_link_libraries(test_scriptengineif ${CMAKE_DL_LIBS} scrypt_core OpenSSL::Crypto OpenSSL::SSL)
 scrypt_add_unit_test(test_scriptengineif)
 

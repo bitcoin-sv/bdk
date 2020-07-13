@@ -1,7 +1,7 @@
 //
 // Created by m.fletcher on 10/07/2020.
 //
-#include "Assembler.h"
+#include "assembler.h"
 
 CScript bsv::from_asm(const std::string& script)
 {

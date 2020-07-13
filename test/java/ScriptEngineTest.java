@@ -459,4 +459,113 @@ public class ScriptEngineTest {
 
 	}
 
+        /*
+	* Test cases for JIRA BS-89 Successful 2 of 3 MultiSig Transaction - successful
+	*/
+	@Test
+	public void testEvaluate2of3tMultiSigWithTxData() {
+
+		String scriptArray = new String(
+				"0 0x48 0x3045022100b41305eb272560e18a0ca0e176fbd041b0a0327192049ad5f004fc4eab63fa0302203a61afe95053f7d31497255385d51605df982e0c2d167708072228a908d8b43601 0x48 0x30450221009d6e7052246947cd424a57ac2d1ea8f093b9894b6029cf0a9fb25828f50f309c02202964744834a47eac0cb255870a4755900c07ae09e4e00972f572cd166b38340b01 2 0x41 0x040b4c866585dd868a9d62348a9cd008d6a312937048fff31670e7e920cfc7a7447b5f0bba9e01e6fe4735c8383e6e7a3347a0fd72381b8f797a19f694054e5a69 0x41 0x04183905ae25e815634ce7f5d9bedbaa2c39032ab98c75b5e88fe43f8dd8246f3c5473ccd4ab475e6a9e6620b52f5ce2fd15a2de32cbe905154b3a05844af70785 0x21 0x030b4c866585dd868a9d62348a9cd008d6a312937048fff31670e7e920cfc7a744 3 CHECKMULTISIG");
+
+		String hexID = new String(
+				"01000000019a73e72f65bbb2db0202d3b198af9ee587ef50bf060ebf24448985ecc2688ed20000000000ffffffff010a000000000000000000000000");
+
+		int amt = 1;
+		Status result = jniIF.evaluateString(scriptArray, true, 0, hexID, 0, amt);
+		Assert.assertEquals(0, result.getStatusCode());
+		Assert.assertEquals("No error", result.getStatusMessage());
+	}
+
+	/*
+	 * Same as above transaction with one missing signature - Negative scenario
+	 */
+	@Test
+	public void testEvaluate2of3InvalidMultiSigWithTxData() {
+
+		String scriptArray = new String(
+				"0 0x48 0x3045022100b41305eb272560e18a0ca0e176fbd041b0a0327192049ad5f004fc4eab63fa0302203a61afe95053f7d31497255385d51605df982e0c2d167708072228a908d8b43601 0x48 0x30450221009d6e7052246947cd424a57ac2d1ea8f093b9894b6029cf0a9fb25828f50f309c02202964744834a47eac0cb255870a4755900c07ae09e4e00972f572cd166b38340b01 2 0x41 0x04183905ae25e815634ce7f5d9bedbaa2c39032ab98c75b5e88fe43f8dd8246f3c5473ccd4ab475e6a9e6620b52f5ce2fd15a2de32cbe905154b3a05844af70785 0x21 0x030b4c866585dd868a9d62348a9cd008d6a312937048fff31670e7e920cfc7a744 3 CHECKMULTISIG");
+
+		String hexID = new String(
+				"01000000019a73e72f65bbb2db0202d3b198af9ee587ef50bf060ebf24448985ecc2688ed20000000000ffffffff010a000000000000000000000000");
+
+		int amt = 1;
+		Status result = jniIF.evaluateString(scriptArray, true, 0, hexID, 0, amt);
+		Assert.assertEquals(14, result.getStatusCode());
+		Assert.assertEquals("Script number overflow", result.getStatusMessage());
+
+	}
+
+	/*
+	 * P2PK transaction - successful
+	 */
+	@Test
+	public void testEvaluateP2PKWithTxData() {
+
+		String scriptArray = new String(
+				"0x47 0x304402200a5c6163f07b8d3b013c4d1d6dba25e780b39658d79ba37af7057a3b7f15ffa102201fd9b4eaa9943f734928b99a83592c2e7bf342ea2680f6a2bb705167966b742001 0x41 0x0479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8 CHECKSIG");
+
+		String hexID = new String(
+				"01000000010000000000000000000000000000000000000000000000000000000000000000000000004847304402200a5c6163f07b8d3b013c4d1d6dba25e780b39658d79ba37af7057a3b7f15ffa102201fd9b4eaa9943f734928b99a83592c2e7bf342ea2680f6a2bb705167966b742001000000000000000000");
+
+		Status result = jniIF.evaluateString(scriptArray, true, 0, hexID, 0, 0);
+		Assert.assertEquals(0, result.getStatusCode());
+		Assert.assertEquals("No error", result.getStatusMessage());
+
+	}
+
+	/*
+	 * P2PK transaction with Missing Signature
+	 */
+	@Test
+	public void testEvaluateInvalidP2PKWithTxData() {
+
+		String scriptArray = new String(
+				"0x41 0x0479be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8 CHECKSIG");
+
+		String hexID = new String(
+				"01000000010000000000000000000000000000000000000000000000000000000000000000000000004847304402200a5c6163f07b8d3b013c4d1d6dba25e780b39658d79ba37af7057a3b7f15ffa102201fd9b4eaa9943f734928b99a83592c2e7bf342ea2680f6a2bb705167966b742001000000000000000000");
+
+		Status result = jniIF.evaluateString(scriptArray, true, 0, hexID, 0, 0);
+		Assert.assertEquals(23, result.getStatusCode());
+		Assert.assertEquals("Operation not valid with the current stack size", result.getStatusMessage());
+
+	}
+
+	/*
+	 * P2PKH trasaction - successful
+	 */
+	@Test
+	public void testEvaluateP2PKHWithTxData() {
+
+		String scriptArray = new String(
+				"0x47 0x304402206e05a6fe23c59196ffe176c9ddc31e73a9885638f9d1328d47c0c703863b8876022076feb53811aa5b04e0e79f938eb19906cc5e67548bc555a8e8b8b0fc603d840c01 0x21 0x038282263212c609d9ea2a6e3e172de238d8c39cabd5ac1ca10646e23fd5f51508 DUP HASH160 0x14 0x1018853670f9f3b0582c5b9ee8ce93764ac32b93 EQUALVERIFY CHECKSIG");
+
+		String hexID = new String(
+				"01000000010000000000000000000000000000000000000000000000000000000000000000000000006a47304402206e05a6fe23c59196ffe176c9ddc31e73a9885638f9d1328d47c0c703863b8876022076feb53811aa5b04e0e79f938eb19906cc5e67548bc555a8e8b8b0fc603d840c0121038282263212c609d9ea2a6e3e172de238d8c39cabd5ac1ca10646e23fd5f51508000000000000000000");
+
+		Status result = jniIF.evaluateString(scriptArray, true, 0, hexID, 0, 0);
+		Assert.assertEquals(0, result.getStatusCode());
+		Assert.assertEquals("No error", result.getStatusMessage());
+
+	}
+
+	/*
+	 * P2PKH transaction Bad Pub key
+	 */
+	@Test
+	public void testEvaluateInvalidP2PKHWithTxData() {
+
+		String scriptArray = new String(
+				"0x47 0x3044022034bb0494b50b8ef130e2185bb220265b9284ef5b4b8a8da4d8415df489c83b5102206259a26d9cc0a125ac26af6153b17c02956855ebe1467412f066e402f5f05d1201 0x21 0x03363d90d446b00c9c99ceac05b6262ee053441c7e55552ffe526bad8f83ff4640 DUP HASH160 0x14 0xc0834c0c158f53be706d234c38fd52de7eece656 EQUALVERIFY CHECKSIG");
+
+		String hexID = new String(
+				"01000000010000000000000000000000000000000000000000000000000000000000000000000000006a473044022034bb0494b50b8ef130e2185bb220265b9284ef5b4b8a8da4d8415df489c83b5102206259a26d9cc0a125ac26af6153b17c02956855ebe1467412f066e402f5f05d12012103363d90d446b00c9c99ceac05b6262ee053441c7e55552ffe526bad8f83ff4640000000000000000000");
+
+		Status result = jniIF.evaluateString(scriptArray, true, 0, hexID, 0, 0);
+		Assert.assertEquals(17, result.getStatusCode());
+		Assert.assertEquals("Script failed an OP_EQUALVERIFY operation", result.getStatusMessage());
+
+	}
+
 }
