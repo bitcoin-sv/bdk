@@ -9,9 +9,9 @@
 
  // SCRIPT_ENGINE_BUILD_TEST ++++++++++++++++++++++++++++++++++++++++++++++++++++
 #ifdef NDEBUG 
-#  define BOOST_TEST_MODULE test_scrypt_core
+#  define BOOST_TEST_MODULE test_sesdk_core
 #else
-#  define BOOST_TEST_MODULE test_scrypt_cored
+#  define BOOST_TEST_MODULE test_sesdk_cored
 #endif
 #include <boost/test/unit_test.hpp>
 // SCRIPT_ENGINE_BUILD_TEST ++++++++++++++++++++++++++++++++++++++++++++++++++++
