@@ -7,6 +7,8 @@
 #include <ecc_guard.h>
 #include <script/interpreter.h>
 
+#include <stdexcept>
+
 using namespace std;
 
 using unique_sig_checker = unique_ptr<BaseSignatureChecker>;
