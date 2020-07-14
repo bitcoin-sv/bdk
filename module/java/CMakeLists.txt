@@ -23,7 +23,7 @@ else()
     add_jar(sesdk_jar SOURCES ${JAVA_FILES} GENERATE_NATIVE_HEADERS BSVUtilsJNI-native DESTINATION ${SESDK_GENERATED_HPP_DIR} OUTPUT_DIR ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
 endif(WIN32)
 
-set(SOURCE_FILES ${CMAKE_CURRENT_SOURCE_DIR}/jni_script_engine.cpp ${CMAKE_CURRENT_SOURCE_DIR}/jni_assembler.cpp ${CMAKE_CURRENT_SOURCE_DIR}/jni_util.cpp)
+set(SOURCE_FILES ${CMAKE_CURRENT_SOURCE_DIR}/jni_interpreter.cpp ${CMAKE_CURRENT_SOURCE_DIR}/jni_assembler.cpp ${CMAKE_CURRENT_SOURCE_DIR}/jni_util.cpp)
 
 add_library(sesdk_jni SHARED ${SOURCE_FILES})
 if(WIN32) #https://github.com/openssl/openssl/pull/1062
