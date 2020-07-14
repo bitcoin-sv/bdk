@@ -1,7 +1,7 @@
 //
 // Created by m.fletcher on 10/07/2020.
 //
-#include "jni_util.h"
+#include "jni_memory.h"
 
 #include <cassert>
 

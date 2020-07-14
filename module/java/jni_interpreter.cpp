@@ -3,9 +3,9 @@
 #include "jni.h" // JNI header provided by JDK
 
 #include "interpreter.h"
-#include "jni_util.h"
+#include "jni_memory.h"
 
-#include <iostream>
+#include <stdexcept>
 #include <vector>
 
 using namespace bsv::jni;
