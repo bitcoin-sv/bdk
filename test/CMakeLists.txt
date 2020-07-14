@@ -42,7 +42,7 @@ add_executable(test_simple "${CMAKE_CURRENT_SOURCE_DIR}/test_simple.cpp")
 target_link_libraries(test_simple ${CMAKE_DL_LIBS} scrypt_core OpenSSL::Crypto OpenSSL::SSL)
 scrypt_add_unit_test(test_simple)
 
-add_executable(test_scriptengineif "${CMAKE_CURRENT_SOURCE_DIR}/test_script_engine.cpp")
+add_executable(test_scriptengineif "${CMAKE_CURRENT_SOURCE_DIR}/test_interpreter.cpp")
 target_link_libraries(test_scriptengineif ${CMAKE_DL_LIBS} scrypt_core OpenSSL::Crypto OpenSSL::SSL)
 scrypt_add_unit_test(test_scriptengineif)
 

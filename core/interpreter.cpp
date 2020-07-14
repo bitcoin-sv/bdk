@@ -1,4 +1,4 @@
-#include <script_engine.h>
+#include <interpreter.h>
 
 #include <base58.h>
 #include <chainparams.h>

@@ -1,7 +1,8 @@
 /// Use it as an example how to add a example
 
+#include "interpreter.h"
+
 #include <iostream>
-#include <script_engine.h>
 #include <sstream>
 
 int main(int argc, char* argv[])
