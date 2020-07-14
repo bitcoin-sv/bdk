@@ -60,7 +60,7 @@ endforeach()
 
 ####################################################################################################################
 ## Test files *cpp here are mainly extract of bsv source code ######################################################
-add_executable(test_scrypt_core
+add_executable(test_sesdk_core
                "${SESDK_BSV_TEST_ROOT}/jsonutil.h"
                "${SESDK_BSV_TEST_ROOT}/scriptflags.h"
                "${SESDK_BSV_TEST_ROOT}/sigutil.h"
@@ -76,9 +76,9 @@ add_executable(test_scrypt_core
                #"${SESDK_BSV_TEST_ROOT}/opcode_tests.cpp
 )
 
-target_link_libraries(test_scrypt_core ${CMAKE_DL_LIBS} scrypt_core OpenSSL::Crypto OpenSSL::SSL)
+target_link_libraries(test_sesdk_core ${CMAKE_DL_LIBS} sesdk_core OpenSSL::Crypto OpenSSL::SSL)
 if(WIN32)
-  target_link_libraries(test_scrypt_core Crypt32.lib Ws2_32)
+  target_link_libraries(test_sesdk_core Crypt32.lib Ws2_32)
 endif()
-target_include_directories(test_scrypt_core PRIVATE "${SESDK_BSV_TEST_ROOT}")
-scrypt_add_unit_test(test_scrypt_core)
+target_include_directories(test_sesdk_core PRIVATE "${SESDK_BSV_TEST_ROOT}")
+scrypt_add_unit_test(test_sesdk_core)

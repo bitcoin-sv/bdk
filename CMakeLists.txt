@@ -49,7 +49,7 @@ HelpFindBSVSource()
 #scryptPrintBSVSourceInfo()#Print help to debug
 
 set(SESDK_VERSION_MAJOR "0" CACHE INTERNAL "script engine major version")
-set(SESDK_VERSION_MINOR "0" CACHE INTERNAL "script engine minor version")
+set(SESDK_VERSION_MINOR "1" CACHE INTERNAL "script engine minor version")
 set(SESDK_VERSION_PATCH "1" CACHE INTERNAL "script engine patch version")
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)## Always include the current directory
@@ -65,7 +65,7 @@ scryptInitCMake()
 ## Everything in core should be includable from everywhere
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/core)
 
-## Build scrypt_core
+## Build sesdk_core
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/core)
 
 if(SESDK_BUILD_MODULES)

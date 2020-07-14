@@ -6,7 +6,7 @@
 #################################################################
 
 if (NOT (Boost_FOUND AND OPENSSL_FOUND))
-  message(FATAL_ERROR "Boost and OpenSSL are required to build scrypt_core")
+  message(FATAL_ERROR "Boost and OpenSSL are required to build sesdk_core")
 endif()
 
 ## Build scrypt requires locating bsv source code
@@ -59,26 +59,26 @@ foreach(_extra_file ${SESDK_CORE_EXTRA_HDR_FILES} ${SESDK_CORE_EXTRA_SRC_FILES})
   endif()
 endforeach()
 
-## Build scrypt_core as a library using bsv source code
-add_library(scrypt_core ${BITCOIN_CONFIG_FILE} ${SESDK_CORE_HDR_FILES} ${SESDK_CORE_SRC_FILES})
-#set_target_properties(scrypt_core PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS 1)
-target_include_directories(scrypt_core PUBLIC ${BSV_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(scrypt_core ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT} secp256k1 ${UNIVALUE_LIB} OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono)
+## Build sesdk_core as a library using bsv source code
+add_library(sesdk_core ${BITCOIN_CONFIG_FILE} ${SESDK_CORE_HDR_FILES} ${SESDK_CORE_SRC_FILES})
+#set_target_properties(sesdk_core PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS 1)
+target_include_directories(sesdk_core PUBLIC ${BSV_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(sesdk_core ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT} secp256k1 ${UNIVALUE_LIB} OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono)
 
 if(WIN32)
-  target_link_libraries(scrypt_core Crypt32.lib Ws2_32)
+  target_link_libraries(sesdk_core Crypt32.lib Ws2_32)
 endif()
-target_compile_definitions(scrypt_core PUBLIC HAVE_CONFIG_H BOOST_THREAD_USE_LIB BOOST_SP_USE_STD_ATOMIC BOOST_AC_USE_STD_ATOMIC)
-scryptLinkTargetToBoost(scrypt_core Boost::boost)
+target_compile_definitions(sesdk_core PUBLIC HAVE_CONFIG_H BOOST_THREAD_USE_LIB BOOST_SP_USE_STD_ATOMIC BOOST_AC_USE_STD_ATOMIC)
+scryptLinkTargetToBoost(sesdk_core Boost::boost)
 
-set_property(TARGET scrypt_core PROPERTY FOLDER "core")
+set_property(TARGET sesdk_core PROPERTY FOLDER "core")
 
 ## Install the binary library
-install(TARGETS scrypt_core DESTINATION "lib" COMPONENT scrypt_core)
+install(TARGETS sesdk_core DESTINATION "lib" COMPONENT sesdk_core)
 
 set(UNIFIED_INSTALL_HEADERS_STR "${UNIFIED_INSTALL_HEADERS_STR}\n// Include files in bsv\n")
-## Install scrypt_core : the *.h header files should be kept as bsv structure
-install(FILES ${BITCOIN_CONFIG_FILE} DESTINATION "include/core/config" COMPONENT scrypt_core)
+## Install sesdk_core : the *.h header files should be kept as bsv structure
+install(FILES ${BITCOIN_CONFIG_FILE} DESTINATION "include/core/config" COMPONENT sesdk_core)
  
 ## Calculate the relative path for include file in installer
 get_filename_component(__f ${BITCOIN_CONFIG_FILE} NAME)
@@ -95,7 +95,7 @@ foreach(_bsv_hdr ${BSV_MINIMAL_HDR_FILES})
     set(_install_dest "${default_install_include_core_dir}")
   endif()
   #message("install file [${_bsv_hdr}]  _install_dest[${_install_dest}]")
-  install(FILES ${_bsv_hdr} DESTINATION "${_install_dest}" COMPONENT scrypt_core)
+  install(FILES ${_bsv_hdr} DESTINATION "${_install_dest}" COMPONENT sesdk_core)
 
   ## Calculate the relative path for include file in installer
   get_filename_component(_f ${_bsv_hdr} NAME)
@@ -105,7 +105,7 @@ endforeach()
 # Install extra core header files
 set(UNIFIED_INSTALL_HEADERS_STR "${UNIFIED_INSTALL_HEADERS_STR}\n// Include extra script engine files in core\n")
 foreach(_extra_hdr ${SESDK_CORE_EXTRA_HDR_FILES})
-  install(FILES ${_extra_hdr} DESTINATION "${default_install_include_core_dir}" COMPONENT scrypt_core)
+  install(FILES ${_extra_hdr} DESTINATION "${default_install_include_core_dir}" COMPONENT sesdk_core)
 
   ## Calculate the relative path for include file in installer
   get_filename_component(_f ${_extra_hdr} NAME)
@@ -115,4 +115,4 @@ endforeach()
 
 set(SESDK_UNIFIED_HEADER_FILE "${SESDK_GENERATED_TOOLS_DIR}/script_engine")
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/script_engine.in" ${SESDK_UNIFIED_HEADER_FILE})
-install(FILES ${SESDK_UNIFIED_HEADER_FILE} DESTINATION "include/core" COMPONENT scrypt_core)
+install(FILES ${SESDK_UNIFIED_HEADER_FILE} DESTINATION "include/core" COMPONENT sesdk_core)

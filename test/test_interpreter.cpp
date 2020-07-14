@@ -1,9 +1,9 @@
 /// Define test module name with debug postfix
 /// Use it as an example how to add a test module
 #ifdef NDEBUG
-#define BOOST_TEST_MODULE test_script_engineIF
+#define BOOST_TEST_MODULE test_interpreter
 #else
-#define BOOST_TEST_MODULE test_script_engineIFd
+#define BOOST_TEST_MODULE test_interpreterd
 #endif
 
 #include "interpreter.h"
@@ -18,7 +18,7 @@
 using namespace std;
 using namespace bsv;
 
-BOOST_AUTO_TEST_SUITE(test_scriptengine_suite)
+BOOST_AUTO_TEST_SUITE(test_script_engine)
 
 BOOST_AUTO_TEST_CASE(script_status)
 {
