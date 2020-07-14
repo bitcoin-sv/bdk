@@ -680,7 +680,7 @@ public class ScriptEngineTest {
 	public void testEvaluate2of3InvalidMultiSigWithTxData() {
 
 		String scriptArray = new String(
-				"0 0x48 0x3045022100b41305eb272560e18a0ca0e176fbd041b0a0327192049ad5f004fc4eab63fa0302203a61afe95053f7d31497255385d51605df982e0c2d167708072228a908d8b43601 0x48 0x30450221009d6e7052246947cd424a57ac2d1ea8f093b9894b6029cf0a9fb25828f50f309c02202964744834a47eac0cb255870a4755900c07ae09e4e00972f572cd166b38340b01 2 0x41 0x04183905ae25e815634ce7f5d9bedbaa2c39032ab98c75b5e88fe43f8dd8246f3c5473ccd4ab475e6a9e6620b52f5ce2fd15a2de32cbe905154b3a05844af70785 0x21 0x030b4c866585dd868a9d62348a9cd008d6a312937048fff31670e7e920cfc7a744 3 CHECKMULTISIG");
+				"0 0x48 0x30450221009d6e7052246947cd424a57ac2d1ea8f093b9894b6029cf0a9fb25828f50f309c02202964744834a47eac0cb255870a4755900c07ae09e4e00972f572cd166b38340b01 2 0x41 0x040b4c866585dd868a9d62348a9cd008d6a312937048fff31670e7e920cfc7a7447b5f0bba9e01e6fe4735c8383e6e7a3347a0fd72381b8f797a19f694054e5a69 0x41 0x04183905ae25e815634ce7f5d9bedbaa2c39032ab98c75b5e88fe43f8dd8246f3c5473ccd4ab475e6a9e6620b52f5ce2fd15a2de32cbe905154b3a05844af70785 0x21 0x030b4c866585dd868a9d62348a9cd008d6a312937048fff31670e7e920cfc7a744 3 CHECKMULTISIG");
 
 		byte[] binaryScript = assembler.fromAsm(scriptArray);
 
@@ -692,14 +692,14 @@ public class ScriptEngineTest {
 		// call evaluateString method for scriptArray in string format
 		Status resultEvaluateString = scriptEngine.evaluateString(scriptArray, true, 0, hexID, 0, amt);
 
-		Assert.assertEquals(14, resultEvaluateString.getStatusCode());
-		Assert.assertEquals("Script number overflow", resultEvaluateString.getStatusMessage());
+		Assert.assertEquals(23, resultEvaluateString.getStatusCode());
+		Assert.assertEquals("Operation not valid with the current stack size", resultEvaluateString.getStatusMessage());
 
 		// call evaluate method for binaryScript in byte array format
 		Status resultEvaluate = scriptEngine.evaluate(binaryScript, true, 0, hexID, 0, amt);
 
-		Assert.assertEquals(14, resultEvaluate.getStatusCode());
-		Assert.assertEquals("Script number overflow", resultEvaluate.getStatusMessage());
+		Assert.assertEquals(23, resultEvaluate.getStatusCode());
+		Assert.assertEquals("Operation not valid with the current stack size", resultEvaluate.getStatusMessage());
 
 	}
 
