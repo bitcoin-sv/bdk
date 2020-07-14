@@ -8,7 +8,7 @@ Object model is an approach to implement scripts functionalities in a object ori
  - **ScriptEngine** class : hold the script configuration and script's evaluation flag switch. These determine how script should be evaluated. It has the execute method to evaluate a script
  - **Stack** class : hold the stack result of script evaluation.
 
-```
+```plantuml
 @startuml
 
 package "c++ Interface" {
