@@ -8,8 +8,8 @@ public class TestSEIF {
         var[i] = (byte) intArray[i];
     }
 
-    ScriptEngine jniIF = new ScriptEngine();
-    if(jniIF.evaluate(var,true,0,"",0,0).getStatusCode() == 0){
+    ScriptEngine scriptEngine = new ScriptEngine();
+    if(scriptEngine.evaluate(var,true,0,"",0,0).getStatusCode() == 0){
         System.out.println("...Successful script evaluation");
     }else{
         System.out.println("...Failure of script evaluation");
@@ -17,7 +17,7 @@ public class TestSEIF {
 
     
     String ScriptArray = new String ("0x00 0x6b 0x54 0x55 0x93 0x59 0x87");
-    if(jniIF.evaluate(ScriptArray,true, 0,"",0,0).getStatusCode() == 0){
+    if(scriptEngine.evaluate(ScriptArray,true, 0,"",0,0).getStatusCode() == 0){
         System.out.println("...Successful script evaluation from String Type");
     }else{
         System.out.println("...Failure of script evaluation from String Type");
@@ -25,14 +25,14 @@ public class TestSEIF {
     
     
     String PubKeyStyle = new String("'abcdefghijklmnopqrstuvwxyz' 0xaa 0x4c 0x20 0xca139bc10c2f660da42666f72e89a225936fc60f193c161124a672050c434671 0x88");
-    if(jniIF.evaluate(PubKeyStyle,true, 0,"",0,0).getStatusCode() == 0){
+    if(scriptEngine.evaluate(PubKeyStyle,true, 0,"",0,0).getStatusCode() == 0){
         System.out.println("...Successful script evaluation from String Type PubKey Style");
     }else{
         System.out.println("...Failure of script evaluation from String Type PubKey Style");
     }
     
     PubKeyStyle = new String ("'abcdefghijklmnopqrstuvwxyz' OP_HASH256 OP_PUSHDATA1 0x20 0xca139bc10c2f660da42666f72e89a225936fc60f193c161124a672050c434671 OP_EQUALVERIFY");
-    if(jniIF.evaluate(PubKeyStyle,true, 0,"",0,0).getStatusCode() == 0){
+    if(scriptEngine.evaluate(PubKeyStyle,true, 0,"",0,0).getStatusCode() == 0){
         System.out.println("...Successful script evaluation from String Type PubKey Style with op codes");
     }else{
         System.out.println("...Failure of script evaluation from String Type PubKey Style with op codes");
@@ -44,7 +44,7 @@ public class TestSEIF {
     String HexID = new String ("0100000001d92670dd4ad598998595be2f1bec959de9a9f8b1fd97fb832965c96cd55145e20000000000ffffffff010a000000000000000000000000");
 	     
     int amt = 10; 
-    if(jniIF.evaluate(pkh,true,0,HexID,0,amt).getStatusCode() == 0){
+    if(scriptEngine.evaluate(pkh,true,0,HexID,0,amt).getStatusCode() == 0){
         System.out.println("...Successful script evaluation Pubkey,signature & tx info");
     }else{
         System.out.println("...Failure script evaluation Pubkey,signature & tx info");
