@@ -24,14 +24,14 @@ static PyObject* wrap_ExecuteScript(PyObject* self, PyObject *args){
     int concensus(true);
     unsigned int scriptflags(0);
     char* hextxptr; 
-    int nIndex(0);
+    int index(0);
     int64_t amount(0); 
 
-    if(!PyArg_ParseTuple(args,"siIsii", &scriptptr,&concensus, &scriptflags,&hextxptr,&nIndex,&amount))
+    if(!PyArg_ParseTuple(args,"siIsii", &scriptptr,&concensus, &scriptflags,&hextxptr,&index,&amount))
         return nullptr;
 
     try{
-        const ScriptError ret = bsv::evaluate(std::string{scriptptr},concensus, scriptflags, std::string{hextxptr},nIndex,amount);
+        const ScriptError ret = bsv::evaluate(std::string{scriptptr},concensus, scriptflags, std::string{hextxptr},index,amount);
         return Py_BuildValue("i", ret);
     }catch(std::exception& e){
         PyErr_SetString(PyExc_TypeError, e.what());

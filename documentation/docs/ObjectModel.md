@@ -8,58 +8,62 @@ Object model is an approach to implement scripts functionalities in a object ori
  - **ScriptEngine** class : hold the script configuration and script's evaluation flag switch. These determine how script should be evaluated. It has the execute method to evaluate a script
  - **Stack** class : hold the stack result of script evaluation.
 
-
-```plantuml
+```
 @startuml
-class ExecutionStatus 
-{ 
-    +unsigned long code;
-    +string message;
-}
-class Config 
-note right: Additional parameters to go here.
-class Config 
-{
-    +unsigned long maxMemoryPolicy;
-    +unsigned long maxMemoryConsensus
-    +load(string filename);
+
+package "c++ Interface" {
+    namespace bsv {
+        class Assembler {
+            +CScript bsv::from_asm(const std::string& script);
+            +std::string bsv::to_asm(const bsv::span<const uint8_t> script)
+        }
+
+
+        class Interpreter {
+            +ScriptError evaluate(bsv::span<const uint8_t> script, bool consensus, unsigned int flags, const std::string& transaction, int tx_input_index, int64_t amount);
+            +ScriptError evaluate(const std::string& script, bool consensus, unsigned int flags, const std::string& transaction, int tx_input_index, int64_t amount);
+            +std::string formatScript(const std::string& script);
+
+            -unique_sig_checker make_unique_sig_checker()
+            -unique_sig_checker make_unique_sig_checker(const CTransaction& tx, const int vinIndex, const int64_t a)
+
+            -ScriptError evaluate_impl(const CScript& script, const bool consensus, const unsigned int scriptflag, BaseSignatureChecker* sigCheck)
+            -ScriptError evaluate_impl(const CScript& script, const bool consensus, const unsigned int scriptflag, const std::string& txhex, const int vinIndex, const int64_t amount)
+        }
+    }
 }
 
-class Assembler
-{
-    +byte[] fromAsm(string asm);
-    +string toAsm(byte[] script);
+package "Java Interface" {
+    class ScriptEngine {
+            +ScriptEngine()
+            +Status evaluate(byte[] script,boolean concensus, int scriptflags,String txHex, int index, int amount);
+            +Status evaluateString(String script,boolean concensus, int scriptflags, String txHex, int index, int amount);
+    }
+
+    class Status {
+         -int statusCode;
+         -String statusMessage;
+
+         +Status(int statusCode, String statusMessage);
+
+         +int getStatusCode()
+         +void setStatusCode(int statusCode)
+         +String getStatusMessage()
+         +void setStatusMessage(String statusMessage)
+    }
+
+
+    class Assembler {
+        +byte[] fromAsm(String script);
+        +String toAsm(byte[] script);
+    }
 }
-class ScriptIterator
-{
-    +ScriptIterator(byte[])
-    +bool next();
-    +int opcode;
-    +byte[] data;
+
+package "Python Interface" {
+    class PySESDK {
+        +ScriptError ExecuteScript(string script, int concensus, unsigned int scriptflags, string hextx, int index, int64_t amount;
+    }
+
 }
-class CancellationToken
-{
-    +void cancel();
-}
-class StackElement 
-{
-    +string asString();
-    +string asHex();
-}
-class Stack
-{
-    +unsigned long size();
-    +StackElement at(unsigned long pos);
-    +void clear();
-}
-class ScriptEngine 
-{
-    +ScriptEngine(Config config);
-    +unsigned long Flags;
-    +ExecutionStatus execute(byte[] script, byte[] transaction, bool consensus, CancellationToken token);
-}
-ScriptEngine --> Stack : stack
-ScriptEngine --> Stack : alt-stack
-Stack *-- StackElement
 @enduml
 ```
