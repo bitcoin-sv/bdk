@@ -3,6 +3,7 @@
 #include <iostream>
 #include <sstream>
 // bitcoin headers
+#include "interpreter.h"
 #include <base58.h>
 #include <cassert>
 #include <chainparams.h>
@@ -10,7 +11,6 @@
 #include <core_io.h>
 #include <key.h>
 #include <script/script_num.h>
-#include <script_engine.h>
 #include <univalue/include/univalue.h>
 
 const std::string strSecret1 = "5HxWvvfubhXpYYpS3tJkw6fq9jE9j18THftkZjHHfmFiWtmAbrj";

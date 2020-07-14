@@ -5,7 +5,7 @@
 #include <map>
 #include <iostream>
 
-#include <script_engine.h>
+#include "interpreter.h"
 
 struct module_state {
     PyObject *error;

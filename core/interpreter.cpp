@@ -1,4 +1,4 @@
-#include <script_engine.h>
+#include <interpreter.h>
 
 #include <base58.h>
 #include <chainparams.h>
@@ -6,6 +6,8 @@
 #include <core_io.h>
 #include <ecc_guard.h>
 #include <script/interpreter.h>
+
+#include <stdexcept>
 
 using namespace std;
 

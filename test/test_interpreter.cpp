@@ -6,8 +6,8 @@
 #define BOOST_TEST_MODULE test_script_engineIFd
 #endif
 
+#include "interpreter.h"
 #include "script/script.h"
-#include <script_engine.h>
 
 #include <boost/test/unit_test.hpp>
 

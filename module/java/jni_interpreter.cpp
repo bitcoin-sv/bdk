@@ -1,9 +1,12 @@
-#include <script_engine.h>
-#include <iostream>
-#include <jni.h>                      // JNI header provided by JDK
 #include <com_nchain_bsv_scriptengine_ScriptEngine.h> // Generated
+
+#include "jni.h" // JNI header provided by JDK
+
+#include "interpreter.h"
+#include "jni_memory.h"
+
+#include <stdexcept>
 #include <vector>
-#include "jni_util.h"
 
 using namespace bsv::jni;
 
