@@ -38,7 +38,7 @@ set(SOURCE_DIRECTORY  ${PROJECT_DIRECTORY}/module/java)
 set(TEST_DIRECTORY  ${PROJECT_DIRECTORY}/test/java)
 
 ## Get all test scripts
-file(GLOB _JAVA_TEST_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.java")
+file(GLOB _JAVA_TEST_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*Test.java")
 
 if(CMAKE_CONFIGURATION_TYPES)
   set(JAVA_DEBUG_FLAG "\$<IF:\$<CONFIG:Debug>,-Ddebug=1,-Ddebug=0>")
@@ -52,43 +52,44 @@ endif()
 
 ## Execute each test from the tests folder
 foreach(_ftest_file ${_JAVA_TEST_FILES})
-  get_filename_component(_ftest_file_name "${_ftest_file}" NAME_WE)
+  get_filename_component(java_test_file "${_ftest_file}" NAME_WE)
+  string(REPLACE "Test" "" BASE_TEST_NAME ${java_test_file})
 
-  set(TEST_NAME test_JAV${_ftest_file_name})
+  set(JAVA_TEST_NAME test_Java${BASE_TEST_NAME})
 
-  add_custom_target(${_ftest_file_name} ALL DEPENDS ${TEST_DIRECTORY}/${_ftest_file_name}.java)
+  add_custom_target(${java_test_file} ALL DEPENDS ${TEST_DIRECTORY}/${java_test_file}.java)
 
   if(CMAKE_CONFIGURATION_TYPES)
-    add_custom_command(TARGET ${_ftest_file_name}
-       COMMAND ${Java_JAVAC_EXECUTABLE} -d $<IF:$<CONFIG:Debug>,${CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG},${CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE}> -cp "${JUNIT_JAR}\$<SEMICOLON>${HAMCREST_JAR}" ${SOURCE_DIRECTORY}/*.java ${TEST_DIRECTORY}/${_ftest_file_name}.java
+    add_custom_command(TARGET ${java_test_file}
+       COMMAND ${Java_JAVAC_EXECUTABLE} -d $<IF:$<CONFIG:Debug>,${CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG},${CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE}> -cp "${JUNIT_JAR}\$<SEMICOLON>${HAMCREST_JAR}" ${SOURCE_DIRECTORY}/*.java ${TEST_DIRECTORY}/${java_test_file}.java
        COMMENT "Compiling ${TEST_FILE}")
   else()
-    add_custom_command(TARGET ${_ftest_file_name}
-       COMMAND ${Java_JAVAC_EXECUTABLE} -d ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} -cp "${JUNIT_JAR}:${HAMCREST_JAR}" ${SOURCE_DIRECTORY}/*.java ${TEST_DIRECTORY}/${_ftest_file_name}.java
+    add_custom_command(TARGET ${java_test_file}
+       COMMAND ${Java_JAVAC_EXECUTABLE} -d ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} -cp "${JUNIT_JAR}:${HAMCREST_JAR}" ${SOURCE_DIRECTORY}/*.java ${TEST_DIRECTORY}/${java_test_file}.java
        COMMENT "Compiling ${TEST_FILE}")
   endif()
 
-  set_target_properties(${_ftest_file_name} PROPERTIES  FOLDER "test/java")
+  set_target_properties(${java_test_file} PROPERTIES  FOLDER "test/java")
 
   if(CMAKE_CONFIGURATION_TYPES)
     ## Need to set the WORKING_DIRECTORY on windows as a hack to get the PATH set there
     ## -Djava.library.path alone does not work because the jni dll depend to other dll in this directory (chained dependencies)
-    add_test(NAME ${TEST_NAME}d
+    add_test(NAME ${JAVA_TEST_NAME}d
              CONFIGURATIONS Debug
-             COMMAND ${Java_JAVA_EXECUTABLE} -Djava_test_data_dir=${CMAKE_CURRENT_SOURCE_DIR}/data -Djava.library.path=${CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG} ${JAVA_DEBUG_FLAG} -cp "${CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG}\$<SEMICOLON>${JUNIT_JAR}\$<SEMICOLON>${HAMCREST_JAR}" org.junit.runner.JUnitCore ${JAVA_PACKAGE_NAME}.${_ftest_file_name}
+             COMMAND ${Java_JAVA_EXECUTABLE} -Djava_test_data_dir=${CMAKE_CURRENT_SOURCE_DIR}/data -Djava.library.path=${CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG} ${JAVA_DEBUG_FLAG} -cp "${CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG}\$<SEMICOLON>${JUNIT_JAR}\$<SEMICOLON>${HAMCREST_JAR}" org.junit.runner.JUnitCore ${JAVA_PACKAGE_NAME}.${java_test_file}
              WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG}
     )
-    add_test(NAME ${TEST_NAME}
+add_test(NAME ${JAVA_TEST_NAME}
              CONFIGURATIONS Release
-             COMMAND ${Java_JAVA_EXECUTABLE} -Djava_test_data_dir=${CMAKE_CURRENT_SOURCE_DIR}/data -Djava.library.path=${CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE} ${JAVA_DEBUG_FLAG} -cp "${CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE}\$<SEMICOLON>${JUNIT_JAR}\$<SEMICOLON>${HAMCREST_JAR}" org.junit.runner.JUnitCore ${JAVA_PACKAGE_NAME}.${_ftest_file_name}
+             COMMAND ${Java_JAVA_EXECUTABLE} -Djava_test_data_dir=${CMAKE_CURRENT_SOURCE_DIR}/data -Djava.library.path=${CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE} ${JAVA_DEBUG_FLAG} -cp "${CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE}\$<SEMICOLON>${JUNIT_JAR}\$<SEMICOLON>${HAMCREST_JAR}" org.junit.runner.JUnitCore ${JAVA_PACKAGE_NAME}.${java_test_file}
              WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE}
     )
   else()
     if(${CMAKE_BUILD_TYPE} STREQUAL "Debug")
       set(_tpost_fix ${CMAKE_DEBUG_POSTFIX})
     endif()
-    add_test(NAME ${TEST_NAME}${_tpost_fix}
-             COMMAND ${Java_JAVA_EXECUTABLE} -Djava_test_data_dir=${CMAKE_CURRENT_SOURCE_DIR}/data -Djava.library.path=${CMAKE_RUNTIME_OUTPUT_DIRECTORY} ${JAVA_DEBUG_FLAG} -cp ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}:$ENV{JAVA_TOOLS}:${JUNIT_JAR}:${HAMCREST_JAR} org.junit.runner.JUnitCore ${JAVA_PACKAGE_NAME}.${_ftest_file_name}
+    add_test(NAME ${JAVA_TEST_NAME}${_tpost_fix}
+             COMMAND ${Java_JAVA_EXECUTABLE} -Djava_test_data_dir=${CMAKE_CURRENT_SOURCE_DIR}/data -Djava.library.path=${CMAKE_RUNTIME_OUTPUT_DIRECTORY} ${JAVA_DEBUG_FLAG} -cp ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}:$ENV{JAVA_TOOLS}:${JUNIT_JAR}:${HAMCREST_JAR} org.junit.runner.JUnitCore ${JAVA_PACKAGE_NAME}.${java_test_file}
     )
   endif()
 endforeach()

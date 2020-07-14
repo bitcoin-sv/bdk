@@ -1,6 +1,6 @@
 package com.nchain.bsv.scriptengine.*;
 
-public class TestSEIF {
+public class ExampleSESDK {
   public static void main(String[] args){
     int[] intArray = new int[] {0x00, 0x6b, 0x54, 0x55, 0x93, 0x59,0x87};
     final byte[] var = new byte[intArray.length];
