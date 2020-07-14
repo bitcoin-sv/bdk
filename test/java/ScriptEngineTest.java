@@ -11,7 +11,7 @@ import java.io.IOException;
 
 public class ScriptEngineTest {
 
-	public ScriptEngine jniIF = new ScriptEngine();
+	public ScriptEngine scriptEngine = new ScriptEngine();
 	public Assembler assembler = new Assembler();
 
 	@Test
@@ -26,13 +26,13 @@ public class ScriptEngineTest {
 		String scriptArray = assembler.toAsm(var);
 
 		// Call evaluate method for var in byte array format
-		Status resultEvaluate = jniIF.evaluate(var, true, 0, "", 0, 0);
+		Status resultEvaluate = scriptEngine.evaluate(var, true, 0, "", 0, 0);
 
 		Assert.assertEquals(0, resultEvaluate.getStatusCode());
 		Assert.assertEquals("No error", resultEvaluate.getStatusMessage());
 
 		// Call evaluate method for scriptArray in string format
-		Status resultEvaluateString = jniIF.evaluateString(scriptArray, true, 0, "", 0, 0);
+		Status resultEvaluateString = scriptEngine.evaluateString(scriptArray, true, 0, "", 0, 0);
 
 		Assert.assertEquals(0, resultEvaluateString.getStatusCode());
 		Assert.assertEquals("No error", resultEvaluateString.getStatusMessage());
@@ -47,7 +47,7 @@ public class ScriptEngineTest {
 			var[i] = (byte) intArray[i];
 		}
 
-		jniIF.evaluate(var, true, 0, null, 0, 0);
+		scriptEngine.evaluate(var, true, 0, null, 0, 0);
 	}
 
 	@Test
@@ -60,13 +60,13 @@ public class ScriptEngineTest {
 		String scriptArray = assembler.toAsm(var);
 
 		// Call evaluate method for var in byte array format
-		Status resultEvaluate = jniIF.evaluate(var, true, 0, "", 0, 0);
+		Status resultEvaluate = scriptEngine.evaluate(var, true, 0, "", 0, 0);
 
 		Assert.assertEquals(0, resultEvaluate.getStatusCode());
 		Assert.assertEquals("No error", resultEvaluate.getStatusMessage());
 
 		// Call evaluate method for scriptArray in string format
-		Status resultEvaluateString = jniIF.evaluateString(scriptArray, true, 0, "", 0, 0);
+		Status resultEvaluateString = scriptEngine.evaluateString(scriptArray, true, 0, "", 0, 0);
 
 		Assert.assertEquals(0, resultEvaluateString.getStatusCode());
 		Assert.assertEquals("No error", resultEvaluateString.getStatusMessage());
@@ -79,13 +79,13 @@ public class ScriptEngineTest {
 		byte[] binaryScript = assembler.fromAsm(scriptArray);
 
 		// Call evaluate method for scriptArray in string format
-		Status resultEvaluateString = jniIF.evaluateString(scriptArray, true, 0, "", 0, 0);
+		Status resultEvaluateString = scriptEngine.evaluateString(scriptArray, true, 0, "", 0, 0);
 
 		Assert.assertEquals(0, resultEvaluateString.getStatusCode());
 		Assert.assertEquals("No error", resultEvaluateString.getStatusMessage());
 
 		// Call evaluate method for binaryScript in byte array format
-		Status resultEvaluate = jniIF.evaluate(binaryScript, true, 0, "", 0, 0);
+		Status resultEvaluate = scriptEngine.evaluate(binaryScript, true, 0, "", 0, 0);
 
 		Assert.assertEquals(0, resultEvaluate.getStatusCode());
 		Assert.assertEquals("No error", resultEvaluate.getStatusMessage());
@@ -99,13 +99,13 @@ public class ScriptEngineTest {
 		byte[] binaryScript = assembler.fromAsm(scriptArray);
 
 		// Call evaluate method for scriptArray in string format
-		Status resultEvaluateString = jniIF.evaluateString(scriptArray, true, 0, "", 0, 0);
+		Status resultEvaluateString = scriptEngine.evaluateString(scriptArray, true, 0, "", 0, 0);
 
 		Assert.assertEquals(0, resultEvaluateString.getStatusCode());
 		Assert.assertEquals("No error", resultEvaluateString.getStatusMessage());
 
 		// Call evaluate method for binaryScript in byte array format
-		Status resultEvaluate = jniIF.evaluate(binaryScript, true, 0, "", 0, 0);
+		Status resultEvaluate = scriptEngine.evaluate(binaryScript, true, 0, "", 0, 0);
 
 		Assert.assertEquals(0, resultEvaluate.getStatusCode());
 		Assert.assertEquals("No error", resultEvaluate.getStatusMessage());
@@ -118,13 +118,13 @@ public class ScriptEngineTest {
 		byte[] binaryScript = assembler.fromAsm(scriptArray);
 
 		// Call evaluate method for scriptArray in string format
-		Status resultEvaluateString = jniIF.evaluateString(scriptArray, true, 0, "", 0, 0);
+		Status resultEvaluateString = scriptEngine.evaluateString(scriptArray, true, 0, "", 0, 0);
 
 		Assert.assertEquals(0, resultEvaluateString.getStatusCode());
 		Assert.assertEquals("No error", resultEvaluateString.getStatusMessage());
 
 		// Call evaluate method for binaryScript in byte array format
-		Status resultEvaluate = jniIF.evaluate(binaryScript, true, 0, "", 0, 0);
+		Status resultEvaluate = scriptEngine.evaluate(binaryScript, true, 0, "", 0, 0);
 
 		Assert.assertEquals(0, resultEvaluate.getStatusCode());
 		Assert.assertEquals("No error", resultEvaluate.getStatusMessage());
@@ -143,13 +143,13 @@ public class ScriptEngineTest {
 		int amt = 10;
 
 		// Call evaluate method for scriptArray in string format
-		Status resultEvaluateString = jniIF.evaluateString(scriptArray, true, 0, HexID, 0, amt);
+		Status resultEvaluateString = scriptEngine.evaluateString(scriptArray, true, 0, HexID, 0, amt);
 
 		Assert.assertEquals(0, resultEvaluateString.getStatusCode());
 		Assert.assertEquals("No error", resultEvaluateString.getStatusMessage());
 
 		// Call evaluate method for binaryScript in byte array format
-		Status resultEvaluate = jniIF.evaluate(binaryScript, true, 0, HexID, 0, amt);
+		Status resultEvaluate = scriptEngine.evaluate(binaryScript, true, 0, HexID, 0, amt);
 
 		Assert.assertEquals(0, resultEvaluate.getStatusCode());
 		Assert.assertEquals("No error", resultEvaluate.getStatusMessage());
@@ -171,13 +171,13 @@ public class ScriptEngineTest {
 		int amt = 10;
 
 		// call evaluateString method for scriptArray in string format
-		Status resultEvaluateString = jniIF.evaluateString(scriptArray, true, 524288, hexID, 0, amt);
+		Status resultEvaluateString = scriptEngine.evaluateString(scriptArray, true, 524288, hexID, 0, amt);
 
 		Assert.assertEquals("No error", resultEvaluateString.getStatusMessage());
 		Assert.assertEquals(0, resultEvaluateString.getStatusCode());
 
 		// call evaluate method for binaryScript in byte array format
-		Status resultEvaluate = jniIF.evaluate(binaryScript, true, 524288, hexID, 0, amt);
+		Status resultEvaluate = scriptEngine.evaluate(binaryScript, true, 524288, hexID, 0, amt);
 
 		Assert.assertEquals("No error", resultEvaluate.getStatusMessage());
 		Assert.assertEquals(0, resultEvaluate.getStatusCode());
@@ -198,13 +198,13 @@ public class ScriptEngineTest {
 		int amt = 10;
 
 		// call evaluateString method for scriptArray in string format
-		Status resultEvaluateString = jniIF.evaluateString(scriptArray, true, 524288, hexID, 0, amt);
+		Status resultEvaluateString = scriptEngine.evaluateString(scriptArray, true, 524288, hexID, 0, amt);
 
 		Assert.assertEquals("Script failed an OP_CHECKSIGVERIFY operation", resultEvaluateString.getStatusMessage());
 		Assert.assertEquals(19, resultEvaluateString.getStatusCode());
 
 		// call evaluate method for binaryScript in byte array format
-		Status resultEvaluate = jniIF.evaluate(binaryScript, true, 524288, hexID, 0, amt);
+		Status resultEvaluate = scriptEngine.evaluate(binaryScript, true, 524288, hexID, 0, amt);
 
 		Assert.assertEquals("Script failed an OP_CHECKSIGVERIFY operation", resultEvaluate.getStatusMessage());
 		Assert.assertEquals(19, resultEvaluate.getStatusCode());
@@ -226,13 +226,13 @@ public class ScriptEngineTest {
 		int amt = 10;
 
 		// call evaluateString method for scriptArray in string format
-		Status resultEvaluateString = jniIF.evaluateString(scriptArray, true, 524288, hexID, 0, amt);
+		Status resultEvaluateString = scriptEngine.evaluateString(scriptArray, true, 524288, hexID, 0, amt);
 
 		Assert.assertEquals("Script failed an OP_EQUALVERIFY operation", resultEvaluateString.getStatusMessage());
 		Assert.assertEquals(17, resultEvaluateString.getStatusCode());
 
 		// call evaluate method for binaryScript in byte array format
-		Status resultEvaluate = jniIF.evaluate(binaryScript, true, 524288, hexID, 0, amt);
+		Status resultEvaluate = scriptEngine.evaluate(binaryScript, true, 524288, hexID, 0, amt);
 
 		Assert.assertEquals("Script failed an OP_EQUALVERIFY operation", resultEvaluate.getStatusMessage());
 		Assert.assertEquals(17, resultEvaluate.getStatusCode());
@@ -255,13 +255,13 @@ public class ScriptEngineTest {
 		int amt = 10;
 
 		// call evaluateString method for scriptArray in string format
-		Status resultEvaluateString = jniIF.evaluateString(scriptArray, true, 524288, hexID, 0, amt);
+		Status resultEvaluateString = scriptEngine.evaluateString(scriptArray, true, 524288, hexID, 0, amt);
 
 		Assert.assertEquals("Script failed an OP_CHECKSIGVERIFY operation", resultEvaluateString.getStatusMessage());
 		Assert.assertEquals(19, resultEvaluateString.getStatusCode());
 
 		// call evaluate method for binaryScript in byte array format
-		Status resultEvaluate = jniIF.evaluate(binaryScript, true, 524288, hexID, 0, amt);
+		Status resultEvaluate = scriptEngine.evaluate(binaryScript, true, 524288, hexID, 0, amt);
 
 		Assert.assertEquals("Script failed an OP_CHECKSIGVERIFY operation", resultEvaluate.getStatusMessage());
 		Assert.assertEquals(19, resultEvaluate.getStatusCode());
@@ -282,13 +282,13 @@ public class ScriptEngineTest {
 		int amt = 10;
 
 		// call evaluateString method for scriptArray in string format
-		Status resultEvaluateString = jniIF.evaluateString(scriptArray, true, 0, hexID, 1, amt);
+		Status resultEvaluateString = scriptEngine.evaluateString(scriptArray, true, 0, hexID, 1, amt);
 
 		Assert.assertEquals("No error", resultEvaluateString.getStatusMessage());
 		Assert.assertEquals(0, resultEvaluateString.getStatusCode());
 
 		// call evaluate method for binaryScript in byte array format
-		Status resultEvaluate = jniIF.evaluate(binaryScript, true, 0, hexID, 1, amt);
+		Status resultEvaluate = scriptEngine.evaluate(binaryScript, true, 0, hexID, 1, amt);
 
 		Assert.assertEquals("No error", resultEvaluate.getStatusMessage());
 		Assert.assertEquals(0, resultEvaluate.getStatusCode());
@@ -313,13 +313,13 @@ public class ScriptEngineTest {
 		int amt = 10;
 
 		// call evaluateString method for scriptArray in string format
-		Status resultEvaluateString = jniIF.evaluateString(scriptArray, true, 0, hexID, 5, amt);
+		Status resultEvaluateString = scriptEngine.evaluateString(scriptArray, true, 0, hexID, 5, amt);
 
 		Assert.assertEquals("Script failed an OP_CHECKSIGVERIFY operation", resultEvaluateString.getStatusMessage());
 		Assert.assertEquals(19, resultEvaluateString.getStatusCode());
 
 		// call evaluate method for binaryScript in byte array format
-		Status resultEvaluate = jniIF.evaluate(binaryScript, true, 0, hexID, 5, amt);
+		Status resultEvaluate = scriptEngine.evaluate(binaryScript, true, 0, hexID, 5, amt);
 
 		Assert.assertEquals("Script failed an OP_CHECKSIGVERIFY operation", resultEvaluate.getStatusMessage());
 		Assert.assertEquals(19, resultEvaluate.getStatusCode());
@@ -345,7 +345,7 @@ public class ScriptEngineTest {
 			Status resultEvaluate = null;
 			// Call evaluateString method for scriptArray in string format
 			try {
-				resultEvaluateString = jniIF.evaluateString(scriptArray, true, flag, txHex, 0, 0);
+				resultEvaluateString = scriptEngine.evaluateString(scriptArray, true, flag, txHex, 0, 0);
 			} catch (Exception ex) {
 				return;
 			}
@@ -354,7 +354,7 @@ public class ScriptEngineTest {
 
 			// Call evaluate method for binaryScript in byte array format
 			try {
-				resultEvaluate = jniIF.evaluate(binaryScript, true, flag, txHex, 0, 0);
+				resultEvaluate = scriptEngine.evaluate(binaryScript, true, flag, txHex, 0, 0);
 			} catch (Exception ex) {
 				return;
 			}
@@ -375,12 +375,12 @@ public class ScriptEngineTest {
 			String txHex = t.get(2);
 
 			// Call evaluateString method for scriptArray in string format
-			Status resultEvaluateString = jniIF.evaluateString(scriptArray, true, flag, txHex, 0, 0);
+			Status resultEvaluateString = scriptEngine.evaluateString(scriptArray, true, flag, txHex, 0, 0);
 
 			Assert.assertEquals(resultEvaluateString.getStatusCode(), 0);
 
 			// Call evaluate method for binaryScript in byte array format
-			Status resultEvaluate = jniIF.evaluate(binaryScript, true, flag, txHex, 0, 0);
+			Status resultEvaluate = scriptEngine.evaluate(binaryScript, true, flag, txHex, 0, 0);
 
 			Assert.assertEquals(resultEvaluate.getStatusCode(), 0);
 
@@ -419,13 +419,13 @@ public class ScriptEngineTest {
 		int amt = 10;
 
 		// call evaluateString method for scriptArray in string format
-		Status resultEvaluateString = jniIF.evaluateString(scriptArray, true, 0, hexID, -2, amt);
+		Status resultEvaluateString = scriptEngine.evaluateString(scriptArray, true, 0, hexID, -2, amt);
 
 		Assert.assertEquals("Script failed an OP_CHECKSIGVERIFY operation", resultEvaluateString.getStatusMessage());
 		Assert.assertEquals(19, resultEvaluateString.getStatusCode());
 
 		// call evaluate method for binaryScript in byte array format
-		Status resultEvaluate = jniIF.evaluate(binaryScript, true, 0, hexID, -2, amt);
+		Status resultEvaluate = scriptEngine.evaluate(binaryScript, true, 0, hexID, -2, amt);
 
 		Assert.assertEquals("Script failed an OP_CHECKSIGVERIFY operation", resultEvaluate.getStatusMessage());
 		Assert.assertEquals(19, resultEvaluate.getStatusCode());
@@ -448,13 +448,13 @@ public class ScriptEngineTest {
 		int amt = 10;
 
 		// call evaluateString method for scriptArray in string format
-		Status resultEvaluateString = jniIF.evaluateString(scriptArray, false, 0, hexID, 1, amt);
+		Status resultEvaluateString = scriptEngine.evaluateString(scriptArray, false, 0, hexID, 1, amt);
 
 		Assert.assertEquals("No error", resultEvaluateString.getStatusMessage());
 		Assert.assertEquals(0, resultEvaluateString.getStatusCode());
 
 		// call evaluate method for binaryScript in byte array format
-		Status resultEvaluate = jniIF.evaluate(binaryScript, false, 0, hexID, 1, amt);
+		Status resultEvaluate = scriptEngine.evaluate(binaryScript, false, 0, hexID, 1, amt);
 
 		Assert.assertEquals("No error", resultEvaluate.getStatusMessage());
 		Assert.assertEquals(0, resultEvaluate.getStatusCode());
@@ -480,13 +480,13 @@ public class ScriptEngineTest {
 		int amt = 10;
 
 		// call evaluateString method for scriptArray in string format
-		Status resultEvaluateString = jniIF.evaluateString(scriptArray, true, 0, hexID, 0, amt);
+		Status resultEvaluateString = scriptEngine.evaluateString(scriptArray, true, 0, hexID, 0, amt);
 
 		Assert.assertEquals("OP_RETURN was encountered", resultEvaluateString.getStatusMessage());
 		Assert.assertEquals(3, resultEvaluateString.getStatusCode());
 
 		// call evaluate method for binaryScript in byte array format
-		Status resultEvaluate = jniIF.evaluate(binaryScript, true, 0, hexID, 0, amt);
+		Status resultEvaluate = scriptEngine.evaluate(binaryScript, true, 0, hexID, 0, amt);
 
 		Assert.assertEquals("OP_RETURN was encountered", resultEvaluate.getStatusMessage());
 		Assert.assertEquals(3, resultEvaluate.getStatusCode());
@@ -508,13 +508,13 @@ public class ScriptEngineTest {
 		int amt = 10;
 
 		// call evaluateString method for scriptArray in string format
-		Status resultEvaluateString = jniIF.evaluateString(scriptArray, true, -1, hexID, 1, amt);
+		Status resultEvaluateString = scriptEngine.evaluateString(scriptArray, true, -1, hexID, 1, amt);
 
 		Assert.assertEquals("Signature must use SIGHASH_FORKID", resultEvaluateString.getStatusMessage());
 		Assert.assertEquals(43, resultEvaluateString.getStatusCode());
 
 		// call evaluate method for binaryScript in byte array format
-		Status resultEvaluate = jniIF.evaluate(binaryScript, true, -1, hexID, 1, amt);
+		Status resultEvaluate = scriptEngine.evaluate(binaryScript, true, -1, hexID, 1, amt);
 
 		Assert.assertEquals("Signature must use SIGHASH_FORKID", resultEvaluate.getStatusMessage());
 		Assert.assertEquals(43, resultEvaluate.getStatusCode());
@@ -533,7 +533,7 @@ public class ScriptEngineTest {
 
 		int amt = 10;
 		try {
-			result = jniIF.evaluateString(scriptArray, true, 0, hexID, 1, amt);
+			result = scriptEngine.evaluateString(scriptArray, true, 0, hexID, 1, amt);
 
 		} catch (Exception ex) {
 			Assert.assertNull(result);
@@ -553,7 +553,7 @@ public class ScriptEngineTest {
 
 		int amt = 10;
 		try {
-			result = jniIF.evaluateString(scriptArray, true, 0, hexID, 1, amt);
+			result = scriptEngine.evaluateString(scriptArray, true, 0, hexID, 1, amt);
 
 		} catch (Exception ex) {
 			Assert.assertNull(result);
@@ -573,7 +573,7 @@ public class ScriptEngineTest {
 
 		int amt = 10;
 		try {
-			result = jniIF.evaluate(binaryScript, true, 0, hexID, 1, amt);
+			result = scriptEngine.evaluate(binaryScript, true, 0, hexID, 1, amt);
 
 		} catch (Exception ex) {
 			Assert.assertNotNull(result);
@@ -593,7 +593,7 @@ public class ScriptEngineTest {
 
 		int amt = 10;
 		try {
-			result = jniIF.evaluate(binaryScript, true, 0, hexID, 1, amt);
+			result = scriptEngine.evaluate(binaryScript, true, 0, hexID, 1, amt);
 
 		} catch (Exception ex) {
 			Assert.assertNull(result);
@@ -615,7 +615,7 @@ public class ScriptEngineTest {
 		Status result = null;
 
 		try {
-			result = jniIF.evaluate(var, true, 0, hexID, 0, 0);
+			result = scriptEngine.evaluate(var, true, 0, hexID, 0, 0);
 		} catch (Exception ex) {
 			Assert.assertNull(result);
 			Assert.assertEquals("value cannot be null", ex.getMessage());
@@ -635,7 +635,7 @@ public class ScriptEngineTest {
 
 		int amt = 10;
 		try {
-			result = jniIF.evaluateString(scriptArray, true, 0, hexID, 1, amt);
+			result = scriptEngine.evaluateString(scriptArray, true, 0, hexID, 1, amt);
 		} catch (Exception ex) {
 			Assert.assertNull(result);
 			Assert.assertEquals("value cannot be null", ex.getMessage());
@@ -660,13 +660,13 @@ public class ScriptEngineTest {
 		int amt = 1;
 
 		// call evaluateString method for scriptArray in string format
-		Status resultEvaluateString = jniIF.evaluateString(scriptArray, true, 0, hexID, 0, amt);
+		Status resultEvaluateString = scriptEngine.evaluateString(scriptArray, true, 0, hexID, 0, amt);
 
 		Assert.assertEquals(0, resultEvaluateString.getStatusCode());
 		Assert.assertEquals("No error", resultEvaluateString.getStatusMessage());
 
 		// call evaluate method for binaryScript in byte array format
-		Status resultEvaluate = jniIF.evaluate(binaryScript, true, 0, hexID, 0, amt);
+		Status resultEvaluate = scriptEngine.evaluate(binaryScript, true, 0, hexID, 0, amt);
 
 		Assert.assertEquals(0, resultEvaluate.getStatusCode());
 		Assert.assertEquals("No error", resultEvaluate.getStatusMessage());
@@ -690,13 +690,13 @@ public class ScriptEngineTest {
 		int amt = 1;
 
 		// call evaluateString method for scriptArray in string format
-		Status resultEvaluateString = jniIF.evaluateString(scriptArray, true, 0, hexID, 0, amt);
+		Status resultEvaluateString = scriptEngine.evaluateString(scriptArray, true, 0, hexID, 0, amt);
 
 		Assert.assertEquals(14, resultEvaluateString.getStatusCode());
 		Assert.assertEquals("Script number overflow", resultEvaluateString.getStatusMessage());
 
 		// call evaluate method for binaryScript in byte array format
-		Status resultEvaluate = jniIF.evaluate(binaryScript, true, 0, hexID, 0, amt);
+		Status resultEvaluate = scriptEngine.evaluate(binaryScript, true, 0, hexID, 0, amt);
 
 		Assert.assertEquals(14, resultEvaluate.getStatusCode());
 		Assert.assertEquals("Script number overflow", resultEvaluate.getStatusMessage());
@@ -718,13 +718,13 @@ public class ScriptEngineTest {
 				"01000000010000000000000000000000000000000000000000000000000000000000000000000000004847304402200a5c6163f07b8d3b013c4d1d6dba25e780b39658d79ba37af7057a3b7f15ffa102201fd9b4eaa9943f734928b99a83592c2e7bf342ea2680f6a2bb705167966b742001000000000000000000");
 
 		// call evaluateString method for scriptArray in string format
-		Status resultEvaluateString = jniIF.evaluateString(scriptArray, true, 0, hexID, 0, 0);
+		Status resultEvaluateString = scriptEngine.evaluateString(scriptArray, true, 0, hexID, 0, 0);
 
 		Assert.assertEquals(0, resultEvaluateString.getStatusCode());
 		Assert.assertEquals("No error", resultEvaluateString.getStatusMessage());
 
 		// call evaluate method for binaryScript in byte array format
-		Status resultEvaluate = jniIF.evaluate(binaryScript, true, 0, hexID, 0, 0);
+		Status resultEvaluate = scriptEngine.evaluate(binaryScript, true, 0, hexID, 0, 0);
 
 		Assert.assertEquals(0, resultEvaluate.getStatusCode());
 		Assert.assertEquals("No error", resultEvaluate.getStatusMessage());
@@ -746,13 +746,13 @@ public class ScriptEngineTest {
 				"01000000010000000000000000000000000000000000000000000000000000000000000000000000004847304402200a5c6163f07b8d3b013c4d1d6dba25e780b39658d79ba37af7057a3b7f15ffa102201fd9b4eaa9943f734928b99a83592c2e7bf342ea2680f6a2bb705167966b742001000000000000000000");
 
 		// call evaluateString method for scriptArray in string format
-		Status resultEvaluateString = jniIF.evaluateString(scriptArray, true, 0, hexID, 0, 0);
+		Status resultEvaluateString = scriptEngine.evaluateString(scriptArray, true, 0, hexID, 0, 0);
 
 		Assert.assertEquals(23, resultEvaluateString.getStatusCode());
 		Assert.assertEquals("Operation not valid with the current stack size", resultEvaluateString.getStatusMessage());
 
 		// call evaluate method for binaryScript in byte array format
-		Status resultEvaluate = jniIF.evaluate(binaryScript, true, 0, hexID, 0, 0);
+		Status resultEvaluate = scriptEngine.evaluate(binaryScript, true, 0, hexID, 0, 0);
 
 		Assert.assertEquals(23, resultEvaluate.getStatusCode());
 		Assert.assertEquals("Operation not valid with the current stack size", resultEvaluate.getStatusMessage());
@@ -774,13 +774,13 @@ public class ScriptEngineTest {
 				"01000000010000000000000000000000000000000000000000000000000000000000000000000000006a47304402206e05a6fe23c59196ffe176c9ddc31e73a9885638f9d1328d47c0c703863b8876022076feb53811aa5b04e0e79f938eb19906cc5e67548bc555a8e8b8b0fc603d840c0121038282263212c609d9ea2a6e3e172de238d8c39cabd5ac1ca10646e23fd5f51508000000000000000000");
 
 		// call evaluateString method for scriptArray in string format
-		Status resultEvaluateString = jniIF.evaluateString(scriptArray, true, 0, hexID, 0, 0);
+		Status resultEvaluateString = scriptEngine.evaluateString(scriptArray, true, 0, hexID, 0, 0);
 
 		Assert.assertEquals(0, resultEvaluateString.getStatusCode());
 		Assert.assertEquals("No error", resultEvaluateString.getStatusMessage());
 
 		// call evaluate method for binaryScript in byte array format
-		Status resultEvaluate = jniIF.evaluate(binaryScript, true, 0, hexID, 0, 0);
+		Status resultEvaluate = scriptEngine.evaluate(binaryScript, true, 0, hexID, 0, 0);
 
 		Assert.assertEquals(0, resultEvaluate.getStatusCode());
 		Assert.assertEquals("No error", resultEvaluate.getStatusMessage());
@@ -802,13 +802,13 @@ public class ScriptEngineTest {
 				"01000000010000000000000000000000000000000000000000000000000000000000000000000000006a473044022034bb0494b50b8ef130e2185bb220265b9284ef5b4b8a8da4d8415df489c83b5102206259a26d9cc0a125ac26af6153b17c02956855ebe1467412f066e402f5f05d12012103363d90d446b00c9c99ceac05b6262ee053441c7e55552ffe526bad8f83ff4640000000000000000000");
 
 		// call evaluateString method for scriptArray in string format
-		Status resultEvaluateString = jniIF.evaluateString(scriptArray, true, 0, hexID, 0, 0);
+		Status resultEvaluateString = scriptEngine.evaluateString(scriptArray, true, 0, hexID, 0, 0);
 
 		Assert.assertEquals(17, resultEvaluateString.getStatusCode());
 		Assert.assertEquals("Script failed an OP_EQUALVERIFY operation", resultEvaluateString.getStatusMessage());
 
 		// call evaluate method for binaryScript in byte array format
-		Status resultEvaluate = jniIF.evaluate(binaryScript, true, 0, hexID, 0, 0);
+		Status resultEvaluate = scriptEngine.evaluate(binaryScript, true, 0, hexID, 0, 0);
 
 		Assert.assertEquals(17, resultEvaluate.getStatusCode());
 		Assert.assertEquals("Script failed an OP_EQUALVERIFY operation", resultEvaluate.getStatusMessage());
