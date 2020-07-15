@@ -1,5 +1,6 @@
 /// Use it as an example how to add a example
 
+#include "assembler.h"
 #include "interpreter.h"
 
 #include <iostream>
@@ -31,7 +32,7 @@ int main(int argc, char* argv[])
     if(bsv::evaluate(script_hash, concensus, scriptsflags, std::string(), 0, 0) == SCRIPT_ERR_OK)
         std::cout << "Successful script execution from string with a hash value & op codes" << std::endl;
 
-    std::string script_val = bsv::formatScript(script_hash);
+    std::string script_val = bsv::to_asm(script_hash);
     try
     {
         if(bsv::evaluate(script_val, concensus, scriptsflags, std::string(), 0, 0) == SCRIPT_ERR_OK)
@@ -42,7 +43,7 @@ int main(int argc, char* argv[])
         std::cout << e.what() << " with script constructed from FormatScript " << std::endl;
     }
 
-    std::cout << bsv::formatScript(script_hash) << std::endl;
+    std::cout << bsv::to_asm(script_hash) << std::endl;
 
     return 0;
 }

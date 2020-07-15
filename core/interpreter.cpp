@@ -93,19 +93,4 @@ ScriptError bsv::evaluate(const std::string& script,
 
     return evaluate_impl(ParseScript(script), consensus, scriptflag, txhex, vinIndex, amount);
 }
-std::string bsv::formatScript(const std::string& input_script)
-{
-    if(input_script.empty() || input_script.find_first_not_of(" /n/t/f") == std::string::npos)
-    {
-        throw std::runtime_error("No script provided to formatScript in ScirptEngine::formatScript");
-    }
-    try
-    {
-        CScript in = ParseScript(input_script);
-        return FormatScript(in);
-    }
-    catch(std::exception& e)
-    {
-        throw std::runtime_error(e.what());
-    }
-}
+

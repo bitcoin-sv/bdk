@@ -20,8 +20,6 @@ namespace bsv
                          const std::string& transaction,
                          int tx_input_index,
                          int64_t amount);
-
-    std::string formatScript(const std::string& script);
 };
 
 #endif
