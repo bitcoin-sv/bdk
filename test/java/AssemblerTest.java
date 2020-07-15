@@ -18,6 +18,17 @@ public class AssemblerTest {
 	}
 
 	@Test
+    public void testToAsmString() {
+    	 String asmInput = "4 5 0x93 9 0x87";
+    	 String expectedAsmOutput = "4 5 ADD 9 EQUAL";
+
+    	 String asmOutput = assembler.toAsm(asmInput);
+
+    	 Assert.assertEquals(expectedAsmOutput, asmOutput);
+    }
+
+
+	@Test
 	public void testFromToAsmFails() {
 		String asmInput = "4 5 OP_ADD 9 EQUAL";
 

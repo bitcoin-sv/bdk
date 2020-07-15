@@ -50,7 +50,7 @@ JNIEXPORT jbyteArray JNICALL Java_com_nchain_bsv_scriptengine_Assembler_fromAsm
     return converted_output_script;
 }
 
-JNIEXPORT jstring JNICALL Java_com_nchain_bsv_scriptengine_Assembler_toAsm
+JNIEXPORT jstring JNICALL Java_com_nchain_bsv_scriptengine_Assembler_toAsm___3B
     (JNIEnv * env, jobject obj, jbyteArray input_script)
 {
     if(input_script == nullptr)
@@ -84,3 +84,35 @@ JNIEXPORT jstring JNICALL Java_com_nchain_bsv_scriptengine_Assembler_toAsm
     return asm_output_script;
 }
 
+JNIEXPORT jstring JNICALL Java_com_nchain_bsv_scriptengine_Assembler_toAsm__Ljava_lang_String_2
+    (JNIEnv * env, jobject obj, jstring input_script)
+{
+
+    if(input_script == nullptr)
+    {
+        env->ThrowNew(env->FindClass("java/lang/IllegalArgumentException"), "value cannot be null");
+        return nullptr;
+    }
+
+    const unique_jstring_ptr input_script_unique = make_unique_jstring(env, input_script);
+
+    jstring asm_output_script = nullptr;
+    try
+    {
+        asm_output_script = env->NewStringUTF(bsv::to_asm(std::string(input_script_unique.get())).c_str());
+    }
+    catch(const std::runtime_error& ex)
+    {
+        env->ThrowNew(env->FindClass("java/lang/RuntimeException"), ex.what());
+    }
+    catch(const std::exception& ex)
+    {
+        env->ThrowNew(env->FindClass("java/lang/Exception"), ex.what());
+    }
+    catch(...)
+    {
+        env->ThrowNew(env->FindClass("java/lang/Exception"), "unable to convert to asm");
+    }
+
+    return asm_output_script;
+}

@@ -14,5 +14,6 @@ public class Assembler {
 
     public native byte[] fromAsm(String script);
     public native String toAsm(byte[] script);
+    public native String toAsm(String script);
 }
 
