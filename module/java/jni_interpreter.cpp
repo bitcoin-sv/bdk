@@ -10,7 +10,7 @@
 
 using namespace bsv::jni;
 
-JNIEXPORT jobject JNICALL Java_com_nchain_bsv_scriptengine_ScriptEngine_evaluate(JNIEnv* env,
+JNIEXPORT jobject JNICALL Java_com_nchain_bsv_scriptengine_ScriptEngine_evaluate___3BZILjava_lang_String_2II(JNIEnv* env,
                                                                    jobject obj,
                                                                    jbyteArray arr,
                                                                    jboolean concensus,
@@ -75,7 +75,7 @@ JNIEXPORT jobject JNICALL Java_com_nchain_bsv_scriptengine_ScriptEngine_evaluate
     return result;
 }
 
-JNIEXPORT jobject JNICALL Java_com_nchain_bsv_scriptengine_ScriptEngine_evaluateString(JNIEnv* env,
+JNIEXPORT jobject JNICALL Java_com_nchain_bsv_scriptengine_ScriptEngine_evaluate__Ljava_lang_String_2ZILjava_lang_String_2II(JNIEnv* env,
                                                                          jobject obj,
                                                                          jstring script,
                                                                          jboolean concensus,
