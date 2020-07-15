@@ -1,17 +1,19 @@
 //
 // Created by m.fletcher on 10/07/2020.
 //
+#pragma once
 
-#ifndef SESDK_ASSEMBLER_H
-#define SESDK_ASSEMBLER_H
+#include <string>
 
-#include <core_io.h>
-#include <script/script.h>
+#include "span.h"
+
+class CScript;
 
 namespace bsv
 {
     CScript from_asm(const std::string& script);
+
     std::string to_asm(const bsv::span<const uint8_t> script);
+    std::string to_asm(const std::string& script);
 }
 
-#endif // SESDK_ASSEMBLER_H

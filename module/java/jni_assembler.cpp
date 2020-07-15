@@ -1,11 +1,12 @@
 //
 // Created by m.fletcher on 10/07/2020.
 //
+#include <com_nchain_bsv_scriptengine_Assembler.h> // Generated
+#include <jni.h>
 
 #include "assembler.h"
 #include "jni_memory.h"
-#include <com_nchain_bsv_scriptengine_Assembler.h> // Generated
-#include <jni.h>
+#include "script.h"
 
 #include <stdexcept>
 
