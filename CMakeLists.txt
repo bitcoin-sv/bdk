@@ -12,11 +12,11 @@
 ## Run to build/test/install
 ##
 ## On Windows
-##   cmake -G"Visual Studio 16 2019" -A x64 ..\bscrypt && cmake --build . --target ALL_BUILD --config Debug && cmake --build . --target ALL_BUILD --config Release && ctest -C Debug && ctest -C Release && cpack -G NSIS -C Release
+##   cmake -G"Visual Studio 16 2019" -A x64 ..\bscrypt && cmake --build . --target ALL_BUILD --config Debug && cmake --build . --target ALL_BUILD --config Release && ctest -C Debug && ctest -C Release && cpack -G NSIS -C Release && cpack -G NSIS -C Debug
 ##
 ## Windows alternative with MSBuild parallele:
-##   cmake -G"Visual Studio 16 2019" -A x64 ..\bscrypt && msbuild sesdk.sln -maxcpucount:4 /p:Configuration=Debug && msbuild sesdk.sln -maxcpucount:4 /p:Configuration=Release && ctest -C Debug && ctest -C Release && cpack -G NSIS -C Release
-##   cmake -G"Visual Studio 16 2019" -A x64 ..\bscrypt && msbuild sesdk.sln -v:q -maxcpucount:4 /p:Configuration=Debug && msbuild sesdk.sln  -v:q -maxcpucount:4 /p:Configuration=Release && ctest -C Debug && ctest -C Release && cpack -G NSIS -C Release
+##   cmake -G"Visual Studio 16 2019" -A x64 ..\bscrypt && msbuild sesdk.sln -maxcpucount:4 /p:Configuration=Debug && msbuild sesdk.sln -maxcpucount:4 /p:Configuration=Release && ctest -C Debug && ctest -C Release && cpack -G NSIS -C Release && cpack -G NSIS -C Release
+##   cmake -G"Visual Studio 16 2019" -A x64 ..\bscrypt && msbuild sesdk.sln -v:q -maxcpucount:4 /p:Configuration=Debug && msbuild sesdk.sln  -v:q -maxcpucount:4 /p:Configuration=Release && ctest -C Debug && ctest -C Release && cpack -G NSIS -C Release && cpack -G NSIS -C Release
 ##
 ## On Linux (Ubuntu)
 ##   cmake ../bscrypt -DCMAKE_BUILD_TYPE=Debug -DCUSTOM_SYSTEM_OS_NAME=Ubuntu; time -p make -j8 ; ctest ; make install; cpack -G TGZ
@@ -48,9 +48,10 @@ include(cmake/modules/FindBSVSourceHelper.cmake)
 HelpFindBSVSource()
 #scryptPrintBSVSourceInfo()#Print help to debug
 
-set(SESDK_VERSION_MAJOR "0" CACHE INTERNAL "script engine major version")
-set(SESDK_VERSION_MINOR "1" CACHE INTERNAL "script engine minor version")
-set(SESDK_VERSION_PATCH "1" CACHE INTERNAL "script engine patch version")
+## Global version should be the maximum of all version numbers
+set(SESDK_VERSION_MAJOR "1" CACHE INTERNAL "Script Engine SDK major version")
+set(SESDK_VERSION_MINOR "0" CACHE INTERNAL "Script Engine SDK minor version")
+set(SESDK_VERSION_PATCH "1" CACHE INTERNAL "Script Engine SDK patch version")
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)## Always include the current directory
 

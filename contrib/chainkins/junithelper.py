@@ -47,7 +47,7 @@ def _fix_testsuites_if_exist(xml_file):
             f.write(xml_content)
 
 def get_consolidated_junitxml(result_dir_path, test_name_postfix=''):
-    xml_file_list = sorted(result_dir_path.glob('*test*.xml'))
+    xml_file_list = sorted(result_dir_path.glob('test_*.xml'))
     #print('\n'.join(xml_file_list))
     junit_xml = junitparser.JUnitXml()
     for xml_file in xml_file_list:

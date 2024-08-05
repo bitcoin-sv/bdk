@@ -43,7 +43,7 @@ To build a C++ program using Script Engine SDK, it needs to link with the instal
 
 To simplify for C++ code there are only one single file to include
 ```c++
-#include <script_engine>
+#include <sesdk>
 ```
 This will include all header files delivered by the package. Note that it is simplified, but not optimal for compilation time.
 

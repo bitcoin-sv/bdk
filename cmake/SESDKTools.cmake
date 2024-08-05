@@ -51,6 +51,14 @@ macro(scrypt_remove_compiler_flags)
   endforeach()
 endmacro()
 
+#### Create a new version number based on a base number, with an increment
+####      add_v = base_v + incr
+#### Usage :
+####     createIncrementVersion(add_v ${base_v} incr "major version of something")
+function(createIncrementVersion add_v base_v incr cache_comment)
+  math(EXPR add_vv ${base_v}+${incr})
+  set(${add_v} ${add_vv} CACHE INTERNAL ${cache_comment})
+endfunction()############################################################################
 
 #### Print OS Info
 function(scryptPrintOSInfo)##############################################################################

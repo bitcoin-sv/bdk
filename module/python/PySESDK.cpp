@@ -5,7 +5,10 @@
 #include <map>
 #include <iostream>
 
-#include "interpreter.h"
+#include <version.hpp>    // global and core versions
+#include <version_py.hpp>
+
+#include <interpreter.h>
 
 struct module_state {
     PyObject *error;
@@ -31,7 +34,7 @@ static PyObject* wrap_ExecuteScript(PyObject* self, PyObject *args){
         return nullptr;
 
     try{
-        const ScriptError ret = bsv::evaluate(std::string{scriptptr},concensus, scriptflags, std::string{hextxptr},index,amount);
+        const ScriptError ret = bsv::execute(std::string{scriptptr},concensus, scriptflags, std::string{hextxptr},index,amount);
         return Py_BuildValue("i", ret);
     }catch(std::exception& e){
         PyErr_SetString(PyExc_TypeError, e.what());
@@ -94,6 +97,39 @@ initmyextension(void)
         Py_DECREF(module);
         INITERROR;
     }
+
+    // Specific version for python binding module
+    PyModule_AddIntConstant(module, "SESDK_PYTHON_VERSION_MAJOR", SESDK_PYTHON_VERSION_MAJOR);
+    PyModule_AddIntConstant(module, "SESDK_PYTHON_VERSION_MINOR", SESDK_PYTHON_VERSION_MINOR);
+    PyModule_AddIntConstant(module, "SESDK_PYTHON_VERSION_PATCH", SESDK_PYTHON_VERSION_PATCH);
+    PyModule_AddStringConstant(module, "SESDK_PYTHON_VERSION_STRING", SESDK_PYTHON_VERSION_STRING.c_str());
+
+    /* Version information inherited from SESDK core */
+    PyModule_AddIntConstant(module, "SESDK_VERSION_MAJOR", SESDK_VERSION_MAJOR);
+    PyModule_AddIntConstant(module, "SESDK_VERSION_MINOR", SESDK_VERSION_MINOR);
+    PyModule_AddIntConstant(module, "SESDK_VERSION_PATCH", SESDK_VERSION_PATCH);
+    PyModule_AddStringConstant(module, "SESDK_VERSION_STRING", SESDK_VERSION_STRING.c_str());
+
+    PyModule_AddStringConstant(module, "SOURCE_GIT_COMMIT_BRANCH", SOURCE_GIT_COMMIT_BRANCH.c_str());
+    PyModule_AddStringConstant(module, "SOURCE_GIT_COMMIT_HASH", SOURCE_GIT_COMMIT_HASH.c_str());
+    PyModule_AddStringConstant(module, "SOURCE_GIT_COMMIT_DATETIME", SOURCE_GIT_COMMIT_DATETIME.c_str());
+    PyModule_AddStringConstant(module, "SESDK_BUILD_DATETIME_UTC", SESDK_BUILD_DATETIME_UTC.c_str());
+
+    PyModule_AddIntConstant(module, "BSV_CLIENT_VERSION_MAJOR", BSV_CLIENT_VERSION_MAJOR);
+    PyModule_AddIntConstant(module, "BSV_CLIENT_VERSION_MINOR", BSV_CLIENT_VERSION_MINOR);
+    PyModule_AddIntConstant(module, "BSV_CLIENT_VERSION_REVISION", BSV_CLIENT_VERSION_REVISION);
+    PyModule_AddStringConstant(module, "BSV_VERSION_STRING", BSV_VERSION_STRING.c_str());
+
+    PyModule_AddStringConstant(module, "BSV_GIT_COMMIT_BRANCH", BSV_GIT_COMMIT_BRANCH.c_str());
+    PyModule_AddStringConstant(module, "BSV_GIT_COMMIT_HASH", BSV_GIT_COMMIT_HASH.c_str());
+    PyModule_AddStringConstant(module, "BSV_GIT_COMMIT_DATETIME", BSV_GIT_COMMIT_DATETIME.c_str());
+
+    PyModule_AddIntConstant(module, "SESDK_CORE_VERSION_MAJOR", SESDK_CORE_VERSION_MAJOR);
+    PyModule_AddIntConstant(module, "SESDK_CORE_VERSION_MINOR", SESDK_CORE_VERSION_MINOR);
+    PyModule_AddIntConstant(module, "SESDK_CORE_VERSION_PATCH", SESDK_CORE_VERSION_PATCH);
+    PyModule_AddStringConstant(module, "SESDK_CORE_VERSION_STRING", SESDK_CORE_VERSION_STRING.c_str());
+
+
 
 #if PY_MAJOR_VERSION >= 3
     return module;

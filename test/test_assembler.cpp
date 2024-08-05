@@ -16,27 +16,10 @@ using namespace bsv;
 
 BOOST_AUTO_TEST_SUITE(test_assembler_suite)
 
-BOOST_AUTO_TEST_CASE(to_asm_from_cscript)
-{
-    const vector<uint8_t> input{0x93, 0x87};
-    const std::string actual{bsv::to_asm(input)};
-    const std::string expected{"ADD EQUAL"};
-    BOOST_CHECK_EQUAL(expected, actual);
-}
-
-BOOST_AUTO_TEST_CASE(to_asm_from_opcode_string)
-{
-    const std::string input("4 5 0x93 9 0x87");
-    const std::string actual{bsv::to_asm(input)};
-    const std::string expected{"4 5 ADD 9 EQUAL"};
-    BOOST_CHECK_EQUAL(expected, actual);
-}
-
 BOOST_AUTO_TEST_CASE(to_asm_from_asm)
 {
     const std::string input("4 5 ADD 9 EQUAL");
     const CScript intermediate{bsv::from_asm(input)};
-    std::cout << intermediate << '\n';
     const std::string output{bsv::to_asm(intermediate)};
     BOOST_CHECK_EQUAL(input, output);
 }

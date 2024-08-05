@@ -13,6 +13,24 @@ endif()
 if(NOT DEFINED SESDK_BSV_ROOT_DIR)#
   message(FATAL_ERROR "Unable to locate bsv source code by SESDK_BSV_ROOT_DIR")
 endif()
+
+#### Set version for C++ core
+set(SESDK_CORE_VERSION_MAJOR 1 CACHE INTERNAL "C++ core major version")
+set(SESDK_CORE_VERSION_MINOR 0 CACHE INTERNAL "C++ core minor version")
+set(SESDK_CORE_VERSION_PATCH 0 CACHE INTERNAL "C++ core patch version")
+set(SESDK_CORE_VERSION_STRING "${SESDK_CORE_VERSION_MAJOR}.${SESDK_CORE_VERSION_MINOR}.${SESDK_CORE_VERSION_PATCH}" CACHE INTERNAL "C++ core version")
+
+## Test maximum of global version
+if(${SESDK_VERSION_STRING} LESS ${SESDK_CORE_VERSION_STRING})
+  message("Script Engine SDK global version should be the max of all version numbers")
+  message("SESDK_VERSION_STRING=${SESDK_VERSION_STRING} while SESDK_CORE_VERSION_STRING=${SESDK_CORE_VERSION_STRING}")
+endif()
+
+#### Generate version C++  #####
+set(SESDK_VERSION_HPP_IN ${CMAKE_CURRENT_SOURCE_DIR}/version.hpp.in CACHE INTERNAL "Template File for C++ version")
+set(SESDK_VERSION_HPP ${SESDK_GENERATED_HPP_DIR}/version.hpp CACHE INTERNAL "HPP File for framework version config")
+configure_file(${SESDK_VERSION_HPP_IN} ${SESDK_VERSION_HPP})
+
 set(BSV_MINIMAL_FILES ${BSV_MINIMAL_HDR_FILES} ${BSV_MINIMAL_SRC_FILES})
 set(UNIFIED_INSTALL_HEADERS_STR "\n#include \"core/SESDKVersion.hpp\"\n\n")
 #scryptPrintList("BSV_MINIMAL_FILES" "${BSV_MINIMAL_FILES}")## Help to debug
@@ -44,7 +62,7 @@ foreach(_bitcoin_file ${BSV_MINIMAL_FILES})
     source_group(TREE ${SESDK_BSV_ROOT_DIR} PREFIX "bitcoin HDR" FILES "${_bitcoin_file}")
   endif()
 endforeach()
-source_group("_generated" FILES "${BITCOIN_CONFIG_FILE}")
+source_group("_generated" FILES "${BITCOIN_CONFIG_FILE}" "${SESDK_VERSION_HPP}")
 
 ## any .cpp .hpp file added here will be added group with bsv file to build the core.
 file(GLOB_RECURSE SESDK_CORE_EXTRA_HDR_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp" "${CMAKE_CURRENT_SOURCE_DIR}/*.h")
@@ -60,7 +78,7 @@ foreach(_extra_file ${SESDK_CORE_EXTRA_HDR_FILES} ${SESDK_CORE_EXTRA_SRC_FILES})
 endforeach()
 
 ## Build sesdk_core as a library using bsv source code
-add_library(sesdk_core ${BITCOIN_CONFIG_FILE} ${SESDK_CORE_HDR_FILES} ${SESDK_CORE_SRC_FILES})
+add_library(sesdk_core ${BITCOIN_CONFIG_FILE} ${SESDK_VERSION_HPP} ${SESDK_CORE_HDR_FILES} ${SESDK_CORE_SRC_FILES})
 #set_target_properties(sesdk_core PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS 1)
 target_include_directories(sesdk_core PUBLIC ${BSV_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(sesdk_core ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT} secp256k1 ${UNIVALUE_LIB} OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono)
@@ -76,10 +94,13 @@ set_property(TARGET sesdk_core PROPERTY FOLDER "core")
 ## Install the binary library
 install(TARGETS sesdk_core DESTINATION "lib" COMPONENT sesdk_core)
 
-set(UNIFIED_INSTALL_HEADERS_STR "${UNIFIED_INSTALL_HEADERS_STR}\n// Include files in bsv\n")
-## Install sesdk_core : the *.h header files should be kept as bsv structure
+## Install version.hpp file
+install(FILES "${SESDK_VERSION_HPP}" DESTINATION "include/core" COMPONENT sesdk_core)
+## Install bitcoin config file
 install(FILES ${BITCOIN_CONFIG_FILE} DESTINATION "include/core/config" COMPONENT sesdk_core)
  
+## Install sesdk_core : the *.h header files should be kept as bsv structure
+set(UNIFIED_INSTALL_HEADERS_STR "${UNIFIED_INSTALL_HEADERS_STR}\n// Include files in bsv\n")
 ## Calculate the relative path for include file in installer
 get_filename_component(__f ${BITCOIN_CONFIG_FILE} NAME)
 set(__install_rl "core/config/${__f}")
@@ -87,6 +108,7 @@ set(UNIFIED_INSTALL_HEADERS_STR "${UNIFIED_INSTALL_HEADERS_STR}#include \"${__in
 set(default_install_include_core_dir "include/core")
 # Install bsv header files
 foreach(_bsv_hdr ${BSV_MINIMAL_HDR_FILES})
+  set(_relative_dir "")#clear
   get_filename_component(_dir ${_bsv_hdr} DIRECTORY)
   if("${_dir}" STRGREATER "${SESDK_BSV_ROOT_DIR}/src")
     string(REPLACE "${SESDK_BSV_ROOT_DIR}/src" "" _relative_dir "${_dir}")
@@ -113,6 +135,6 @@ foreach(_extra_hdr ${SESDK_CORE_EXTRA_HDR_FILES})
   set(UNIFIED_INSTALL_HEADERS_STR "${UNIFIED_INSTALL_HEADERS_STR}#include \"${_install_rl}\"\n")
 endforeach()
 
-set(SESDK_UNIFIED_HEADER_FILE "${SESDK_GENERATED_TOOLS_DIR}/script_engine")
-configure_file("${CMAKE_CURRENT_SOURCE_DIR}/script_engine.in" ${SESDK_UNIFIED_HEADER_FILE})
+set(SESDK_UNIFIED_HEADER_FILE "${SESDK_GENERATED_TOOLS_DIR}/sesdk")
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/sesdk.in" ${SESDK_UNIFIED_HEADER_FILE})
 install(FILES ${SESDK_UNIFIED_HEADER_FILE} DESTINATION "include/core" COMPONENT sesdk_core)

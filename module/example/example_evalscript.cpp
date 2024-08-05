@@ -1,27 +1,26 @@
-/// Use it as an example how to add a example
-
-#include <config.h>
 #include <iostream>
-#include <script/interpreter.h>
-#include <script/script.h>
-#include <script/script_error.h>
 #include <sstream>
-#include <taskcancellation.h>
+
+#include "config.h"
+#include "script/interpreter.h"
+#include "taskcancellation.h"
+
+using namespace std;
 
 int main(int argc, char* argv[])
 {
-    std::cout << "Test starting" << std::endl;
-    static const uint8_t direct[] = {1, 0x5a};
-    // static const uint8_t direct[] = {0x81, 0x82, OP_ADD, 0x83, OP_EQUAL, OP_CHECK};
-    CScript scr;
-    ScriptError err;
-    LimitedStack direct_stack(UINT32_MAX);
+    constexpr array<uint8_t, 6> direct{OP_2, OP_2, OP_ADD, OP_4, OP_EQUAL};
+    const Config& config = GlobalConfig::GetConfig();
     auto source = task::CCancellationSource::Make();
-    const GlobalConfig& testConfig = GlobalConfig::GetConfig();
-
-    auto res = EvalScript(testConfig, true, source->GetToken(), direct_stack,
-                          CScript(&direct[0], &direct[sizeof(direct)]), SCRIPT_VERIFY_P2SH,
-                          BaseSignatureChecker(), &err);
-
-    return 0;
+    LimitedStack stack(UINT32_MAX);
+    ScriptError err{};
+    const auto res = EvalScript(config,
+                                true,
+                                source->GetToken(),
+                                stack,
+                                CScript{begin(direct), end(direct)},
+                                0,
+                                BaseSignatureChecker{},
+                                &err);
+    cout << "Result: " << res.value() << "\nScriptError: " << err << '\n';
 }

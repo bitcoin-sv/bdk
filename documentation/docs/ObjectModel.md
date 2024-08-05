@@ -1,29 +1,68 @@
 ## Script engine object model
 
-Object model is an approach to implement scripts functionalities in a object oriented fashion. The main function in script engine is the evaluation of the script. Other classes provide facilities to hold additional/auxiliare data to this function.
+Plant UML description
 
- - **Status** class : hold the result of script's evaluation, i.e its return code and error message if any.
- - **Assembler** class : Implement method that convert a binary script to string script (the underlying data of a script is a binary array)
- - **ScriptEngine** class : hold the script configuration and script's evaluation flag switch. These determine how script should be evaluated. It has the execute method to evaluate a script
-
-```plantuml
 @startuml
 class Status 
 { 
-	+readonly unsigned long code;
-	+readonly string message;
+	+unsigned long code;
+	+string message;
 }
+class Config 
+{
+	+Config(boolean isGenesisEnabled, boolean isConsensus)
 
+    +void load(String filename);
+
+    +uint64 getMaxOpsPerScript();
+    +uint64 getMaxScriptNumLength();
+    +uint64 getMaxScriptSize();
+    +uint64 getMaxPubKeysPerMultiSig();
+    +uint64 getMaxStackMemoryUsage();
+
+    +void setMaxOpsPerScriptPolicy(uint64 v);
+    +void setMaxScriptnumLengthPolicy(uint64 v);
+    +void setMaxScriptSizePolicy(uint64 v);
+    +void setMaxPubkeysPerMultisigPolicy(uint64 v);
+    +void setMaxStackMemoryUsage(uint64 v1, uint64 v2);
+
+    +bool isGenesisEnabled;
+    +bool isConsensus;
+}
 class Assembler
 {
-	+byte[] fromAsm(string asm);
-	+string toAsm(byte[] script);
+    +byte[] fromAsm(String script);
+    +string toAsm(byte[] script);
 }
-
+class ScriptIterator
+{
+	+ScriptIterator(byte[])
+	
+	+bool next();
+	+readonly int opcode;
+	+readonly byte[] data;
+}
+class CancellationToken
+{
+	+void cancel();
+}
+class Stack
+{
+    +int64 size();
+    +byte[] at(int pos);
+}
 class ScriptEngine 
 {
-    Status evaluate(byte[] script, boolean concensus, int flags, string txHex, int index, int amount);
-    Status evaluate(string script, boolean concensus, int flags, string txHex, int index, int amount);
+	+ScriptEngine(Config config, uint64 Flags);
+	
+	+Status execute(byte[] script, CancellationToken token, String txHex, int index, int amount);
+    +Status execute(String script, CancellationToken token, String txHex, int index, int amount);
+	+reset(Config config, uint64 Flags);
+	
+	+boolean[] getExecState();
+	+boolean[] getElseState();
 }
+ScriptEngine --> Stack : stack
+ScriptEngine --> Stack : alt-stack
 @enduml
-```
+

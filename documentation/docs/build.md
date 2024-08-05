@@ -13,6 +13,7 @@ python -m pip install pytest junitparser mkdocs pymdown-extensions plantuml_mark
 ```
 - [CMake 3.16](https://cmake.org/download/) or later
 - [Boost 1.72](https://www.boost.org/doc/libs/1_72_0/) or later. 
+- Please make sure MSBuild is in the PATH.
 **Linux**: static libraries and must be compiled with `fPIC` on.
 - OpenSSL 1.1.1b or later
 - C++ 17 compatible compiler
@@ -20,8 +21,8 @@ python -m pip install pytest junitparser mkdocs pymdown-extensions plantuml_mark
 **Linux**: g++9 on Linux
 ##### Java module
 - Java JDK 8 or later
-- `junit4.jar` and `hamcrest.jar`. (Rename if necessary)
-- The `JAVA_TOOLS` environment variable must be setup to point to junit4.jar and hamcrest.jar
+- Download testng jar files `guice-4.1.0.jar`, `jcommander-1.72.jar`, `snakeyaml-1.21.jar` and `testng-7.1.0.jar`
+- The `JAVA_TOOLS` environment variable must be setup pointing to the directory containing these files
 ##### Python module
 - No additional requirements if Python is installed with Debug symbols
 
@@ -72,8 +73,9 @@ From the build directory:
 
 To build Script Engine SDK
 ```console
-cmake ../bscrypt -DCMAKE_BUILD_TYPE=Debug -DCUSTOM_SYSTEM_OS_NAME=Ubuntu; time -p make -j8
+cmake ../bscrypt -DCUSTOM_SYSTEM_OS_NAME=Ubuntu; time -p make -j8
 ```
+If you want to build in debug mode, add the flag `-DCMAKE_BUILD_TYPE=Debug` to the cmake command.
 
 To run tests
 ```console
@@ -88,9 +90,39 @@ cpack -G TGZ
 ## Tests
 Once the build tools and libraries are prepared, some post installation steps are required to let the Script Engine SDK build system know how to find everything:
 
-##### Linux
+##### C++ on Linux
 ```console
 make test
 ctest
 ```
 
+##### Java test from IntelliJ IDEA
+
+In general to run script engine java test from any IDE, users need to let the IDE know where to load the sesdk.jar package and where is the location of the sesdk_jni runtime library. Below is the explanation of how to do it with IntelliJ IDEA.
+
+Ctrl-Shift-A then type "Import project from existing source". Select directory $BSCRYPT, click next next a few time until reaching
+
+  - The window asking to select some of the directories, uncheck all, leave only the $BSCRYPT/test/java
+  - The window asking to select a library (jar file), uncheck all
+
+When the project is created, IntelliJ open a new window with projec tree there. Open File/Project Structure, then go to Modules :
+
+  - On Sources tab, select directory $BSCRYPT/test/java and make sure it is marked as "Test"
+  - On Dependencies tab :
+
+      - click on '+' button to add sesdk jar file ($BUILD_DIR/generated/tools/bin/sesdk-x.y.z.jar)
+      - click on '+' button to add directory $JAVA_TOOLS
+    Make sure the 2 dependencies added are checked to be used
+
+Right click on a specific *Test.java file, select recompile
+Right click on the same *Test.java file, select "create test" (there are symbol indicating TestNG), then the test configuration will open
+From the VM options, add appropriate value of
+```
+-Djava_test_data_dir="$BSCRYPT/test/java/data" -Djava.library.path="$CMAKE_BUILD_DIR/x64/release"
+```
+Then the test is ready to run/debug. To debug java code, and jni C++ call:
+
+- Make sure you've built in debug mode
+- Change VM option `-Djava.library.path="$CMAKE_BUILD_DIR/x64/debug` 
+- add the argument "-Ddebug=1" to VM options
+- use the method "PackageInfo.getPID()" to get the pid of the proccess and use C++ debugger "attach to process" functionality.

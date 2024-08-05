@@ -1,52 +1,27 @@
 /// Use it as an example how to add a example
 
+#include <cassert>
 #include <iostream>
 #include <sstream>
-// bitcoin headers
+
+#include "base58.h"
+#include "chainparams.h"
+#include "config.h"
+#include "core_io.h"
 #include "interpreter.h"
-#include <base58.h>
-#include <cassert>
-#include <chainparams.h>
-#include <config.h>
-#include <core_io.h>
-#include <key.h>
-#include <script/script_num.h>
-#include <univalue/include/univalue.h>
+#include "key.h"
+#include "script/script_num.h"
+#include "univalue/include/univalue.h"
 
 const std::string strSecret1 = "5HxWvvfubhXpYYpS3tJkw6fq9jE9j18THftkZjHHfmFiWtmAbrj";
-
-// lifted from Nakasendo (conversions.h / conversions.cpp)
-constexpr char hexmap[] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
-
-std::string binTohexStr(const std::unique_ptr<unsigned char[]>& data, int len)
-{
-    std::string s(len * 2, ' ');
-    for(int i = 0; i < len; ++i)
-    {
-        s[2 * i] = hexmap[(data.get()[i] & 0xF0) >> 4];
-        s[2 * i + 1] = hexmap[data.get()[i] & 0x0F];
-    }
-    return s;
-}
-
-std::string UintToHex(const std::vector<uint8_t>& UintRep)
-{
-    std::unique_ptr<unsigned char[]> uncharRep(new unsigned char[UintRep.size()]);
-    int index(0);
-    for(std::vector<uint8_t>::const_iterator iter = UintRep.begin(); iter != UintRep.end(); ++iter)
-    {
-        uncharRep[index++] = *iter;
-    }
-    return (binTohexStr(uncharRep, UintRep.size()));
-}
 
 void NegateSignatureS(std::vector<uint8_t>& vchSig)
 {
     // Parse the signature.
-    std::vector<uint8_t> r, s;
-    r = std::vector<uint8_t>(vchSig.begin() + 4, vchSig.begin() + 4 + vchSig[3]);
-    s = std::vector<uint8_t>(vchSig.begin() + 6 + vchSig[3],
-                             vchSig.begin() + 6 + vchSig[3] + vchSig[5 + vchSig[3]]);
+    std::vector<uint8_t> r(vchSig.begin() + 4, vchSig.begin() + 4 + vchSig[3]);
+    std::vector<uint8_t> s(vchSig.begin() + 6 + vchSig[3],
+                           vchSig.begin() + 6 + vchSig[3] +
+                               vchSig[5 + vchSig[3]]);
 
     // Really ugly to implement mod-n negation here, but it would be feature
     // creep to expose such functionality from libsecp256k1.
@@ -147,14 +122,9 @@ std::vector<uint8_t> MakeSig(CScript& script,
 
 int main(int argc, char* argv[])
 {
-
     // Set up for Bitcoin libs
-    const GlobalConfig& testConfig = GlobalConfig::GetConfig();
     SelectParams(CBaseChainParams::TESTNET);
-    ECCVerifyHandle globalVerifyHandle;
-    ECC_Start();
 
-    std::cout << "Starting..." << std::endl;
     CBitcoinSecret bsecret1;
     bsecret1.SetString(strSecret1);
 
@@ -166,25 +136,21 @@ int main(int argc, char* argv[])
 
     std::string strMsg = strprintf("Very secret message %i: 11", 0);
     uint256 hashMsg = Hash(strMsg.begin(), strMsg.end());
-    // std::cout << keys.key0 << std::endl;
     std::vector<uint8_t> sign1;
     key1.Sign(hashMsg, sign1);
 
     if(pubkey1.Verify(hashMsg, sign1))
         std::cout << "Hashed message verified" << std::endl;
 
-    // COnstruct a tx
+    // Construct a tx
     CScript scriptSig;
     scriptSig << OP_DUP << OP_HASH160 << ToByteVector(pubkey1.GetID()) << OP_EQUALVERIFY << OP_CHECKSIGVERIFY;
 
     CScript Pubkey;
     Pubkey << ToByteVector(pubkey1);
 
-    CScript scriptToHash;
-    scriptToHash = Pubkey + scriptSig;
-
-    CMutableTransaction creditTx = BuildCreditingTransaction(scriptSig, Amount(10));
-
+    const Amount amount{10};
+    CMutableTransaction creditTx = BuildCreditingTransaction(scriptSig, amount);
     CMutableTransaction spendTx = BuildSpendingTransaction(CScript(), creditTx);
 
     CTransaction ctx(creditTx);
@@ -192,7 +158,7 @@ int main(int argc, char* argv[])
     std::cout << "Credit TX " << ctx.ToString() << std::endl;
     std::cout << "Spending TX " << stx.ToString() << std::endl;
 
-    std::vector<uint8_t> sig = MakeSig(scriptToHash, key1, spendTx);
+    std::vector<uint8_t> sig = MakeSig(scriptSig, key1, spendTx);
 
     std::cout << EncodeHexTx(stx) << std::endl;
     const std::string& hextx = EncodeHexTx(stx, 0);
@@ -204,27 +170,25 @@ int main(int argc, char* argv[])
 
         CTransaction t(rebuilttx);
 
-        uint256 hash = SignatureHash(scriptToHash, stx, 0, SigHashType(), Amount(10), nullptr,
+        uint256 hash = SignatureHash(scriptSig, stx, 0, SigHashType(), Amount(10), nullptr,
                                      SCRIPT_ENABLE_SIGHASH_FORKID);
 
         if(pubkey1.Verify(hash, sig))
             std::cout << "Sig hash verified - value of hash is " << hash.ToString() << std::endl;
     }
-    ECC_Stop();
 
     CScript finalScript;
     finalScript << sig << ToByteVector(pubkey1);
 
     finalScript += scriptSig;
 
-    Amount a(10);
-    int64_t amt = a.GetSatoshis();
+    int64_t amt = amount.GetSatoshis();
     std::cout << "Amount is: " << amt << std::endl;
     const std::string& scriptStr = FormatScript(finalScript);
 
     std::string scr = FormatScript(finalScript);
     std::cout << scr << std::endl;
-    if(bsv::evaluate(scr, true, 0, hextx, 0, amt))
+    if(bsv::execute(scr, true, 0, hextx, 0, amt))
     {
         std::cout << "Successfully executed script with a checksig" << std::endl;
     }

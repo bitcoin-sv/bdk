@@ -22,6 +22,7 @@ set(FindJavaJDKHelper_Include TRUE)
 macro(HelpFindJavaJDK)########################################################################################
   find_package(Java COMPONENTS Development)
   find_package(JNI)
+  include(UseJava)
 endmacro()
 
 #### Print found JavaJDK for debug

@@ -118,7 +118,6 @@ macro(scryptInitCMake)
   scryptSetCompilationOptions()
   scryptSetOutputDirectories()
   scryptSetBuildVersion()
-  install(FILES "${SESDK_VERSION_HPP}" DESTINATION "include/core" COMPONENT Files)
 
   ## Precalculate variable for installation
   scryptGetInstallRootDir(_install_root_dir)

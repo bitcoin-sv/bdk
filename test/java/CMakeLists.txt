@@ -5,93 +5,137 @@
 #  Copyright (c) 2020 nChain Limited. All rights reserved       #
 #################################################################
 
-find_package(Java REQUIRED)
-find_package(JNI REQUIRED)
-include(UseJava)
+include(FindJavaJDKHelper)
+HelpFindJavaJDK()
+#scryptPrintJavaJDKInfo()#Debug Log
 
-if(NOT (JNI_FOUND AND Java_FOUND AND DEFINED ENV{JAVA_TOOLS}))
-    message(WARNING "Unable to find Java JDK on the system or environment variable JAVA_TOOLS. Skip building Java tests")
-    message(STATUS "       JNI_FOUND  [${JNI_FOUND}]")
-    message(STATUS "       Java_FOUND [${Java_FOUND}]")
-    message(STATUS "       JAVA_TOOLS [$ENV{JAVA_TOOLS}]")
-    return()
+if(NOT (JNI_FOUND AND Java_FOUND AND SESDK_JAR))
+  message(STATUS "Unable to find Java JDK and script engine SDK")
+  message(STATUS "       JNI_FOUND  [${JNI_FOUND}]")
+  message(STATUS "       Java_FOUND [${Java_FOUND}]")
+  message(STATUS "       SESDK_JAR [${SESDK_JAR}]")
+  message(WARNING "Skip building Java tests")
+  return()
 endif()
 
-find_jar(JUNIT_JAR NAMES junit4 PATHS $ENV{JAVA_TOOLS} $ENV{JAVA_HOME} $ENV{JAVA_ROOT})
-find_jar(HAMCREST_JAR NAMES hamcrest hamcrest-core PATHS $ENV{JAVA_TOOLS} $ENV{JAVA_HOME} $ENV{JAVA_ROOT})
+if(DEFINED ENV{JAVA_TOOLS})
+  set(JAVA_TOOLS_DIR "$ENV{JAVA_TOOLS}")
+else()
+  set(JAVA_TOOLS_DIR "${SESDK_GENERATED_BIN_DIR}")
+  message("\n  Dowloading testng and dependencies")
+  message("    DOWNLOAD file https://repo1.maven.org/maven2/org/testng/testng/7.1.0/testng-7.1.0.jar      to ${JAVA_TOOLS_DIR}")
+  file(DOWNLOAD https://repo1.maven.org/maven2/org/testng/testng/7.1.0/testng-7.1.0.jar "${JAVA_TOOLS_DIR}/testng-7.1.0.jar")
+  message("    DOWNLOAD file https://repo1.maven.org/maven2/com/beust/jcommander/1.72/jcommander-1.72.jar to ${JAVA_TOOLS_DIR}")
+  file(DOWNLOAD https://repo1.maven.org/maven2/com/beust/jcommander/1.72/jcommander-1.72.jar "${JAVA_TOOLS_DIR}/jcommander-1.72.jar")
+  message("    DOWNLOAD file https://repo1.maven.org/maven2/com/google/inject/guice/4.1.0/guice-4.1.0.jar to ${JAVA_TOOLS_DIR}")
+  file(DOWNLOAD https://repo1.maven.org/maven2/com/google/inject/guice/4.1.0/guice-4.1.0.jar "${JAVA_TOOLS_DIR}/guice-4.1.0.jar")
+  message("    DOWNLOAD file https://repo1.maven.org/maven2/org/yaml/snakeyaml/1.21/snakeyaml-1.21.jar    to ${JAVA_TOOLS_DIR}")
+  file(DOWNLOAD https://repo1.maven.org/maven2/org/yaml/snakeyaml/1.21/snakeyaml-1.21.jar "${JAVA_TOOLS_DIR}/snakeyaml-1.21.jar")
+  message("  Skip these download by manually downloading them to a directory.")
+  message("  Then define the environment variable JAVA_TOOLS pointing to this directory\n")
+endif()
+message(STATUS "Use JAVA_TOOLS_DIR=[${JAVA_TOOLS_DIR}]")
 
-if(NOT (JUNIT_JAR AND HAMCREST_JAR))
-    message(WARNING "Unable to find Java packages junit and hamcrest. Skip building Java tests")
-    message(STATUS "       JUNIT_JAR    [${JUNIT_JAR}]")
-    message(STATUS "       HAMCREST_JAR [${HAMCREST_JAR}]")
-    return()
+find_jar(TESTNG_JAR NAMES testng-7.1.0 PATHS ${JAVA_TOOLS_DIR} $ENV{JAVA_HOME} $ENV{JAVA_ROOT})
+find_jar(JCOMMANDER_JAR NAMES jcommander-1.72 PATHS ${JAVA_TOOLS_DIR} $ENV{JAVA_HOME} $ENV{JAVA_ROOT})
+find_jar(GUICE_JAR NAMES guice-4.1.0 PATHS ${JAVA_TOOLS_DIR} $ENV{JAVA_HOME} $ENV{JAVA_ROOT})
+find_jar(SNAKEYAML_JAR NAMES snakeyaml-1.21 PATHS ${JAVA_TOOLS_DIR} $ENV{JAVA_HOME} $ENV{JAVA_ROOT})
+
+if(NOT (TESTNG_JAR AND JCOMMANDER_JAR AND GUICE_JAR AND SNAKEYAML_JAR))
+  message(STATUS "Unable to find Java testing packages for testng")
+  message(STATUS "       TESTNG_JAR     [${TESTNG_JAR}]")
+  message(STATUS "       JCOMMANDER_JAR [${JCOMMANDER_JAR}]")
+  message(STATUS "       GUICE_JAR      [${GUICE_JAR}]")
+  message(STATUS "       SNAKEYAML_JAR  [${SNAKEYAML_JAR}]")
+  message(WARNING "Skip building Java tests")
+  return()
 endif()
 
-
-#set commands
-set(CMAKE_INCLUDE_CURRENT_DIR ON)## Always include the current directory by default is off
-
-set(JAVA_PACKAGE_NAME "com.nchain.bsv.scriptengine")
-
-set(PROJECT_DIRECTORY ${CMAKE_SOURCE_DIR})
-set(SOURCE_DIRECTORY  ${PROJECT_DIRECTORY}/module/java)
-set(TEST_DIRECTORY  ${PROJECT_DIRECTORY}/test/java)
+set(SESDK_CLASSPATH "com.nchain.sesdk")
 
 ## Get all test scripts
 file(GLOB _JAVA_TEST_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*Test.java")
 
+
 if(CMAKE_CONFIGURATION_TYPES)
-  set(JAVA_DEBUG_FLAG "\$<IF:\$<CONFIG:Debug>,-Ddebug=1,-Ddebug=0>")
+  set(TESTNG_JAR_FILES "${TESTNG_JAR}\$<SEMICOLON>${JCOMMANDER_JAR}\$<SEMICOLON>${GUICE_JAR}\$<SEMICOLON>${SNAKEYAML_JAR}")
 else()
-  if(CMAKE_BUILD_TYPE STREQUAL "Debug")
-    set(JAVA_DEBUG_FLAG "-Ddebug=1")
-  else()
-    set(JAVA_DEBUG_FLAG "-Ddebug=0")
-  endif()
+  set(TESTNG_JAR_FILES "${TESTNG_JAR}:${JCOMMANDER_JAR}:${GUICE_JAR}:${SNAKEYAML_JAR}")
 endif()
 
 ## Execute each test from the tests folder
-foreach(_ftest_file ${_JAVA_TEST_FILES})
-  get_filename_component(java_test_file "${_ftest_file}" NAME_WE)
-  string(REPLACE "Test" "" BASE_TEST_NAME ${java_test_file})
+foreach(java_testfile ${_JAVA_TEST_FILES})
+  get_filename_component(JAVA_TEST_CLASSNAME "${java_testfile}" NAME_WE)
+  string(REPLACE "Test" "" BASE_TEST_NAME ${JAVA_TEST_CLASSNAME})
 
-  set(JAVA_TEST_NAME test_Java${BASE_TEST_NAME})
+  set(JAVA_BUILDTEST_NAME build_Java${JAVA_TEST_CLASSNAME})
+  set(JAVA_RUNTEST_NAME test_Java${BASE_TEST_NAME})
 
-  add_custom_target(${java_test_file} ALL DEPENDS ${TEST_DIRECTORY}/${java_test_file}.java)
+  add_custom_target(${JAVA_BUILDTEST_NAME} ALL DEPENDS "${java_testfile}")
+  add_dependencies(${JAVA_BUILDTEST_NAME} ${SESDK_JAR_BASE_NAME})
 
+  # Compile java test to runtime output directories of the project
+  # -cp should have all *.jar files, in particular the ${SESDK_JAR}
   if(CMAKE_CONFIGURATION_TYPES)
-    add_custom_command(TARGET ${java_test_file}
-       COMMAND ${Java_JAVAC_EXECUTABLE} -d $<IF:$<CONFIG:Debug>,${CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG},${CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE}> -cp "${JUNIT_JAR}\$<SEMICOLON>${HAMCREST_JAR}" ${SOURCE_DIRECTORY}/*.java ${TEST_DIRECTORY}/${java_test_file}.java
-       COMMENT "Compiling ${TEST_FILE}")
+    add_custom_command(TARGET ${JAVA_BUILDTEST_NAME}
+      COMMAND ${Java_JAVAC_EXECUTABLE}
+      -d $<IF:$<CONFIG:Debug>,${CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG},${CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE}>
+      -cp "${SESDK_JAR}\$<SEMICOLON>${TESTNG_JAR_FILES}"
+      ${java_testfile}
+       COMMENT "Compiling ${java_testfile}")
   else()
-    add_custom_command(TARGET ${java_test_file}
-       COMMAND ${Java_JAVAC_EXECUTABLE} -d ${CMAKE_RUNTIME_OUTPUT_DIRECTORY} -cp "${JUNIT_JAR}:${HAMCREST_JAR}" ${SOURCE_DIRECTORY}/*.java ${TEST_DIRECTORY}/${java_test_file}.java
-       COMMENT "Compiling ${TEST_FILE}")
+    add_custom_command(TARGET ${JAVA_BUILDTEST_NAME}
+      COMMAND ${Java_JAVAC_EXECUTABLE}
+      -d ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+      -cp "${SESDK_JAR}:${TESTNG_JAR_FILES}"
+      ${java_testfile}
+       COMMENT "Compiling ${java_testfile}")
   endif()
 
-  set_target_properties(${java_test_file} PROPERTIES  FOLDER "test/java")
+  set_target_properties(${JAVA_BUILDTEST_NAME} PROPERTIES  FOLDER "test/java")
 
+  # Add java test
+  # -Djava.library.path should point to the jni runtime library (C++)
+  # -cp should have all *.jar files, in particular the ${SESDK_JAR}
   if(CMAKE_CONFIGURATION_TYPES)
-    ## Need to set the WORKING_DIRECTORY on windows as a hack to get the PATH set there
-    ## -Djava.library.path alone does not work because the jni dll depend to other dll in this directory (chained dependencies)
-    add_test(NAME ${JAVA_TEST_NAME}d
-             CONFIGURATIONS Debug
-             COMMAND ${Java_JAVA_EXECUTABLE} -Djava_test_data_dir=${CMAKE_CURRENT_SOURCE_DIR}/data -Djava.library.path=${CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG} ${JAVA_DEBUG_FLAG} -cp "${CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG}\$<SEMICOLON>${JUNIT_JAR}\$<SEMICOLON>${HAMCREST_JAR}" org.junit.runner.JUnitCore ${JAVA_PACKAGE_NAME}.${java_test_file}
-             WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG}
-    )
-add_test(NAME ${JAVA_TEST_NAME}
-             CONFIGURATIONS Release
-             COMMAND ${Java_JAVA_EXECUTABLE} -Djava_test_data_dir=${CMAKE_CURRENT_SOURCE_DIR}/data -Djava.library.path=${CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE} ${JAVA_DEBUG_FLAG} -cp "${CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE}\$<SEMICOLON>${JUNIT_JAR}\$<SEMICOLON>${HAMCREST_JAR}" org.junit.runner.JUnitCore ${JAVA_PACKAGE_NAME}.${java_test_file}
-             WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE}
-    )
+    add_test(NAME ${JAVA_RUNTEST_NAME}${CMAKE_DEBUG_POSTFIX}
+      CONFIGURATIONS Debug
+      COMMAND ${Java_JAVA_EXECUTABLE} -Ddebug=1
+      -Djava_test_data_dir=${CMAKE_CURRENT_SOURCE_DIR}/data
+      -Djava.library.path=${CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG}
+      -cp "${CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG}\$<SEMICOLON>${SESDK_JAR}\$<SEMICOLON>${TESTNG_JAR_FILES}" org.testng.TestNG
+      -testclass "${SESDK_CLASSPATH}.${JAVA_TEST_CLASSNAME}"
+      -suitename "."
+      -testname ${JAVA_RUNTEST_NAME}${CMAKE_DEBUG_POSTFIX}
+      -d ${CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG}
+      )
+    add_test(NAME ${JAVA_RUNTEST_NAME}
+      CONFIGURATIONS Release
+      COMMAND ${Java_JAVA_EXECUTABLE} -Ddebug=0
+      -Djava_test_data_dir=${CMAKE_CURRENT_SOURCE_DIR}/data
+      -Djava.library.path=${CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE}
+      -cp "${CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE}\$<SEMICOLON>${SESDK_JAR}\$<SEMICOLON>${TESTNG_JAR_FILES}" org.testng.TestNG
+      -testclass ${SESDK_CLASSPATH}.${JAVA_TEST_CLASSNAME}
+      -suitename "."
+      -testname ${JAVA_RUNTEST_NAME}
+      -d ${CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE}
+      )
   else()
     if(${CMAKE_BUILD_TYPE} STREQUAL "Debug")
       set(_tpost_fix ${CMAKE_DEBUG_POSTFIX})
+      set(_tdflag "-Ddebug=1")
+    else()
+      set(_tdflag "-Ddebug=0")
     endif()
-    add_test(NAME ${JAVA_TEST_NAME}${_tpost_fix}
-             COMMAND ${Java_JAVA_EXECUTABLE} -Djava_test_data_dir=${CMAKE_CURRENT_SOURCE_DIR}/data -Djava.library.path=${CMAKE_RUNTIME_OUTPUT_DIRECTORY} ${JAVA_DEBUG_FLAG} -cp ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}:$ENV{JAVA_TOOLS}:${JUNIT_JAR}:${HAMCREST_JAR} org.junit.runner.JUnitCore ${JAVA_PACKAGE_NAME}.${java_test_file}
+    add_test(NAME ${JAVA_RUNTEST_NAME}${_tpost_fix}
+      COMMAND ${Java_JAVA_EXECUTABLE} ${_tdflag}
+      -Djava_test_data_dir=${CMAKE_CURRENT_SOURCE_DIR}/data
+      -Djava.library.path=${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+      -cp "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}:${SESDK_JAR}:${JAVA_TOOLS_DIR}:${TESTNG_JAR_FILES}" org.testng.TestNG
+      -testclass ${SESDK_CLASSPATH}.${JAVA_TEST_CLASSNAME}
+      -suitename "."
+      -testname ${JAVA_RUNTEST_NAME}${_tpost_fix}
+      -d ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
     )
   endif()
 endforeach()
-
-

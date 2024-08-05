@@ -14,7 +14,7 @@ if(NOT TARGET Python::Interpreter)
   message(FATAL_ERROR "Python Interpreter is required to run tests on CI")
 endif()
 
-macro(scrypt_add_unit_test _targetName)
+macro(sesdk_add_unit_test _targetName)
   if(NOT TARGET ${_targetName})
       message(FATAL_ERROR " [${_targetName}] is not a TARGET")
   endif()
@@ -40,11 +40,11 @@ endif()
 
 add_executable(test_interpreter "${CMAKE_CURRENT_SOURCE_DIR}/test_interpreter.cpp")
 target_link_libraries(test_interpreter ${CMAKE_DL_LIBS} sesdk_core OpenSSL::Crypto OpenSSL::SSL)
-scrypt_add_unit_test(test_interpreter)
+sesdk_add_unit_test(test_interpreter)
 
-add_executable(test_asm "${CMAKE_CURRENT_SOURCE_DIR}/test_assembler.cpp")
-target_link_libraries(test_asm ${CMAKE_DL_LIBS} sesdk_core OpenSSL::Crypto OpenSSL::SSL)
-scrypt_add_unit_test(test_asm)
+add_executable(test_assembler "${CMAKE_CURRENT_SOURCE_DIR}/test_assembler.cpp")
+target_link_libraries(test_assembler ${CMAKE_DL_LIBS} sesdk_core OpenSSL::Crypto OpenSSL::SSL)
+sesdk_add_unit_test(test_assembler)
 
 
 ## Test binding modules

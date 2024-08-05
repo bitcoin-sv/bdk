@@ -1,6 +1,9 @@
-FROM ubuntu:18.04
+FROM ubuntu:20.04
 
 LABEL author="Chris Gibson"
+
+ENV TZ=Europe/London
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
 RUN apt update && apt install -y \
     wget \
@@ -60,7 +63,6 @@ RUN python3 -m pip install pytest
 RUN apt install -y default-jdk
 RUN apt install -y openjdk-8-jdk
 RUN apt install -y junit4
-ENV JAVA_TOOLS=/usr/share/java
 
 # Create build dir for CMake   
 WORKDIR /root

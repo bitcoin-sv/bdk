@@ -60,7 +60,7 @@ endforeach()
 
 ####################################################################################################################
 ## Test files *cpp here are mainly extract of bsv source code ######################################################
-add_executable(test_sesdk_core
+add_executable(test_core
                "${SESDK_BSV_TEST_ROOT}/jsonutil.h"
                "${SESDK_BSV_TEST_ROOT}/scriptflags.h"
                "${SESDK_BSV_TEST_ROOT}/sigutil.h"
@@ -70,15 +70,16 @@ add_executable(test_sesdk_core
                ${JSON_HEADERS}
                "${CMAKE_CURRENT_SOURCE_DIR}/script_tests_modified.cpp"
                "${SESDK_BSV_TEST_ROOT}/bn_op_tests.cpp"
+#               "${SESDK_BSV_TEST_ROOT}/config_tests.cpp"
                "${SESDK_BSV_TEST_ROOT}/scriptflags.cpp"
                "${SESDK_BSV_TEST_ROOT}/scriptnum_tests.cpp"
                ## TODO
                #"${SESDK_BSV_TEST_ROOT}/opcode_tests.cpp
 )
 
-target_link_libraries(test_sesdk_core ${CMAKE_DL_LIBS} sesdk_core OpenSSL::Crypto OpenSSL::SSL)
+target_link_libraries(test_core ${CMAKE_DL_LIBS} sesdk_core OpenSSL::Crypto OpenSSL::SSL)
 if(WIN32)
-  target_link_libraries(test_sesdk_core Crypt32.lib Ws2_32)
+  target_link_libraries(test_core Crypt32.lib Ws2_32)
 endif()
-target_include_directories(test_sesdk_core PRIVATE "${SESDK_BSV_TEST_ROOT}")
-scrypt_add_unit_test(test_sesdk_core)
+target_include_directories(test_core PRIVATE "${SESDK_BSV_TEST_ROOT}")
+sesdk_add_unit_test(test_core)

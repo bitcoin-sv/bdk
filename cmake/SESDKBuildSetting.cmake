@@ -91,10 +91,6 @@ endfunction()
 
 #### Get bsv versions in the "${SESDK_BSV_ROOT_DIR}/src/clientversion.h"
 function(scryptCalculateBSVVersion clientversionFile)###############################################################
-  ## #define CLIENT_VERSION_MAJOR 1
-  ## #define CLIENT_VERSION_MINOR 0
-  ## #define CLIENT_VERSION_REVISION 2
-
   if(NOT EXISTS "${clientversionFile}")
     message(FATAL_ERROR "BSV version file [${clientversionFile}] does not exist")
   endif()
@@ -169,9 +165,4 @@ function(scryptSetBuildVersion)
   set(BSV_GIT_COMMIT_DATETIME ${_BSV_GIT_COMMIT_DATETIME} CACHE INTERNAL "BSV commit datetime")
 
   scryptCalculateBSVVersion("${SESDK_BSV_ROOT_DIR}/src/clientversion.h")
-
-  #### Generate version C++  #####
-  set(SESDK_VERSION_HPP_IN ${SESDK_ROOT_CMAKE_MODULE_PATH}/SESDKVersion.hpp.in CACHE INTERNAL "Template File for framework version config")
-  set(SESDK_VERSION_HPP ${SESDK_GENERATED_HPP_DIR}/SESDKVersion.hpp CACHE INTERNAL "HPP File for framework version config")
-  configure_file(${SESDK_VERSION_HPP_IN} ${SESDK_VERSION_HPP})
 endfunction()

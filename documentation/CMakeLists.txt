@@ -5,12 +5,6 @@
 #  Copyright (c) 2020 nChain Limited. All rights reserved       #
 #################################################################
 
-if(NOT Java_JAVA_EXECUTABLE)
-  include(FindJavaJDKHelper)
-  HelpFindJavaJDK()
-  #scryptPrintJavaJDKInfo()#Debug Log
-endif()
-
 if(NOT Python_EXECUTABLE)
   include(FindPythonHelper)
   HelpFindPython()
@@ -22,8 +16,8 @@ if(NOT mkdocs_EXECUTABLE)
   #message(STATUS "Found mkdocs mkdocs_EXECUTABLE[${mkdocs_EXECUTABLE}]")
 endif()
 
-if(NOT (Java_JAVA_EXECUTABLE AND Python_EXECUTABLE) )
-  message(STATUS "Missing java or python")
+if(NOT (mkdocs_EXECUTABLE AND Python_EXECUTABLE))
+  message(STATUS "Missing python or mkdocs")
   message(WARNING "Deactivate building documentation")
   return()
 endif()

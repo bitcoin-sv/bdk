@@ -14,6 +14,5 @@ namespace bsv
     CScript from_asm(const std::string& script);
 
     std::string to_asm(const bsv::span<const uint8_t> script);
-    std::string to_asm(const std::string& script);
 }
 

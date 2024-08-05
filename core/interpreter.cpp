@@ -4,93 +4,227 @@
 #include <chainparams.h>
 #include <config.h>
 #include <core_io.h>
-#include <ecc_guard.h>
 #include <script/interpreter.h>
 
 #include <stdexcept>
 
 using namespace std;
 
-using unique_sig_checker = unique_ptr<BaseSignatureChecker>;
-
 namespace
 {
-    unique_sig_checker make_unique_sig_checker() { return make_unique<BaseSignatureChecker>(); }
-
-    unique_sig_checker make_unique_sig_checker(const CTransaction& tx, const int vinIndex, const int64_t a)
+    ScriptError execute_impl(const CScript& script,
+                             const bool consensus,
+                             const unsigned int flags,
+                             BaseSignatureChecker& sig_checker)
     {
-        Amount amount{a};
-        return make_unique<TransactionSignatureChecker>(&tx, vinIndex, amount);
-    }
-
-    ScriptError evaluate_impl(const CScript& script,
-                              const bool consensus,
-                              const unsigned int scriptflag,
-                              BaseSignatureChecker* sigCheck)
-    {
-        ECCVerifyHandle verify_handle;
-        ecc_guard guard;
         auto source = task::CCancellationSource::Make();
-        LimitedStack direct_stack(UINT32_MAX);
-        ScriptError err;
-        EvalScript(GlobalConfig::GetConfig(), consensus, source->GetToken(), direct_stack, script, scriptflag,
-                   *sigCheck, &err);
+        LimitedStack stack(UINT32_MAX);
+        ScriptError err{};
+        EvalScript(GlobalConfig::GetConfig(),
+                   consensus,
+                   source->GetToken(),
+                   stack,
+                   script,
+                   flags,
+                   sig_checker,
+                   &err);
         return err;
     }
 
-    ScriptError evaluate_impl(const CScript& script,
-                              const bool consensus,
-                              const unsigned int scriptflag,
-                              const std::string& txhex,
-                              const int vinIndex,
-                              const int64_t amount)
+    ScriptError execute_impl(const CScript& script,
+                             const bool consensus,
+                             const unsigned int flags)
     {
-        CMutableTransaction mtx;
-
-        if(!txhex.empty() && txhex.find_first_not_of(" /n/t/f") != std::string::npos)
-        {
-            if(!DecodeHexTx(mtx, txhex))
-            {
-                throw std::runtime_error("Unable to create a CMutableTransaction "
-                                         "from supplied transaction hex");
-            }
-        }
-
-        unique_sig_checker sig_check{make_unique_sig_checker()};
-        CTransaction tx(mtx);
-        if(!mtx.vin.empty() && !mtx.vout.empty())
-        {
-            sig_check = make_unique_sig_checker(tx, vinIndex, amount);
-        }
-
-        return evaluate_impl(script, consensus, scriptflag, sig_check.get());
+        BaseSignatureChecker sig_checker;
+        return execute_impl(script, consensus, flags, sig_checker);
     }
 }
 
-ScriptError bsv::evaluate(const bsv::span<const uint8_t> script,
-                          const bool consensus,
-                          const unsigned int scriptflag,
-                          const std::string& txhex,
-                          const int vinIndex,
-                          const int64_t amount)
-{
-    return evaluate_impl(CScript{script.begin(), script.end()}, consensus, scriptflag, txhex, vinIndex,
-                         amount);
-}
-
-ScriptError bsv::evaluate(const std::string& script,
-                          const bool consensus,
-                          const unsigned int scriptflag,
-                          const std::string& txhex,
-                          const int vinIndex,
-                          const int64_t amount)
+ScriptError bsv::execute(const bsv::span<const uint8_t> script,
+                         const bool consensus,
+                         const unsigned int flags)
 {
     if(script.empty())
-        throw std::runtime_error("empty script");
+        throw std::runtime_error("script empty");
+
+    return execute_impl(CScript{script.begin(), script.end()},
+                        consensus,
+                        flags);
+}
+
+ScriptError bsv::execute(const std::string& script,
+                         bool consensus,
+                         unsigned int flags)
+{
+    if(script.empty())
+        throw std::runtime_error("script empty");
+
+    return execute_impl(ParseScript(script), consensus, flags);
+}
+
+namespace
+{
+    ScriptError execute_impl(const CScript& script,
+                             const bool consensus,
+                             const unsigned int flags,
+                             const CMutableTransaction& mtx,
+                             const int index,
+                             const int64_t amount)
+    {
+        const CTransaction tx(mtx);
+        if(!tx.vin.empty() && !tx.vout.empty())
+        {
+            const Amount amt{amount};
+            TransactionSignatureChecker sig_checker(&tx, index, amt);
+            return execute_impl(script, consensus, flags, sig_checker);
+        }
+        else
+        {
+            BaseSignatureChecker sig_checker;
+            return execute_impl(script, consensus, flags, sig_checker);
+        }
+    }
+}
+
+ScriptError bsv::execute(const bsv::span<const uint8_t> script,
+                         const bool consensus,
+                         const unsigned int flags,
+                         const bsv::span<const uint8_t> tx,
+                         const int index,
+                         const int64_t amount)
+{
+    if(script.empty())
+        throw std::runtime_error("script empty");
+
+    if(tx.empty())
+        throw std::runtime_error("tx empty");
+
+    const char* begin{reinterpret_cast<const char*>(tx.data())};
+    const char* end{reinterpret_cast<const char*>(tx.data() + tx.size())};
+    CDataStream tx_stream(begin, end, SER_NETWORK, PROTOCOL_VERSION);
+    CMutableTransaction mtx;
+    tx_stream >> mtx;
+    if(!tx_stream.empty())
+    {
+        throw std::runtime_error(
+            "Unable to create a CMutableTransaction from supplied tx data");
+    }
+
+    return execute_impl(CScript{script.begin(), script.end()},
+                        consensus,
+                        flags,
+                        mtx,
+                        index,
+                        amount);
+}
+
+ScriptError bsv::execute(const std::string& script,
+                         const bool consensus,
+                         const unsigned int flags,
+                         const std::string& tx,
+                         const int index,
+                         const int64_t amount)
+{
+    if(script.empty())
+        throw std::runtime_error("script empty");
 
     if(script.find_first_not_of(" /n/t/f") == std::string::npos)
         throw std::runtime_error("Control character in script");
 
-    return evaluate_impl(ParseScript(script), consensus, scriptflag, txhex, vinIndex, amount);
+    if(tx.empty())
+        throw std::runtime_error("tx empty");
+
+    // if(tx.find_first_not_of(" /n/t/f") != std::string::npos)
+    //    throw std::runtime_error("Control character in tx");
+
+    CMutableTransaction mtx;
+    if(!DecodeHexTx(mtx, tx))
+    {
+        throw std::runtime_error("Unable to create a CMutableTransaction "
+                                 "from supplied transaction hex");
+    }
+
+    return execute_impl(ParseScript(script), consensus, flags, mtx, index, amount);
+}
+
+namespace
+{
+    ScriptError verify_impl(const CScript& unlocking_script,
+                            const CScript& locking_script,
+                            const bool consensus,
+                            const unsigned int flags,
+                            BaseSignatureChecker& sig_checker)
+    {
+        auto source = task::CCancellationSource::Make();
+        ScriptError err{};
+        VerifyScript(GlobalConfig::GetConfig(),
+                     consensus,
+                     source->GetToken(),
+                     unlocking_script,
+                     locking_script,
+                     flags,
+                     sig_checker,
+                     &err);
+        return err;
+    }
+
+    ScriptError verify_impl(const CScript& unlocking_script,
+                            const CScript& locking_script,
+                            const bool consensus,
+                            const unsigned int flags,
+                            const CMutableTransaction& mtx,
+                            const int index,
+                            const int64_t amount)
+    {
+        const CTransaction tx(mtx);
+        if(!tx.vin.empty() && !tx.vout.empty())
+        {
+            const Amount amt{amount};
+            TransactionSignatureChecker sig_checker(&tx, index, amt);
+            return verify_impl(unlocking_script,
+                               locking_script,
+                               consensus,
+                               flags,
+                               sig_checker);
+        }
+        else
+        {
+            BaseSignatureChecker sig_checker;
+            return verify_impl(unlocking_script,
+                               locking_script,
+                               consensus,
+                               flags,
+                               sig_checker);
+        }
+    }
+}
+
+ScriptError bsv::verify(const bsv::span<const uint8_t> unlocking_script,
+                        const bsv::span<const uint8_t> locking_script,
+                        const bool consensus,
+                        const unsigned int flags,
+                        const bsv::span<const uint8_t> tx,
+                        const int index,
+                        const int64_t amount)
+{
+    const char* begin{reinterpret_cast<const char*>(tx.data())};
+    const char* end{reinterpret_cast<const char*>(tx.data() + tx.size())};
+    CDataStream tx_stream(begin, end, SER_NETWORK, PROTOCOL_VERSION);
+    CMutableTransaction mtx;
+    tx_stream >> mtx;
+
+    if(!tx_stream.empty())
+    {
+        throw std::runtime_error("Unable to create a CMutableTransaction from "
+                                 "supplied tx data");
+    }
+
+    return verify_impl(CScript{unlocking_script.begin(), unlocking_script.end()},
+                       CScript{locking_script.begin(), locking_script.end()},
+                       consensus,
+                       flags,
+                       mtx,
+                       index,
+                       amount);
 }
 

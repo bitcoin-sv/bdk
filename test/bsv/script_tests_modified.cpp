@@ -8,10 +8,12 @@
  // LICENSE.
 
  // SCRIPT_ENGINE_BUILD_TEST ++++++++++++++++++++++++++++++++++++++++++++++++++++
+#include <thread>
+#include <chrono>
 #ifdef NDEBUG 
-#  define BOOST_TEST_MODULE test_sesdk_core
+#  define BOOST_TEST_MODULE test_core
 #else
-#  define BOOST_TEST_MODULE test_sesdk_cored
+#  define BOOST_TEST_MODULE test_cored
 #endif
 #include <boost/test/unit_test.hpp>
 // SCRIPT_ENGINE_BUILD_TEST ++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -64,21 +66,15 @@ static const unsigned int flags = SCRIPT_VERIFY_P2SH | SCRIPT_VERIFY_STRICTENC;
  */
 struct BasicTestingSetup {
 
-    ECCVerifyHandle globalVerifyHandle;
-    GlobalConfig& testConfig;
-    BasicTestingSetup():testConfig(GlobalConfig::GetConfig())
+    ConfigInit& testConfig;
+    BasicTestingSetup():testConfig(GlobalConfig::GetModifiableGlobalConfig())
     {
         SHA256AutoDetect();
         RandomInit();
-        ECC_Start();
         SetupEnvironment();
         SetupNetworking();
         InitSignatureCache();
         InitScriptExecutionCache();
-    }
-    ~BasicTestingSetup()
-    {
-        ECC_Stop();
     }
 };
 
@@ -554,6 +550,71 @@ std::string JSONPrettyPrint(const UniValue &univalue) {
     return ret;
 }
 } // namespace
+
+// SCRIPT_ENGINE_BUILD_TEST ----------------------------------------------------
+BOOST_AUTO_TEST_CASE(concurent_cancellation)
+{
+    struct Executor
+    {
+        const CScriptConfig& config;
+        bool consensus;
+        const task::CCancellationToken& token;
+        LimitedStack& stack;
+        const CScript& script;
+        uint32_t flags;
+        const BaseSignatureChecker checker;
+        ScriptError* error;
+        void operator()()
+        {
+            ret = EvalScript(config, consensus, token, stack, script, flags, checker, error);
+        }
+
+        std::optional<bool> ret;
+    };
+
+    constexpr size_t N {100000};
+
+    // Script of form [OP_PUSHDATA1 0x01 0x02 OP_PUSHDATA1 0x03 0x06 OP_PUSHDATA1 0x01 0x04
+    //                 OP_PUSHDATA1 0x01 0x01 OP_DROP OP_PUSHDATA1 0x01 0x01 OP_DROP ...  
+    //                 OP_DROP OP_DROP OP_DROP]
+    std::vector<uint8_t> script_data {OP_PUSHDATA1, 1, 2, OP_PUSHDATA1, 1, 3, OP_PUSHDATA1, 1, 4};
+    for(size_t i=0;i<N;++i)
+    {
+        script_data.push_back(OP_PUSHDATA1);
+        script_data.push_back(1);
+        script_data.push_back(1);
+        script_data.push_back(OP_DROP);
+    }
+    script_data.push_back(OP_DROP);
+    script_data.push_back(OP_DROP);
+    script_data.push_back(OP_DROP);
+
+    const CScript script{script_data.begin(), script_data.end()};
+    auto source = task::CCancellationSource::Make();
+    const task::CCancellationToken& token = source->GetToken();
+    LimitedStack stack = LimitedStack(INT64_MAX);
+
+    const auto flags{SCRIPT_UTXO_AFTER_GENESIS};
+    ScriptError err;
+    Executor f{GlobalConfig::GetConfig(), true, token, stack, script, flags, BaseSignatureChecker{}, &err};
+    std::thread t(f);
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    source->Cancel();// Concurently cancel
+    t.join();
+    BOOST_CHECK( !f.ret.has_value() );
+    BOOST_TEST( err == SCRIPT_ERR_UNKNOWN_ERROR, ScriptErrorString(err));
+    const auto ss = stack.size();
+    //BOOST_CHECK( ss >=3 );
+    if(ss >=3)
+    {
+        const uint8_t& e0 = stack.at(0)[0];
+        const uint8_t& e1 = stack.at(1)[0];
+        const uint8_t& e2 = stack.at(2)[0];
+        BOOST_CHECK(e0 ==2);
+        BOOST_CHECK(e1 ==3);
+        BOOST_CHECK(e2 ==4);
+    }
+}
 
 BOOST_AUTO_TEST_CASE(script_build) {
     const KeyData keys;
@@ -2349,16 +2410,17 @@ BOOST_AUTO_TEST_CASE(solver_MultiSig_Decode_Check) {
 BOOST_AUTO_TEST_CASE(txout_IsDust) {
 
     CFeeRate feerate(Amount(1000));
+    int64_t dustLimitFactor{DEFAULT_DUST_LIMIT_FACTOR};
     std::vector<uint8_t> data(100, 3);
     CScript opFalseOpReturn = CScript() << OP_FALSE << OP_RETURN << data;
 
     CScript opReturn = CScript() << OP_RETURN << data;
 
-    BOOST_CHECK(!CTxOut(Amount(10), opFalseOpReturn).IsDust(feerate, false));
-    BOOST_CHECK(!CTxOut(Amount(10), opReturn).IsDust(feerate, false));
+    BOOST_CHECK(!CTxOut(Amount(10), opFalseOpReturn).IsDust(feerate, dustLimitFactor, false));
+    BOOST_CHECK(!CTxOut(Amount(10), opReturn).IsDust(feerate, dustLimitFactor, false));
 
-    BOOST_CHECK(!CTxOut(Amount(10), opFalseOpReturn).IsDust(feerate, true));
-    BOOST_CHECK(CTxOut(Amount(10), opReturn).IsDust(feerate, true)); // single "OP_RETURN" is not considered data after Genesis upgrade, so it is considered dust
+    BOOST_CHECK(!CTxOut(Amount(10), opFalseOpReturn).IsDust(feerate, dustLimitFactor, true));
+    BOOST_CHECK(CTxOut(Amount(10), opReturn).IsDust(feerate, dustLimitFactor, true)); // single "OP_RETURN" is not considered data after Genesis upgrade, so it is considered dust
 }
 
 BOOST_AUTO_TEST_SUITE_END()
