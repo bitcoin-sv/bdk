@@ -12,7 +12,8 @@ For nChain developers, the best way to do this is to have a BitBucket account se
 python -m pip install pytest junitparser mkdocs pymdown-extensions plantuml_markdown
 ```
 - [CMake 3.16](https://cmake.org/download/) or later
-- [Boost 1.72](https://www.boost.org/doc/libs/1_72_0/) or later. 
+- [Boost 1.72](https://www.boost.org/doc/libs/1_72_0/) or later.
+- [BSV 1.0.13](https://github.com/bitcoin-sv/bitcoin-sv/releases/tag/v1.0.13) exact version.
 - Please make sure MSBuild is in the PATH.
 **Linux**: static libraries and must be compiled with `fPIC` on.
 - OpenSSL 1.1.1b or later
