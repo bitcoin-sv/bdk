@@ -8,7 +8,7 @@
 #include <version.hpp>    // global and core versions
 #include <version_py.hpp>
 
-#include <interpreter.h>
+#include <interpreter_sesdk.hpp>
 
 struct module_state {
     PyObject *error;

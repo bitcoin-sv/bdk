@@ -14,7 +14,7 @@
 #include <boost/test/unit_test.hpp>
 #include <boost/algorithm/hex.hpp>
 
-#include "interpreter.h"
+#include "interpreter_sesdk.hpp"
 #include "script/script.h"
 #include "script/script_flags.h"
 

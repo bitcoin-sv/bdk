@@ -6,7 +6,7 @@
 #include "jni_cppobj_helper.h"
 
 #include <ecc_guard.h> // sdk core
-#include <interpreter.h>
+#include <interpreter_sesdk.hpp>
 
 #include <base58.h>                 // bsv src
 #include <chainparams.h>            // bsv src

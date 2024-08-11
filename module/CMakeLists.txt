@@ -18,6 +18,8 @@ endif()
 
 message(STATUS "Building modules ...")
 
+add_subdirectory(golang)
+
 add_subdirectory(example)
 
 if(BUILD_JAVA_BINDING_ONLY AND BUILD_PYTHON_BINDING_ONLY)
