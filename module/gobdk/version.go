@@ -1,4 +1,4 @@
-package main
+package gobdk
 
 
 /*
@@ -8,23 +8,9 @@ package main
 */
 import "C"
 
-import (
-	"fmt"
-)
-
-// Library code ////////////////////////////////////////////////////////////////
-
 // VersionString return the version string in format semver Major.Minor.Patch
 func VersionString() string {
 	cStr := C.VersionString()
 	goStr := C.GoString(cStr)
     return goStr
-}
-
-// Library code ////////////////////////////////////////////////////////////////
-
-
-// main code
-func main() {
-    fmt.Println("Golang module version : ",VersionString())
 }

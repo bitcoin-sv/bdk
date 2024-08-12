@@ -21,7 +21,7 @@ message(STATUS "Building modules ...")
 add_subdirectory(example)
 
 if(NOT SKIP_MODULE_GOLANG)
-	add_subdirectory(golang)
+	add_subdirectory(gobdk)
 else()
 	message(STATUS "Building Golang module has been disabled")
 endif()
