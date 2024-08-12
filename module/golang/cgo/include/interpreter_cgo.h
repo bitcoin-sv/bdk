@@ -6,7 +6,12 @@
 extern "C" {
 #endif
 
-    void hello_cgo();
+///!  Version of C++ core Script Engine SDK
+int VersionMajor();
+int VersionMinor();
+int VersionPatch();
+int VersionPatch();
+const char * VersionString();
 
 #ifdef __cplusplus
 }
