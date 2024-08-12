@@ -1,0 +1,22 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/core",
+                "${workspaceFolder}/build/generated/hpp",                
+                "${env:BSV_ROOT}/src",
+                "${env:BSV_ROOT}/src/crypto",
+                "${env:BSV_ROOT}/src/script",
+                "${env:BSV_ROOT}/src/leveldb",
+                "${env:BSV_ROOT}/src/leveldb/include"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/g++",
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "gcc-x64"
+        }
+    ],
+    "version": 4
+}
