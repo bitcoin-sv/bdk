@@ -39,8 +39,9 @@ option(SESDK_BUILD_MODULES "Activate the build of modules" ON)
 option(SESDK_BUILD_BSV_TESTS "Activate the build of bsv tests" ON)
 
 # Language binding modules are all built by default. Activate one will deactivate other
-option(BUILD_JAVA_BINDING_ONLY "Build the JNI interface and associated unit tests" OFF)
-option(BUILD_PYTHON_BINDING_ONLY "Build the python interface and associated unit tests" OFF)
+option(SKIP_MODULE_JAVA "Skip building and testing the Java module" OFF)
+option(SKIP_MODULE_PYTHON "Skip building and testing the Python module" OFF)
+option(SKIP_MODULE_GOLANG "Skip building and testing the Golang module" OFF)
 
 ## script engine built is based on source files from bsv code.
 ## Use -DSESDK_BSV_SRC_ROOT=/path/to/sv_root
@@ -75,7 +76,7 @@ endif()
 
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/test)
 
-#add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/documentation)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/documentation)
 
 ## On Widows, need to download NSIS https://nsis.sourceforge.io/Download
 ## Possible to do WIX generator for MSI installer

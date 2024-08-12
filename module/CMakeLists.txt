@@ -18,22 +18,22 @@ endif()
 
 message(STATUS "Building modules ...")
 
-add_subdirectory(golang)
-
 add_subdirectory(example)
 
-if(BUILD_JAVA_BINDING_ONLY AND BUILD_PYTHON_BINDING_ONLY)
-	message(FATAL_ERROR "Should not activate both BUILD_PYTHON_BINDING_ONLY[${BUILD_PYTHON_BINDING_ONLY}] and BUILD_JAVA_BINDING_ONLY[${BUILD_JAVA_BINDING_ONLY}]")
+if(NOT SKIP_MODULE_GOLANG)
+	add_subdirectory(golang)
+else()
+	message(STATUS "Building Golang module has been disabled")
 endif()
 
-if(NOT BUILD_PYTHON_BINDING_ONLY)
+if(NOT SKIP_MODULE_JAVA)
 	add_subdirectory(java)
 else()
-	message(STATUS "Activation of python has disabled building java module")
+	message(STATUS "Building Java module has been disabled")
 endif()
 
-if(NOT BUILD_JAVA_BINDING_ONLY)
+if(NOT SKIP_MODULE_PYTHON)
 	add_subdirectory(python)
 else()
-	message(STATUS "Activation of java has disabled building python module")
+	message(STATUS "Building Python module has been disabled")
 endif()

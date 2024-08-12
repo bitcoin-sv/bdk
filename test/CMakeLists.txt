@@ -48,14 +48,14 @@ sesdk_add_unit_test(test_assembler)
 
 
 ## Test binding modules
-if(NOT BUILD_PYTHON_BINDING_ONLY)
+if(NOT SKIP_MODULE_JAVA)
 	add_subdirectory(java)
 else()
-	message(STATUS "Activation of python has disabled building java module")
+	message(STATUS "Testing Java module has been disabled")
 endif()
 
-if(NOT BUILD_JAVA_BINDING_ONLY)
+if(NOT SKIP_MODULE_PYTHON)
 	add_subdirectory(python)
 else()
-	message(STATUS "Activation of java has disabled building python module")
+	message(STATUS "Testing Python module has been disabled")
 endif()

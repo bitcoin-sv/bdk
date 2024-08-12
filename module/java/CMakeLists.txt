@@ -50,7 +50,7 @@ add_jar(${SESDK_JAR_BASE_NAME}
 
 set(SESDK_JAR "${SESDK_GENERATED_BIN_DIR}/${SESDK_JAR_VER_NAME}.jar" CACHE INTERNAL "Absolute path to sesdk jar file")# SESDK_JAR use to run java tests
 set_target_properties(${SESDK_JAR_BASE_NAME} PROPERTIES FOLDER "module/java")
-install_jar(${SESDK_JAR_BASE_NAME} DESTINATION "lib" COMPONENT module)
+install_jar(${SESDK_JAR_BASE_NAME} DESTINATION "bin" COMPONENT JavaModule)
 
 #####  Building jni runtime native librarie
 set(SESDK_JNI_SRC_FILES
@@ -73,4 +73,4 @@ target_include_directories(${SESDK_JAVA_JNI_NAME} PUBLIC ${JNI_INCLUDE_DIRS} ${S
 target_link_libraries(${SESDK_JAVA_JNI_NAME} sesdk_core jni_interface ${JNI_LIBRARIES})
 
 set_target_properties(${SESDK_JAVA_JNI_NAME} PROPERTIES FOLDER "module/java" DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})
-install(TARGETS ${SESDK_JAVA_JNI_NAME} DESTINATION "lib" COMPONENT module)
+install(TARGETS ${SESDK_JAVA_JNI_NAME} DESTINATION "bin" COMPONENT JavaModule)

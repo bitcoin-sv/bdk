@@ -39,4 +39,4 @@ else()
   set_target_properties(${_PY_MODULE_NAME} PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
 endif()
 
-install(TARGETS ${_PY_MODULE_NAME} DESTINATION "lib" COMPONENT PyModules)
+install(TARGETS ${_PY_MODULE_NAME} DESTINATION "bin" COMPONENT PyModules)
