@@ -18,21 +18,30 @@ if(${SESDK_VERSION_STRING} LESS ${SESDK_GOLANG_VERSION_STRING})
   message("SESDK_VERSION_STRING=${SESDK_VERSION_STRING} while SESDK_GOLANG_VERSION_STRING=${SESDK_GOLANG_VERSION_STRING}")
 endif()
 
+#### Generate version golang binding #####
+set(SESDK_VERSION_GOLANG_H_IN ${CMAKE_CURRENT_SOURCE_DIR}/cgo/include/version_go.h.in CACHE INTERNAL "Template File for python version")
+set(SESDK_VERSION_GOLANG_H ${SESDK_GENERATED_HPP_DIR}/version_go.h CACHE INTERNAL "HPP File for python version")
+configure_file(${SESDK_VERSION_GOLANG_H_IN} ${SESDK_VERSION_GOLANG_H})
+
 set(_GO_MODULE_NAME GoSESDK)
-set(_GO_MODULE_SOURCE_FILES ${CMAKE_CURRENT_SOURCE_DIR}/cgo/interpreter_cgo.h "${CMAKE_CURRENT_SOURCE_DIR}/cgo/interpreter_cgo.cpp")
+set(_GO_MODULE_HEADER_FILES
+    ${SESDK_VERSION_GOLANG_H}
+    ${CMAKE_CURRENT_SOURCE_DIR}/cgo/include/interpreter_cgo.h
+)
 
-add_library(${_GO_MODULE_NAME} ${_GO_MODULE_SOURCE_FILES})
+set(_GO_MODULE_SOURCE_FILES
+    ${CMAKE_CURRENT_SOURCE_DIR}/cgo/src/interpreter_cgo.cpp
+)
+
+add_library(${_GO_MODULE_NAME} ${_GO_MODULE_HEADER_FILES} ${_GO_MODULE_SOURCE_FILES})
 target_link_libraries(${_GO_MODULE_NAME} PRIVATE sesdk_core OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono)
+target_include_directories(${_GO_MODULE_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/cgo/include)
 
-# Copy the built library to golang source tree
-# Get the full path to the library file
-#get_target_property(_BUILT_FILE ${_GO_MODULE_NAME} LOCATION)
-#get_filename_component(_BUILT_FILE_NAME ${_BUILT_FILE} NAME)
 
 add_custom_command(TARGET ${_GO_MODULE_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy
     $<TARGET_FILE:${_GO_MODULE_NAME}>
-    ${CMAKE_CURRENT_SOURCE_DIR}/lib/$<TARGET_FILE_NAME:${_GO_MODULE_NAME}>
+    ${CMAKE_CURRENT_SOURCE_DIR}/cgo/lib/$<TARGET_FILE_NAME:${_GO_MODULE_NAME}>
     COMMENT "Copying cgo library to the source"
 )
 
@@ -42,4 +51,5 @@ else()
   set_target_properties(${_GO_MODULE_NAME} PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
 endif()
 
-install(TARGETS ${_GO_MODULE_NAME} DESTINATION "lib" COMPONENT GoModules)
+install(TARGETS ${_GO_MODULE_NAME} DESTINATION "cgo/lib" COMPONENT GoModules)
+install(FILES ${SESDK_VERSION_GOLANG_H} ${_GO_MODULE_HEADER_FILES} DESTINATION "cgo/include" COMPONENT GoModules)
