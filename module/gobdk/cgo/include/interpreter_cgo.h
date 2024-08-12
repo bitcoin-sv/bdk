@@ -1,6 +1,7 @@
 #ifndef __INTERPRETER_CGO_H__
 #define __INTERPRETER_CGO_H__
 
+#include <stdbool.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -12,6 +13,9 @@ int VersionMinor();
 int VersionPatch();
 int VersionPatch();
 const char * VersionString();
+
+int cgo_execute(const char* scriptPtr, int scriptLen, bool consensus, unsigned int flags);
+
 
 #ifdef __cplusplus
 }
