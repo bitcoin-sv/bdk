@@ -3,7 +3,7 @@ package gobdk
 
 /*
 #cgo CFLAGS: -I${SRCDIR}/cgo/include
-#cgo LDFLAGS: -L${SRCDIR}/cgo/lib -lGoSESDK -lsesdk_core -lsecp256k1 -lcrypto -lssl -lboost_filesystem -lboost_thread -lboost_chrono -lboost_program_options -lstdc++ -lm
+#cgo LDFLAGS: -L${SRCDIR}/cgo/bin -lGoSESDK -lstdc++ -lm -Wl,-rpath,./cgo/bin
 #include "interpreter_cgo.h"
 */
 import "C"

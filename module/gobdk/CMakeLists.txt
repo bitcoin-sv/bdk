@@ -33,15 +33,15 @@ set(_GO_MODULE_SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/cgo/src/interpreter_cgo.cpp
 )
 
-add_library(${_GO_MODULE_NAME} ${_GO_MODULE_HEADER_FILES} ${_GO_MODULE_SOURCE_FILES})
-target_link_libraries(${_GO_MODULE_NAME} PRIVATE sesdk_core OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono)
+add_library(${_GO_MODULE_NAME} SHARED ${_GO_MODULE_HEADER_FILES} ${_GO_MODULE_SOURCE_FILES})
+target_link_libraries(${_GO_MODULE_NAME} PRIVATE sesdk_core ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT} secp256k1 ${UNIVALUE_LIB} OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono)
 target_include_directories(${_GO_MODULE_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/cgo/include)
 
 
 add_custom_command(TARGET ${_GO_MODULE_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy
     $<TARGET_FILE:${_GO_MODULE_NAME}>
-    ${CMAKE_CURRENT_SOURCE_DIR}/cgo/lib/$<TARGET_FILE_NAME:${_GO_MODULE_NAME}>
+    ${CMAKE_CURRENT_SOURCE_DIR}/cgo/bin/$<TARGET_FILE_NAME:${_GO_MODULE_NAME}>
     COMMENT "Copying cgo library to the source"
 )
 
@@ -51,5 +51,5 @@ else()
   set_target_properties(${_GO_MODULE_NAME} PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
 endif()
 
-install(TARGETS ${_GO_MODULE_NAME} DESTINATION "cgo/lib" COMPONENT GoModules)
+install(TARGETS ${_GO_MODULE_NAME} DESTINATION "bin" COMPONENT GoModules)
 install(FILES ${SESDK_VERSION_GOLANG_H} ${_GO_MODULE_HEADER_FILES} DESTINATION "cgo/include" COMPONENT GoModules)
