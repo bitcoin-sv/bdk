@@ -11,15 +11,15 @@ For nChain developers, the best way to do this is to have a BitBucket account se
 ```console
 python -m pip install pytest junitparser mkdocs pymdown-extensions plantuml_markdown
 ```
-- [CMake 3.16](https://cmake.org/download/) or later
-- [Boost 1.72](https://www.boost.org/doc/libs/1_72_0/) or later.
+- [CMake 3.30.2](https://cmake.org/download/) or later
+- [Boost 1.78](https://www.boost.org/doc/libs/1_78_0/) or later.
+- [OpenSSL 3.0.9](https://openssl-library.org/source/index.html) or later (or 1.1.1b).
 - [BSV 1.0.13](https://github.com/bitcoin-sv/bitcoin-sv/releases/tag/v1.0.13) exact version.
 - Please make sure MSBuild is in the PATH.
 **Linux**: static libraries and must be compiled with `fPIC` on.
-- OpenSSL 1.1.1b or later
 - C++ 17 compatible compiler
 **Windows**: Visual Studio Community Edition 2019 on windows
-**Linux**: g++9 on Linux
+**Linux**: g++11 on Linux
 ##### Java module
 - Java JDK 8 or later
 - Download testng jar files `guice-4.1.0.jar`, `jcommander-1.72.jar`, `snakeyaml-1.21.jar` and `testng-7.1.0.jar`
