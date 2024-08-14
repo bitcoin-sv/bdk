@@ -18,7 +18,7 @@ int main(int argc, char* argv[])
                                 true,
                                 source->GetToken(),
                                 stack,
-                                CScript{begin(direct), end(direct)},
+                                CScript(direct.data(), direct.data() + direct.size()),
                                 0,
                                 BaseSignatureChecker{},
                                 &err);
