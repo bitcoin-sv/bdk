@@ -152,3 +152,22 @@ check_symbol_exists(daemon "unistd.h" HAVE_DECL_DAEMON)
 set(BITCOIN_CONFIG_IN "${SESDK_BSV_ROOT_DIR}/src/config/bitcoin-config.h.cmake.in")
 set(BITCOIN_CONFIG_FILE "${SESDK_GENERATED_HPP_DIR}/config/bitcoin-config.h")
 configure_file("${BITCOIN_CONFIG_IN}" "${BITCOIN_CONFIG_FILE}" ESCAPE_QUOTES)
+
+
+if(MSVC)
+    message(STATUS "SESDK Warning : Hot fix for Visual Studio 17 2022")
+    message(STATUS "SESDK Warning : The build fails because in file src/script/script.h, it use std::array but doesn't include <array>")
+    message(STATUS "SESDK Warning : We \"hot-fix\" that by make this include <array> in the generated file config/bitcoin-config.h")
+    message(STATUS "SESDK Warning : which is in our control")
+
+	# Read the file content and prepare lines to replace
+	file(READ "${BITCOIN_CONFIG_FILE}" FILE_CONTENTS)
+	set(LINE_TO_INSERT "\n\n#include <array>\n")
+	set(INSERT_AFTER "#define BITCOIN_CONFIG_BITCOIN_CONFIG_H")
+
+	# Modify the content: Insert the new line after a specific line
+	string(REPLACE "${INSERT_AFTER}" "${INSERT_AFTER}${LINE_TO_INSERT}" MODIFIED_CONTENTS "${FILE_CONTENTS}")
+
+	# Write the modified content back to the file
+	file(WRITE "${BITCOIN_CONFIG_FILE}" "${MODIFIED_CONTENTS}")
+endif()
