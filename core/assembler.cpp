@@ -6,12 +6,16 @@
 #include "core_io.h"
 #include "script.h"
 
-CScript bsv::from_asm(const std::string& script)
-{
-    return ParseScript(script);
-}
+namespace bsv {
 
-std::string bsv::to_asm(const bsv::span<const uint8_t> script)
-{
-    return FormatScript(CScript{script.begin(), script.end()});
+    CScript from_asm(const std::string& script)
+    {
+        return ParseScript(script);
+    }
+
+    std::string to_asm(const bsv::span<const uint8_t> script)
+    {
+        return FormatScript(CScript{script.begin(), script.end()});
+    }
+
 }

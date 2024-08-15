@@ -6,6 +6,7 @@
 #include <script/script_error.h>
 #include <string>
 #include <vector>
+#include <cstdint>
 
 namespace bsv
 {

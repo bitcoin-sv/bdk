@@ -58,11 +58,43 @@ foreach(_f ${JSON_HEADERS})
   endif()
 endforeach()
 
+
+
+#######################################################################################
+#######################################################################################
+# Fix for gcc13 for as the code bsv 1.0.13 broke it
+# The file "${SESDK_BSV_TEST_ROOT}/scriptflags.h" broke the build because it used the uint32_t without #include <cstdint>. gcc13 don't like it, which is the code bsv 1.0.13
+# What we'll do :
+# We don't include it as it is, but we copy it to our generated directory, then modify it
+# Then we include the modified version
+
+set(HOTFIX_DIRECTORY_SCRIPTFLAGS "${SESDK_GENERATED_HPP_DIR}/hotfix-scriptflags")
+set(BROKEN_SCRIPTFLAGS_H "${SESDK_BSV_TEST_ROOT}/scriptflags.h")
+set(MODIFIED_SCRIPTFLAGS_H "${HOTFIX_DIRECTORY_SCRIPTFLAGS}/test/scriptflags.h")
+configure_file("${BROKEN_SCRIPTFLAGS_H}" "${MODIFIED_SCRIPTFLAGS_H}" COPYONLY)
+
+message(STATUS "SESDK Warning : Hot fix gcc 13")
+message(STATUS "SESDK Warning : The build fails because in file src/test/scriptflags.h, it use uint32_t but doesn't include <cstdint>")
+message(STATUS "SESDK Warning : We \"hot-fix\" that by copying this file to our generated directory, then modify it")
+
+# Read the file content and prepare lines to replace
+file(READ "${MODIFIED_SCRIPTFLAGS_H}" FILE_CONTENTS)
+set(LINE_TO_INSERT "\n#include <cstdint>\n")
+set(INSERT_AFTER "#include <string>")
+
+# Modify the content: Insert the new line after a specific line
+string(REPLACE "${INSERT_AFTER}" "${INSERT_AFTER}${LINE_TO_INSERT}" MODIFIED_CONTENTS "${FILE_CONTENTS}")
+
+# Write the modified content back to the file
+file(WRITE "${MODIFIED_SCRIPTFLAGS_H}" "${MODIFIED_CONTENTS}")
+#######################################################################################
+
 ####################################################################################################################
 ## Test files *cpp here are mainly extract of bsv source code ######################################################
 add_executable(test_core
                "${SESDK_BSV_TEST_ROOT}/jsonutil.h"
-               "${SESDK_BSV_TEST_ROOT}/scriptflags.h"
+               #"${SESDK_BSV_TEST_ROOT}/scriptflags.h" This file is replaced by the hotfix modified file
+               "${MODIFIED_SCRIPTFLAGS_H}"
                "${SESDK_BSV_TEST_ROOT}/sigutil.h"
                "${SESDK_BSV_TEST_ROOT}/jsonutil.cpp"
                "${SESDK_BSV_TEST_ROOT}/scriptflags.cpp"
@@ -81,5 +113,5 @@ target_link_libraries(test_core ${CMAKE_DL_LIBS} sesdk_core OpenSSL::Crypto Open
 if(WIN32)
   target_link_libraries(test_core Crypt32.lib Ws2_32)
 endif()
-target_include_directories(test_core PRIVATE "${SESDK_BSV_TEST_ROOT}")
+target_include_directories(test_core PRIVATE "${SESDK_BSV_TEST_ROOT}" "${HOTFIX_DIRECTORY_SCRIPTFLAGS}")
 sesdk_add_unit_test(test_core)
