@@ -43,6 +43,12 @@ option(SKIP_MODULE_JAVA "Skip building and testing the Java module" OFF)
 option(SKIP_MODULE_PYTHON "Skip building and testing the Python module" OFF)
 option(SKIP_MODULE_GOLANG "Skip building and testing the Golang module" OFF)
 
+if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin")
+    message(STATUS "Hot fix when building on Mac OS, boost broke the build")
+    #add_definitions(-D_LIBCPP_ENABLE_CXX17_REMOVED_UNARY_BINARY_FUNCTION)
+    add_definitions(-DBOOST_NO_CXX98_FUNCTION_BASE)
+endif()
+
 ## script engine built is based on source files from bsv code.
 ## Use -DSESDK_BSV_SRC_ROOT=/path/to/sv_root
 include(cmake/modules/FindBSVSourceHelper.cmake)
