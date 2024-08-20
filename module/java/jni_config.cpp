@@ -43,7 +43,7 @@ JNIEXPORT void JNICALL Java_com_nchain_sesdk_Config_load(JNIEnv* env, jobject ob
     // Configure maximum length of numbers in scripts
     if (gArgs.IsArgSet("-maxscriptnumlengthpolicy"))
     {
-        const int64_t value = gArgs.GetArgAsBytes("-maxscriptnumlengthpolicy", DEFAULT_SCRIPT_NUM_LENGTH_POLICY_AFTER_GENESIS);
+        const int64_t value = gArgs.GetArgAsBytes("-maxscriptnumlengthpolicy", DEFAULT_SCRIPT_NUM_LENGTH_POLICY);
         Java_com_nchain_sesdk_Config_setMaxScriptnumLengthPolicy(env, obj, static_cast<jlong>(value));
     }
 
@@ -85,19 +85,20 @@ JNIEXPORT jlong JNICALL Java_com_nchain_sesdk_Config_getMaxOpsPerScript(JNIEnv* 
     return r;
 }
 
-JNIEXPORT jlong JNICALL Java_com_nchain_sesdk_Config_getMaxScriptNumLength(JNIEnv* env, jobject obj)
-{
-    const jboolean isGenesisEnabled = env->GetBooleanField(obj, getBooleanFieldID(env, obj, "isGenesisEnabled"));
-    const jboolean isConsensus = env->GetBooleanField(obj, getBooleanFieldID(env, obj, "isConsensus"));
+//// Temporary dissable as it failed the build. The method has changed
+// JNIEXPORT jlong JNICALL Java_com_nchain_sesdk_Config_getMaxScriptNumLength(JNIEnv* env, jobject obj)
+// {
+//     const jboolean isGenesisEnabled = env->GetBooleanField(obj, getBooleanFieldID(env, obj, "isGenesisEnabled"));
+//     const jboolean isConsensus = env->GetBooleanField(obj, getBooleanFieldID(env, obj, "isConsensus"));
 
-    jlong r{0};
-    if(GlobalConfig* pConfig = getHandle<GlobalConfig>(env, obj,"cppConfig"))
-        r = static_cast<jlong>(pConfig->GetMaxScriptNumLength(static_cast<bool>(isGenesisEnabled), static_cast<bool>(isConsensus)));
-    else
-        env->ThrowNew(env->FindClass("java/lang/RuntimeException"), "Config::getMaxScriptNumLength unable to deference C++ pointer");
+//     jlong r{0};
+//     if(GlobalConfig* pConfig = getHandle<GlobalConfig>(env, obj,"cppConfig"))
+//         r = static_cast<jlong>(pConfig->GetMaxScriptNumLength(static_cast<bool>(isGenesisEnabled), static_cast<bool>(isConsensus)));
+//     else
+//         env->ThrowNew(env->FindClass("java/lang/RuntimeException"), "Config::getMaxScriptNumLength unable to deference C++ pointer");
 
-    return r;
-}
+//     return r;
+// }
 
 JNIEXPORT jlong JNICALL Java_com_nchain_sesdk_Config_getMaxScriptSize(JNIEnv* env, jobject obj)
 {

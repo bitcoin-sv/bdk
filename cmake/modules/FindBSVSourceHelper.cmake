@@ -237,6 +237,7 @@ function(cryptGetMinimumListBSVSource)##########################################
       "src/logging.cpp"
       "src/primitives/block.cpp"
       "src/primitives/transaction.cpp"
+      "src/protocol_era.cpp"
       "src/pubkey.cpp"
       "src/random.cpp"
       "src/rpc/jsonwriter.cpp"

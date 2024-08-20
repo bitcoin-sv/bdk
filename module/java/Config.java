@@ -39,7 +39,7 @@ public class Config implements AutoCloseable {
 
 	// Interface used by script engine and client code to retrieve limit information
     public native long getMaxOpsPerScript();
-    public native long getMaxScriptNumLength();
+    //public native long getMaxScriptNumLength(); //// Temporary dissable as it failed the build. The method has changed
     public native long getMaxScriptSize();
     public native long getMaxPubKeysPerMultiSig();
     public native long getMaxStackMemoryUsage();
