@@ -132,6 +132,7 @@ function(cryptGetMinimumListBSVSource)##########################################
       "src/hash.h"  ##  Used by [base58.cpp], [block.cpp], [config.cpp], [core_write.cpp], [dstencode.cpp], [fRequireStandard.cpp], [hash.cpp], [interpreter.cpp], [key.cpp], [limitedstack.cpp], [merkle.cpp], [pubkey.cpp], [scriptcache.cpp], [sigcache.cpp], [standard.cpp], [transaction.cpp]
       "src/indirectmap.h"  ##  Used by [config.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [scriptcache.cpp], [sigcache.cpp]
       "src/key.h"  ##  Used by [base58.cpp], [core_write.cpp], [dstencode.cpp], [interpreter.cpp], [key.cpp]
+      "src/keystore.h"  ##  Manual fix the build
       "src/limitedmap.h"  ##  Used by [config.cpp], [dstencode.cpp], [interpreter.cpp]
       "src/logging.h"  ##  Used by [chainparams.cpp], [chainparamsbase.cpp], [config.cpp], [core_read.cpp], [core_write.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [logging.cpp], [random.cpp], [scriptcache.cpp], [sigcache.cpp], [standard.cpp], [util.cpp]
       "src/memusage.h"  ##  Used by [config.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [scriptcache.cpp], [sigcache.cpp]
@@ -164,6 +165,7 @@ function(cryptGetMinimumListBSVSource)##########################################
       "src/script/script_flags.h"  ##  Used by [base58.cpp], [chainparams.cpp], [config.cpp], [core_write.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [scriptcache.cpp], [sigcache.cpp], [standard.cpp]
       "src/script/script_num.h"  ##  Used by [block.cpp], [chainparams.cpp], [core_write.cpp], [interpreter.cpp], [standard.cpp]
       "src/script/sigcache.h"  ##  Used by [scriptcache.cpp]
+      "src/script/sign.h"     ##  Manual fix the build
       "src/script/standard.h"  ##  Used by [base58.cpp], [chainparams.cpp], [config.cpp], [core_write.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [scriptcache.cpp], [standard.cpp]
       "src/script/instruction.h"  ##  Used by [script.cpp]
       "src/script/instruction_iterator.h"  ##  Used by [script.cpp]
@@ -234,6 +236,7 @@ function(cryptGetMinimumListBSVSource)##########################################
       "src/fs.cpp"
       "src/hash.cpp"
       "src/key.cpp"
+      "src/keystore.cpp"  ##  Manual fix the build
       "src/logging.cpp"
       "src/primitives/block.cpp"
       "src/primitives/transaction.cpp"
@@ -250,6 +253,7 @@ function(cryptGetMinimumListBSVSource)##########################################
       "src/script/script_num.cpp"
       "src/script/scriptcache.cpp"
       "src/script/sigcache.cpp"
+      "src/script/sign.cpp"     ##  Manual fix the build
       "src/script/standard.cpp"
       "src/support/cleanse.cpp"
       "src/support/lockedpool.cpp"
