@@ -16,6 +16,6 @@ int cgo_execute(const char* scriptPtr, int scriptLen, bool consensus, unsigned i
 {
     std::cout<<"Calling cggo_execute from C code"<<std::endl;
     const uint8_t* p = static_cast<const uint8_t*>(reinterpret_cast<const void*>(scriptPtr));
-    const bsv::span<const uint8_t> script(p, scriptLen);
-    return execute(script, consensus, flags);
+    const std::span<const uint8_t> script(p, scriptLen);
+    return bsv::execute(script, consensus, flags);
 }

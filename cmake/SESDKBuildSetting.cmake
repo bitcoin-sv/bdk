@@ -12,7 +12,7 @@ set(SESDKBuildSetting_Include TRUE)
 macro(scryptSetCompilationOptions)## This has to be macro instead of a function because of add_definitions scope is local
   if(NOT SESDK_SET_COMPILATION_OPTIONS_DONE)
     ## Set common compile options
-    set(CMAKE_CXX_STANDARD 17 CACHE INTERNAL "Use of C++17" FORCE)#TODO : change to C++17 when visual studio support
+    set(CMAKE_CXX_STANDARD 20 CACHE INTERNAL "Use of C++20" FORCE)#TODO : change to C++20 when visual studio support
     set(CMAKE_CXX_STANDARD_REQUIRED ON CACHE INTERNAL "Require C++ standard" FORCE)
     set(CMAKE_CXX_EXTENSIONS OFF CACHE INTERNAL "Do not use C++ extension" FORCE)
     set(CMAKE_DEBUG_POSTFIX d CACHE INTERNAL "Use d as debug postfix for  targets" FORCE)

@@ -85,7 +85,10 @@ set(SECP256K1_CPP_FILE "${SECP256K1_ROOT}/src/secp256k1.c")
 set(SECP256K1_PUBLIC_HEADER_DIR "${SECP256K1_ROOT}/include")
 
 # Generate the config
-set(LIBSECP256K1_CONFIG_FILE_IN "${SECP256K1_ROOT}/src/libsecp256k1-config.h.cmake.in")
+# File libsecp256k1-config.h.cmake.in was removed from latest version of bsv.
+# We copy and reuse it here, so we don't have to deal with the new way of building secp256k1
+# As secp256k1 source code would not change
+set(LIBSECP256K1_CONFIG_FILE_IN "${CMAKE_CURRENT_SOURCE_DIR}/secp256k1/src/libsecp256k1-config.h.cmake.in")
 set(LIBSECP256K1_CONFIG_FILE "${SESDK_GENERATED_HPP_DIR}/libsecp256k1-config.h")
 configure_file(${LIBSECP256K1_CONFIG_FILE_IN} ${LIBSECP256K1_CONFIG_FILE} ESCAPE_QUOTES)
 

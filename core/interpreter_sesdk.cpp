@@ -40,14 +40,14 @@ namespace
     }
 }
 
-ScriptError bsv::execute(const bsv::span<const uint8_t> script,
+ScriptError bsv::execute(const std::span<const uint8_t> script,
                          const bool consensus,
                          const unsigned int flags)
 {
     if(script.empty())
         throw std::runtime_error("script empty");
 
-    return execute_impl(CScript{script.begin(), script.end()},
+    return execute_impl(CScript(script.data(), script.data() + script.size()),
                         consensus,
                         flags);
 }
@@ -86,10 +86,10 @@ namespace
     }
 }
 
-ScriptError bsv::execute(const bsv::span<const uint8_t> script,
+ScriptError bsv::execute(const std::span<const uint8_t> script,
                          const bool consensus,
                          const unsigned int flags,
-                         const bsv::span<const uint8_t> tx,
+                         const std::span<const uint8_t> tx,
                          const int index,
                          const int64_t amount)
 {
@@ -110,7 +110,7 @@ ScriptError bsv::execute(const bsv::span<const uint8_t> script,
             "Unable to create a CMutableTransaction from supplied tx data");
     }
 
-    return execute_impl(CScript{script.begin(), script.end()},
+    return execute_impl(CScript(script.data(), script.data() + script.size()),
                         consensus,
                         flags,
                         mtx,
@@ -199,11 +199,11 @@ namespace
     }
 }
 
-ScriptError bsv::verify(const bsv::span<const uint8_t> unlocking_script,
-                        const bsv::span<const uint8_t> locking_script,
+ScriptError bsv::verify(const std::span<const uint8_t> unlocking_script,
+                        const std::span<const uint8_t> locking_script,
                         const bool consensus,
                         const unsigned int flags,
-                        const bsv::span<const uint8_t> tx,
+                        const std::span<const uint8_t> tx,
                         const int index,
                         const int64_t amount)
 {
@@ -219,8 +219,8 @@ ScriptError bsv::verify(const bsv::span<const uint8_t> unlocking_script,
                                  "supplied tx data");
     }
 
-    return verify_impl(CScript{unlocking_script.begin(), unlocking_script.end()},
-                       CScript{locking_script.begin(), locking_script.end()},
+    return verify_impl(CScript(unlocking_script.data(), unlocking_script.data() + unlocking_script.size()),
+                       CScript(locking_script.data(), locking_script.data() + locking_script.size()),
                        consensus,
                        flags,
                        mtx,

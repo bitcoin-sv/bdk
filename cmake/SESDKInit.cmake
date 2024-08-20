@@ -97,6 +97,8 @@ endmacro()
 #### Initialize all setting for using CMake
 macro(scryptInitCMake)
 
+
+
   scryptTestBuildType()
   scryptSetCMakeBuildType()
   scryptForceInstallDir()

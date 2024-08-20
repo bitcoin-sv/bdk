@@ -172,7 +172,6 @@ function(cryptGetMinimumListBSVSource)##########################################
       "src/script/sighashtype.h"  ##  Used by [base58.cpp], [chainparams.cpp], [config.cpp], [core_write.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [scriptcache.cpp], [sigcache.cpp], [standard.cpp]
       "src/script_config.h"  ##  Used by [config.cpp], [dstencode.cpp], [interpreter.cpp]
       "src/serialize.h"  ##  Used by [amount.cpp], [assembler.cpp], [base58.cpp], [block.cpp], [chainparams.cpp], [config.cpp], [core_read.cpp], [core_write.cpp], [dstencode.cpp], [fRequireStandard.cpp], [hash.cpp], [interpreter.cpp], [key.cpp], [limitedstack.cpp], [merkle.cpp], [pubkey.cpp], [script.cpp], [scriptcache.cpp], [sigcache.cpp], [standard.cpp], [transaction.cpp], [util.cpp], [utilmoneystr.cpp]
-      "src/span.h"  ##  Used by [assembler.cpp], [base58.cpp], [big_int.cpp], [block.cpp], [chainparams.cpp], [config.cpp], [core_read.cpp], [core_write.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [limitedstack.cpp], [merkle.cpp], [script.cpp], [script_num.cpp], [scriptcache.cpp], [sigcache.cpp], [standard.cpp], [transaction.cpp], [utilmoneystr.cpp]
       "src/streams.h"  ##  Used by [config.cpp], [core_read.cpp], [core_write.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [scriptcache.cpp]
       "src/support/allocators/secure.h"  ##  Used by [base58.cpp], [core_write.cpp], [dstencode.cpp], [interpreter.cpp], [key.cpp]
       "src/support/allocators/zeroafterfree.h"  ##  Used by [base58.cpp], [config.cpp], [core_read.cpp], [core_write.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [scriptcache.cpp]
@@ -214,6 +213,7 @@ function(cryptGetMinimumListBSVSource)##########################################
 
   set(_minimal_src_files
       "src/amount.cpp"
+      "src/arith_uint256.cpp"
       "src/base58.cpp"
       "src/big_int.cpp"
       "src/chainparams.cpp"
@@ -252,7 +252,7 @@ function(cryptGetMinimumListBSVSource)##########################################
       "src/script/standard.cpp"
       "src/support/cleanse.cpp"
       "src/support/lockedpool.cpp"
-      "src/arith_uint256.cpp"
+      "src/taskcancellation.cpp"
       "src/util.cpp"
       "src/utilmoneystr.cpp"
       "src/utilstrencodings.cpp"

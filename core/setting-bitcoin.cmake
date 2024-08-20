@@ -161,7 +161,7 @@ message(STATUS "SESDK Warning : which is in our control")
 
 # Read the file content and prepare lines to replace
 file(READ "${BITCOIN_CONFIG_FILE}" FILE_CONTENTS)
-set(LINE_TO_INSERT "\n\n#include <array>\n#include <stdexcept>\n#include <cstdint>\n")
+set(LINE_TO_INSERT "\n\n#include <array>\n#include <stdexcept>\n#include <cstdint>\n#include <ranges>\n#include <span>\n")
 set(INSERT_AFTER "#define BITCOIN_CONFIG_BITCOIN_CONFIG_H")
 
 # Modify the content: Insert the new line after a specific line

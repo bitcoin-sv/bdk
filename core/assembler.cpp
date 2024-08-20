@@ -13,9 +13,9 @@ namespace bsv {
         return ParseScript(script);
     }
 
-    std::string to_asm(const bsv::span<const uint8_t> script)
+    std::string to_asm(const std::span<const uint8_t> script)
     {
-        return FormatScript(CScript{script.begin(), script.end()});
+        return FormatScript(CScript(script.data(), script.data() + script.size()));
     }
 
 }
