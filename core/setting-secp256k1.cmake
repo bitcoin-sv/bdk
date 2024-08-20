@@ -9,8 +9,20 @@
 if(NOT DEFINED SESDK_BSV_ROOT_DIR)#
     message(FATAL_ERROR "Unable to locate bsv source code by SESDK_BSV_ROOT_DIR")
 endif()
-# This file is mainly copied from ${SESDK_BSV_ROOT_DIR}/sv/src/secp256k1/CMakeLists.txt with slightl modifications
+
 #######################################################################
+
+## The MSVC build for secp256k1 has set for coverage build, which we don't need that anyway
+## This setting make the build broken, cmake complain that CMAKE_MODULE_LINKER_FLAGS_COVERAGE
+## is required but not set. We just set it here to satisfy cmake, that'd fix the msvc cmake run
+if(MSVC)
+  set(CMAKE_MODULE_LINKER_FLAGS_COVERAGE "${CMAKE_MODULE_LINKER_FLAGS_COVERAGE} --coverage" CACHE STRING
+    "Flags used by the shared libraries linker during \"Coverage\" builds."
+    FORCE
+  )
+  mark_as_advanced(CMAKE_MODULE_LINKER_FLAGS_COVERAGE)
+endif()
+
 
 ## Backup CMAKE_C_FLAGS_RELEASE to do the hotfix
 set(BACKUP_CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE}")
