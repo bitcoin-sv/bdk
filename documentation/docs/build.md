@@ -21,6 +21,9 @@ python -m pip install pytest junitparser mkdocs pymdown-extensions plantuml_mark
 **Windows**: Visual Studio Community Edition 2022 on windows
 **Linux**: g++13 on Linux
 **MacOS**: clang 15 on Mac OS
+
+Note that when building in Mac OS with clang, it only work with boost 1.78. As in boost 1.86, it seems the `boost::uuids::uuid::data_type` has changed, making the reinterpret_cast at `src/serialize.h:989` broken.
+
 ##### Java module
 - Java JDK 8 or later
 - Download testng jar files `guice-4.1.0.jar`, `jcommander-1.72.jar`, `snakeyaml-1.21.jar` and `testng-7.1.0.jar`
