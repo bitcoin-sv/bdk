@@ -5,21 +5,22 @@ For nChain developers, the best way to do this is to have a BitBucket account se
 
 ## Prerequisites
 ##### General
-- [Python 3.8 (64-bit)](https://www.python.org/downloads/release/python-380/) or later
+- [Python 3.12 (64-bit)](https://www.python.org/downloads/release/python-3125) or later
 **Windows**: If using the executable installer, ensure the "Download debugging symbols" and the "Download debug binaries" installation options are selected. 
 - The following python packages are needed to install and build documentation and to run tests.
 ```console
 python -m pip install pytest junitparser mkdocs pymdown-extensions plantuml_markdown
 ```
 - [CMake 3.30.2](https://cmake.org/download/) or later
-- [Boost 1.78](https://www.boost.org/doc/libs/1_78_0/) or later.
+- [Boost 1.86](https://www.boost.org/doc/libs/1_78_0/) or later.
 - [OpenSSL 3.0.9](https://openssl-library.org/source/index.html) or later (or 1.1.1b).
-- [BSV 1.0.13](https://github.com/bitcoin-sv/bitcoin-sv/releases/tag/v1.0.13) exact version.
+- [BSV 1.2.0](https://github.com/bitcoin-sv/bitcoin-sv/releases) exact version.
 - Please make sure MSBuild is in the PATH.
 **Linux**: static libraries and must be compiled with `fPIC` on.
-- C++ 17 compatible compiler
-**Windows**: Visual Studio Community Edition 2019 on windows
-**Linux**: g++11 on Linux
+- C++ 20 compatible compiler
+**Windows**: Visual Studio Community Edition 2022 on windows
+**Linux**: g++13 on Linux
+**MacOS**: clang 15 on Mac OS
 ##### Java module
 - Java JDK 8 or later
 - Download testng jar files `guice-4.1.0.jar`, `jcommander-1.72.jar`, `snakeyaml-1.21.jar` and `testng-7.1.0.jar`
@@ -51,7 +52,7 @@ From the build directory:
 
 To build Script Engine SDK
 ```console
-cmake -G"Visual Studio 16 2019" -A x64 ..\bscrypt && cmake --build . --target ALL_BUILD --config Debug && cmake --build . --target ALL_BUILD --config Release
+cmake -G"Visual Studio 17 2022" -A x64 ..\bscrypt && cmake --build . --target ALL_BUILD --config Debug && cmake --build . --target ALL_BUILD --config Release
 ```
 
 To run tests
