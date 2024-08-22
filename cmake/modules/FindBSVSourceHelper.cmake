@@ -36,9 +36,9 @@ function(cryptFindBSVDir)#######################################################
   ## Function try to find the BSV source code and set the cache variable SESDK_BSV_ROOT_DIR
   ##   If user define -DBSV_ROOT, it will be use
   ##   If user define environment variable BSV_ROOT, it will be used
-  ##   If inside the script engine project, there are a directory '${CMAKE_SOURCE_DIR}/sv', then it will be used      ## jenkins build
-  ##   If alongside the script engine project, there are a directory ${CMAKE_SOURCE_DIR}/../sv, then it will be used  ## local development
-  ##   If non of them exist, then it will be clone from source into '${CMAKE_SOURCE_DIR}/sv'
+  ##   If inside the script engine project, there are a directory '${CMAKE_SOURCE_DIR}/bitcoin-sv', then it will be used      ## jenkins build
+  ##   If alongside the script engine project, there are a directory ${CMAKE_SOURCE_DIR}/../bitcoin-svsv, then it will be used  ## local development
+  ##   If non of them exist, then it will be clone from source into '${CMAKE_SOURCE_DIR}/bitcoin-sv'
   if(DEFINED BSV_ROOT)
     file(TO_CMAKE_PATH "${BSV_ROOT}" _CMAKE_PATH)
     set(SESDK_BSV_ROOT_DIR "${_CMAKE_PATH}" CACHE PATH "Root directory for BSV source code" FORCE)
@@ -53,31 +53,31 @@ function(cryptFindBSVDir)#######################################################
     return()
   endif()
 
-  if(EXISTS "${CMAKE_SOURCE_DIR}/sv")
-    set(SESDK_BSV_ROOT_DIR "${CMAKE_SOURCE_DIR}/sv" CACHE PATH "Root directory for BSV source code" FORCE)
+  if(EXISTS "${CMAKE_SOURCE_DIR}/bitcoin-sv")
+    set(SESDK_BSV_ROOT_DIR "${CMAKE_SOURCE_DIR}/bitcoin-sv" CACHE PATH "Root directory for BSV source code" FORCE)
     _checkprint_SESDK_BSV_ROOT_DIR()
     return()
   endif()
 
-  if(EXISTS "${CMAKE_SOURCE_DIR}/../sv")
-    get_filename_component(_ABS_PATH "${CMAKE_SOURCE_DIR}/../sv" ABSOLUTE)
+  if(EXISTS "${CMAKE_SOURCE_DIR}/../bitcoin-sv")
+    get_filename_component(_ABS_PATH "${CMAKE_SOURCE_DIR}/../bitcoin-sv" ABSOLUTE)
     set(SESDK_BSV_ROOT_DIR "${_ABS_PATH}" CACHE PATH "Root directory for BSV source code" FORCE)
     _checkprint_SESDK_BSV_ROOT_DIR()
     return()
   endif()
 
-  set(BSV_REPO_URL "git@bitbucket.org:nch-atlassian/sv.git")#Private dev repo
-  message(STATUS "Unable to find bsv source code on local machine. It will be clone to [${CMAKE_SOURCE_DIR}/sv]")
+  set(BSV_REPO_URL "git@github.com:bitcoin-sv/bitcoin-sv.git")# public repo
+  message(STATUS "Unable to find bsv source code on local machine. It will be clone to [${CMAKE_SOURCE_DIR}/bitcoin-sv]")
   execute_process(
     COMMAND git clone ${BSV_REPO_URL}
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     OUTPUT_STRIP_TRAILING_WHITESPACE
   )
-  if(NOT EXISTS "${CMAKE_SOURCE_DIR}/sv")
-    message(FATAL_ERROR "Unable to clone [${BSV_REPO_URL}] into [${CMAKE_SOURCE_DIR}/sv]. Check internet connection")
+  if(NOT EXISTS "${CMAKE_SOURCE_DIR}/bitcoin-sv")
+    message(FATAL_ERROR "Unable to clone [${BSV_REPO_URL}] into [${CMAKE_SOURCE_DIR}/bitcoin-sv]. Check internet connection")
   else()
-    message(STATUS "Successfully cloned [${BSV_REPO_URL}] into [${CMAKE_SOURCE_DIR}/sv]")
-    set(SESDK_BSV_ROOT_DIR "${CMAKE_SOURCE_DIR}/sv" CACHE PATH "Root directory for BSV source code" FORCE)
+    message(STATUS "Successfully cloned [${BSV_REPO_URL}] into [${CMAKE_SOURCE_DIR}/bitcoin-sv]")
+    set(SESDK_BSV_ROOT_DIR "${CMAKE_SOURCE_DIR}/bitcoin-sv" CACHE PATH "Root directory for BSV source code" FORCE)
     _checkprint_SESDK_BSV_ROOT_DIR()
   endif()
 endfunction()##cryptFindBSVDir
