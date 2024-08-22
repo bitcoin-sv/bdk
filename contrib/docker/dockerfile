@@ -69,6 +69,6 @@ WORKDIR /root
 RUN mkdir build
 WORKDIR /root/build
 
-RUN echo "cmake ../bscrypt -DCMAKE_BUILD_TYPE=Debug -DCUSTOM_SYSTEM_OS_NAME=Ubuntu; time -p make -j8" > build.sh
+RUN echo "cmake ../bdk -DCMAKE_BUILD_TYPE=Debug -DCUSTOM_SYSTEM_OS_NAME=Ubuntu; time -p make -j8" > build.sh
 RUN chmod +x ./build.sh
 

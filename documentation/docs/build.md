@@ -1,5 +1,5 @@
 ## Getting the source code
-Building Script Engine SDK requires the source for both Script Engine SDK and bsv repositories. 
+Building Bitcoin Development Kit requires the source for both BDK and bsv repositories. 
 
 For nChain developers, the best way to do this is to have a BitBucket account setup with [ssh key access](https://confluence.atlassian.com/bitbucket/set-up-an-ssh-key-728138079.html). If other access is available, the source code should be organised as per the directory structure outlined in [directories structure](directories.md)
 
@@ -55,7 +55,7 @@ From the build directory:
 
 To build Script Engine SDK
 ```console
-cmake -G"Visual Studio 17 2022" -A x64 ..\bscrypt && cmake --build . --target ALL_BUILD --config Debug && cmake --build . --target ALL_BUILD --config Release
+cmake -G"Visual Studio 17 2022" -A x64 ..\bdk && cmake --build . --target ALL_BUILD --config Debug && cmake --build . --target ALL_BUILD --config Release
 ```
 
 To run tests
@@ -78,7 +78,7 @@ From the build directory:
 
 To build Script Engine SDK
 ```console
-cmake ../bscrypt -DCUSTOM_SYSTEM_OS_NAME=Ubuntu; time -p make -j8
+cmake ../bdk -DCUSTOM_SYSTEM_OS_NAME=Ubuntu; time -p make -j8
 ```
 If you want to build in debug mode, add the flag `-DCMAKE_BUILD_TYPE=Debug` to the cmake command.
 
@@ -105,14 +105,14 @@ ctest
 
 In general to run script engine java test from any IDE, users need to let the IDE know where to load the sesdk.jar package and where is the location of the sesdk_jni runtime library. Below is the explanation of how to do it with IntelliJ IDEA.
 
-Ctrl-Shift-A then type "Import project from existing source". Select directory $BSCRYPT, click next next a few time until reaching
+Ctrl-Shift-A then type "Import project from existing source". Select directory $BDK, click next next a few time until reaching
 
-  - The window asking to select some of the directories, uncheck all, leave only the $BSCRYPT/test/java
+  - The window asking to select some of the directories, uncheck all, leave only the $BDK/test/java
   - The window asking to select a library (jar file), uncheck all
 
 When the project is created, IntelliJ open a new window with projec tree there. Open File/Project Structure, then go to Modules :
 
-  - On Sources tab, select directory $BSCRYPT/test/java and make sure it is marked as "Test"
+  - On Sources tab, select directory $BDK/test/java and make sure it is marked as "Test"
   - On Dependencies tab :
 
       - click on '+' button to add sesdk jar file ($BUILD_DIR/generated/tools/bin/sesdk-x.y.z.jar)
@@ -123,7 +123,7 @@ Right click on a specific *Test.java file, select recompile
 Right click on the same *Test.java file, select "create test" (there are symbol indicating TestNG), then the test configuration will open
 From the VM options, add appropriate value of
 ```
--Djava_test_data_dir="$BSCRYPT/test/java/data" -Djava.library.path="$CMAKE_BUILD_DIR/x64/release"
+-Djava_test_data_dir="$BDK/test/java/data" -Djava.library.path="$CMAKE_BUILD_DIR/x64/release"
 ```
 Then the test is ready to run/debug. To debug java code, and jni C++ call:
 

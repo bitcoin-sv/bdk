@@ -19,26 +19,26 @@ if(${SESDK_VERSION_STRING} LESS ${SESDK_GOLANG_VERSION_STRING})
 endif()
 
 #### Generate version golang binding #####
-set(SESDK_VERSION_GOLANG_H_IN ${CMAKE_CURRENT_SOURCE_DIR}/cgo/include/version_go.h.in CACHE INTERNAL "Template File for python version")
+set(SESDK_VERSION_GOLANG_H_IN ${CMAKE_CURRENT_SOURCE_DIR}/include/version_go.h.in CACHE INTERNAL "Template File for python version")
 set(SESDK_VERSION_GOLANG_H ${SESDK_GENERATED_HPP_DIR}/version_go.h CACHE INTERNAL "HPP File for python version")
 configure_file(${SESDK_VERSION_GOLANG_H_IN} ${SESDK_VERSION_GOLANG_H})
 
 set(_GO_MODULE_NAME GoSESDK)
 set(_GO_MODULE_HEADER_FILES
     ${SESDK_VERSION_GOLANG_H}
-    ${CMAKE_CURRENT_SOURCE_DIR}/cgo/include/gobdk.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/cgo/include/interpreter_cgo.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/cgo/include/global_scriptconfig.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/gobdk.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/interpreter_cgo.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/global_scriptconfig.h
 )
 
 set(_GO_MODULE_SOURCE_FILES
-    ${CMAKE_CURRENT_SOURCE_DIR}/cgo/src/interpreter_cgo.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/cgo/src/global_scriptconfig.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/interpreter_cgo.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/global_scriptconfig.cpp
 )
 
 add_library(${_GO_MODULE_NAME} SHARED ${_GO_MODULE_HEADER_FILES} ${_GO_MODULE_SOURCE_FILES})
 target_link_libraries(${_GO_MODULE_NAME} PRIVATE sesdk_core ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT} secp256k1 ${UNIVALUE_LIB} OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono)
-target_include_directories(${_GO_MODULE_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/cgo/include)
+target_include_directories(${_GO_MODULE_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 if(CMAKE_CONFIGURATION_TYPES)
   set_target_properties(${_GO_MODULE_NAME} PROPERTIES FOLDER "module/golang" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d

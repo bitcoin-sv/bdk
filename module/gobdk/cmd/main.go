@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/bitcoin-sv/bscrypt/module/gobdk/config"
+	"github.com/bitcoin-sv/bdk/module/gobdk/config"
 )
 
 // main code

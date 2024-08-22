@@ -1,10 +1,10 @@
 #!/bin/bash
 
-docker run --name bscrypt \
-           --volumes-from vc_bscrypt \
+docker run --name bdk \
+           --volumes-from vc_bdk \
            --privileged \
             --cap-add=SYS_ADMIN \
            -it \
            --rm \
-           bscrypt:20.04
+           bdk:20.04
 

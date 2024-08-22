@@ -20,7 +20,7 @@ import com.nchain.sesdk.*;
 
 // This program allows the user to pass the length for the script 
 // java command to execute the test from command line 
-// cd to bscrypt/module/example folder and run the below command
+// cd to bdk/module/example folder and run the below command
 //java -Djava.library.path=path/build/INSTALLATION/lib: -cp path/build/generated/tools/bin/sesdk-0.1.1.jar:path/build/x64/release:. ExampleCancellationToken.java 4000000
 //expected result for the above execution : 
 //stack size 4

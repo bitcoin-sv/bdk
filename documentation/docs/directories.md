@@ -1,7 +1,7 @@
 #### Directories
 ```
 |---build
-|---bscrypt
+|---bdk
 |    |---core
 |    |---documentation
 |    |---sv

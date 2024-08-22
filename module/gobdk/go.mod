@@ -1,4 +1,4 @@
-module github.com/bitcoin-sv/bscrypt/module/gobdk
+module github.com/bitcoin-sv/bdk/module/gobdk
 
 go 1.22.6
 

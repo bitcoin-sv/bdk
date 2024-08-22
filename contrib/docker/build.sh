@@ -1,3 +1,3 @@
 #!/bin/bash
 
-docker build -t bscrypt:20.04 .
+docker build -t bdk:20.04 .
