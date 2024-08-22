@@ -26,11 +26,14 @@ configure_file(${SESDK_VERSION_GOLANG_H_IN} ${SESDK_VERSION_GOLANG_H})
 set(_GO_MODULE_NAME GoSESDK)
 set(_GO_MODULE_HEADER_FILES
     ${SESDK_VERSION_GOLANG_H}
+    ${CMAKE_CURRENT_SOURCE_DIR}/cgo/include/gobdk.h
     ${CMAKE_CURRENT_SOURCE_DIR}/cgo/include/interpreter_cgo.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/cgo/include/global_scriptconfig.h
 )
 
 set(_GO_MODULE_SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/cgo/src/interpreter_cgo.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/cgo/src/global_scriptconfig.cpp
 )
 
 add_library(${_GO_MODULE_NAME} SHARED ${_GO_MODULE_HEADER_FILES} ${_GO_MODULE_SOURCE_FILES})
