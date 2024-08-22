@@ -14,8 +14,33 @@ int VersionPatch();
 int VersionPatch();
 const char * VersionString();
 
-int cgo_execute(const char* scriptPtr, int scriptLen, bool consensus, unsigned int flags);
+/**
+ *  cgo_execute executes the script without verifying. Useful for simple script playing
+ */
+int cgo_execute_no_verify(const char* scriptPtr, int scriptLen,
+                          bool consensus, unsigned int flags);
 
+/**
+ *  cgo_execute executes the script with verification.
+ */
+int cgo_execute(const char* scriptPtr, int scriptLen,
+                bool consensus,
+                unsigned int flags,
+                const char* txPtr, int txLen,
+                int index,
+                unsigned long long amount);
+
+
+/**
+ *  cgo_verify verifies the locking and unlocking scripts
+ */
+int cgo_verify(const char* uScriptPtr, int uScriptLen,
+               const char* lScriptPtr, int lScriptLen,
+               bool consensus,
+               unsigned int flags,
+               const char* txPtr, int txLen,
+               int index,
+               unsigned long long amount);
 
 #ifdef __cplusplus
 }

@@ -1,4 +1,11 @@
-package gobdk
+package script
+
+import (
+	"fmt"
+	"unsafe"
+
+	goconfig "github.com/bitcoin-sv/bdk/module/gobdk/config"
+)
 
 // To make this work on local dev
 //   Build the full sesdk library, make install it to a specific location. Then set the environment variables
@@ -18,16 +25,29 @@ package gobdk
 
 /*
 #cgo LDFLAGS: -lGoSESDK -lstdc++ -lm
-#include "interpreter_cgo.h"
+#include <stdlib.h>
+#include "gobdk.h"
 */
 import "C"
 
-import (
-	"unsafe"
-)
+// SetGlobalScriptConfig set config globally for script operations
+func SetGlobalScriptConfig(config goconfig.ScriptConfig) error {
 
-// Execute execute script
-func Execute(script []byte, consensus bool, flag uint) int {
-	scriptPtr := (*C.char)(unsafe.Pointer(&script[0]))
-	return int( C.cgo_execute(scriptPtr, C.int(len(script)), C.bool(consensus), C.uint(flag)))
+	errCStr := C.SetGlobalScriptConfig(
+		C.ulonglong(config.MaxOpsPerScriptPolicy),
+		C.ulonglong(config.MaxScriptNumLengthPolicy),
+		C.ulonglong(config.MaxScriptSizePolicy),
+		C.ulonglong(config.MaxPubKeysPerMultiSig),
+		C.ulonglong(config.MaxStackMemoryUsageConsensus),
+		C.ulonglong(config.MaxStackMemoryUsagePolicy),
+	)
+
+	errGoStr := C.GoString(errCStr)
+	C.free(unsafe.Pointer(errCStr))
+
+	if len(errGoStr) < 1 {
+		return nil
+	}
+
+	return fmt.Errorf("error while setting global config for script %v", errGoStr)
 }

@@ -12,7 +12,10 @@
       "program": "${workspaceFolder}/cmd/main.go",
       "cwd": "${workspaceFolder}",
       "buildFlags": "",
-      "env": {"GOBDK_SCRIPTCONFIG_MAXOPSPERSCRIPTPOLICY":"1"
+      "env": {"LD_LIBRARY_PATH":"/abs/path/to/INSTALLATION/bin"
+        ,"CGO_LDFLAGS":"-L/abs/path/to/INSTALLATION/bin"
+        ,"CGO_CFLAGS":"-I/abs/path/to/INSTALLATION/include/cgo"
+        ,"GOBDK_SCRIPTCONFIG_MAXOPSPERSCRIPTPOLICY":"1"
         ,"GOBDK_SCRIPTCONFIG_MAXSCRIPTNUMLENGTHPOLICY":"2"
         ,"GOBDK_SCRIPTCONFIG_MAXSCRIPTSIZEPOLICY":"3"
         ,"GOBDK_SCRIPTCONFIG_MAXPUBKEYSPERMULTISIG":"4"
