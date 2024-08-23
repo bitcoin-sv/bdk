@@ -5,6 +5,7 @@
  *  File globing all headers to a single one
  */
 
+#include <asm_cgo.h>
 #include <global_scriptconfig.h>
 #include <interpreter_cgo.h>
 

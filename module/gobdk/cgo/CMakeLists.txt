@@ -27,11 +27,13 @@ set(_GO_MODULE_NAME GoSESDK)
 set(_GO_MODULE_HEADER_FILES
     ${SESDK_VERSION_GOLANG_H}
     ${CMAKE_CURRENT_SOURCE_DIR}/include/gobdk.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/asm_cgo.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/interpreter_cgo.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/global_scriptconfig.h
 )
 
 set(_GO_MODULE_SOURCE_FILES
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/asm_cgo.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/interpreter_cgo.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/global_scriptconfig.cpp
 )
