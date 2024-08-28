@@ -42,6 +42,28 @@ endif()
 
 add_subdirectory("${SESDK_BSV_ROOT_DIR}/src/secp256k1" ${CMAKE_CURRENT_BINARY_DIR}/secp256k1)
 
+set(_BSV_SECP256K1_INSTALL_HDR_FILES
+  "${SESDK_BSV_ROOT_DIR}/src/secp256k1/include/secp256k1.h"
+  "${SESDK_BSV_ROOT_DIR}/src/secp256k1/include/secp256k1_ellswift.h"
+  "${SESDK_BSV_ROOT_DIR}/src/secp256k1/include/secp256k1_preallocated.h"
+  "${SESDK_BSV_ROOT_DIR}/src/secp256k1/include/secp256k1_schnorrsig.h"
+  "${SESDK_BSV_ROOT_DIR}/src/secp256k1/include/secp256k1_ecdh.h"
+  "${SESDK_BSV_ROOT_DIR}/src/secp256k1/include/secp256k1_extrakeys.h"
+  "${SESDK_BSV_ROOT_DIR}/src/secp256k1/include/secp256k1_recovery.h"
+)
+
 ## Restore CMAKE_C_FLAGS_RELEASE after the hotfix for secp256k1 build
 set(CMAKE_C_FLAGS_RELEASE "{BACKUP_CMAKE_C_FLAGS_RELEASE}")
 
+#######################################################################################################################
+## Install secp256k1 the *.h header files should be kept as secp256k1 structure    ####################################
+set(UNIFIED_INSTALL_HEADERS_STR "${UNIFIED_INSTALL_HEADERS_STR}\n// Include files for secp256k1\n")
+foreach(_secp256k1_pubhdr ${_BSV_SECP256K1_INSTALL_HDR_FILES})
+  install(FILES ${_secp256k1_pubhdr} DESTINATION "include/secp256k1" COMPONENT secp256k1)
+
+  ## Calculate the relative path for include file in installer
+  get_filename_component(_f ${_secp256k1_pubhdr} NAME)
+  set(_install_rl "secp256k1/${_f}")
+  set(UNIFIED_INSTALL_HEADERS_STR "${UNIFIED_INSTALL_HEADERS_STR}#include \"${_install_rl}\"\n")
+endforeach()
+install(TARGETS secp256k1 DESTINATION "lib" COMPONENT secp256k1)
