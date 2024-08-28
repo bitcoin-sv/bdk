@@ -43,6 +43,15 @@ func Execute(script []byte, consensus bool, flag uint,
 	return int(C.cgo_execute(scriptPtr, C.int(len(script)), C.bool(consensus), C.uint(flag), txPtr, C.int(len(tx)), C.int(index), C.ulonglong(amount)))
 }
 
+// ScriptVerificationFlags calculates the flags to be used when verifying scripts
+// It is calculated based on the locking script and the boolean isPostChronical
+// If the node parameter -genesis is set to true, then the argument isPostChronical is false
+// Otherwise, isPostChronical is true
+func ScriptVerificationFlags(lScript []byte, isChronicle bool) uint {
+	lScriptPtr := (*C.char)(unsafe.Pointer(&lScript[0]))
+	return uint(C.cgo_script_verification_flags(lScriptPtr, C.int(len(lScript)), C.bool(isChronicle)))
+}
+
 // Verify verify the unlocking and locking script
 func Verify(uScript []byte, lScript []byte,
 	consensus bool, flag uint,

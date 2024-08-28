@@ -15,6 +15,11 @@ int VersionPatch();
 const char * VersionString();
 
 /**
+ * cgo_script_verification_flags calculates the flags to be used when verifying script
+ */
+unsigned int cgo_script_verification_flags(const char* lScriptPtr, int lScriptLen, bool isChronicle);
+
+/**
  *  cgo_execute executes the script without verifying. Useful for simple script playing
  */
 int cgo_execute_no_verify(const char* scriptPtr, int scriptLen,

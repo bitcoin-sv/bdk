@@ -12,6 +12,13 @@ const char * VersionString() {
     return SESDK_GOLANG_VERSION_STRING.c_str();
 }
 
+unsigned int cgo_script_verification_flags(const char* lScriptPtr, int lScriptLen, bool isChronicle)
+{
+    const uint8_t* p = static_cast<const uint8_t*>(reinterpret_cast<const void*>(lScriptPtr));
+    const std::span<const uint8_t> lScript(p, lScriptLen);
+    return bsv::script_verification_flags(lScript, isChronicle);
+}
+
 int cgo_execute_no_verify(const char* scriptPtr, int scriptLen, bool consensus, unsigned int flags)
 {
     const uint8_t* p = static_cast<const uint8_t*>(reinterpret_cast<const void*>(scriptPtr));

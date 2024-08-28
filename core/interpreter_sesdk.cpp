@@ -3,12 +3,22 @@
 #include <base58.h>
 #include <chainparams.h>
 #include <config.h>
+#include <script/script.h>
 #include <core_io.h>
 #include <script/interpreter.h>
 
 #include <stdexcept>
 
 using namespace std;
+
+
+// This method of flags calculation was found in $BSV/src/bitcoin-tx.cpp in Chronicle release 1.2.0
+unsigned int bsv::script_verification_flags(const std::span<const uint8_t> locking_script, const bool isPostChronical){
+    const ProtocolEra ActiveEra { isPostChronical ? ProtocolEra::PostChronicle : ProtocolEra::PostGenesis };
+    const ProtocolEra utxoEra { IsP2SH(locking_script)? ProtocolEra::PreGenesis : ActiveEra };
+    const unsigned int flags = (unsigned int )(StandardScriptVerifyFlags(ActiveEra) | InputScriptVerifyFlags(ActiveEra, utxoEra));
+    return flags;
+}
 
 namespace
 {

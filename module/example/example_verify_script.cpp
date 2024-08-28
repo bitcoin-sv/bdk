@@ -40,13 +40,7 @@ int main(int argc, char* argv[])
     std::cout << "Unlocking Script : " << std::endl << uScriptASM << std::endl << std::endl;
     std::cout << "Locking Script : " << std::endl << lScriptASM << std::endl << std::endl;
 
-    // The important part of the verification script is to put the right flags.
-    // This flags calculations was taken from $BSV/src/bitcoin-tx.cpp at Chronical version
-    const ProtocolEra ActiveEra{ ProtocolEra::PostChronicle };
-    // We will assume that script is after Genesis for every script type except p2sh
-    const ProtocolEra utxoEra { lScript.size()>0 ? ProtocolEra::PreGenesis : ActiveEra };
-    const unsigned int flags = (unsigned int)(StandardScriptVerifyFlags(ActiveEra) | InputScriptVerifyFlags(ActiveEra, utxoEra));
-
+    const unsigned int flags = bsv::script_verification_flags(lScript, true);
     auto ret = bsv::verify(uScript, lScript, true, flags, tx, inIndex, satoshis);
     std::cout << "Verification Script Return " << ret << std::endl;
     std::cout << "End Of Program "  << std::endl;
