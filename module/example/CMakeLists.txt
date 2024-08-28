@@ -18,3 +18,6 @@ add_executable(example_tx_keys "${CMAKE_CURRENT_SOURCE_DIR}/example_tx_keys.cpp"
 target_link_libraries(example_tx_keys ${CMAKE_DL_LIBS} sesdk_core OpenSSL::Crypto OpenSSL::SSL)
 set_target_properties(example_tx_keys PROPERTIES  FOLDER "module/example" DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})
 
+add_executable(example_verify_script "${CMAKE_CURRENT_SOURCE_DIR}/example_verify_script.cpp")
+target_link_libraries(example_verify_script ${CMAKE_DL_LIBS} sesdk_core OpenSSL::Crypto OpenSSL::SSL)
+set_target_properties(example_verify_script PROPERTIES  FOLDER "module/example" DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})
