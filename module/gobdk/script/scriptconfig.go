@@ -10,10 +10,10 @@ import (
 // To make this work on local dev
 //   Build the full sesdk library, make install it to a specific location. Then set the environment variables
 //
-//     export SESDK_ROOT=/path/to/install/directory
-//     export CGO_CFLAGS="-I${SESDK_ROOT}/include/cgo"
-//     export CGO_LDFLAGS="-L${SESDK_ROOT}/bin"
-//     export LD_LIBRARY_PATH=${SESDK_ROOT}/bin:$LD_LIBRARY_PATH
+//     export BDK_ROOT=/path/to/install/directory
+//     export CGO_CFLAGS="-I${BDK_ROOT}/include/cgo"
+//     export CGO_LDFLAGS="-L${BDK_ROOT}/bin"
+//     export LD_LIBRARY_PATH=${BDK_ROOT}/bin:$LD_LIBRARY_PATH
 //
 // To make a build inside docker, the same, i.e
 //   - Get the docker images that have all the necessary dependencies for C++ build
@@ -24,7 +24,7 @@ import (
 // to the release docker image. Use lld to know which one is missing.
 
 /*
-#cgo LDFLAGS: -lGoSESDK -lstdc++ -lm
+#cgo LDFLAGS: -lGoBDK -lstdc++ -lm
 #include <stdlib.h>
 #include "gobdk.h"
 */

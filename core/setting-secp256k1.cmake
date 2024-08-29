@@ -6,8 +6,8 @@
 #################################################################
 
 ## Build secp256k1 requires locating bsv source code
-if(NOT DEFINED SESDK_BSV_ROOT_DIR)#
-    message(FATAL_ERROR "Unable to locate bsv source code by SESDK_BSV_ROOT_DIR")
+if(NOT DEFINED BDK_BSV_ROOT_DIR)#
+    message(FATAL_ERROR "Unable to locate bsv source code by BDK_BSV_ROOT_DIR")
 endif()
 
 #######################################################################
@@ -40,16 +40,16 @@ if(NOT MSVC)
   set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -O3")
 endif()
 
-add_subdirectory("${SESDK_BSV_ROOT_DIR}/src/secp256k1" ${CMAKE_CURRENT_BINARY_DIR}/secp256k1)
+add_subdirectory("${BDK_BSV_ROOT_DIR}/src/secp256k1" ${CMAKE_CURRENT_BINARY_DIR}/secp256k1)
 
 set(_BSV_SECP256K1_INSTALL_HDR_FILES
-  "${SESDK_BSV_ROOT_DIR}/src/secp256k1/include/secp256k1.h"
-  "${SESDK_BSV_ROOT_DIR}/src/secp256k1/include/secp256k1_ellswift.h"
-  "${SESDK_BSV_ROOT_DIR}/src/secp256k1/include/secp256k1_preallocated.h"
-  "${SESDK_BSV_ROOT_DIR}/src/secp256k1/include/secp256k1_schnorrsig.h"
-  "${SESDK_BSV_ROOT_DIR}/src/secp256k1/include/secp256k1_ecdh.h"
-  "${SESDK_BSV_ROOT_DIR}/src/secp256k1/include/secp256k1_extrakeys.h"
-  "${SESDK_BSV_ROOT_DIR}/src/secp256k1/include/secp256k1_recovery.h"
+  "${BDK_BSV_ROOT_DIR}/src/secp256k1/include/secp256k1.h"
+  "${BDK_BSV_ROOT_DIR}/src/secp256k1/include/secp256k1_ellswift.h"
+  "${BDK_BSV_ROOT_DIR}/src/secp256k1/include/secp256k1_preallocated.h"
+  "${BDK_BSV_ROOT_DIR}/src/secp256k1/include/secp256k1_schnorrsig.h"
+  "${BDK_BSV_ROOT_DIR}/src/secp256k1/include/secp256k1_ecdh.h"
+  "${BDK_BSV_ROOT_DIR}/src/secp256k1/include/secp256k1_extrakeys.h"
+  "${BDK_BSV_ROOT_DIR}/src/secp256k1/include/secp256k1_recovery.h"
 )
 
 ## Restore CMAKE_C_FLAGS_RELEASE after the hotfix for secp256k1 build

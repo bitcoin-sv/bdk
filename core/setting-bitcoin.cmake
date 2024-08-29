@@ -6,10 +6,10 @@
 #################################################################
 
 ## Build scrypt requires locating bsv source code
-if(NOT DEFINED SESDK_BSV_ROOT_DIR)#
-    message(FATAL_ERROR "Unable to locate bsv source code by SESDK_BSV_ROOT_DIR")
+if(NOT DEFINED BDK_BSV_ROOT_DIR)#
+    message(FATAL_ERROR "Unable to locate bsv source code by BDK_BSV_ROOT_DIR")
 endif()
-# This file is mainly copied from ${SESDK_BSV_ROOT_DIR}/sv/src/config/CMakeLists.txt with slightl modifications
+# This file is mainly copied from ${BDK_BSV_ROOT_DIR}/sv/src/config/CMakeLists.txt with slightl modifications
 #######################################################################
 
 
@@ -149,15 +149,15 @@ check_symbol_exists(daemon "unistd.h" HAVE_DECL_DAEMON)
 #set(ENABLE_ZMQ ${BUILD_BITCOIN_ZMQ})
 
 # Generate the config
-set(BITCOIN_CONFIG_IN "${SESDK_BSV_ROOT_DIR}/src/config/bitcoin-config.h.cmake.in")
-set(BITCOIN_CONFIG_FILE "${SESDK_GENERATED_HPP_DIR}/config/bitcoin-config.h")
+set(BITCOIN_CONFIG_IN "${BDK_BSV_ROOT_DIR}/src/config/bitcoin-config.h.cmake.in")
+set(BITCOIN_CONFIG_FILE "${BDK_GENERATED_HPP_DIR}/config/bitcoin-config.h")
 configure_file("${BITCOIN_CONFIG_IN}" "${BITCOIN_CONFIG_FILE}" ESCAPE_QUOTES)
 
 
-message(STATUS "SESDK Warning : Hot fix for Visual Studio 17 2022 and gcc 13")
-message(STATUS "SESDK Warning : The build fails because in file src/script/script.h, it use std::array but doesn't include <array>")
-message(STATUS "SESDK Warning : We \"hot-fix\" that by make this include <array> in the generated file config/bitcoin-config.h")
-message(STATUS "SESDK Warning : which is in our control")
+message(STATUS "BDK Warning : Hot fix for Visual Studio 17 2022 and gcc 13")
+message(STATUS "BDK Warning : The build fails because in file src/script/script.h, it use std::array but doesn't include <array>")
+message(STATUS "BDK Warning : We \"hot-fix\" that by make this include <array> in the generated file config/bitcoin-config.h")
+message(STATUS "BDK Warning : which is in our control")
 
 # Read the file content and prepare lines to replace
 file(READ "${BITCOIN_CONFIG_FILE}" FILE_CONTENTS)

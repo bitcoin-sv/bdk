@@ -9,11 +9,11 @@ include(FindJavaJDKHelper)
 HelpFindJavaJDK()
 #scryptPrintJavaJDKInfo()#Debug Log
 
-if(NOT (JNI_FOUND AND Java_FOUND AND SESDK_JAR))
+if(NOT (JNI_FOUND AND Java_FOUND AND BDK_JAR))
   message(STATUS "Unable to find Java JDK and script engine SDK")
   message(STATUS "       JNI_FOUND  [${JNI_FOUND}]")
   message(STATUS "       Java_FOUND [${Java_FOUND}]")
-  message(STATUS "       SESDK_JAR [${SESDK_JAR}]")
+  message(STATUS "       BDK_JAR [${BDK_JAR}]")
   message(WARNING "Skip building Java tests")
   return()
 endif()
@@ -21,7 +21,7 @@ endif()
 if(DEFINED ENV{JAVA_TOOLS})
   set(JAVA_TOOLS_DIR "$ENV{JAVA_TOOLS}")
 else()
-  set(JAVA_TOOLS_DIR "${SESDK_GENERATED_BIN_DIR}")
+  set(JAVA_TOOLS_DIR "${BDK_GENERATED_BIN_DIR}")
   message("\n  Dowloading testng and dependencies")
   message("    DOWNLOAD file https://repo1.maven.org/maven2/org/testng/testng/7.1.0/testng-7.1.0.jar      to ${JAVA_TOOLS_DIR}")
   file(DOWNLOAD https://repo1.maven.org/maven2/org/testng/testng/7.1.0/testng-7.1.0.jar "${JAVA_TOOLS_DIR}/testng-7.1.0.jar")
@@ -51,7 +51,7 @@ if(NOT (TESTNG_JAR AND JCOMMANDER_JAR AND GUICE_JAR AND SNAKEYAML_JAR))
   return()
 endif()
 
-set(SESDK_CLASSPATH "com.nchain.sesdk")
+set(BDK_CLASSPATH "com.nchain.sesdk")
 
 ## Get all test scripts
 file(GLOB _JAVA_TEST_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*Test.java")
@@ -72,22 +72,22 @@ foreach(java_testfile ${_JAVA_TEST_FILES})
   set(JAVA_RUNTEST_NAME test_Java${BASE_TEST_NAME})
 
   add_custom_target(${JAVA_BUILDTEST_NAME} ALL DEPENDS "${java_testfile}")
-  add_dependencies(${JAVA_BUILDTEST_NAME} ${SESDK_JAR_BASE_NAME})
+  add_dependencies(${JAVA_BUILDTEST_NAME} ${BDK_JAR_BASE_NAME})
 
   # Compile java test to runtime output directories of the project
-  # -cp should have all *.jar files, in particular the ${SESDK_JAR}
+  # -cp should have all *.jar files, in particular the ${BDK_JAR}
   if(CMAKE_CONFIGURATION_TYPES)
     add_custom_command(TARGET ${JAVA_BUILDTEST_NAME}
       COMMAND ${Java_JAVAC_EXECUTABLE}
       -d $<IF:$<CONFIG:Debug>,${CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG},${CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE}>
-      -cp "${SESDK_JAR}\$<SEMICOLON>${TESTNG_JAR_FILES}"
+      -cp "${BDK_JAR}\$<SEMICOLON>${TESTNG_JAR_FILES}"
       ${java_testfile}
        COMMENT "Compiling ${java_testfile}")
   else()
     add_custom_command(TARGET ${JAVA_BUILDTEST_NAME}
       COMMAND ${Java_JAVAC_EXECUTABLE}
       -d ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
-      -cp "${SESDK_JAR}:${TESTNG_JAR_FILES}"
+      -cp "${BDK_JAR}:${TESTNG_JAR_FILES}"
       ${java_testfile}
        COMMENT "Compiling ${java_testfile}")
   endif()
@@ -96,15 +96,15 @@ foreach(java_testfile ${_JAVA_TEST_FILES})
 
   # Add java test
   # -Djava.library.path should point to the jni runtime library (C++)
-  # -cp should have all *.jar files, in particular the ${SESDK_JAR}
+  # -cp should have all *.jar files, in particular the ${BDK_JAR}
   if(CMAKE_CONFIGURATION_TYPES)
     add_test(NAME ${JAVA_RUNTEST_NAME}${CMAKE_DEBUG_POSTFIX}
       CONFIGURATIONS Debug
       COMMAND ${Java_JAVA_EXECUTABLE} -Ddebug=1
       -Djava_test_data_dir=${CMAKE_CURRENT_SOURCE_DIR}/data
       -Djava.library.path=${CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG}
-      -cp "${CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG}\$<SEMICOLON>${SESDK_JAR}\$<SEMICOLON>${TESTNG_JAR_FILES}" org.testng.TestNG
-      -testclass "${SESDK_CLASSPATH}.${JAVA_TEST_CLASSNAME}"
+      -cp "${CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG}\$<SEMICOLON>${BDK_JAR}\$<SEMICOLON>${TESTNG_JAR_FILES}" org.testng.TestNG
+      -testclass "${BDK_CLASSPATH}.${JAVA_TEST_CLASSNAME}"
       -suitename "."
       -testname ${JAVA_RUNTEST_NAME}${CMAKE_DEBUG_POSTFIX}
       -d ${CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG}
@@ -114,8 +114,8 @@ foreach(java_testfile ${_JAVA_TEST_FILES})
       COMMAND ${Java_JAVA_EXECUTABLE} -Ddebug=0
       -Djava_test_data_dir=${CMAKE_CURRENT_SOURCE_DIR}/data
       -Djava.library.path=${CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE}
-      -cp "${CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE}\$<SEMICOLON>${SESDK_JAR}\$<SEMICOLON>${TESTNG_JAR_FILES}" org.testng.TestNG
-      -testclass ${SESDK_CLASSPATH}.${JAVA_TEST_CLASSNAME}
+      -cp "${CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE}\$<SEMICOLON>${BDK_JAR}\$<SEMICOLON>${TESTNG_JAR_FILES}" org.testng.TestNG
+      -testclass ${BDK_CLASSPATH}.${JAVA_TEST_CLASSNAME}
       -suitename "."
       -testname ${JAVA_RUNTEST_NAME}
       -d ${CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE}
@@ -131,8 +131,8 @@ foreach(java_testfile ${_JAVA_TEST_FILES})
       COMMAND ${Java_JAVA_EXECUTABLE} ${_tdflag}
       -Djava_test_data_dir=${CMAKE_CURRENT_SOURCE_DIR}/data
       -Djava.library.path=${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
-      -cp "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}:${SESDK_JAR}:${JAVA_TOOLS_DIR}:${TESTNG_JAR_FILES}" org.testng.TestNG
-      -testclass ${SESDK_CLASSPATH}.${JAVA_TEST_CLASSNAME}
+      -cp "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}:${BDK_JAR}:${JAVA_TOOLS_DIR}:${TESTNG_JAR_FILES}" org.testng.TestNG
+      -testclass ${BDK_CLASSPATH}.${JAVA_TEST_CLASSNAME}
       -suitename "."
       -testname ${JAVA_RUNTEST_NAME}${_tpost_fix}
       -d ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}

@@ -6,26 +6,26 @@
 #################################################################
 
 
-#### SESDK Go module version as increment of core version
-createIncrementVersion(SESDK_GOLANG_VERSION_MAJOR ${SESDK_CORE_VERSION_MAJOR} 0 "script engine golang major version")
-createIncrementVersion(SESDK_GOLANG_VERSION_MINOR ${SESDK_CORE_VERSION_MINOR} 1 "script engine golang minor version")
-createIncrementVersion(SESDK_GOLANG_VERSION_PATCH ${SESDK_CORE_VERSION_PATCH} 0 "script engine golang patch version")
-set(SESDK_GOLANG_VERSION_STRING "${SESDK_GOLANG_VERSION_MAJOR}.${SESDK_GOLANG_VERSION_MINOR}.${SESDK_GOLANG_VERSION_PATCH}")
+#### BDK Go module version as increment of core version
+createIncrementVersion(BDK_GOLANG_VERSION_MAJOR ${BDK_CORE_VERSION_MAJOR} 0 "script engine golang major version")
+createIncrementVersion(BDK_GOLANG_VERSION_MINOR ${BDK_CORE_VERSION_MINOR} 1 "script engine golang minor version")
+createIncrementVersion(BDK_GOLANG_VERSION_PATCH ${BDK_CORE_VERSION_PATCH} 0 "script engine golang patch version")
+set(BDK_GOLANG_VERSION_STRING "${BDK_GOLANG_VERSION_MAJOR}.${BDK_GOLANG_VERSION_MINOR}.${BDK_GOLANG_VERSION_PATCH}")
 
 ## Test maximum of global version
-if(${SESDK_VERSION_STRING} LESS ${SESDK_GOLANG_VERSION_STRING})
+if(${BDK_VERSION_STRING} LESS ${BDK_GOLANG_VERSION_STRING})
   message("Script Engine SDK global version should be the max of all version numbers")
-  message("SESDK_VERSION_STRING=${SESDK_VERSION_STRING} while SESDK_GOLANG_VERSION_STRING=${SESDK_GOLANG_VERSION_STRING}")
+  message("BDK_VERSION_STRING=${BDK_VERSION_STRING} while BDK_GOLANG_VERSION_STRING=${BDK_GOLANG_VERSION_STRING}")
 endif()
 
 #### Generate version golang binding #####
-set(SESDK_VERSION_GOLANG_H_IN ${CMAKE_CURRENT_SOURCE_DIR}/include/version_go.h.in CACHE INTERNAL "Template File for python version")
-set(SESDK_VERSION_GOLANG_H ${SESDK_GENERATED_HPP_DIR}/version_go.h CACHE INTERNAL "HPP File for python version")
-configure_file(${SESDK_VERSION_GOLANG_H_IN} ${SESDK_VERSION_GOLANG_H})
+set(BDK_VERSION_GOLANG_H_IN ${CMAKE_CURRENT_SOURCE_DIR}/include/version_go.h.in CACHE INTERNAL "Template File for python version")
+set(BDK_VERSION_GOLANG_H ${BDK_GENERATED_HPP_DIR}/version_go.h CACHE INTERNAL "HPP File for python version")
+configure_file(${BDK_VERSION_GOLANG_H_IN} ${BDK_VERSION_GOLANG_H})
 
-set(_GO_MODULE_NAME GoSESDK)
+set(_GO_MODULE_NAME GoBDK)
 set(_GO_MODULE_HEADER_FILES
-    ${SESDK_VERSION_GOLANG_H}
+    ${BDK_VERSION_GOLANG_H}
     ${CMAKE_CURRENT_SOURCE_DIR}/include/gobdk.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/asm_cgo.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/interpreter_cgo.h
@@ -49,4 +49,4 @@ else()
 endif()
 
 install(TARGETS ${_GO_MODULE_NAME} DESTINATION "bin" COMPONENT GoModules)
-install(FILES ${SESDK_VERSION_GOLANG_H} ${_GO_MODULE_HEADER_FILES} DESTINATION "include/cgo" COMPONENT GoModules)
+install(FILES ${BDK_VERSION_GOLANG_H} ${_GO_MODULE_HEADER_FILES} DESTINATION "include/cgo" COMPONENT GoModules)

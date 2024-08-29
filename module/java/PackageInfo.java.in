@@ -22,7 +22,7 @@ public class PackageInfo {
             if (libraryAbsolutePath != null) {
                 System.load(libraryAbsolutePath);
             } else {
-                String libraryName = "${SESDK_JAVA_JNI_NAME}";
+                String libraryName = "${BDK_JAVA_JNI_NAME}";
                 if (Integer.getInteger("debug", 0) == 1) {
                     libraryName += "d";
                 }
@@ -46,22 +46,22 @@ public class PackageInfo {
     // PID help to debug jni with "attach to process"
     final static long pid = PackageInfo.getPID();
 
-    /* Version for SESDK Java module */
-    public final static int SESDK_JAVA_VERSION_MAJOR = ${SESDK_JAVA_VERSION_MAJOR};
-    public final static int SESDK_JAVA_VERSION_MINOR = ${SESDK_JAVA_VERSION_MINOR};
-    public final static int SESDK_JAVA_VERSION_PATCH = ${SESDK_JAVA_VERSION_PATCH};
-    public final static String SESDK_JAVA_VERSION_STRING = "${SESDK_JAVA_VERSION_STRING}";
+    /* Version for BDK Java module */
+    public final static int BDK_JAVA_VERSION_MAJOR = ${BDK_JAVA_VERSION_MAJOR};
+    public final static int BDK_JAVA_VERSION_MINOR = ${BDK_JAVA_VERSION_MINOR};
+    public final static int BDK_JAVA_VERSION_PATCH = ${BDK_JAVA_VERSION_PATCH};
+    public final static String BDK_JAVA_VERSION_STRING = "${BDK_JAVA_VERSION_STRING}";
 
-    /* Version information inherited from SESDK core */
-    public final static int SESDK_VERSION_MAJOR = ${SESDK_VERSION_MAJOR};
-    public final static int SESDK_VERSION_MINOR = ${SESDK_VERSION_MINOR};
-    public final static int SESDK_VERSION_PATCH = ${SESDK_VERSION_PATCH};
-    public final static String SESDK_VERSION_STRING = "${SESDK_VERSION_STRING}";
+    /* Version information inherited from BDK core */
+    public final static int BDK_VERSION_MAJOR = ${BDK_VERSION_MAJOR};
+    public final static int BDK_VERSION_MINOR = ${BDK_VERSION_MINOR};
+    public final static int BDK_VERSION_PATCH = ${BDK_VERSION_PATCH};
+    public final static String BDK_VERSION_STRING = "${BDK_VERSION_STRING}";
 
     public final static String SOURCE_GIT_COMMIT_BRANCH   = "${SOURCE_GIT_COMMIT_BRANCH}";
     public final static String SOURCE_GIT_COMMIT_HASH     = "${SOURCE_GIT_COMMIT_HASH}";
     public final static String SOURCE_GIT_COMMIT_DATETIME = "${SOURCE_GIT_COMMIT_DATETIME}";
-    public final static String SESDK_BUILD_DATETIME_UTC = "${SESDK_BUILD_DATETIME_UTC}";
+    public final static String BDK_BUILD_DATETIME_UTC = "${BDK_BUILD_DATETIME_UTC}";
 
     public final static int BSV_CLIENT_VERSION_MAJOR    = ${BSV_CLIENT_VERSION_MAJOR};
     public final static int BSV_CLIENT_VERSION_MINOR    = ${BSV_CLIENT_VERSION_MINOR};
@@ -72,8 +72,8 @@ public class PackageInfo {
     public final static String BSV_GIT_COMMIT_HASH     = "${BSV_GIT_COMMIT_HASH}";
     public final static String BSV_GIT_COMMIT_DATETIME = "${BSV_GIT_COMMIT_DATETIME}";
 
-    public final static int SESDK_CORE_VERSION_MAJOR = ${SESDK_CORE_VERSION_MAJOR};
-    public final static int SESDK_CORE_VERSION_MINOR = ${SESDK_CORE_VERSION_MINOR};
-    public final static int SESDK_CORE_VERSION_PATCH = ${SESDK_CORE_VERSION_PATCH};
-    public final static String SESDK_CORE_VERSION_STRING = "${SESDK_CORE_VERSION_STRING}";
+    public final static int BDK_CORE_VERSION_MAJOR = ${BDK_CORE_VERSION_MAJOR};
+    public final static int BDK_CORE_VERSION_MINOR = ${BDK_CORE_VERSION_MINOR};
+    public final static int BDK_CORE_VERSION_PATCH = ${BDK_CORE_VERSION_PATCH};
+    public final static String BDK_CORE_VERSION_STRING = "${BDK_CORE_VERSION_STRING}";
 }

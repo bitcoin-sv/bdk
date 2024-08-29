@@ -4,13 +4,13 @@
 #                                                               #
 #  Copyright (c) 2020 nChain Limited. All rights reserved       #
 #################################################################
-if(SESDKBuildSetting_Include)## Include guard
+if(BDKBuildSetting_Include)## Include guard
   return()
 endif()
-set(SESDKBuildSetting_Include TRUE)
+set(BDKBuildSetting_Include TRUE)
 
 macro(scryptSetCompilationOptions)## This has to be macro instead of a function because of add_definitions scope is local
-  if(NOT SESDK_SET_COMPILATION_OPTIONS_DONE)
+  if(NOT BDK_SET_COMPILATION_OPTIONS_DONE)
     ## Set common compile options
     set(CMAKE_CXX_STANDARD 20 CACHE INTERNAL "Use of C++20" FORCE)#TODO : change to C++20 when visual studio support
     set(CMAKE_CXX_STANDARD_REQUIRED ON CACHE INTERNAL "Require C++ standard" FORCE)
@@ -36,26 +36,26 @@ macro(scryptSetCompilationOptions)## This has to be macro instead of a function 
       set(CMAKE_C_FLAGS_RELEASE "-O3 -g0 -DNDEBUG" CACHE STRING "flags for C release version" FORCE)
     endif()
 
-    set(SESDK_SET_COMPILATION_OPTIONS_DONE TRUE CACHE BOOL "Protect to call twices")
+    set(BDK_SET_COMPILATION_OPTIONS_DONE TRUE CACHE BOOL "Protect to call twices")
   endif()
 endmacro()
 
 #### Define output directories according to ${CMAKE_CONFIGURATION_TYPES} or ${CMAKE_BUILD_TYPE}
 #### Based on the defined 
-####   ${SESDK_SYSTEM_BUILD_ARCHI}
+####   ${BDK_SYSTEM_BUILD_ARCHI}
 ####   ${CMAKE_CONFIGURATION_TYPES}
 ####   ${CMAKE_BUILD_TYPE}
 function(scryptSetOutputDirectories)
 
-  if(SESDK_SET_OUTPUT_DIRS_DONE)
+  if(BDK_SET_OUTPUT_DIRS_DONE)
     return()
   else()
-    set(SESDK_SET_OUTPUT_DIRS_DONE TRUE CACHE BOOL "Protect to call twices")
+    set(BDK_SET_OUTPUT_DIRS_DONE TRUE CACHE BOOL "Protect to call twices")
   endif()
 
-  if(NOT DEFINED SESDK_SYSTEM_BUILD_ARCHI)
-    message("  SetBuildFolders : variable [SESDK_SYSTEM_BUILD_ARCHI] is not defined")
-    message(FATAL_ERROR "On Windows, [SESDK_SYSTEM_BUILD_ARCHI] should be defined x64 or x86")
+  if(NOT DEFINED BDK_SYSTEM_BUILD_ARCHI)
+    message("  SetBuildFolders : variable [BDK_SYSTEM_BUILD_ARCHI] is not defined")
+    message(FATAL_ERROR "On Windows, [BDK_SYSTEM_BUILD_ARCHI] should be defined x64 or x86")
   endif()
 
   if(CMAKE_BUILD_TYPE)
@@ -76,7 +76,7 @@ function(scryptSetOutputDirectories)
       string(TOLOWER ${CMAKE_BUILD_TYPE} _build_type_dir)
     endif()
 
-    set(_MAIN_OUTPUT_PATH "${CMAKE_BINARY_DIR}/x${SESDK_SYSTEM_BUILD_ARCHI}/${_build_type_dir}")
+    set(_MAIN_OUTPUT_PATH "${CMAKE_BINARY_DIR}/x${BDK_SYSTEM_BUILD_ARCHI}/${_build_type_dir}")
     if(NOT EXISTS "${_MAIN_OUTPUT_PATH}")
       file(MAKE_DIRECTORY "${_MAIN_OUTPUT_PATH}")
     endif()
@@ -89,7 +89,7 @@ function(scryptSetOutputDirectories)
   #scryptPrintList("scryptOUTPUT_DIRECTORIES" "${scryptOUTPUT_DIRECTORIES}")## Debug Log
 endfunction()
 
-#### Get bsv versions in the "${SESDK_BSV_ROOT_DIR}/src/clientversion.h"
+#### Get bsv versions in the "${BDK_BSV_ROOT_DIR}/src/clientversion.h"
 function(scryptCalculateBSVVersion clientversionFile)###############################################################
   if(NOT EXISTS "${clientversionFile}")
     message(FATAL_ERROR "BSV version file [${clientversionFile}] does not exist")
@@ -111,22 +111,22 @@ function(scryptCalculateBSVVersion clientversionFile)###########################
 endfunction()
 
 function(scryptSetBuildVersion)
-  if(SESDK_SET_BUILD_VERSION_DONE)
+  if(BDK_SET_BUILD_VERSION_DONE)
     return()
   else()
-    set(SESDK_SET_BUILD_VERSION_DONE TRUE CACHE BOOL "Protect to call twices")
+    set(BDK_SET_BUILD_VERSION_DONE TRUE CACHE BOOL "Protect to call twices")
   endif()
 
-  if(NOT DEFINED SESDK_VERSION_MAJOR)
-    set(SESDK_VERSION_MAJOR "1" CACHE INTERNAL "framework major version")
+  if(NOT DEFINED BDK_VERSION_MAJOR)
+    set(BDK_VERSION_MAJOR "1" CACHE INTERNAL "framework major version")
   endif()
-  if(NOT DEFINED SESDK_VERSION_MINOR)
-    set(SESDK_VERSION_MINOR "0" CACHE INTERNAL "framework minor version")
+  if(NOT DEFINED BDK_VERSION_MINOR)
+    set(BDK_VERSION_MINOR "0" CACHE INTERNAL "framework minor version")
   endif()
-  if(NOT DEFINED SESDK_VERSION_PATCH)
-    set(SESDK_VERSION_PATCH "0" CACHE INTERNAL "framework patch version")
+  if(NOT DEFINED BDK_VERSION_PATCH)
+    set(BDK_VERSION_PATCH "0" CACHE INTERNAL "framework patch version")
   endif()
-  set(SESDK_VERSION_STRING "${SESDK_VERSION_MAJOR}.${SESDK_VERSION_MINOR}.${SESDK_VERSION_PATCH}" CACHE INTERNAL "scrypt version string")
+  set(BDK_VERSION_STRING "${BDK_VERSION_MAJOR}.${BDK_VERSION_MINOR}.${BDK_VERSION_PATCH}" CACHE INTERNAL "scrypt version string")
 
   # Get branch
   scryptGetGitBranch(_SOURCE_GIT_COMMIT_BRANCH "${CMAKE_SOURCE_DIR}")
@@ -140,29 +140,29 @@ function(scryptSetBuildVersion)
   set(SOURCE_GIT_COMMIT_DATETIME ${_SOURCE_GIT_COMMIT_DATETIME} CACHE INTERNAL "Source commit datetime")
 
   # Get the build date time
-  scryptGetBuildDateTime(_SESDK_BUILD_DATETIME_UTC)
-  set(SESDK_BUILD_DATETIME_UTC ${_SESDK_BUILD_DATETIME_UTC} CACHE INTERNAL "Build datetime UTC")
+  scryptGetBuildDateTime(_BDK_BUILD_DATETIME_UTC)
+  set(BDK_BUILD_DATETIME_UTC ${_BDK_BUILD_DATETIME_UTC} CACHE INTERNAL "Build datetime UTC")
 
 
-  ## Go to "${SESDK_BSV_ROOT_DIR}" and find bsv repository informations:
+  ## Go to "${BDK_BSV_ROOT_DIR}" and find bsv repository informations:
   ##   Repo url
   ##   Repo branch
   ##   Repo git hash
   ##   Repo commit date time
-  if(NOT (DEFINED SESDK_BSV_ROOT_DIR AND EXISTS "${SESDK_BSV_ROOT_DIR}"))
+  if(NOT (DEFINED BDK_BSV_ROOT_DIR AND EXISTS "${BDK_BSV_ROOT_DIR}"))
       message(FATAL_ERROR "Unable to find local bsv repository")
   endif()
 
   # Get branch
-  scryptGetGitBranch(_BSV_GIT_COMMIT_BRANCH "${SESDK_BSV_ROOT_DIR}")
+  scryptGetGitBranch(_BSV_GIT_COMMIT_BRANCH "${BDK_BSV_ROOT_DIR}")
   set(BSV_GIT_COMMIT_BRANCH ${_BSV_GIT_COMMIT_BRANCH} CACHE INTERNAL "BSV commit branch")
 
-  scryptGetGitCommitHash(_BSV_GIT_COMMIT_HASH "${SESDK_BSV_ROOT_DIR}")
+  scryptGetGitCommitHash(_BSV_GIT_COMMIT_HASH "${BDK_BSV_ROOT_DIR}")
   set(BSV_GIT_COMMIT_HASH ${_BSV_GIT_COMMIT_HASH} CACHE INTERNAL "BSV commit hash")
 
   # Get the latest commit datetime
-  scryptGetGitCommitDateTime(_BSV_GIT_COMMIT_DATETIME "${SESDK_BSV_ROOT_DIR}")
+  scryptGetGitCommitDateTime(_BSV_GIT_COMMIT_DATETIME "${BDK_BSV_ROOT_DIR}")
   set(BSV_GIT_COMMIT_DATETIME ${_BSV_GIT_COMMIT_DATETIME} CACHE INTERNAL "BSV commit datetime")
 
-  scryptCalculateBSVVersion("${SESDK_BSV_ROOT_DIR}/src/clientversion.h")
+  scryptCalculateBSVVersion("${BDK_BSV_ROOT_DIR}/src/clientversion.h")
 endfunction()

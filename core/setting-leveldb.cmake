@@ -6,8 +6,8 @@
 #################################################################
 
 ## Build leveldb requires locating bsv source code
-if(NOT DEFINED SESDK_BSV_ROOT_DIR)#
-    message(FATAL_ERROR "Unable to locate bsv source code by SESDK_BSV_ROOT_DIR")
+if(NOT DEFINED BDK_BSV_ROOT_DIR)#
+    message(FATAL_ERROR "Unable to locate bsv source code by BDK_BSV_ROOT_DIR")
 endif()
 
 macro(FindSHLWAPI)
@@ -29,7 +29,7 @@ macro(FindSHLWAPI)
   set(SHLWAPI_INCLUDE_DIRS ${SHLWAPI_INCLUDE_DIR})
 endmacro()
 
-# This file is mainly copied from ${SESDK_BSV_ROOT_DIR}/sv/src/leveldb/CMakeLists.txt with slightl modifications
+# This file is mainly copied from ${BDK_BSV_ROOT_DIR}/sv/src/leveldb/CMakeLists.txt with slightl modifications
 #######################################################################
 
 if(NOT MSVC)
@@ -39,61 +39,61 @@ if(NOT MSVC)
   scrypt_remove_compiler_flags(-Wstrict-prototypes)
 endif()
 
-set(SESDK_BSV_LEVELDB_ROOT "${SESDK_BSV_ROOT_DIR}/src/leveldb")
+set(BDK_BSV_LEVELDB_ROOT "${BDK_BSV_ROOT_DIR}/src/leveldb")
 
 include(CheckIncludeFileCXX)
 check_include_file_cxx("atomic" LEVELDB_ATOMIC_PRESENT)
 
-include_directories("${SESDK_BSV_LEVELDB_ROOT}")
+include_directories("${BDK_BSV_LEVELDB_ROOT}")
 
 # Leveldb library
 add_library(leveldb
-  "${SESDK_BSV_LEVELDB_ROOT}/db/builder.cc"
-  "${SESDK_BSV_LEVELDB_ROOT}/db/c.cc"
-  "${SESDK_BSV_LEVELDB_ROOT}/db/dbformat.cc"
-  "${SESDK_BSV_LEVELDB_ROOT}/db/db_impl.cc"
-  "${SESDK_BSV_LEVELDB_ROOT}/db/db_iter.cc"
-  "${SESDK_BSV_LEVELDB_ROOT}/db/dumpfile.cc"
-  "${SESDK_BSV_LEVELDB_ROOT}/db/filename.cc"
-  "${SESDK_BSV_LEVELDB_ROOT}/db/log_reader.cc"
-  "${SESDK_BSV_LEVELDB_ROOT}/db/log_writer.cc"
-  "${SESDK_BSV_LEVELDB_ROOT}/db/memtable.cc"
-  "${SESDK_BSV_LEVELDB_ROOT}/db/repair.cc"
-  "${SESDK_BSV_LEVELDB_ROOT}/db/table_cache.cc"
-  "${SESDK_BSV_LEVELDB_ROOT}/db/version_edit.cc"
-  "${SESDK_BSV_LEVELDB_ROOT}/db/version_set.cc"
-  "${SESDK_BSV_LEVELDB_ROOT}/db/write_batch.cc"
-  "${SESDK_BSV_LEVELDB_ROOT}/table/block_builder.cc"
-  "${SESDK_BSV_LEVELDB_ROOT}/table/block.cc"
-  "${SESDK_BSV_LEVELDB_ROOT}/table/filter_block.cc"
-  "${SESDK_BSV_LEVELDB_ROOT}/table/format.cc"
-  "${SESDK_BSV_LEVELDB_ROOT}/table/iterator.cc"
-  "${SESDK_BSV_LEVELDB_ROOT}/table/merger.cc"
-  "${SESDK_BSV_LEVELDB_ROOT}/table/table_builder.cc"
-  "${SESDK_BSV_LEVELDB_ROOT}/table/table.cc"
-  "${SESDK_BSV_LEVELDB_ROOT}/table/two_level_iterator.cc"
-  "${SESDK_BSV_LEVELDB_ROOT}/util/arena.cc"
-  "${SESDK_BSV_LEVELDB_ROOT}/util/bloom.cc"
-  "${SESDK_BSV_LEVELDB_ROOT}/util/cache.cc"
-  "${SESDK_BSV_LEVELDB_ROOT}/util/coding.cc"
-  "${SESDK_BSV_LEVELDB_ROOT}/util/comparator.cc"
-  "${SESDK_BSV_LEVELDB_ROOT}/util/crc32c.cc"
-  "${SESDK_BSV_LEVELDB_ROOT}/util/env.cc"
-  "${SESDK_BSV_LEVELDB_ROOT}/util/env_posix.cc"
-  "${SESDK_BSV_LEVELDB_ROOT}/util/filter_policy.cc"
-  "${SESDK_BSV_LEVELDB_ROOT}/util/hash.cc"
-  "${SESDK_BSV_LEVELDB_ROOT}/util/histogram.cc"
-  "${SESDK_BSV_LEVELDB_ROOT}/util/logging.cc"
-  "${SESDK_BSV_LEVELDB_ROOT}/util/options.cc"
-  "${SESDK_BSV_LEVELDB_ROOT}/util/status.cc"
+  "${BDK_BSV_LEVELDB_ROOT}/db/builder.cc"
+  "${BDK_BSV_LEVELDB_ROOT}/db/c.cc"
+  "${BDK_BSV_LEVELDB_ROOT}/db/dbformat.cc"
+  "${BDK_BSV_LEVELDB_ROOT}/db/db_impl.cc"
+  "${BDK_BSV_LEVELDB_ROOT}/db/db_iter.cc"
+  "${BDK_BSV_LEVELDB_ROOT}/db/dumpfile.cc"
+  "${BDK_BSV_LEVELDB_ROOT}/db/filename.cc"
+  "${BDK_BSV_LEVELDB_ROOT}/db/log_reader.cc"
+  "${BDK_BSV_LEVELDB_ROOT}/db/log_writer.cc"
+  "${BDK_BSV_LEVELDB_ROOT}/db/memtable.cc"
+  "${BDK_BSV_LEVELDB_ROOT}/db/repair.cc"
+  "${BDK_BSV_LEVELDB_ROOT}/db/table_cache.cc"
+  "${BDK_BSV_LEVELDB_ROOT}/db/version_edit.cc"
+  "${BDK_BSV_LEVELDB_ROOT}/db/version_set.cc"
+  "${BDK_BSV_LEVELDB_ROOT}/db/write_batch.cc"
+  "${BDK_BSV_LEVELDB_ROOT}/table/block_builder.cc"
+  "${BDK_BSV_LEVELDB_ROOT}/table/block.cc"
+  "${BDK_BSV_LEVELDB_ROOT}/table/filter_block.cc"
+  "${BDK_BSV_LEVELDB_ROOT}/table/format.cc"
+  "${BDK_BSV_LEVELDB_ROOT}/table/iterator.cc"
+  "${BDK_BSV_LEVELDB_ROOT}/table/merger.cc"
+  "${BDK_BSV_LEVELDB_ROOT}/table/table_builder.cc"
+  "${BDK_BSV_LEVELDB_ROOT}/table/table.cc"
+  "${BDK_BSV_LEVELDB_ROOT}/table/two_level_iterator.cc"
+  "${BDK_BSV_LEVELDB_ROOT}/util/arena.cc"
+  "${BDK_BSV_LEVELDB_ROOT}/util/bloom.cc"
+  "${BDK_BSV_LEVELDB_ROOT}/util/cache.cc"
+  "${BDK_BSV_LEVELDB_ROOT}/util/coding.cc"
+  "${BDK_BSV_LEVELDB_ROOT}/util/comparator.cc"
+  "${BDK_BSV_LEVELDB_ROOT}/util/crc32c.cc"
+  "${BDK_BSV_LEVELDB_ROOT}/util/env.cc"
+  "${BDK_BSV_LEVELDB_ROOT}/util/env_posix.cc"
+  "${BDK_BSV_LEVELDB_ROOT}/util/filter_policy.cc"
+  "${BDK_BSV_LEVELDB_ROOT}/util/hash.cc"
+  "${BDK_BSV_LEVELDB_ROOT}/util/histogram.cc"
+  "${BDK_BSV_LEVELDB_ROOT}/util/logging.cc"
+  "${BDK_BSV_LEVELDB_ROOT}/util/options.cc"
+  "${BDK_BSV_LEVELDB_ROOT}/util/status.cc"
 )
 
 # The SSE4.2 optimized CRC32 implementation.
-add_library(leveldb-sse4.2 "${SESDK_BSV_LEVELDB_ROOT}/port/port_posix_sse.cc")
+add_library(leveldb-sse4.2 "${BDK_BSV_LEVELDB_ROOT}/port/port_posix_sse.cc")
 target_link_libraries(leveldb leveldb-sse4.2)
 
 # The libmemenv library.
-add_library(memenv "${SESDK_BSV_LEVELDB_ROOT}/helpers/memenv/memenv.cc")
+add_library(memenv "${BDK_BSV_LEVELDB_ROOT}/helpers/memenv/memenv.cc")
 
 # Select the proper port: posix or Windows.
 if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
@@ -101,8 +101,8 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
     set(LEVELDB_OS WINDOWS)
     target_sources(leveldb
         PRIVATE
-          "${SESDK_BSV_LEVELDB_ROOT}/util/env_win.cc"
-          "${SESDK_BSV_LEVELDB_ROOT}/port/port_win.cc"
+          "${BDK_BSV_LEVELDB_ROOT}/util/env_win.cc"
+          "${BDK_BSV_LEVELDB_ROOT}/port/port_win.cc"
     )
     target_compile_definitions(leveldb
         PRIVATE
@@ -116,7 +116,7 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
     target_link_libraries(leveldb shlwapi)
 else()
     set(LEVELDB_PLATFORM POSIX)
-    target_sources(leveldb PRIVATE "${SESDK_BSV_LEVELDB_ROOT}/port/port_posix.cc")
+    target_sources(leveldb PRIVATE "${BDK_BSV_LEVELDB_ROOT}/port/port_posix.cc")
 
     set(THREADS_PREFER_PTHREAD_FLAG ON)
     find_package(Threads REQUIRED)
@@ -161,7 +161,7 @@ endif (HAVE_SNAPPY)
 
 # Configure all leveldb libraries.
 function(configure_leveldb_lib LIB)
-    target_include_directories(${LIB} PUBLIC "${SESDK_BSV_LEVELDB_ROOT}/include")
+    target_include_directories(${LIB} PUBLIC "${BDK_BSV_LEVELDB_ROOT}/include")
     target_compile_definitions(${LIB}
         PUBLIC
             OS_${LEVELDB_OS}
@@ -206,7 +206,7 @@ endif()
 
 #######################################################################################################################
 ## Install leveldb the *.h header files should be kept as leveldb structure        ####################################
-file(GLOB_RECURSE LEVELDB_PUBLIC_HEADERS "${SESDK_BSV_LEVELDB_ROOT}/include/*.h") # TO INSTALL
+file(GLOB_RECURSE LEVELDB_PUBLIC_HEADERS "${BDK_BSV_LEVELDB_ROOT}/include/*.h") # TO INSTALL
 install(FILES ${LEVELDB_PUBLIC_HEADERS} DESTINATION "include/leveldb" COMPONENT leveldb)
 install(TARGETS leveldb leveldb-sse4.2 memenv DESTINATION "lib" COMPONENT leveldb)
 ###############################################

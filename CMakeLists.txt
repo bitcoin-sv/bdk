@@ -31,12 +31,12 @@
 cmake_minimum_required(VERSION 3.16)
 project(sesdk)
 
-option(SESDK_LOG_BSV_FILES "Log used bitcoin sv file to build" ON)
-option(SESDK_BUILD_LEVELDB "Activate the build of leveldb" OFF)
-option(SESDK_BUILD_UNIVALUE "Activate the build of univalue" ON)
+option(BDK_LOG_BSV_FILES "Log used bitcoin sv file to build" ON)
+option(BDK_BUILD_LEVELDB "Activate the build of leveldb" OFF)
+option(BDK_BUILD_UNIVALUE "Activate the build of univalue" ON)
 
-option(SESDK_BUILD_MODULES "Activate the build of modules" ON)
-option(SESDK_BUILD_BSV_TESTS "Activate the build of bsv tests" ON)
+option(BDK_BUILD_MODULES "Activate the build of modules" ON)
+option(BDK_BUILD_BSV_TESTS "Activate the build of bsv tests" ON)
 
 # Language binding modules are all built by default. Activate one will deactivate other
 option(SKIP_MODULE_JAVA "Skip building and testing the Java module" OFF)
@@ -50,15 +50,15 @@ if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin")
 endif()
 
 ## script engine built is based on source files from bsv code.
-## Use -DSESDK_BSV_SRC_ROOT=/path/to/sv_root
+## Use -DBDK_BSV_SRC_ROOT=/path/to/sv_root
 include(cmake/modules/FindBSVSourceHelper.cmake)
 HelpFindBSVSource()
 #scryptPrintBSVSourceInfo()#Print help to debug
 
 ## Global version should be the maximum of all version numbers
-set(SESDK_VERSION_MAJOR "1" CACHE INTERNAL "Script Engine SDK major version")
-set(SESDK_VERSION_MINOR "0" CACHE INTERNAL "Script Engine SDK minor version")
-set(SESDK_VERSION_PATCH "1" CACHE INTERNAL "Script Engine SDK patch version")
+set(BDK_VERSION_MAJOR "1" CACHE INTERNAL "Script Engine SDK major version")
+set(BDK_VERSION_MINOR "0" CACHE INTERNAL "Script Engine SDK minor version")
+set(BDK_VERSION_PATCH "1" CACHE INTERNAL "Script Engine SDK patch version")
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)## Always include the current directory
 
@@ -67,7 +67,7 @@ if(MSVC)
 endif()
 
 ## Init CMake, find all external packages and eventually build them if necessary
-include(cmake/SESDKInit.cmake)
+include(cmake/BDKInit.cmake)
 scryptInitCMake()
 
 ## Everything in core should be includable from everywhere
@@ -76,7 +76,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/core)
 ## Build sesdk_core
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/core)
 
-if(SESDK_BUILD_MODULES)
+if(BDK_BUILD_MODULES)
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/module)
 endif()
 
@@ -86,11 +86,11 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/documentation)
 
 ## On Widows, need to download NSIS https://nsis.sourceforge.io/Download
 ## Possible to do WIX generator for MSI installer
-set(SESDK_CPACK_CONFIG_IN "${CMAKE_SOURCE_DIR}/cmake/SESDKCPackConfig.cpack.in")
-set(SESDK_CPACK_CONFIG "${CMAKE_BINARY_DIR}/SESDKCPackConfig.cpack")
-configure_file(${SESDK_CPACK_CONFIG_IN} ${SESDK_CPACK_CONFIG} @ONLY)
+set(BDK_CPACK_CONFIG_IN "${CMAKE_SOURCE_DIR}/cmake/BDKCPackConfig.cpack.in")
+set(BDK_CPACK_CONFIG "${CMAKE_BINARY_DIR}/BDKCPackConfig.cpack")
+configure_file(${BDK_CPACK_CONFIG_IN} ${BDK_CPACK_CONFIG} @ONLY)
 install(FILES "ReleaseNote.md" DESTINATION "." COMPONENT Files)
 install(FILES "LICENCE.txt" DESTINATION "." COMPONENT Files)
-include(${SESDK_CPACK_CONFIG})
+include(${BDK_CPACK_CONFIG})
 include(CPack)
 message("Compile with [${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}]")

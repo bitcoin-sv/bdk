@@ -49,30 +49,30 @@ static PyMethodDef ModuleMethods[] = {
 
 #if PY_MAJOR_VERSION >= 3
 
-static int PySESDK_traverse(PyObject *m, visitproc visit, void *arg) {
+static int PyBDK_traverse(PyObject *m, visitproc visit, void *arg) {
     Py_VISIT(GETSTATE(m)->error);
     return 0;
 }
 
-static int PySESDK_clear(PyObject *m) {
+static int PyBDK_clear(PyObject *m) {
     Py_CLEAR(GETSTATE(m)->error);
     return 0;
 }
 
 static struct PyModuleDef moduledef = {PyModuleDef_HEAD_INIT,
-                                       "PySESDK",
+                                       "PyBDK",
                                        nullptr,
                                        sizeof(struct module_state),
                                        ModuleMethods,
                                        nullptr,
-                                       PySESDK_traverse,
-                                       PySESDK_clear,
+                                       PyBDK_traverse,
+                                       PyBDK_clear,
                                        nullptr};
 
 #define INITERROR return nullptr
 
 PyMODINIT_FUNC
-PyInit_PySESDK(void)
+PyInit_PyBDK(void)
 
 #else
 #define INITERROR return
@@ -84,14 +84,14 @@ initmyextension(void)
 #if PY_MAJOR_VERSION >= 3
     PyObject *module = PyModule_Create(&moduledef);
 #else
-    PyObject *module = Py_InitModule("PySESDK", myextension_methods);
+    PyObject *module = Py_InitModule("PyBDK", myextension_methods);
 #endif
 
     if(module == nullptr)
         INITERROR;
     struct module_state *st = GETSTATE(module);
 
-    st->error = PyErr_NewException("PySESDK.Error", nullptr, nullptr);
+    st->error = PyErr_NewException("PyBDK.Error", nullptr, nullptr);
     if(st->error == nullptr)
     {
         Py_DECREF(module);
@@ -99,21 +99,21 @@ initmyextension(void)
     }
 
     // Specific version for python binding module
-    PyModule_AddIntConstant(module, "SESDK_PYTHON_VERSION_MAJOR", SESDK_PYTHON_VERSION_MAJOR);
-    PyModule_AddIntConstant(module, "SESDK_PYTHON_VERSION_MINOR", SESDK_PYTHON_VERSION_MINOR);
-    PyModule_AddIntConstant(module, "SESDK_PYTHON_VERSION_PATCH", SESDK_PYTHON_VERSION_PATCH);
-    PyModule_AddStringConstant(module, "SESDK_PYTHON_VERSION_STRING", SESDK_PYTHON_VERSION_STRING.c_str());
+    PyModule_AddIntConstant(module, "BDK_PYTHON_VERSION_MAJOR", BDK_PYTHON_VERSION_MAJOR);
+    PyModule_AddIntConstant(module, "BDK_PYTHON_VERSION_MINOR", BDK_PYTHON_VERSION_MINOR);
+    PyModule_AddIntConstant(module, "BDK_PYTHON_VERSION_PATCH", BDK_PYTHON_VERSION_PATCH);
+    PyModule_AddStringConstant(module, "BDK_PYTHON_VERSION_STRING", BDK_PYTHON_VERSION_STRING.c_str());
 
-    /* Version information inherited from SESDK core */
-    PyModule_AddIntConstant(module, "SESDK_VERSION_MAJOR", SESDK_VERSION_MAJOR);
-    PyModule_AddIntConstant(module, "SESDK_VERSION_MINOR", SESDK_VERSION_MINOR);
-    PyModule_AddIntConstant(module, "SESDK_VERSION_PATCH", SESDK_VERSION_PATCH);
-    PyModule_AddStringConstant(module, "SESDK_VERSION_STRING", SESDK_VERSION_STRING.c_str());
+    /* Version information inherited from BDK core */
+    PyModule_AddIntConstant(module, "BDK_VERSION_MAJOR", BDK_VERSION_MAJOR);
+    PyModule_AddIntConstant(module, "BDK_VERSION_MINOR", BDK_VERSION_MINOR);
+    PyModule_AddIntConstant(module, "BDK_VERSION_PATCH", BDK_VERSION_PATCH);
+    PyModule_AddStringConstant(module, "BDK_VERSION_STRING", BDK_VERSION_STRING.c_str());
 
     PyModule_AddStringConstant(module, "SOURCE_GIT_COMMIT_BRANCH", SOURCE_GIT_COMMIT_BRANCH.c_str());
     PyModule_AddStringConstant(module, "SOURCE_GIT_COMMIT_HASH", SOURCE_GIT_COMMIT_HASH.c_str());
     PyModule_AddStringConstant(module, "SOURCE_GIT_COMMIT_DATETIME", SOURCE_GIT_COMMIT_DATETIME.c_str());
-    PyModule_AddStringConstant(module, "SESDK_BUILD_DATETIME_UTC", SESDK_BUILD_DATETIME_UTC.c_str());
+    PyModule_AddStringConstant(module, "BDK_BUILD_DATETIME_UTC", BDK_BUILD_DATETIME_UTC.c_str());
 
     PyModule_AddIntConstant(module, "BSV_CLIENT_VERSION_MAJOR", BSV_CLIENT_VERSION_MAJOR);
     PyModule_AddIntConstant(module, "BSV_CLIENT_VERSION_MINOR", BSV_CLIENT_VERSION_MINOR);
@@ -124,10 +124,10 @@ initmyextension(void)
     PyModule_AddStringConstant(module, "BSV_GIT_COMMIT_HASH", BSV_GIT_COMMIT_HASH.c_str());
     PyModule_AddStringConstant(module, "BSV_GIT_COMMIT_DATETIME", BSV_GIT_COMMIT_DATETIME.c_str());
 
-    PyModule_AddIntConstant(module, "SESDK_CORE_VERSION_MAJOR", SESDK_CORE_VERSION_MAJOR);
-    PyModule_AddIntConstant(module, "SESDK_CORE_VERSION_MINOR", SESDK_CORE_VERSION_MINOR);
-    PyModule_AddIntConstant(module, "SESDK_CORE_VERSION_PATCH", SESDK_CORE_VERSION_PATCH);
-    PyModule_AddStringConstant(module, "SESDK_CORE_VERSION_STRING", SESDK_CORE_VERSION_STRING.c_str());
+    PyModule_AddIntConstant(module, "BDK_CORE_VERSION_MAJOR", BDK_CORE_VERSION_MAJOR);
+    PyModule_AddIntConstant(module, "BDK_CORE_VERSION_MINOR", BDK_CORE_VERSION_MINOR);
+    PyModule_AddIntConstant(module, "BDK_CORE_VERSION_PATCH", BDK_CORE_VERSION_PATCH);
+    PyModule_AddStringConstant(module, "BDK_CORE_VERSION_STRING", BDK_CORE_VERSION_STRING.c_str());
 
 
 

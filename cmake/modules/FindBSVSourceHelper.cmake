@@ -9,7 +9,7 @@ if(FindBSVSourceHelper_Include)
   return()
 endif()
 set(FindBSVSourceHelper_Include TRUE)
-include(${CMAKE_SOURCE_DIR}/cmake/SESDKTools.cmake)
+include(${CMAKE_SOURCE_DIR}/cmake/BDKTools.cmake)
 
 
 ## Locate the BSV source root
@@ -20,20 +20,20 @@ include(${CMAKE_SOURCE_DIR}/cmake/SESDKTools.cmake)
 ## ./configure --with-boost=/path/to/boost_1_63_0 --disable-ccache --disable-maintainer-mode --disable-dependency-tracking --enable-glibc-back-compat --enable-reduce-exports --disable-bench ; make -j4
 
 
-function(_checkprint_SESDK_BSV_ROOT_DIR)
-  if(DEFINED SESDK_BSV_ROOT_DIR)
-    if(EXISTS "${SESDK_BSV_ROOT_DIR}")
-        message(STATUS "Found Bitcoin SV source code at SESDK_BSV_ROOT_DIR=[${SESDK_BSV_ROOT_DIR}]")
+function(_checkprint_BDK_BSV_ROOT_DIR)
+  if(DEFINED BDK_BSV_ROOT_DIR)
+    if(EXISTS "${BDK_BSV_ROOT_DIR}")
+        message(STATUS "Found Bitcoin SV source code at BDK_BSV_ROOT_DIR=[${BDK_BSV_ROOT_DIR}]")
     else()
-        message(FATAL_ERROR "Used inexisting directory SESDK_BSV_ROOT_DIR=[${SESDK_BSV_ROOT_DIR}]")
+        message(FATAL_ERROR "Used inexisting directory BDK_BSV_ROOT_DIR=[${BDK_BSV_ROOT_DIR}]")
     endif()
   else()
-    message(FATAL_ERROR "Variable SESDK_BSV_ROOT_DIR is not defined")
+    message(FATAL_ERROR "Variable BDK_BSV_ROOT_DIR is not defined")
   endif()
 endfunction()
 
 function(cryptFindBSVDir)########################################################################################
-  ## Function try to find the BSV source code and set the cache variable SESDK_BSV_ROOT_DIR
+  ## Function try to find the BSV source code and set the cache variable BDK_BSV_ROOT_DIR
   ##   If user define -DBSV_ROOT, it will be use
   ##   If user define environment variable BSV_ROOT, it will be used
   ##   If inside the script engine project, there are a directory '${CMAKE_SOURCE_DIR}/bitcoin-sv', then it will be used      ## jenkins build
@@ -41,28 +41,28 @@ function(cryptFindBSVDir)#######################################################
   ##   If non of them exist, then it will be clone from source into '${CMAKE_SOURCE_DIR}/bitcoin-sv'
   if(DEFINED BSV_ROOT)
     file(TO_CMAKE_PATH "${BSV_ROOT}" _CMAKE_PATH)
-    set(SESDK_BSV_ROOT_DIR "${_CMAKE_PATH}" CACHE PATH "Root directory for BSV source code" FORCE)
-    _checkprint_SESDK_BSV_ROOT_DIR()
+    set(BDK_BSV_ROOT_DIR "${_CMAKE_PATH}" CACHE PATH "Root directory for BSV source code" FORCE)
+    _checkprint_BDK_BSV_ROOT_DIR()
     return()
   endif()
 
   if(DEFINED ENV{BSV_ROOT})
     file(TO_CMAKE_PATH "$ENV{BSV_ROOT}" _CMAKE_PATH)
-    set(SESDK_BSV_ROOT_DIR "${_CMAKE_PATH}" CACHE PATH "Root directory for BSV source code" FORCE)
-    _checkprint_SESDK_BSV_ROOT_DIR()
+    set(BDK_BSV_ROOT_DIR "${_CMAKE_PATH}" CACHE PATH "Root directory for BSV source code" FORCE)
+    _checkprint_BDK_BSV_ROOT_DIR()
     return()
   endif()
 
   if(EXISTS "${CMAKE_SOURCE_DIR}/bitcoin-sv")
-    set(SESDK_BSV_ROOT_DIR "${CMAKE_SOURCE_DIR}/bitcoin-sv" CACHE PATH "Root directory for BSV source code" FORCE)
-    _checkprint_SESDK_BSV_ROOT_DIR()
+    set(BDK_BSV_ROOT_DIR "${CMAKE_SOURCE_DIR}/bitcoin-sv" CACHE PATH "Root directory for BSV source code" FORCE)
+    _checkprint_BDK_BSV_ROOT_DIR()
     return()
   endif()
 
   if(EXISTS "${CMAKE_SOURCE_DIR}/../bitcoin-sv")
     get_filename_component(_ABS_PATH "${CMAKE_SOURCE_DIR}/../bitcoin-sv" ABSOLUTE)
-    set(SESDK_BSV_ROOT_DIR "${_ABS_PATH}" CACHE PATH "Root directory for BSV source code" FORCE)
-    _checkprint_SESDK_BSV_ROOT_DIR()
+    set(BDK_BSV_ROOT_DIR "${_ABS_PATH}" CACHE PATH "Root directory for BSV source code" FORCE)
+    _checkprint_BDK_BSV_ROOT_DIR()
     return()
   endif()
 
@@ -77,19 +77,19 @@ function(cryptFindBSVDir)#######################################################
     message(FATAL_ERROR "Unable to clone [${BSV_REPO_URL}] into [${CMAKE_SOURCE_DIR}/bitcoin-sv]. Check internet connection")
   else()
     message(STATUS "Successfully cloned [${BSV_REPO_URL}] into [${CMAKE_SOURCE_DIR}/bitcoin-sv]")
-    set(SESDK_BSV_ROOT_DIR "${CMAKE_SOURCE_DIR}/bitcoin-sv" CACHE PATH "Root directory for BSV source code" FORCE)
-    _checkprint_SESDK_BSV_ROOT_DIR()
+    set(BDK_BSV_ROOT_DIR "${CMAKE_SOURCE_DIR}/bitcoin-sv" CACHE PATH "Root directory for BSV source code" FORCE)
+    _checkprint_BDK_BSV_ROOT_DIR()
   endif()
 endfunction()##cryptFindBSVDir
 
 function(cryptGetMinimumListBSVSource)########################################################################################
-  if(NOT (DEFINED SESDK_BSV_ROOT_DIR AND EXISTS "${SESDK_BSV_ROOT_DIR}"))
-      message(FATAL_ERROR "Unable to locate bsv source code for SESDK_BSV_ROOT_DIR")
+  if(NOT (DEFINED BDK_BSV_ROOT_DIR AND EXISTS "${BDK_BSV_ROOT_DIR}"))
+      message(FATAL_ERROR "Unable to locate bsv source code for BDK_BSV_ROOT_DIR")
   endif()
 
-  scryptAppendToGlobalSet(BSV_INCLUDE_DIRS "${SESDK_BSV_ROOT_DIR}/src")
-  scryptAppendToGlobalSet(BSV_INCLUDE_DIRS "${SESDK_BSV_ROOT_DIR}/src/crypto")
-  scryptAppendToGlobalSet(BSV_INCLUDE_DIRS "${SESDK_BSV_ROOT_DIR}/src/script")
+  scryptAppendToGlobalSet(BSV_INCLUDE_DIRS "${BDK_BSV_ROOT_DIR}/src")
+  scryptAppendToGlobalSet(BSV_INCLUDE_DIRS "${BDK_BSV_ROOT_DIR}/src/crypto")
+  scryptAppendToGlobalSet(BSV_INCLUDE_DIRS "${BDK_BSV_ROOT_DIR}/src/script")
 
   set(_minimal_hdr_files
       "src/addrdb.h"  ##  Used by [config.cpp], [dstencode.cpp], [interpreter.cpp]
@@ -210,7 +210,7 @@ function(cryptGetMinimumListBSVSource)##########################################
       ## Total number of header files : 114
   )
   foreach(rel_file ${_minimal_hdr_files})
-    scryptAppendToGlobalSet(BSV_MINIMAL_HDR_FILES "${SESDK_BSV_ROOT_DIR}/${rel_file}")
+    scryptAppendToGlobalSet(BSV_MINIMAL_HDR_FILES "${BDK_BSV_ROOT_DIR}/${rel_file}")
   endforeach()
 
   set(_minimal_src_files
@@ -265,7 +265,7 @@ function(cryptGetMinimumListBSVSource)##########################################
       ## Total number of source files : 40
   )
   foreach(rel_file ${_minimal_src_files})
-    scryptAppendToGlobalSet(BSV_MINIMAL_SRC_FILES "${SESDK_BSV_ROOT_DIR}/${rel_file}")
+    scryptAppendToGlobalSet(BSV_MINIMAL_SRC_FILES "${BDK_BSV_ROOT_DIR}/${rel_file}")
   endforeach()
 endfunction()
 
@@ -278,7 +278,7 @@ endmacro()
 
 function(scryptPrintBSVSourceInfo)
   message("BSV Source info :")
-  message("SESDK_BSV_ROOT_DIR  [${SESDK_BSV_ROOT_DIR}]")
+  message("BDK_BSV_ROOT_DIR  [${BDK_BSV_ROOT_DIR}]")
 
   scryptPrintList("BSV_MINIMAL_HDR_FILES" "${BSV_MINIMAL_HDR_FILES}")
   scryptPrintList("BSV_MINIMAL_SRC_FILES" "${BSV_MINIMAL_SRC_FILES}")

@@ -12,9 +12,9 @@
       "program": "${workspaceFolder}/cmd/main.go",
       "cwd": "${workspaceFolder}",
       "buildFlags": "",
-      "env": {"LD_LIBRARY_PATH":"${env:LOCAL_BDK_INSTALL}/INSTALLATION/bin:${env:LD_LIBRARY_PATH}"
-        ,"CGO_LDFLAGS":"-L${env:LOCAL_BDK_INSTALL}/INSTALLATION/bin ${env:CGO_LDFLAGS}"
-        ,"CGO_CFLAGS":"-I${env:LOCAL_BDK_INSTALL}/INSTALLATION/include/cgo ${env:CGO_CFLAGS}"
+      "env": {"LD_LIBRARY_PATH":"${env:BDK_INSTALL_ROOT}/bin:${env:LD_LIBRARY_PATH}"
+        ,"CGO_LDFLAGS":"-L${env:BDK_INSTALL_ROOT}/bin ${env:CGO_LDFLAGS}"
+        ,"CGO_CFLAGS":"-I${env:BDK_INSTALL_ROOT}/include/cgo ${env:CGO_CFLAGS}"
         ,"GOBDK_SCRIPTCONFIG_MAXOPSPERSCRIPTPOLICY":"1"
         ,"GOBDK_SCRIPTCONFIG_MAXSCRIPTNUMLENGTHPOLICY":"2"
         ,"GOBDK_SCRIPTCONFIG_MAXSCRIPTSIZEPOLICY":"3"

@@ -22,7 +22,7 @@ After unpacking the Script Engine SDK installer to the local machine, the conten
 |               |-- core_doc
 ```
 
-- File `include/core/SESDKVersion.hpp` contains full version's information of how and when the installer was built.
+- File `include/core/BDKVersion.hpp` contains full version's information of how and when the installer was built.
 - `include/core/sv` directory contains all `*.h` and `*.hpp` files from bsv source code.
 - `include/core` directory contains all extra `*.h` and `*.hpp` files declaring additional functionalities in Script Engine SDK core.
 - lib directory contains all archives (static) and runtime (shared) libraries.

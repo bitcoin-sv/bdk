@@ -4,12 +4,12 @@
 
 #include <iostream>
 
-int VersionMajor() { return SESDK_GOLANG_VERSION_MAJOR; }
-int VersionMinor() { return SESDK_GOLANG_VERSION_MINOR; }
-int VersionPatch() { return SESDK_GOLANG_VERSION_PATCH; }
+int VersionMajor() { return BDK_GOLANG_VERSION_MAJOR; }
+int VersionMinor() { return BDK_GOLANG_VERSION_MINOR; }
+int VersionPatch() { return BDK_GOLANG_VERSION_PATCH; }
 
 const char * VersionString() {
-    return SESDK_GOLANG_VERSION_STRING.c_str();
+    return BDK_GOLANG_VERSION_STRING.c_str();
 }
 
 unsigned int cgo_script_verification_flags(const char* lScriptPtr, int lScriptLen, bool isChronicle)

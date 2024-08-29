@@ -5,8 +5,8 @@
 *  Copyright (c) 2020 nChain Limited. All rights reserved       *
 ****************************************************************/
 
-#ifndef SESDK_GOLANG_VERSION_HPP
-#define SESDK_GOLANG_VERSION_HPP
+#ifndef BDK_GOLANG_VERSION_HPP
+#define BDK_GOLANG_VERSION_HPP
 
 #include <string>
 
@@ -16,9 +16,9 @@
  */
 
 ///!  Version of C++ core Script Engine SDK
-const static int SESDK_GOLANG_VERSION_MAJOR = ${SESDK_GOLANG_VERSION_MAJOR};
-const static int SESDK_GOLANG_VERSION_MINOR = ${SESDK_GOLANG_VERSION_MINOR};
-const static int SESDK_GOLANG_VERSION_PATCH = ${SESDK_GOLANG_VERSION_PATCH};
-const static std::string SESDK_GOLANG_VERSION_STRING  = "${SESDK_GOLANG_VERSION_STRING}";
+const static int BDK_GOLANG_VERSION_MAJOR = ${BDK_GOLANG_VERSION_MAJOR};
+const static int BDK_GOLANG_VERSION_MINOR = ${BDK_GOLANG_VERSION_MINOR};
+const static int BDK_GOLANG_VERSION_PATCH = ${BDK_GOLANG_VERSION_PATCH};
+const static std::string BDK_GOLANG_VERSION_STRING  = "${BDK_GOLANG_VERSION_STRING}";
 
-#endif /* SESDK_GOLANG_VERSION_HPP */
+#endif /* BDK_GOLANG_VERSION_HPP */
