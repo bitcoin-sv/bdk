@@ -12,7 +12,7 @@
 #include "script/script_num.h"
 #include "univalue/include/univalue.h"
 
-#include "interpreter_sesdk.hpp"
+#include "interpreter_bdk.hpp"
 
 #include "assembler.h"
 #include "utilstrencodings.h"

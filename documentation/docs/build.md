@@ -103,7 +103,7 @@ ctest
 
 ##### Java test from IntelliJ IDEA
 
-In general to run script engine java test from any IDE, users need to let the IDE know where to load the sesdk.jar package and where is the location of the sesdk_jni runtime library. Below is the explanation of how to do it with IntelliJ IDEA.
+In general to run script engine java test from any IDE, users need to let the IDE know where to load the bdk.jar package and where is the location of the bdk_jni runtime library. Below is the explanation of how to do it with IntelliJ IDEA.
 
 Ctrl-Shift-A then type "Import project from existing source". Select directory $BDK, click next next a few time until reaching
 
@@ -115,7 +115,7 @@ When the project is created, IntelliJ open a new window with projec tree there. 
   - On Sources tab, select directory $BDK/test/java and make sure it is marked as "Test"
   - On Dependencies tab :
 
-      - click on '+' button to add sesdk jar file ($BUILD_DIR/generated/tools/bin/sesdk-x.y.z.jar)
+      - click on '+' button to add bdk jar file ($BUILD_DIR/generated/tools/bin/bdk-x.y.z.jar)
       - click on '+' button to add directory $JAVA_TOOLS
     Make sure the 2 dependencies added are checked to be used
 

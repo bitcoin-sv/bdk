@@ -109,9 +109,9 @@ add_executable(test_core
                #"${BDK_BSV_TEST_ROOT}/opcode_tests.cpp
 )
 
-target_link_libraries(test_core ${CMAKE_DL_LIBS} sesdk_core OpenSSL::Crypto OpenSSL::SSL)
+target_link_libraries(test_core ${CMAKE_DL_LIBS} bdk_core OpenSSL::Crypto OpenSSL::SSL)
 if(WIN32)
   target_link_libraries(test_core Crypt32.lib Ws2_32)
 endif()
 target_include_directories(test_core PRIVATE "${BDK_BSV_TEST_ROOT}" "${HOTFIX_DIRECTORY_SCRIPTFLAGS}")
-sesdk_add_unit_test(test_core)
+bdk_add_unit_test(test_core)

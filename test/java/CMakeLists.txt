@@ -51,7 +51,7 @@ if(NOT (TESTNG_JAR AND JCOMMANDER_JAR AND GUICE_JAR AND SNAKEYAML_JAR))
   return()
 endif()
 
-set(BDK_CLASSPATH "com.nchain.sesdk")
+set(BDK_CLASSPATH "com.nchain.bdk")
 
 ## Get all test scripts
 file(GLOB _JAVA_TEST_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*Test.java")

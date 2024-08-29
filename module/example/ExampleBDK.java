@@ -1,4 +1,4 @@
-package com.nchain.sesdk.*;
+package com.nchain.bdk.*;
 
 public class ExampleBDK {
   public static void main(String[] args){

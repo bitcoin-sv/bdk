@@ -31,7 +31,7 @@ set(_PY_MODULE_NAME PyBDK)
 set(_PY_MODULE_SOURCE_FILES "${BDK_VERSION_PYTHON_HPP}" "${CMAKE_CURRENT_SOURCE_DIR}/PyBDK.cpp")
 
 Python_add_library(${_PY_MODULE_NAME} ${_PY_MODULE_SOURCE_FILES})
-target_link_libraries(${_PY_MODULE_NAME} PRIVATE sesdk_core OpenSSL::Crypto OpenSSL::SSL)
+target_link_libraries(${_PY_MODULE_NAME} PRIVATE bdk_core OpenSSL::Crypto OpenSSL::SSL)
 target_include_directories(${_PY_MODULE_NAME} PUBLIC ${BDK_GENERATED_HPP_DIR})
 if(CMAKE_CONFIGURATION_TYPES)
   set_target_properties(${_PY_MODULE_NAME} PROPERTIES FOLDER "module/python" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d

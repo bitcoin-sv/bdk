@@ -1,4 +1,4 @@
-#include <com_nchain_sesdk_Stack.h> // Generated
+#include <com_nchain_bdk_Stack.h> // Generated
 
 #include "limitedstack.h"// bitcoin source code
 
@@ -6,7 +6,7 @@
 
 
 
-JNIEXPORT jlong JNICALL Java_com_nchain_sesdk_Stack_size(JNIEnv *env, jobject obj)
+JNIEXPORT jlong JNICALL Java_com_nchain_bdk_Stack_size(JNIEnv *env, jobject obj)
 {
     jlong r{0};
     if(LimitedStack* p = getHandle<LimitedStack>(env,obj,"cppStack"))
@@ -17,7 +17,7 @@ JNIEXPORT jlong JNICALL Java_com_nchain_sesdk_Stack_size(JNIEnv *env, jobject ob
     return r;
 }
 
-JNIEXPORT jbyteArray JNICALL Java_com_nchain_sesdk_Stack_at(JNIEnv *env, jobject obj, jint i)
+JNIEXPORT jbyteArray JNICALL Java_com_nchain_bdk_Stack_at(JNIEnv *env, jobject obj, jint i)
 {
     jbyteArray ret{nullptr};
     if(LimitedStack* p = getHandle<LimitedStack>(env,obj,"cppStack"))
@@ -36,13 +36,13 @@ JNIEXPORT jbyteArray JNICALL Java_com_nchain_sesdk_Stack_at(JNIEnv *env, jobject
     return ret;
 }
 
-JNIEXPORT void JNICALL Java_com_nchain_sesdk_Stack_initCppStack(JNIEnv *env, jobject obj, jlong maxsize)
+JNIEXPORT void JNICALL Java_com_nchain_bdk_Stack_initCppStack(JNIEnv *env, jobject obj, jlong maxsize)
 {
     LimitedStack* cpp_stack = new LimitedStack((uint64_t)maxsize);
     setHandle<LimitedStack>(env, obj, cpp_stack, "cppStack");
 }
 
-JNIEXPORT void JNICALL Java_com_nchain_sesdk_Stack_deleteCppStack(JNIEnv *env, jobject obj)
+JNIEXPORT void JNICALL Java_com_nchain_bdk_Stack_deleteCppStack(JNIEnv *env, jobject obj)
 {
     if(LimitedStack* p = getHandle<LimitedStack>(env,obj,"cppStack"))
     {

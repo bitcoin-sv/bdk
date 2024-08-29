@@ -1,4 +1,4 @@
-package com.nchain.sesdk;
+package com.nchain.bdk;
 import java.util.logging.Logger;
 
 /*! \file PackageInfo.java
@@ -7,7 +7,7 @@ import java.util.logging.Logger;
  */
 public class PackageInfo {
 
-    private static final Logger LOG = Logger.getLogger("com.nchain.sesdk.PackageInfo");
+    private static final Logger LOG = Logger.getLogger("com.nchain.bdk.PackageInfo");
     private static boolean jniLoaded = false;
 
     public static boolean loadJNI(){
@@ -32,7 +32,7 @@ public class PackageInfo {
             return jniLoaded;
         }
         catch(Exception e){
-            LOG.severe("Unable to load sesdk jni. Error : " + e.toString());
+            LOG.severe("Unable to load bdk jni. Error : " + e.toString());
             jniLoaded = false;
             return jniLoaded;
         }

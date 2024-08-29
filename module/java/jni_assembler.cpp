@@ -1,7 +1,7 @@
 //
 // Created by m.fletcher on 10/07/2020.
 //
-#include <com_nchain_sesdk_Assembler.h> // Generated
+#include <com_nchain_bdk_Assembler.h> // Generated
 #include <jni.h>
 
 #include "assembler.h"
@@ -12,7 +12,7 @@
 
 using namespace bsv::jni;
 
-JNIEXPORT jbyteArray JNICALL Java_com_nchain_sesdk_Assembler_fromAsm
+JNIEXPORT jbyteArray JNICALL Java_com_nchain_bdk_Assembler_fromAsm
     (JNIEnv * env , jobject obj, jstring input_script_asm)
 {
     if(input_script_asm == nullptr)
@@ -51,8 +51,8 @@ JNIEXPORT jbyteArray JNICALL Java_com_nchain_sesdk_Assembler_fromAsm
     return converted_output_script;
 }
 
-//JNIEXPORT jstring JNICALL Java_com_nchain_sesdk_Assembler_toAsm___3B
-JNIEXPORT jstring JNICALL Java_com_nchain_sesdk_Assembler_toAsm(JNIEnv * env, jobject obj, jbyteArray input_script)
+//JNIEXPORT jstring JNICALL Java_com_nchain_bdk_Assembler_toAsm___3B
+JNIEXPORT jstring JNICALL Java_com_nchain_bdk_Assembler_toAsm(JNIEnv * env, jobject obj, jbyteArray input_script)
 {
     if(input_script == nullptr)
     {

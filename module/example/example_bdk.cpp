@@ -3,7 +3,7 @@
 #include <sstream>
 
 #include "assembler.h"
-#include "interpreter_sesdk.hpp"
+#include "interpreter_bdk.hpp"
 #include "script/opcodes.h"
 
 using namespace std;

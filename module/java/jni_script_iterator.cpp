@@ -1,4 +1,4 @@
-#include <com_nchain_sesdk_ScriptIterator.h> // Generated
+#include <com_nchain_bdk_ScriptIterator.h> // Generated
 #include <jni.h>
 
 #include <config.h>// bsv code
@@ -11,7 +11,7 @@
 
 using namespace bsv::jni;
 
-JNIEXPORT void JNICALL Java_com_nchain_sesdk_ScriptIterator_helpctor(JNIEnv* env, jobject obj, jbyteArray arr)
+JNIEXPORT void JNICALL Java_com_nchain_bdk_ScriptIterator_helpctor(JNIEnv* env, jobject obj, jbyteArray arr)
 {
     if(arr == nullptr)
     {
@@ -59,7 +59,7 @@ JNIEXPORT void JNICALL Java_com_nchain_sesdk_ScriptIterator_helpctor(JNIEnv* env
     env->SetIntField(obj, env->GetFieldID(env->GetObjectClass(obj), "opcode", "I"), -1);
 }
 
-JNIEXPORT jboolean JNICALL Java_com_nchain_sesdk_ScriptIterator_next(JNIEnv* env, jobject obj)
+JNIEXPORT jboolean JNICALL Java_com_nchain_bdk_ScriptIterator_next(JNIEnv* env, jobject obj)
 {
     jboolean ret = true;
 
@@ -111,7 +111,7 @@ JNIEXPORT jboolean JNICALL Java_com_nchain_sesdk_ScriptIterator_next(JNIEnv* env
     return ret;
 }
 
-JNIEXPORT jboolean JNICALL Java_com_nchain_sesdk_ScriptIterator_reset(JNIEnv* env, jobject obj)
+JNIEXPORT jboolean JNICALL Java_com_nchain_bdk_ScriptIterator_reset(JNIEnv* env, jobject obj)
 {
     env->SetIntField(obj, env->GetFieldID(env->GetObjectClass(obj), "posOpcode", "I"), -1);
     env->SetIntField(obj, env->GetFieldID(env->GetObjectClass(obj), "opcode", "I"), -1);

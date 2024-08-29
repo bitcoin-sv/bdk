@@ -11,7 +11,7 @@ Script engine SDK provides a facilities to work with Bitcoin SV scripts with dif
 After unpacking the Script Engine SDK installer to the local machine, the content of the installation directory looks as below
 
 ```
-|-- sesdk_install
+|-- bdk_install
 |       |-- include
 |              |-- core
 |                    |-- sv
@@ -35,15 +35,15 @@ Script Engine SDK is a multi languages library, it allows users to work with `C+
 To build a C++ program using Script Engine SDK, it needs to link with the installed Script Engine SDK:
 
 - Let compiler know additional include directories are
-    - `/path/to/sesdk_install/include`
-    - `/path/to/sesdk_install/include/secp256k1`
-    - `/path/to/sesdk_install/include/univalue`
-    - `/path/to/sesdk_install/include/core`
-- Let the compiler know additional library directory is `/path/to/sesdk_install/lib`
+    - `/path/to/bdk_install/include`
+    - `/path/to/bdk_install/include/secp256k1`
+    - `/path/to/bdk_install/include/univalue`
+    - `/path/to/bdk_install/include/core`
+- Let the compiler know additional library directory is `/path/to/bdk_install/lib`
 
 To simplify for C++ code there are only one single file to include
 ```c++
-#include <sesdk>
+#include <bdk>
 ```
 This will include all header files delivered by the package. Note that it is simplified, but not optimal for compilation time.
 
@@ -51,15 +51,15 @@ This will include all header files delivered by the package. Note that it is sim
 #### Java
 Java library `.jar` was build with `JNI`, it depend to a shared library, which is delivered in the same directory. To be able to correctly load the `.jar` library, it is required to set in the IDE
 
-- _java.library.path_=`/path/to/sesdk_install/lib`
+- _java.library.path_=`/path/to/bdk_install/lib`
 
 #### Python
-Similar to Java, python module need to load the shared library interface. In order to allow python loading the binding module, it require to set _PYTHONPATH_ environment pointing to `/path/to/sesdk_install/lib`.
+Similar to Java, python module need to load the shared library interface. In order to allow python loading the binding module, it require to set _PYTHONPATH_ environment pointing to `/path/to/bdk_install/lib`.
 
 
 #### Documentation
 Documentations are build and delivered as html contents. To visualize it:
 ```
-python -m http.server -d /path/to/sesdk_install/Documentation/core_doc
+python -m http.server -d /path/to/bdk_install/Documentation/core_doc
 ```
 Then use a web browser to open the address `localhost:8000`

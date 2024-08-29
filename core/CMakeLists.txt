@@ -6,7 +6,7 @@
 #################################################################
 
 if (NOT (Boost_FOUND AND OPENSSL_FOUND))
-  message(FATAL_ERROR "Boost and OpenSSL are required to build sesdk_core")
+  message(FATAL_ERROR "Boost and OpenSSL are required to build bdk_core")
 endif()
 
 ## Build scrypt requires locating bsv source code
@@ -77,29 +77,29 @@ foreach(_extra_file ${BDK_CORE_EXTRA_HDR_FILES} ${BDK_CORE_EXTRA_SRC_FILES})
   endif()
 endforeach()
 
-## Build sesdk_core as a library using bsv source code
-add_library(sesdk_core ${BITCOIN_CONFIG_FILE} ${BDK_VERSION_HPP} ${BDK_CORE_HDR_FILES} ${BDK_CORE_SRC_FILES})
-#set_target_properties(sesdk_core PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS 1)
-target_include_directories(sesdk_core PUBLIC ${BSV_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(sesdk_core ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT} secp256k1 ${UNIVALUE_LIB} OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono)
+## Build bdk_core as a library using bsv source code
+add_library(bdk_core ${BITCOIN_CONFIG_FILE} ${BDK_VERSION_HPP} ${BDK_CORE_HDR_FILES} ${BDK_CORE_SRC_FILES})
+#set_target_properties(bdk_core PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS 1)
+target_include_directories(bdk_core PUBLIC ${BSV_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(bdk_core ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT} secp256k1 ${UNIVALUE_LIB} OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono)
 
 if(WIN32)
-  target_link_libraries(sesdk_core Crypt32.lib Ws2_32)
+  target_link_libraries(bdk_core Crypt32.lib Ws2_32)
 endif()
-target_compile_definitions(sesdk_core PUBLIC HAVE_CONFIG_H BOOST_THREAD_USE_LIB BOOST_SP_USE_STD_ATOMIC BOOST_AC_USE_STD_ATOMIC)
-scryptLinkTargetToBoost(sesdk_core Boost::boost)
+target_compile_definitions(bdk_core PUBLIC HAVE_CONFIG_H BOOST_THREAD_USE_LIB BOOST_SP_USE_STD_ATOMIC BOOST_AC_USE_STD_ATOMIC)
+scryptLinkTargetToBoost(bdk_core Boost::boost)
 
-set_property(TARGET sesdk_core PROPERTY FOLDER "core")
+set_property(TARGET bdk_core PROPERTY FOLDER "core")
 
 ## Install the binary library
-install(TARGETS sesdk_core DESTINATION "lib" COMPONENT sesdk_core)
+install(TARGETS bdk_core DESTINATION "lib" COMPONENT bdk_core)
 
 ## Install version.hpp file
-install(FILES "${BDK_VERSION_HPP}" DESTINATION "include/core" COMPONENT sesdk_core)
+install(FILES "${BDK_VERSION_HPP}" DESTINATION "include/core" COMPONENT bdk_core)
 ## Install bitcoin config file
-install(FILES ${BITCOIN_CONFIG_FILE} DESTINATION "include/core/config" COMPONENT sesdk_core)
+install(FILES ${BITCOIN_CONFIG_FILE} DESTINATION "include/core/config" COMPONENT bdk_core)
  
-## Install sesdk_core : the *.h header files should be kept as bsv structure
+## Install bdk_core : the *.h header files should be kept as bsv structure
 set(UNIFIED_INSTALL_HEADERS_STR "${UNIFIED_INSTALL_HEADERS_STR}\n// Include files in bsv\n")
 ## Calculate the relative path for include file in installer
 get_filename_component(__f ${BITCOIN_CONFIG_FILE} NAME)
@@ -117,7 +117,7 @@ foreach(_bsv_hdr ${BSV_MINIMAL_HDR_FILES})
     set(_install_dest "${default_install_include_core_dir}")
   endif()
   #message("install file [${_bsv_hdr}]  _install_dest[${_install_dest}]")
-  install(FILES ${_bsv_hdr} DESTINATION "${_install_dest}" COMPONENT sesdk_core)
+  install(FILES ${_bsv_hdr} DESTINATION "${_install_dest}" COMPONENT bdk_core)
 
   ## Calculate the relative path for include file in installer
   get_filename_component(_f ${_bsv_hdr} NAME)
@@ -127,7 +127,7 @@ endforeach()
 # Install extra core header files
 set(UNIFIED_INSTALL_HEADERS_STR "${UNIFIED_INSTALL_HEADERS_STR}\n// Include extra script engine files in core\n")
 foreach(_extra_hdr ${BDK_CORE_EXTRA_HDR_FILES})
-  install(FILES ${_extra_hdr} DESTINATION "${default_install_include_core_dir}" COMPONENT sesdk_core)
+  install(FILES ${_extra_hdr} DESTINATION "${default_install_include_core_dir}" COMPONENT bdk_core)
 
   ## Calculate the relative path for include file in installer
   get_filename_component(_f ${_extra_hdr} NAME)
@@ -135,6 +135,6 @@ foreach(_extra_hdr ${BDK_CORE_EXTRA_HDR_FILES})
   set(UNIFIED_INSTALL_HEADERS_STR "${UNIFIED_INSTALL_HEADERS_STR}#include \"${_install_rl}\"\n")
 endforeach()
 
-set(BDK_UNIFIED_HEADER_FILE "${BDK_GENERATED_TOOLS_DIR}/sesdk")
-configure_file("${CMAKE_CURRENT_SOURCE_DIR}/sesdk.in" ${BDK_UNIFIED_HEADER_FILE})
-install(FILES ${BDK_UNIFIED_HEADER_FILE} DESTINATION "include/core" COMPONENT sesdk_core)
+set(BDK_UNIFIED_HEADER_FILE "${BDK_GENERATED_TOOLS_DIR}/bdk")
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/bdk.in" ${BDK_UNIFIED_HEADER_FILE})
+install(FILES ${BDK_UNIFIED_HEADER_FILE} DESTINATION "include/core" COMPONENT bdk_core)

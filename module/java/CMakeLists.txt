@@ -13,8 +13,8 @@ if(NOT (JNI_FOUND AND Java_FOUND))
   message(WARNING "Unable to find Java JDK on the system. Skip building java binding module")
   return()
 endif()
-set(BDK_JAR_BASE_NAME sesdk CACHE INTERNAL "Name of the Script Engine SDK Java package")
-set(BDK_JAVA_JNI_NAME sesdk_jni CACHE INTERNAL "Name of the Script Engine SDK JNI runtime library")
+set(BDK_JAR_BASE_NAME bdk CACHE INTERNAL "Name of the Script Engine SDK Java package")
+set(BDK_JAVA_JNI_NAME bdk_jni CACHE INTERNAL "Name of the Script Engine SDK JNI runtime library")
 
 #### Java module version as increment of core version
 ##createIncrementVersion(BDK_JAVA_VERSION_MAJOR ${BDK_CORE_VERSION_MAJOR} 1 "script engine java major version")
@@ -48,7 +48,7 @@ add_jar(${BDK_JAR_BASE_NAME}
   OUTPUT_DIR "${BDK_GENERATED_BIN_DIR}"
 )
 
-set(BDK_JAR "${BDK_GENERATED_BIN_DIR}/${BDK_JAR_VER_NAME}.jar" CACHE INTERNAL "Absolute path to sesdk jar file")# BDK_JAR use to run java tests
+set(BDK_JAR "${BDK_GENERATED_BIN_DIR}/${BDK_JAR_VER_NAME}.jar" CACHE INTERNAL "Absolute path to bdk jar file")# BDK_JAR use to run java tests
 set_target_properties(${BDK_JAR_BASE_NAME} PROPERTIES FOLDER "module/java")
 install_jar(${BDK_JAR_BASE_NAME} DESTINATION "bin" COMPONENT JavaModule)
 
@@ -70,7 +70,7 @@ if(WIN32) #https://github.com/openssl/openssl/pull/1062
   set_target_properties(${BDK_JAVA_JNI_NAME} PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS 1)
 endif()
 target_include_directories(${BDK_JAVA_JNI_NAME} PUBLIC ${JNI_INCLUDE_DIRS} ${BDK_GENERATED_HPP_DIR})
-target_link_libraries(${BDK_JAVA_JNI_NAME} sesdk_core jni_interface ${JNI_LIBRARIES})
+target_link_libraries(${BDK_JAVA_JNI_NAME} bdk_core jni_interface ${JNI_LIBRARIES})
 
 set_target_properties(${BDK_JAVA_JNI_NAME} PROPERTIES FOLDER "module/java" DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})
 install(TARGETS ${BDK_JAVA_JNI_NAME} DESTINATION "bin" COMPONENT JavaModule)

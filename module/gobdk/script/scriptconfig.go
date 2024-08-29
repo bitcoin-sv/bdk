@@ -8,7 +8,7 @@ import (
 )
 
 // To make this work on local dev
-//   Build the full sesdk library, make install it to a specific location. Then set the environment variables
+//   Build the full bdk library, make install it to a specific location. Then set the environment variables
 //
 //     export BDK_ROOT=/path/to/install/directory
 //     export CGO_CFLAGS="-I${BDK_ROOT}/include/cgo"
@@ -17,7 +17,7 @@ import (
 //
 // To make a build inside docker, the same, i.e
 //   - Get the docker images that have all the necessary dependencies for C++ build
-//   - Build this sesdk libraries, and make install it to a location
+//   - Build this bdk libraries, and make install it to a location
 //   - Copy the installed files to the release image. To optimize, copy only the neccessary part,
 //   - For golang module, copy only the shared library go, and headers in cgo.
 // There might be other system shared library that is required for the executable, just copy them

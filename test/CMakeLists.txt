@@ -14,7 +14,7 @@ if(NOT TARGET Python::Interpreter)
   message(FATAL_ERROR "Python Interpreter is required to run tests on CI")
 endif()
 
-macro(sesdk_add_unit_test _targetName)
+macro(bdk_add_unit_test _targetName)
   if(NOT TARGET ${_targetName})
       message(FATAL_ERROR " [${_targetName}] is not a TARGET")
   endif()
@@ -39,12 +39,12 @@ if(BDK_BUILD_BSV_TESTS)## Broken now as dependencies has been reduce to minimal
 endif()
 
 add_executable(test_interpreter "${CMAKE_CURRENT_SOURCE_DIR}/test_interpreter.cpp")
-target_link_libraries(test_interpreter ${CMAKE_DL_LIBS} sesdk_core OpenSSL::Crypto OpenSSL::SSL)
-sesdk_add_unit_test(test_interpreter)
+target_link_libraries(test_interpreter ${CMAKE_DL_LIBS} bdk_core OpenSSL::Crypto OpenSSL::SSL)
+bdk_add_unit_test(test_interpreter)
 
 add_executable(test_assembler "${CMAKE_CURRENT_SOURCE_DIR}/test_assembler.cpp")
-target_link_libraries(test_assembler ${CMAKE_DL_LIBS} sesdk_core OpenSSL::Crypto OpenSSL::SSL)
-sesdk_add_unit_test(test_assembler)
+target_link_libraries(test_assembler ${CMAKE_DL_LIBS} bdk_core OpenSSL::Crypto OpenSSL::SSL)
+bdk_add_unit_test(test_assembler)
 
 
 ## Test binding modules

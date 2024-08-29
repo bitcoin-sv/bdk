@@ -1,4 +1,4 @@
-package com.nchain.sesdk;
+package com.nchain.bdk;
 
 import java.lang.*;
 import java.io.*;

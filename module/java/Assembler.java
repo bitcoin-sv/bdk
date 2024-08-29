@@ -1,6 +1,6 @@
-package com.nchain.sesdk;
+package com.nchain.bdk;
 
-import com.nchain.sesdk.PackageInfo;
+import com.nchain.bdk.PackageInfo;
 
 public class Assembler {
 

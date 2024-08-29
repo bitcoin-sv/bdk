@@ -1,10 +1,10 @@
-package com.nchain.sesdk;
+package com.nchain.bdk;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.nio.file.Files;
 
-import com.nchain.sesdk.*;
+import com.nchain.bdk.*;
 
 //The idea of the test is to create a very long script in function of n
 //so that it'll take a few second to fully execute the script. Then a separate
@@ -21,7 +21,7 @@ import com.nchain.sesdk.*;
 // This program allows the user to pass the length for the script 
 // java command to execute the test from command line 
 // cd to bdk/module/example folder and run the below command
-//java -Djava.library.path=path/build/INSTALLATION/lib: -cp path/build/generated/tools/bin/sesdk-0.1.1.jar:path/build/x64/release:. ExampleCancellationToken.java 4000000
+//java -Djava.library.path=path/build/INSTALLATION/lib: -cp path/build/generated/tools/bin/bdk-0.1.1.jar:path/build/x64/release:. ExampleCancellationToken.java 4000000
 //expected result for the above execution : 
 //stack size 4
 //Test successfully passed since the stack size is 4 and the script execution was cancelled before the completion (script generated is of size 16 MB)

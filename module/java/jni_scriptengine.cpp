@@ -1,4 +1,4 @@
-#include <com_nchain_sesdk_ScriptEngine.h> // Generated
+#include <com_nchain_bdk_ScriptEngine.h> // Generated
 
 #include "jni.h" // JNI header provided by JDK
 
@@ -6,7 +6,7 @@
 #include "jni_cppobj_helper.h"
 
 #include <ecc_guard.h> // sdk core
-#include <interpreter_sesdk.hpp>
+#include <interpreter_bdk.hpp>
 
 #include <base58.h>                 // bsv src
 #include <chainparams.h>            // bsv src
@@ -26,7 +26,7 @@ using namespace bsv::jni;
 jobject createNewJavaStackObject(JNIEnv* env, LimitedStack* cppStack)
 {
     jobject jStack{};
-    jclass clazzStack = env->FindClass("com/nchain/sesdk/Stack");
+    jclass clazzStack = env->FindClass("com/nchain/bdk/Stack");
     jmethodID methodIDStackCtor = env->GetMethodID(clazzStack, "<init>", "(J)V");
     jStack = env->NewObject(clazzStack, methodIDStackCtor, (jlong) cppStack->getCombinedStackSize());
 
@@ -46,7 +46,7 @@ int get_flags_member(JNIEnv* env, jobject obj)
 bool get_consensus(JNIEnv* env, jobject obj)
 {
     jclass clazzSE = env->GetObjectClass(obj);
-    jfieldID fieldIDIConfig =  env->GetFieldID(clazzSE, "config", "Lcom/nchain/sesdk/Config;");
+    jfieldID fieldIDIConfig =  env->GetFieldID(clazzSE, "config", "Lcom/nchain/bdk/Config;");
 
     jobject objectConfig = env->GetObjectField(obj, fieldIDIConfig);
     jclass clazzConfig = env->GetObjectClass(objectConfig);
@@ -58,7 +58,7 @@ bool get_consensus(JNIEnv* env, jobject obj)
 LimitedStack* get_stack_member(JNIEnv* env, jobject obj, const char* member_name)
 {
     jclass clazzSE = env->GetObjectClass(obj);
-    jfieldID fieldIDStack =  env->GetFieldID(clazzSE, member_name, "Lcom/nchain/sesdk/Stack;");
+    jfieldID fieldIDStack =  env->GetFieldID(clazzSE, member_name, "Lcom/nchain/bdk/Stack;");
 
     jobject objectStack = env->GetObjectField(obj, fieldIDStack);
     if(LimitedStack* p = getHandle<LimitedStack>(env, objectStack, "cppStack"))
@@ -72,7 +72,7 @@ LimitedStack* get_stack_member(JNIEnv* env, jobject obj, const char* member_name
 GlobalConfig* get_config_member(JNIEnv* env, jobject obj)
 {
     jclass clazzSE = env->GetObjectClass(obj);
-    jfieldID fieldIDConfig =  env->GetFieldID(clazzSE, "config", "Lcom/nchain/sesdk/Config;");
+    jfieldID fieldIDConfig =  env->GetFieldID(clazzSE, "config", "Lcom/nchain/bdk/Config;");
 
     jobject objectConfig = env->GetObjectField(obj, fieldIDConfig);
     if(GlobalConfig* p = getHandle<GlobalConfig>(env, objectConfig, "cppConfig"))
@@ -97,7 +97,7 @@ std::shared_ptr<task::CCancellationSource>* get_cpp_cancellation_source(JNIEnv* 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 JNIEXPORT jobject JNICALL
-Java_com_nchain_sesdk_ScriptEngine_execute___3BLcom_nchain_sesdk_CancellationToken_2Ljava_lang_String_2IJ(
+Java_com_nchain_bdk_ScriptEngine_execute___3BLcom_nchain_bdk_CancellationToken_2Ljava_lang_String_2IJ(
     JNIEnv* env,
     jobject obj,
     jbyteArray arr,
@@ -123,7 +123,7 @@ Java_com_nchain_sesdk_ScriptEngine_execute___3BLcom_nchain_sesdk_CancellationTok
     env->GetByteArrayRegion(arr, 0, len, reinterpret_cast<jbyte*>(script_binary.data()));
 
     // class we want to call
-    jclass clazz = env->FindClass("com/nchain/sesdk/Status");
+    jclass clazz = env->FindClass("com/nchain/bdk/Status");
     if(env->ExceptionCheck())
     {
         return nullptr;
@@ -207,7 +207,7 @@ Java_com_nchain_sesdk_ScriptEngine_execute___3BLcom_nchain_sesdk_CancellationTok
     return result;
 }
 
-JNIEXPORT jobject JNICALL Java_com_nchain_sesdk_ScriptEngine_execute__Ljava_lang_String_2Lcom_nchain_sesdk_CancellationToken_2Ljava_lang_String_2IJ(
+JNIEXPORT jobject JNICALL Java_com_nchain_bdk_ScriptEngine_execute__Ljava_lang_String_2Lcom_nchain_bdk_CancellationToken_2Ljava_lang_String_2IJ(
                                                                          JNIEnv* env,
                                                                          jobject obj,
                                                                          jstring script_jstr,
@@ -251,14 +251,14 @@ JNIEXPORT jobject JNICALL Java_com_nchain_sesdk_ScriptEngine_execute__Ljava_lang
     jbyteArray script_binary = env->NewByteArray(script.size());
     env->SetByteArrayRegion(script_binary, 0, script.size(), reinterpret_cast<const jbyte*>(script.data()));
 
-    return Java_com_nchain_sesdk_ScriptEngine_execute___3BLcom_nchain_sesdk_CancellationToken_2Ljava_lang_String_2IJ(
+    return Java_com_nchain_bdk_ScriptEngine_execute___3BLcom_nchain_bdk_CancellationToken_2Ljava_lang_String_2IJ(
         env, obj, script_binary, token, hextx, idx, amount
     );
 }
 
 
 
-JNIEXPORT jbooleanArray JNICALL Java_com_nchain_sesdk_ScriptEngine_getExecState(JNIEnv* env, jobject obj)
+JNIEXPORT jbooleanArray JNICALL Java_com_nchain_bdk_ScriptEngine_getExecState(JNIEnv* env, jobject obj)
 {
     jbooleanArray ret{nullptr};
     if(std::vector<bool>* p = getHandle< std::vector<bool> >(env,obj,"cppExecState"))
@@ -280,7 +280,7 @@ JNIEXPORT jbooleanArray JNICALL Java_com_nchain_sesdk_ScriptEngine_getExecState(
     return ret;
 }
 
-JNIEXPORT jbooleanArray JNICALL Java_com_nchain_sesdk_ScriptEngine_getElseState(JNIEnv* env, jobject obj)
+JNIEXPORT jbooleanArray JNICALL Java_com_nchain_bdk_ScriptEngine_getElseState(JNIEnv* env, jobject obj)
 {
     jbooleanArray ret{nullptr};
     if(std::vector<bool>* p = getHandle< std::vector<bool> >(env,obj,"cppElseState"))
@@ -303,19 +303,19 @@ JNIEXPORT jbooleanArray JNICALL Java_com_nchain_sesdk_ScriptEngine_getElseState(
 
 }
 
-JNIEXPORT void JNICALL Java_com_nchain_sesdk_ScriptEngine_initAltStack(JNIEnv* env, jobject obj)
+JNIEXPORT void JNICALL Java_com_nchain_bdk_ScriptEngine_initAltStack(JNIEnv* env, jobject obj)
 {
     LimitedStack* stack_ptr = get_stack_member(env, obj, "stack");
     LimitedStack* altstack_ptr = new LimitedStack(stack_ptr->makeChildStack());
     jobject jAltStack = createNewJavaStackObject(env, altstack_ptr);
 
     jclass clazzScriptEngine = env->GetObjectClass(obj);
-    const jfieldID altstackFieldID = env->GetFieldID(clazzScriptEngine, "altstack", "Lcom/nchain/sesdk/Stack;");
+    const jfieldID altstackFieldID = env->GetFieldID(clazzScriptEngine, "altstack", "Lcom/nchain/bdk/Stack;");
     env->SetObjectField(obj, altstackFieldID, jAltStack);
 }
 
 
-JNIEXPORT void JNICALL Java_com_nchain_sesdk_ScriptEngine_initBranchStates(JNIEnv* env, jobject obj)
+JNIEXPORT void JNICALL Java_com_nchain_bdk_ScriptEngine_initBranchStates(JNIEnv* env, jobject obj)
 {
     std::vector<bool>* cpp_vfExec = new std::vector<bool>();
     setHandle<std::vector<bool>>(env, obj, cpp_vfExec, "cppExecState");
@@ -324,7 +324,7 @@ JNIEXPORT void JNICALL Java_com_nchain_sesdk_ScriptEngine_initBranchStates(JNIEn
     setHandle<std::vector<bool>>(env, obj, cpp_vfElse, "cppElseState");
 }
 
-//JNIEXPORT void JNICALL Java_com_nchain_sesdk_ScriptEngine_clearBranchStates(JNIEnv* env, jobject obj)
+//JNIEXPORT void JNICALL Java_com_nchain_bdk_ScriptEngine_clearBranchStates(JNIEnv* env, jobject obj)
 //{
 //    if(std::vector<bool>* pvfExec = getHandle< std::vector<bool> >(env,obj,"cppExecState"))
 //        pvfExec->clear();
@@ -333,7 +333,7 @@ JNIEXPORT void JNICALL Java_com_nchain_sesdk_ScriptEngine_initBranchStates(JNIEn
 //        pvfElse->clear();
 //}
 
-JNIEXPORT void JNICALL Java_com_nchain_sesdk_ScriptEngine_deleteBranchStates(JNIEnv* env, jobject obj)
+JNIEXPORT void JNICALL Java_com_nchain_bdk_ScriptEngine_deleteBranchStates(JNIEnv* env, jobject obj)
 {
     if(std::vector<bool>* p = getHandle< std::vector<bool> >(env,obj,"cppExecState"))
     {
@@ -348,7 +348,7 @@ JNIEXPORT void JNICALL Java_com_nchain_sesdk_ScriptEngine_deleteBranchStates(JNI
     }
 }
 
-JNIEXPORT jobject JNICALL Java_com_nchain_sesdk_ScriptEngine_execute___3BLcom_nchain_sesdk_CancellationToken_2_3BIJ(JNIEnv* env,
+JNIEXPORT jobject JNICALL Java_com_nchain_bdk_ScriptEngine_execute___3BLcom_nchain_bdk_CancellationToken_2_3BIJ(JNIEnv* env,
                                                                                                                     jobject obj,
                                                                                                                     jbyteArray binary_script,
                                                                                                                     jobject token,
@@ -373,7 +373,7 @@ JNIEXPORT jobject JNICALL Java_com_nchain_sesdk_ScriptEngine_execute___3BLcom_nc
     env->GetByteArrayRegion(rawtx, 0, rawtxLen, reinterpret_cast<jbyte*>(txArray.data()));
 
     // class we want to return
-    jclass clazz = env->FindClass("com/nchain/sesdk/Status");
+    jclass clazz = env->FindClass("com/nchain/bdk/Status");
     if(env->ExceptionCheck())
     {
         return nullptr;
@@ -417,7 +417,7 @@ JNIEXPORT jobject JNICALL Java_com_nchain_sesdk_ScriptEngine_execute___3BLcom_nc
     return result;
 }
 
-JNIEXPORT jobject JNICALL Java_com_nchain_sesdk_ScriptEngine_verify(JNIEnv* env,
+JNIEXPORT jobject JNICALL Java_com_nchain_bdk_ScriptEngine_verify(JNIEnv* env,
                                                                     jobject obj,
                                                                     jbyteArray scriptSig,
                                                                     jbyteArray scriptPub,
@@ -450,7 +450,7 @@ JNIEXPORT jobject JNICALL Java_com_nchain_sesdk_ScriptEngine_verify(JNIEnv* env,
     env->GetByteArrayRegion(hextx, 0, txHexLen, reinterpret_cast<jbyte*>(txHex.data()));
 
     // class we want to return
-    jclass clazz = env->FindClass("com/nchain/sesdk/Status");
+    jclass clazz = env->FindClass("com/nchain/bdk/Status");
     if(env->ExceptionCheck())
     {
         return nullptr;

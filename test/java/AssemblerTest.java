@@ -1,4 +1,4 @@
-package com.nchain.sesdk;
+package com.nchain.bdk;
 
 import org.testng.Assert;
 import org.testng.annotations.Test;

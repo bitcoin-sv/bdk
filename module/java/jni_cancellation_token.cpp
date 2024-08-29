@@ -1,4 +1,4 @@
-#include <com_nchain_sesdk_CancellationToken.h> // Generated
+#include <com_nchain_bdk_CancellationToken.h> // Generated
 
 #include <jni_cppobj_helper.h>
 
@@ -8,7 +8,7 @@
 using CCancellationSourcePtr = std::shared_ptr<task::CCancellationSource>;
 
 
-JNIEXPORT void JNICALL Java_com_nchain_sesdk_CancellationToken_cancel(JNIEnv *env, jobject obj)
+JNIEXPORT void JNICALL Java_com_nchain_bdk_CancellationToken_cancel(JNIEnv *env, jobject obj)
 {
     if(CCancellationSourcePtr* p_ptr = getHandle<CCancellationSourcePtr>(env,obj,"cppToken"))
     {
@@ -21,13 +21,13 @@ JNIEXPORT void JNICALL Java_com_nchain_sesdk_CancellationToken_cancel(JNIEnv *en
     }
 }
 
-JNIEXPORT void JNICALL Java_com_nchain_sesdk_CancellationToken_initCppToken(JNIEnv *env, jobject obj)
+JNIEXPORT void JNICALL Java_com_nchain_bdk_CancellationToken_initCppToken(JNIEnv *env, jobject obj)
 {
     CCancellationSourcePtr* p = new CCancellationSourcePtr(std::move(task::CCancellationSource::Make()));
     setHandle<CCancellationSourcePtr>(env, obj, p, "cppToken");
 }
 
-JNIEXPORT void JNICALL Java_com_nchain_sesdk_CancellationToken_deleteCppToken(JNIEnv *env, jobject obj)
+JNIEXPORT void JNICALL Java_com_nchain_bdk_CancellationToken_deleteCppToken(JNIEnv *env, jobject obj)
 {
     if(CCancellationSourcePtr* p = getHandle<CCancellationSourcePtr>(env,obj,"cppToken"))
     {
