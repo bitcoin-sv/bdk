@@ -52,7 +52,7 @@ public class PackageInfo {
     public final static int BSV_CLIENT_VERSION_REVISION = ${BSV_CLIENT_VERSION_REVISION};
     public final static String BSV_VERSION_STRING       = "${BSV_VERSION_STRING}";
 
-    public final static String BSV_GIT_COMMIT_BRANCH   = "${BSV_GIT_COMMIT_BRANCH}";
+    public final static String BSV_GIT_COMMIT_TAG_OR_BRANCH   = "${BSV_GIT_COMMIT_TAG_OR_BRANCH}";
     public final static String BSV_GIT_COMMIT_HASH     = "${BSV_GIT_COMMIT_HASH}";
     public final static String BSV_GIT_COMMIT_DATETIME = "${BSV_GIT_COMMIT_DATETIME}";
 
@@ -62,7 +62,7 @@ public class PackageInfo {
     public final static int BDK_VERSION_PATCH = ${BDK_VERSION_PATCH};
     public final static String BDK_VERSION_STRING = "${BDK_VERSION_STRING}";
 
-    public final static String SOURCE_GIT_COMMIT_BRANCH   = "${SOURCE_GIT_COMMIT_BRANCH}";
+    public final static String SOURCE_GIT_COMMIT_TAG_OR_BRANCH   = "${SOURCE_GIT_COMMIT_TAG_OR_BRANCH}";
     public final static String SOURCE_GIT_COMMIT_HASH     = "${SOURCE_GIT_COMMIT_HASH}";
     public final static String SOURCE_GIT_COMMIT_DATETIME = "${SOURCE_GIT_COMMIT_DATETIME}";
     public final static String BDK_BUILD_DATETIME_UTC = "${BDK_BUILD_DATETIME_UTC}";

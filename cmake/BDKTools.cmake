@@ -321,11 +321,11 @@ function(bdkGetBuildTypeFromBUILDTYPE BuildType BUILDTYPE)
   message(FATAL_ERROR "BUILDTYPE[${BUILDTYPE}] Doesn't match RELEASE or DEBUG")
 endfunction()############################################################################
 
-#### Get The source Branch from git
+#### Get The source Tag, if not exist, return branch from git
 #### Usage :
-####     bdkGetGitBranch(myVar)                             # will investigate in ${CMAKE_SOURCE_DIR}
-####     bdkGetGitBranch(myVar "${OTHER_SOURCE_REPO_DIR}")
-function(bdkGetGitBranch)
+####     bdkGetGitTagOrBranch(myVar)                             # will investigate in ${CMAKE_SOURCE_DIR}
+####     bdkGetGitTagOrBranch(myVar "${OTHER_SOURCE_REPO_DIR}")
+function(bdkGetGitTagOrBranch)
     list(LENGTH ARGN _NB_ARGS)
     list(GET ARGN 0 result)
     if(_NB_ARGS GREATER 1)
@@ -340,16 +340,15 @@ function(bdkGetGitBranch)
     else()
         set(_REPO_DIR ${CMAKE_SOURCE_DIR})
     endif()
-    ### get git branch and commit hash
-    ### http://xit0.org/2013/04/cmake-use-git-branch-and-commit-details-in-project/
+    ### get git tag, if not exist, return branch
     # Get the current working branch
     execute_process(
-      COMMAND git rev-parse --abbrev-ref HEAD
+      COMMAND git describe --tags --exact-match $(git rev-parse HEAD) 2>/dev/null || git symbolic-ref --short HEAD
       WORKING_DIRECTORY ${_REPO_DIR}
-      OUTPUT_VARIABLE _Source_Branch
+      OUTPUT_VARIABLE _Tag_Or_Branch
       OUTPUT_STRIP_TRAILING_WHITESPACE
     )
-    set(${result} ${_Source_Branch} PARENT_SCOPE)
+    set(${result} ${_Tag_Or_Branch} PARENT_SCOPE)
 endfunction()############################################################################
 
 #### Get abreviation git commit hash of the last commit
@@ -380,11 +379,6 @@ function(bdkGetGitCommitHash)
        OUTPUT_STRIP_TRAILING_WHITESPACE
      )
 
-     if(_is_Dirty_Working_Source)
-       set(${result} "dirty" PARENT_SCOPE)
-       return()
-     endif()
-
      # Get the latest abbreviated commit hash of the working branch
      execute_process(
        COMMAND git log -1 --format=%h
@@ -392,6 +386,11 @@ function(bdkGetGitCommitHash)
        OUTPUT_VARIABLE _Source_Commit_Hash
        OUTPUT_STRIP_TRAILING_WHITESPACE
      )
+
+    if(_is_Dirty_Working_Source)
+      set(_Source_Commit_Hash "${_Source_Commit_Hash}_dirty")
+    endif()
+
     set(${result} ${_Source_Commit_Hash} PARENT_SCOPE)
 endfunction()############################################################################
 

@@ -104,7 +104,7 @@ initmyextension(void)
     PyModule_AddIntConstant(module, "BSV_CLIENT_VERSION_REVISION", BSV_CLIENT_VERSION_REVISION);
     PyModule_AddStringConstant(module, "BSV_VERSION_STRING", BSV_VERSION_STRING.c_str());
 
-    PyModule_AddStringConstant(module, "BSV_GIT_COMMIT_BRANCH", BSV_GIT_COMMIT_BRANCH.c_str());
+    PyModule_AddStringConstant(module, "BSV_GIT_COMMIT_TAG_OR_BRANCH", BSV_GIT_COMMIT_TAG_OR_BRANCH.c_str());
     PyModule_AddStringConstant(module, "BSV_GIT_COMMIT_HASH", BSV_GIT_COMMIT_HASH.c_str());
     PyModule_AddStringConstant(module, "BSV_GIT_COMMIT_DATETIME", BSV_GIT_COMMIT_DATETIME.c_str());
 
@@ -114,7 +114,7 @@ initmyextension(void)
     PyModule_AddIntConstant(module, "BDK_VERSION_PATCH", BDK_VERSION_PATCH);
     PyModule_AddStringConstant(module, "BDK_VERSION_STRING", BDK_VERSION_STRING.c_str());
 
-    PyModule_AddStringConstant(module, "SOURCE_GIT_COMMIT_BRANCH", SOURCE_GIT_COMMIT_BRANCH.c_str());
+    PyModule_AddStringConstant(module, "SOURCE_GIT_COMMIT_TAG_OR_BRANCH", SOURCE_GIT_COMMIT_TAG_OR_BRANCH.c_str());
     PyModule_AddStringConstant(module, "SOURCE_GIT_COMMIT_HASH", SOURCE_GIT_COMMIT_HASH.c_str());
     PyModule_AddStringConstant(module, "SOURCE_GIT_COMMIT_DATETIME", SOURCE_GIT_COMMIT_DATETIME.c_str());
     PyModule_AddStringConstant(module, "BDK_BUILD_DATETIME_UTC", BDK_BUILD_DATETIME_UTC.c_str());

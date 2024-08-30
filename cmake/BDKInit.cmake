@@ -46,12 +46,12 @@ macro(bdkGetOSInfo)
   ## BDK_SYSTEM_OS used for package name.
   ## Users can define -DCUSTOM_SYSTEM_OS_NAME=Ubuntu for example to have the customized os name on the installer
   if(WIN32) #Windows
-    set(BDK_SYSTEM_OS Windows CACHE STRING "System OS type")
+    set(BDK_SYSTEM_OS win CACHE STRING "System OS type")
   else()    # UNIX
     if(APPLE)
-        set(BDK_SYSTEM_OS MacOS CACHE STRING "System OS type")
+        set(BDK_SYSTEM_OS mac CACHE STRING "System OS type")
     else()
-        set(BDK_SYSTEM_OS Linux CACHE STRING "System OS type")
+        set(BDK_SYSTEM_OS linux CACHE STRING "System OS type")
     endif()
   endif()
 endmacro()
