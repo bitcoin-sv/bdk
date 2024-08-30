@@ -17,12 +17,9 @@ set(BDK_JAR_BASE_NAME bdk CACHE INTERNAL "Name of the Bitcoin Development Kit Ja
 set(BDK_JAVA_JNI_NAME JavaBDK CACHE INTERNAL "Name of the Bitcoin Development Kit JNI runtime library")
 
 #### Java module version as increment of core version
-##createIncrementVersion(BDK_JAVA_VERSION_MAJOR ${BDK_CORE_VERSION_MAJOR} 1 "BDK java major version")
-##createIncrementVersion(BDK_JAVA_VERSION_MINOR ${BDK_CORE_VERSION_MINOR} 0 "BDK java minor version")
-##createIncrementVersion(BDK_JAVA_VERSION_PATCH ${BDK_CORE_VERSION_PATCH} 0 "BDK java patch version")
-set(BDK_JAVA_VERSION_MAJOR 1)
-set(BDK_JAVA_VERSION_MINOR 0)
-set(BDK_JAVA_VERSION_PATCH 1)
+createIncrementVersion(BDK_JAVA_VERSION_MAJOR ${BDK_VERSION_MAJOR} 1 "BDK java major version")
+createIncrementVersion(BDK_JAVA_VERSION_MINOR ${BDK_VERSION_MINOR} 0 "BDK java minor version")
+createIncrementVersion(BDK_JAVA_VERSION_PATCH ${BDK_VERSION_PATCH} 0 "BDK java patch version")
 set(BDK_JAVA_VERSION_STRING "${BDK_JAVA_VERSION_MAJOR}.${BDK_JAVA_VERSION_MINOR}.${BDK_JAVA_VERSION_PATCH}")
 
 ## Test maximum of global version

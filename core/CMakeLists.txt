@@ -14,18 +14,6 @@ if(NOT DEFINED BDK_BSV_ROOT_DIR)#
   message(FATAL_ERROR "Unable to locate bsv source code by BDK_BSV_ROOT_DIR")
 endif()
 
-#### Set version for C++ core
-set(BDK_CORE_VERSION_MAJOR 1 CACHE INTERNAL "C++ core major version")
-set(BDK_CORE_VERSION_MINOR 0 CACHE INTERNAL "C++ core minor version")
-set(BDK_CORE_VERSION_PATCH 0 CACHE INTERNAL "C++ core patch version")
-set(BDK_CORE_VERSION_STRING "${BDK_CORE_VERSION_MAJOR}.${BDK_CORE_VERSION_MINOR}.${BDK_CORE_VERSION_PATCH}" CACHE INTERNAL "C++ core version")
-
-## Test maximum of global version
-if(${BDK_VERSION_STRING} LESS ${BDK_CORE_VERSION_STRING})
-  message("Bitcoin Development Kit global version should be the max of all version numbers")
-  message("BDK_VERSION_STRING=${BDK_VERSION_STRING} while BDK_CORE_VERSION_STRING=${BDK_CORE_VERSION_STRING}")
-endif()
-
 #### Generate version C++  #####
 set(BDK_VERSION_HPP_IN ${CMAKE_CURRENT_SOURCE_DIR}/version.hpp.in CACHE INTERNAL "Template File for C++ version")
 set(BDK_VERSION_HPP ${BDK_GENERATED_HPP_DIR}/version.hpp CACHE INTERNAL "HPP File for framework version config")

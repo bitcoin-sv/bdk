@@ -12,7 +12,9 @@ import (
 // main code
 func main() {
 
-	fmt.Println("Golang module version : ", gobdk.VersionString())
+	fmt.Println("BSV version string  : ", gobdk.BSV_VERSION_STRING())
+	fmt.Println("GoBDK version string major : ", gobdk.BDK_GOLANG_VERSION_PATCH())
+	fmt.Println("GoBDK version string : ", gobdk.BDK_GOLANG_VERSION_STRING())
 
 	settings := config.LoadSetting(
 		config.LoadScriptConfig(),

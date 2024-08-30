@@ -46,11 +46,15 @@ public class PackageInfo {
     // PID help to debug jni with "attach to process"
     final static long pid = PackageInfo.getPID();
 
-    /* Version for BDK Java module */
-    public final static int BDK_JAVA_VERSION_MAJOR = ${BDK_JAVA_VERSION_MAJOR};
-    public final static int BDK_JAVA_VERSION_MINOR = ${BDK_JAVA_VERSION_MINOR};
-    public final static int BDK_JAVA_VERSION_PATCH = ${BDK_JAVA_VERSION_PATCH};
-    public final static String BDK_JAVA_VERSION_STRING = "${BDK_JAVA_VERSION_STRING}";
+    /* Version of Bitcoin SV on which BDK has been built */
+    public final static int BSV_CLIENT_VERSION_MAJOR    = ${BSV_CLIENT_VERSION_MAJOR};
+    public final static int BSV_CLIENT_VERSION_MINOR    = ${BSV_CLIENT_VERSION_MINOR};
+    public final static int BSV_CLIENT_VERSION_REVISION = ${BSV_CLIENT_VERSION_REVISION};
+    public final static String BSV_VERSION_STRING       = "${BSV_VERSION_STRING}";
+
+    public final static String BSV_GIT_COMMIT_BRANCH   = "${BSV_GIT_COMMIT_BRANCH}";
+    public final static String BSV_GIT_COMMIT_HASH     = "${BSV_GIT_COMMIT_HASH}";
+    public final static String BSV_GIT_COMMIT_DATETIME = "${BSV_GIT_COMMIT_DATETIME}";
 
     /* Version information inherited from BDK core */
     public final static int BDK_VERSION_MAJOR = ${BDK_VERSION_MAJOR};
@@ -63,17 +67,9 @@ public class PackageInfo {
     public final static String SOURCE_GIT_COMMIT_DATETIME = "${SOURCE_GIT_COMMIT_DATETIME}";
     public final static String BDK_BUILD_DATETIME_UTC = "${BDK_BUILD_DATETIME_UTC}";
 
-    public final static int BSV_CLIENT_VERSION_MAJOR    = ${BSV_CLIENT_VERSION_MAJOR};
-    public final static int BSV_CLIENT_VERSION_MINOR    = ${BSV_CLIENT_VERSION_MINOR};
-    public final static int BSV_CLIENT_VERSION_REVISION = ${BSV_CLIENT_VERSION_REVISION};
-    public final static String BSV_VERSION_STRING       = "${BSV_VERSION_STRING}";
-
-    public final static String BSV_GIT_COMMIT_BRANCH   = "${BSV_GIT_COMMIT_BRANCH}";
-    public final static String BSV_GIT_COMMIT_HASH     = "${BSV_GIT_COMMIT_HASH}";
-    public final static String BSV_GIT_COMMIT_DATETIME = "${BSV_GIT_COMMIT_DATETIME}";
-
-    public final static int BDK_CORE_VERSION_MAJOR = ${BDK_CORE_VERSION_MAJOR};
-    public final static int BDK_CORE_VERSION_MINOR = ${BDK_CORE_VERSION_MINOR};
-    public final static int BDK_CORE_VERSION_PATCH = ${BDK_CORE_VERSION_PATCH};
-    public final static String BDK_CORE_VERSION_STRING = "${BDK_CORE_VERSION_STRING}";
+    /* Version for BDK Java module */
+    public final static int BDK_JAVA_VERSION_MAJOR = ${BDK_JAVA_VERSION_MAJOR};
+    public final static int BDK_JAVA_VERSION_MINOR = ${BDK_JAVA_VERSION_MINOR};
+    public final static int BDK_JAVA_VERSION_PATCH = ${BDK_JAVA_VERSION_PATCH};
+    public final static String BDK_JAVA_VERSION_STRING = "${BDK_JAVA_VERSION_STRING}";
 }

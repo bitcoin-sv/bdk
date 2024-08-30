@@ -8,5 +8,6 @@
 #include <asm_cgo.h>
 #include <global_scriptconfig.h>
 #include <interpreter_cgo.h>
+#include <version_cgo.h>
 
 #endif /* __GO_BDK_H__ */

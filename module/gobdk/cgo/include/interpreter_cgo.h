@@ -7,13 +7,6 @@
 extern "C" {
 #endif
 
-///!  Version of C++ core Bitcoin Development Kit
-int VersionMajor();
-int VersionMinor();
-int VersionPatch();
-int VersionPatch();
-const char * VersionString();
-
 /**
  * cgo_script_verification_flags calculates the flags to be used when verifying script
  */

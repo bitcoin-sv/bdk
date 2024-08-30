@@ -7,9 +7,9 @@
 
 
 #### BDK Go module version as increment of core version
-createIncrementVersion(BDK_GOLANG_VERSION_MAJOR ${BDK_CORE_VERSION_MAJOR} 0 "BDK golang major version")
-createIncrementVersion(BDK_GOLANG_VERSION_MINOR ${BDK_CORE_VERSION_MINOR} 1 "BDK golang minor version")
-createIncrementVersion(BDK_GOLANG_VERSION_PATCH ${BDK_CORE_VERSION_PATCH} 0 "BDK golang patch version")
+createIncrementVersion(BDK_GOLANG_VERSION_MAJOR ${BDK_VERSION_MAJOR} 0 "BDK golang major version")
+createIncrementVersion(BDK_GOLANG_VERSION_MINOR ${BDK_VERSION_MINOR} 1 "BDK golang minor version")
+createIncrementVersion(BDK_GOLANG_VERSION_PATCH ${BDK_VERSION_PATCH} 0 "BDK golang patch version")
 set(BDK_GOLANG_VERSION_STRING "${BDK_GOLANG_VERSION_MAJOR}.${BDK_GOLANG_VERSION_MINOR}.${BDK_GOLANG_VERSION_PATCH}")
 
 ## Test maximum of global version
@@ -19,8 +19,8 @@ if(${BDK_VERSION_STRING} LESS ${BDK_GOLANG_VERSION_STRING})
 endif()
 
 #### Generate version golang binding #####
-set(BDK_VERSION_GOLANG_H_IN ${CMAKE_CURRENT_SOURCE_DIR}/include/version_go.h.in CACHE INTERNAL "Template File for python version")
-set(BDK_VERSION_GOLANG_H ${BDK_GENERATED_HPP_DIR}/version_go.h CACHE INTERNAL "HPP File for python version")
+set(BDK_VERSION_GOLANG_H_IN ${CMAKE_CURRENT_SOURCE_DIR}/include/version_cgo.h.in CACHE INTERNAL "Template File for python version")
+set(BDK_VERSION_GOLANG_H ${BDK_GENERATED_HPP_DIR}/version_cgo.h CACHE INTERNAL "HPP File for python version")
 configure_file(${BDK_VERSION_GOLANG_H_IN} ${BDK_VERSION_GOLANG_H})
 
 set(_GO_MODULE_NAME GoBDK)

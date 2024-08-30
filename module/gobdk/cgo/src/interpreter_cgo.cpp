@@ -1,16 +1,8 @@
-#include <version_go.h>
+#include <version_cgo.h>
 #include <interpreter_cgo.h>
 #include <interpreter_bdk.hpp>
 
 #include <iostream>
-
-int VersionMajor() { return BDK_GOLANG_VERSION_MAJOR; }
-int VersionMinor() { return BDK_GOLANG_VERSION_MINOR; }
-int VersionPatch() { return BDK_GOLANG_VERSION_PATCH; }
-
-const char * VersionString() {
-    return BDK_GOLANG_VERSION_STRING.c_str();
-}
 
 unsigned int cgo_script_verification_flags(const char* lScriptPtr, int lScriptLen, bool isChronicle)
 {

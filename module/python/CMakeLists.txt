@@ -11,9 +11,9 @@ if(NOT (Python_FOUND AND Python_EXECUTABLE AND Python_Development_FOUND))
 endif()
 
 #### Python module version as increment of core version
-createIncrementVersion(BDK_PYTHON_VERSION_MAJOR ${BDK_CORE_VERSION_MAJOR} 0 "BDK python major version")
-createIncrementVersion(BDK_PYTHON_VERSION_MINOR ${BDK_CORE_VERSION_MINOR} 1 "BDK python minor version")
-createIncrementVersion(BDK_PYTHON_VERSION_PATCH ${BDK_CORE_VERSION_PATCH} 0 "BDK python patch version")
+createIncrementVersion(BDK_PYTHON_VERSION_MAJOR ${BDK_VERSION_MAJOR} 0 "BDK python major version")
+createIncrementVersion(BDK_PYTHON_VERSION_MINOR ${BDK_VERSION_MINOR} 1 "BDK python minor version")
+createIncrementVersion(BDK_PYTHON_VERSION_PATCH ${BDK_VERSION_PATCH} 0 "BDK python patch version")
 set(BDK_PYTHON_VERSION_STRING "${BDK_PYTHON_VERSION_MAJOR}.${BDK_PYTHON_VERSION_MINOR}.${BDK_PYTHON_VERSION_PATCH}")
 
 ## Test maximum of global version
