@@ -44,7 +44,7 @@ Dependencies marked optional apply if you wish to run the unit tests. See [Tests
 ##### Java module
 
 - Make sure the `JAVA_TOOLS` environment variable is set to the location of `junit4.jar` and `hamcreast.jar`
-By default all languange binding modules are built. If users don't want to build java module, add `-SKIP_MODULE_JAVA=ON` to cmake command, it will deactivate build of the java binding.
+By default all languange binding modules are built. If users don't want to build java module, add `-BUILD_MODULE_JAVA=OFF` to cmake command, it will deactivate build of the java binding.
 
 ## Building Script Engine SDK
 It is recommended that a build directory **build** is created outside of Script Engine SDK source code directory. See [directories structure](directories.md).

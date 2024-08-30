@@ -7,7 +7,7 @@
 
 include(FindJavaJDKHelper)
 HelpFindJavaJDK()
-#scryptPrintJavaJDKInfo()#Debug Log
+#bdkPrintJavaJDKInfo()#Debug Log
 
 if(NOT (JNI_FOUND AND Java_FOUND AND BDK_JAR))
   message(STATUS "Unable to find Java JDK and script engine SDK")

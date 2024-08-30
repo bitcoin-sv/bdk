@@ -9,7 +9,7 @@ if(BDKBuildSetting_Include)## Include guard
 endif()
 set(BDKBuildSetting_Include TRUE)
 
-macro(scryptSetCompilationOptions)## This has to be macro instead of a function because of add_definitions scope is local
+macro(bdkSetCompilationOptions)## This has to be macro instead of a function because of add_definitions scope is local
   if(NOT BDK_SET_COMPILATION_OPTIONS_DONE)
     ## Set common compile options
     set(CMAKE_CXX_STANDARD 20 CACHE INTERNAL "Use of C++20" FORCE)#TODO : change to C++20 when visual studio support
@@ -18,7 +18,7 @@ macro(scryptSetCompilationOptions)## This has to be macro instead of a function 
     set(CMAKE_DEBUG_POSTFIX d CACHE INTERNAL "Use d as debug postfix for  targets" FORCE)
 
     if (MSVC)
-      scrypt_add_compiler_flag(/Gm- /MP /wd4251 /wd4244 /wd4307)## TODO test if DNOMINMAX can move here
+      bdk_add_compiler_flag(/Gm- /MP /wd4251 /wd4244 /wd4307)## TODO test if DNOMINMAX can move here
       ## Using MSVC STATIC RUNTIME)
       ##foreach(flag_var CMAKE_CXX_FLAGS CMAKE_CXX_FLAGS_DEBUG CMAKE_CXX_FLAGS_RELEASE CMAKE_CXX_FLAGS_MINSIZEREL CMAKE_CXX_FLAGS_RELWITHDEBINFO)
       ##  if(${flag_var} MATCHES "/MD")
@@ -45,7 +45,7 @@ endmacro()
 ####   ${BDK_SYSTEM_BUILD_ARCHI}
 ####   ${CMAKE_CONFIGURATION_TYPES}
 ####   ${CMAKE_BUILD_TYPE}
-function(scryptSetOutputDirectories)
+function(bdkSetOutputDirectories)
 
   if(BDK_SET_OUTPUT_DIRS_DONE)
     return()
@@ -82,15 +82,15 @@ function(scryptSetOutputDirectories)
     endif()
     foreach(_OUT_TYPE ${_LIST_OUTPUT_TYPES})
       set(CMAKE_${_OUT_TYPE}_OUTPUT_DIRECTORY${_BUILD_TYPE_TAG} "${_MAIN_OUTPUT_PATH}" CACHE PATH "Default path for runtime ouput directory" FORCE)
-      scryptAppendToGlobalSet(scryptOUTPUT_DIRECTORIES "CMAKE_${_OUT_TYPE}_OUTPUT_DIRECTORY${_BUILD_TYPE_TAG}=[${CMAKE_${_OUT_TYPE}_OUTPUT_DIRECTORY${_BUILD_TYPE_TAG}}]")
+      bdkAppendToGlobalSet(bdkOUTPUT_DIRECTORIES "CMAKE_${_OUT_TYPE}_OUTPUT_DIRECTORY${_BUILD_TYPE_TAG}=[${CMAKE_${_OUT_TYPE}_OUTPUT_DIRECTORY${_BUILD_TYPE_TAG}}]")
     endforeach()
   endforeach()
 
-  #scryptPrintList("scryptOUTPUT_DIRECTORIES" "${scryptOUTPUT_DIRECTORIES}")## Debug Log
+  #bdkPrintList("bdkOUTPUT_DIRECTORIES" "${bdkOUTPUT_DIRECTORIES}")## Debug Log
 endfunction()
 
 #### Get bsv versions in the "${BDK_BSV_ROOT_DIR}/src/clientversion.h"
-function(scryptCalculateBSVVersion clientversionFile)###############################################################
+function(bdkCalculateBSVVersion clientversionFile)###############################################################
   if(NOT EXISTS "${clientversionFile}")
     message(FATAL_ERROR "BSV version file [${clientversionFile}] does not exist")
   endif()
@@ -110,7 +110,7 @@ function(scryptCalculateBSVVersion clientversionFile)###########################
   set(BSV_VERSION_STRING "${BSV_CLIENT_VERSION_MAJOR}.${BSV_CLIENT_VERSION_MINOR}.${BSV_CLIENT_VERSION_REVISION}" CACHE INTERNAL "BSV version string")
 endfunction()
 
-function(scryptSetBuildVersion)
+function(bdkSetBuildVersion)
   if(BDK_SET_BUILD_VERSION_DONE)
     return()
   else()
@@ -126,21 +126,21 @@ function(scryptSetBuildVersion)
   if(NOT DEFINED BDK_VERSION_PATCH)
     set(BDK_VERSION_PATCH "0" CACHE INTERNAL "framework patch version")
   endif()
-  set(BDK_VERSION_STRING "${BDK_VERSION_MAJOR}.${BDK_VERSION_MINOR}.${BDK_VERSION_PATCH}" CACHE INTERNAL "scrypt version string")
+  set(BDK_VERSION_STRING "${BDK_VERSION_MAJOR}.${BDK_VERSION_MINOR}.${BDK_VERSION_PATCH}" CACHE INTERNAL "bdk version string")
 
   # Get branch
-  scryptGetGitBranch(_SOURCE_GIT_COMMIT_BRANCH "${CMAKE_SOURCE_DIR}")
+  bdkGetGitBranch(_SOURCE_GIT_COMMIT_BRANCH "${CMAKE_SOURCE_DIR}")
   set(SOURCE_GIT_COMMIT_BRANCH ${_SOURCE_GIT_COMMIT_BRANCH} CACHE INTERNAL "Source commit hash")
 
-  scryptGetGitCommitHash(_SOURCE_GIT_COMMIT_HASH "${CMAKE_SOURCE_DIR}")
+  bdkGetGitCommitHash(_SOURCE_GIT_COMMIT_HASH "${CMAKE_SOURCE_DIR}")
   set(SOURCE_GIT_COMMIT_HASH ${_SOURCE_GIT_COMMIT_HASH} CACHE INTERNAL "Source commit hash")
 
   # Get the latest commit datetime
-  scryptGetGitCommitDateTime(_SOURCE_GIT_COMMIT_DATETIME "${CMAKE_SOURCE_DIR}")
+  bdkGetGitCommitDateTime(_SOURCE_GIT_COMMIT_DATETIME "${CMAKE_SOURCE_DIR}")
   set(SOURCE_GIT_COMMIT_DATETIME ${_SOURCE_GIT_COMMIT_DATETIME} CACHE INTERNAL "Source commit datetime")
 
   # Get the build date time
-  scryptGetBuildDateTime(_BDK_BUILD_DATETIME_UTC)
+  bdkGetBuildDateTime(_BDK_BUILD_DATETIME_UTC)
   set(BDK_BUILD_DATETIME_UTC ${_BDK_BUILD_DATETIME_UTC} CACHE INTERNAL "Build datetime UTC")
 
 
@@ -154,15 +154,15 @@ function(scryptSetBuildVersion)
   endif()
 
   # Get branch
-  scryptGetGitBranch(_BSV_GIT_COMMIT_BRANCH "${BDK_BSV_ROOT_DIR}")
+  bdkGetGitBranch(_BSV_GIT_COMMIT_BRANCH "${BDK_BSV_ROOT_DIR}")
   set(BSV_GIT_COMMIT_BRANCH ${_BSV_GIT_COMMIT_BRANCH} CACHE INTERNAL "BSV commit branch")
 
-  scryptGetGitCommitHash(_BSV_GIT_COMMIT_HASH "${BDK_BSV_ROOT_DIR}")
+  bdkGetGitCommitHash(_BSV_GIT_COMMIT_HASH "${BDK_BSV_ROOT_DIR}")
   set(BSV_GIT_COMMIT_HASH ${_BSV_GIT_COMMIT_HASH} CACHE INTERNAL "BSV commit hash")
 
   # Get the latest commit datetime
-  scryptGetGitCommitDateTime(_BSV_GIT_COMMIT_DATETIME "${BDK_BSV_ROOT_DIR}")
+  bdkGetGitCommitDateTime(_BSV_GIT_COMMIT_DATETIME "${BDK_BSV_ROOT_DIR}")
   set(BSV_GIT_COMMIT_DATETIME ${_BSV_GIT_COMMIT_DATETIME} CACHE INTERNAL "BSV commit datetime")
 
-  scryptCalculateBSVVersion("${BDK_BSV_ROOT_DIR}/src/clientversion.h")
+  bdkCalculateBSVVersion("${BDK_BSV_ROOT_DIR}/src/clientversion.h")
 endfunction()

@@ -6,10 +6,10 @@
 #################################################################
 
 
-## Modules are build based on (link to) scrypt-core
+## Modules are build based on (link to) bdk-core
 ## They are considered as orthogonal extension applications, libraries that extends script's functionalities
 ##
-## Modules should depend ONLY scrypt-core, and NOT each other
+## Modules should depend ONLY bdk-core, and NOT each other
 
 if(NOT BDK_BUILD_MODULES)
   message(WARNING "Deactivated building modules. Set BDK_BUILD_MODULES=ON to activate.")
@@ -20,19 +20,19 @@ message(STATUS "Building modules ...")
 
 add_subdirectory(example)
 
-if(NOT SKIP_MODULE_GOLANG)
+if(BUILD_MODULE_GOLANG)
 	add_subdirectory(gobdk/cgo)
 else()
 	message(STATUS "Building Golang module has been disabled")
 endif()
 
-if(NOT SKIP_MODULE_JAVA)
+if(BUILD_MODULE_JAVA)
 	add_subdirectory(java)
 else()
 	message(STATUS "Building Java module has been disabled")
 endif()
 
-if(NOT SKIP_MODULE_PYTHON)
+if(BUILD_MODULE_PYTHON)
 	add_subdirectory(python)
 else()
 	message(STATUS "Building Python module has been disabled")

@@ -87,9 +87,9 @@ function(cryptGetMinimumListBSVSource)##########################################
       message(FATAL_ERROR "Unable to locate bsv source code for BDK_BSV_ROOT_DIR")
   endif()
 
-  scryptAppendToGlobalSet(BSV_INCLUDE_DIRS "${BDK_BSV_ROOT_DIR}/src")
-  scryptAppendToGlobalSet(BSV_INCLUDE_DIRS "${BDK_BSV_ROOT_DIR}/src/crypto")
-  scryptAppendToGlobalSet(BSV_INCLUDE_DIRS "${BDK_BSV_ROOT_DIR}/src/script")
+  bdkAppendToGlobalSet(BSV_INCLUDE_DIRS "${BDK_BSV_ROOT_DIR}/src")
+  bdkAppendToGlobalSet(BSV_INCLUDE_DIRS "${BDK_BSV_ROOT_DIR}/src/crypto")
+  bdkAppendToGlobalSet(BSV_INCLUDE_DIRS "${BDK_BSV_ROOT_DIR}/src/script")
 
   set(_minimal_hdr_files
       "src/addrdb.h"  ##  Used by [config.cpp], [dstencode.cpp], [interpreter.cpp]
@@ -210,7 +210,7 @@ function(cryptGetMinimumListBSVSource)##########################################
       ## Total number of header files : 114
   )
   foreach(rel_file ${_minimal_hdr_files})
-    scryptAppendToGlobalSet(BSV_MINIMAL_HDR_FILES "${BDK_BSV_ROOT_DIR}/${rel_file}")
+    bdkAppendToGlobalSet(BSV_MINIMAL_HDR_FILES "${BDK_BSV_ROOT_DIR}/${rel_file}")
   endforeach()
 
   set(_minimal_src_files
@@ -265,7 +265,7 @@ function(cryptGetMinimumListBSVSource)##########################################
       ## Total number of source files : 40
   )
   foreach(rel_file ${_minimal_src_files})
-    scryptAppendToGlobalSet(BSV_MINIMAL_SRC_FILES "${BDK_BSV_ROOT_DIR}/${rel_file}")
+    bdkAppendToGlobalSet(BSV_MINIMAL_SRC_FILES "${BDK_BSV_ROOT_DIR}/${rel_file}")
   endforeach()
 endfunction()
 
@@ -276,11 +276,11 @@ macro(HelpFindBSVSource)########################################################
   cryptGetMinimumListBSVSource()
 endmacro()
 
-function(scryptPrintBSVSourceInfo)
+function(bdkPrintBSVSourceInfo)
   message("BSV Source info :")
   message("BDK_BSV_ROOT_DIR  [${BDK_BSV_ROOT_DIR}]")
 
-  scryptPrintList("BSV_MINIMAL_HDR_FILES" "${BSV_MINIMAL_HDR_FILES}")
-  scryptPrintList("BSV_MINIMAL_SRC_FILES" "${BSV_MINIMAL_SRC_FILES}")
-  scryptPrintList("BSV_INCLUDE_DIRS" "${BSV_INCLUDE_DIRS}")
+  bdkPrintList("BSV_MINIMAL_HDR_FILES" "${BSV_MINIMAL_HDR_FILES}")
+  bdkPrintList("BSV_MINIMAL_SRC_FILES" "${BSV_MINIMAL_SRC_FILES}")
+  bdkPrintList("BSV_INCLUDE_DIRS" "${BSV_INCLUDE_DIRS}")
 endfunction()

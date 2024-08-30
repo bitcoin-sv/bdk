@@ -18,7 +18,7 @@ macro(bdk_add_unit_test _targetName)
   if(NOT TARGET ${_targetName})
       message(FATAL_ERROR " [${_targetName}] is not a TARGET")
   endif()
-  scryptLinkTargetToBoost(${_targetName} Boost::unit_test_framework)
+  bdkLinkTargetToBoost(${_targetName} Boost::unit_test_framework)
   set_target_properties(${_targetName} PROPERTIES  FOLDER "test/unit" DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})
 
   if(CMAKE_CONFIGURATION_TYPES)
@@ -48,13 +48,13 @@ bdk_add_unit_test(test_assembler)
 
 
 ## Test binding modules
-if(NOT SKIP_MODULE_JAVA)
+if(BUILD_MODULE_JAVA)
 	add_subdirectory(java)
 else()
 	message(STATUS "Testing Java module has been disabled")
 endif()
 
-if(NOT SKIP_MODULE_PYTHON)
+if(BUILD_MODULE_PYTHON)
 	add_subdirectory(python)
 else()
 	message(STATUS "Testing Python module has been disabled")

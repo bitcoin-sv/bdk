@@ -52,6 +52,6 @@ macro(HelpFindFlutter)##########################################################
   message("Found Flutter_EXECUTABLE [${Flutter_EXECUTABLE}]")
 endmacro()
 
-function(scryptPrintFlutterInfo)
+function(bdkPrintFlutterInfo)
   message(" ---------- Flutter_EXECUTABLE [${Flutter_EXECUTABLE}]")
 endfunction()

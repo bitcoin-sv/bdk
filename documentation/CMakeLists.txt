@@ -8,7 +8,7 @@
 if(NOT Python_EXECUTABLE)
   include(FindPythonHelper)
   HelpFindPython()
-  #scryptPrintPythonInfo()#Debug Log
+  #bdkPrintPythonInfo()#Debug Log
 endif()
 
 if(NOT mkdocs_EXECUTABLE)

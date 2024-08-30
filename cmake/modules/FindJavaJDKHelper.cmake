@@ -26,7 +26,7 @@ macro(HelpFindJavaJDK)##########################################################
 endmacro()
 
 #### Print found JavaJDK for debug
-function(scryptPrintJavaJDKInfo)##############################################################################
+function(bdkPrintJavaJDKInfo)##############################################################################
   message(" --")
   message("         JNI_FOUND[${JNI_FOUND}]")
   message("           JNI_INCLUDE_DIRS[${JNI_INCLUDE_DIRS}]")

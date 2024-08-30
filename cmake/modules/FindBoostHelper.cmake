@@ -36,17 +36,17 @@ function(presetBoostVariable)###################################################
 endfunction()
 
 #### Linking with found boost
-####     scryptLinkTargetToBoost(myTarget Boost::system Boost::random)
-####     scryptLinkTargetToBoost(myTarget Boost::boost)## Header only
+####     bdkLinkTargetToBoost(myTarget Boost::system Boost::random)
+####     bdkLinkTargetToBoost(myTarget Boost::boost)## Header only
 #### TODO Add a custom target Boost::ASIO and Boost::BEAST where import take all of openssl, and the header append the include of Boost::boost
-macro(scryptLinkTargetToBoost)##################################################
+macro(bdkLinkTargetToBoost)##################################################
   if(${ARGC} LESS 2)
-    message(FATAL_ERROR "Error calling function scryptLinkTargetToBoost(myTarget Boost::comp1 Boost::compN)")
+    message(FATAL_ERROR "Error calling function bdkLinkTargetToBoost(myTarget Boost::comp1 Boost::compN)")
   endif()
   set(list_arg "${ARGN}")
   list(GET list_arg 0 _target) # First argument is the target
   list(REMOVE_AT list_arg 0)   # Remaining element in the list should be imported boost
-  #scryptPrintList("Boost components to link" "${list_arg}")#Debug log
+  #bdkPrintList("Boost components to link" "${list_arg}")#Debug log
   
   #if(NOT TARGET ${_target})
   #    message(FATAL_ERROR " [${_target}] is not a TARGET")
@@ -106,10 +106,10 @@ function(_CopyAndInstallSharedBoostComp _Boost_Comp)############################
     if(${_dll_EXT} STREQUAL ".dll" OR ${_dll_EXT} STREQUAL ".dylib" OR ${_dll_EXT} MATCHES ".so")
       if(CMAKE_CONFIGURATION_TYPES)#config-like system
         string(REGEX REPLACE "IMPORTED_LOCATION_" "" _BUILD_TYPE "${_IMPORTED_LOCATION_PROPERTY}")
-        scryptGetBuildTypeFromBUILDTYPE(_BuildType "${_BUILD_TYPE}")
-        scryptCopyFileToBuildDir("${_dll_File}" ${_BuildType} ".")
+        bdkGetBuildTypeFromBUILDTYPE(_BuildType "${_BUILD_TYPE}")
+        bdkCopyFileToBuildDir("${_dll_File}" ${_BuildType} ".")
       else()
-        scryptCopyFileToBuildDir("${_dll_File}" "" ".")
+        bdkCopyFileToBuildDir("${_dll_File}" "" ".")
       endif()
     else()
       message(FATAL_ERROR "Boost::${_Boost_Comp}::${_IMPORTED_LOCATION_PROPERTY}[${_lib_File}] is supposed to be imported dynamically")
@@ -151,7 +151,7 @@ macro(HelpFindBoost)############################################################
         unit_test_framework
         CACHE INTERNAL "List of required boost components"
     )
-    #scryptPrintList("Project_Required_BOOST_COMPONENTS" "${Project_Required_BOOST_COMPONENTS}")#Debug log
+    #bdkPrintList("Project_Required_BOOST_COMPONENTS" "${Project_Required_BOOST_COMPONENTS}")#Debug log
   endif()
 
   find_package(Boost ${boost_MINIMUM_REQUIRED} COMPONENTS ${Project_Required_BOOST_COMPONENTS} REQUIRED)
@@ -165,7 +165,7 @@ macro(HelpFindBoost)############################################################
     endif()
 
     if(NOT Boost_USE_STATIC_LIBS)
-      scryptFixImportedTargetSymlink(Boost ${_Boost_Comp})
+      bdkFixImportedTargetSymlink(Boost ${_Boost_Comp})
       _CopyAndInstallSharedBoostComp(${_Boost_Comp})
     endif()
   endforeach()
@@ -173,16 +173,16 @@ macro(HelpFindBoost)############################################################
   #TODO add message if BOOST_FOUND to show user how to add boost linking to a target
 endmacro()
 
-function(scryptPrintBoostInfo)
+function(bdkPrintBoostInfo)
   if(NOT Boost_USE_STATIC_LIBS)##Nothing to do more if it is statically imported
     foreach(_Boost_Comp ${Project_Required_BOOST_COMPONENTS})
-      scryptPrintProperties(Boost::${_Boost_Comp})
+      bdkPrintProperties(Boost::${_Boost_Comp})
     endforeach()
   endif()
-  scryptPrintProperties(Boost::boost)
-  scryptPrintProperties(Boost::diagnostic_definitions)
-  scryptPrintProperties(Boost::disable_autolinking)
-  scryptPrintProperties(Boost::dynamic_linking)
+  bdkPrintProperties(Boost::boost)
+  bdkPrintProperties(Boost::diagnostic_definitions)
+  bdkPrintProperties(Boost::disable_autolinking)
+  bdkPrintProperties(Boost::dynamic_linking)
   
   message(" --")
   message(" ---------- Boost_FOUND [${Boost_FOUND}]")

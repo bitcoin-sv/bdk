@@ -7,7 +7,7 @@
 
 include(FindJavaJDKHelper)
 HelpFindJavaJDK()
-#scryptPrintJavaJDKInfo()#Debug Log
+#bdkPrintJavaJDKInfo()#Debug Log
 
 if(NOT (JNI_FOUND AND Java_FOUND))
   message(WARNING "Unable to find Java JDK on the system. Skip building java binding module")

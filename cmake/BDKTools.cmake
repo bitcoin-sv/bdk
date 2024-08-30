@@ -19,7 +19,7 @@ include(CheckCCompilerFlag)
 # Allow to easily add flags for C and C++
 include(CheckCXXCompilerFlag)
 include(CheckCCompilerFlag)
-function(scrypt_add_c_compiler_flag)
+function(bdk_add_c_compiler_flag)
   foreach(f ${ARGN})
     CHECK_C_COMPILER_FLAG(${f} FLAG_IS_SUPPORTED)
     if(FLAG_IS_SUPPORTED)
@@ -29,7 +29,7 @@ function(scrypt_add_c_compiler_flag)
   set(CMAKE_C_FLAGS ${CMAKE_C_FLAGS} PARENT_SCOPE)
 endfunction()
 
-function(scrypt_add_cxx_compiler_flag)
+function(bdk_add_cxx_compiler_flag)
   foreach(f ${ARGN})
     CHECK_CXX_COMPILER_FLAG(${f} FLAG_IS_SUPPORTED)
     if(FLAG_IS_SUPPORTED)
@@ -39,12 +39,12 @@ function(scrypt_add_cxx_compiler_flag)
   set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} PARENT_SCOPE)
 endfunction()
 
-macro(scrypt_add_compiler_flag)
-  scrypt_add_c_compiler_flag(${ARGN})
-  scrypt_add_cxx_compiler_flag(${ARGN})
+macro(bdk_add_compiler_flag)
+  bdk_add_c_compiler_flag(${ARGN})
+  bdk_add_cxx_compiler_flag(${ARGN})
 endmacro()
 
-macro(scrypt_remove_compiler_flags)
+macro(bdk_remove_compiler_flags)
   foreach(f ${ARGN})
     string(REGEX REPLACE "${f}( |^)" "" CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS})
     string(REGEX REPLACE "${f}( |^)" "" CMAKE_C_FLAGS ${CMAKE_C_FLAGS})
@@ -61,7 +61,7 @@ function(createIncrementVersion add_v base_v incr cache_comment)
 endfunction()############################################################################
 
 #### Print OS Info
-function(scryptPrintOSInfo)##############################################################################
+function(bdkPrintOSInfo)##############################################################################
   #### TODO print more read-only information like compiler, default compiler flags ...
   message(STATUS "     OS Info:")
   message(STATUS "         BDK_SYSTEM_X64[${BDK_SYSTEM_X64}]")
@@ -104,8 +104,8 @@ endfunction()
 
 #### Get the root directory to install
 #### Usage :
-####     scryptGetInstallRootDir(_install_root_dir)
-function(scryptGetInstallRootDir result)
+####     bdkGetInstallRootDir(_install_root_dir)
+function(bdkGetInstallRootDir result)
 #[[ Usage of absolute path for install will not work at CPack time
   if(CMAKE_CONFIGURATION_TYPES)
     set(installDir \$<IF:\$<CONFIG:Debug>,${CMAKE_INSTALL_PREFIX}/x${BDK_SYSTEM_BUILD_ARCHI}/debug,${CMAKE_INSTALL_PREFIX}/x${BDK_SYSTEM_BUILD_ARCHI}/release>)
@@ -122,19 +122,19 @@ endfunction()###################################################################
 ####    _BuildType could be "" Debug Release. _BuildType shouldn't be empty on config-like system
 ####    _subDir is the child dir, usually "."
 #### Usage :
-####    scryptCopyFileToBuildDir(${my_file_dll} Debug ".")
-####    scryptCopyFileToBuildDir(${my_file_so} "" ".")
-function(scryptCopyFileToBuildDir _file _BuildType _subDir)
+####    bdkCopyFileToBuildDir(${my_file_dll} Debug ".")
+####    bdkCopyFileToBuildDir(${my_file_so} "" ".")
+function(bdkCopyFileToBuildDir _file _BuildType _subDir)
   if(NOT EXISTS "${_file}")
-    message(FATAL_ERROR "BDKTools.cmake::scryptCopyFileToBuildDir file[${_file}] doesn't exist")
+    message(FATAL_ERROR "BDKTools.cmake::bdkCopyFileToBuildDir file[${_file}] doesn't exist")
   endif()
 
   if(NOT _BuildType AND CMAKE_CONFIGURATION_TYPES)
-    message(FATAL_ERROR "BDKTools.cmake::scryptCopyInstallSharedLib _BuildType[${_BuildType}] empty should not be used on config-like system")
+    message(FATAL_ERROR "BDKTools.cmake::bdkCopyInstallSharedLib _BuildType[${_BuildType}] empty should not be used on config-like system")
   endif()
 
   if(IS_SYMLINK ${_file})# symlink will not work to copy to runtime
-    message(FATAL_ERROR "BDKTools.cmake::scryptCopyInstallSharedLib _file[${_file}] is a symlink, unable to copy")
+    message(FATAL_ERROR "BDKTools.cmake::bdkCopyInstallSharedLib _file[${_file}] is a symlink, unable to copy")
   endif()
 
   if(_BuildType)
@@ -151,29 +151,29 @@ endfunction()
 ####    _BuildType could be "" Debug Release. _BuildType shouldn't be empty on config-like system
 ####    _subDir is the child dir, usually "."
 #### Usage :
-####    scryptCopyInstallSharedLib(${my_file_dll} Debug ".")
-####    scryptCopyInstallSharedLib(${my_file_so} "" ".")
-function(scryptCopyInstallSharedLib _file _BuildType _subDir)
+####    bdkCopyInstallSharedLib(${my_file_dll} Debug ".")
+####    bdkCopyInstallSharedLib(${my_file_so} "" ".")
+function(bdkCopyInstallSharedLib _file _BuildType _subDir)
   get_filename_component(_lib_EXT "${_file}" EXT)
   if(NOT (${_lib_EXT} STREQUAL ".dll" OR ${_lib_EXT} STREQUAL ".dylib" OR ${_lib_EXT} MATCHES ".so"))
-    message(FATAL_ERROR "BDKTools.cmake::scryptCopyInstallSharedLib _subDir[${_subDir}] _BuildType[${_BuildType}] File[${_file}] is not a shared library")
+    message(FATAL_ERROR "BDKTools.cmake::bdkCopyInstallSharedLib _subDir[${_subDir}] _BuildType[${_BuildType}] File[${_file}] is not a shared library")
   endif()
 
   if(NOT _BuildType AND CMAKE_CONFIGURATION_TYPES)
-    message(FATAL_ERROR "BDKTools.cmake::scryptCopyInstallSharedLib _BuildType[${_BuildType}] empty should not be used on config-like system")
+    message(FATAL_ERROR "BDKTools.cmake::bdkCopyInstallSharedLib _BuildType[${_BuildType}] empty should not be used on config-like system")
   endif()
 
   if(IS_SYMLINK ${_file})# symlink will not work to copy to runtime and install.
-    message(FATAL_ERROR "BDKTools.cmake::scryptCopyInstallSharedLib _file[${_file}] is a symlink, it will not work")
+    message(FATAL_ERROR "BDKTools.cmake::bdkCopyInstallSharedLib _file[${_file}] is a symlink, it will not work")
   endif()
 
   if(_BuildType)
-    scryptCopyFileToBuildDir(${_file} ${_BuildType} ${_subDir})
+    bdkCopyFileToBuildDir(${_file} ${_BuildType} ${_subDir})
   else()
-    scryptCopyFileToBuildDir(${_file} "" ${_subDir})
+    bdkCopyFileToBuildDir(${_file} "" ${_subDir})
   endif()
 
-  scryptGetInstallRootDir(instDestination)
+  bdkGetInstallRootDir(instDestination)
 
   #message("install File [${_file}] to [${instDestination}] for [${_BuildType}]")# Debug Log
   if(_BuildType)
@@ -190,15 +190,15 @@ endfunction()
 ####   _BuildType could be empty, Debug, Release
 ####   _PRPTY     could be LOCATION or IMPORTED_LOCATION
 ####   Example Boost::system, Qt5::Core ...
-####     scryptSolveImportedSymlink(Boost system IMPORTED_LOCATION "")
-####     scryptSolveImportedSymlink(Qt5 Core LOCATION Debug)
-function(scryptSolveImportedSymlink _Lib _Component _PRPTY _BuildType)
+####     bdkSolveImportedSymlink(Boost system IMPORTED_LOCATION "")
+####     bdkSolveImportedSymlink(Qt5 Core LOCATION Debug)
+function(bdkSolveImportedSymlink _Lib _Component _PRPTY _BuildType)
   if(CMAKE_CONFIGURATION_TYPES)## If config-like system, do nothing
     return()
   endif()
 
   if(NOT ((${_PRPTY} STREQUAL "LOCATION") OR (${_PRPTY} STREQUAL "IMPORTED_LOCATION")))
-    message(FATAL_ERROR "BDKTools.cmake::scryptSolveImportedSymlink, _PRPTY [${PRPTY}] should be LOCATION or IMPORTED_LOCATION")
+    message(FATAL_ERROR "BDKTools.cmake::bdkSolveImportedSymlink, _PRPTY [${PRPTY}] should be LOCATION or IMPORTED_LOCATION")
   endif()
 
   checkIfImported("${_Lib}" "${_Component}")
@@ -208,27 +208,27 @@ function(scryptSolveImportedSymlink _Lib _Component _PRPTY _BuildType)
   else()
     string(TOUPPER ${_BuildType} _BUILD_TYPE)
     if(NOT ((${_BUILD_TYPE} STREQUAL "DEBUG") OR (${_BUILD_TYPE} STREQUAL "RELEASE")))
-      message(FATAL_ERROR "BDKTools.cmake::scryptSolveImportedSymlink, _BuildType[${_BuildType}] should be empty string, or Debug/Release")
+      message(FATAL_ERROR "BDKTools.cmake::bdkSolveImportedSymlink, _BuildType[${_BuildType}] should be empty string, or Debug/Release")
     endif()
     set(TGT_PROPERTY ${_PRPTY}_${_BUILD_TYPE})
   endif()
 
   get_property(_lib_${_PRPTY} TARGET ${_Lib}::${_Component} PROPERTY ${TGT_PROPERTY})
   if(NOT _lib_${_PRPTY})
-    message(STATUS "WARNING : BDKTools.cmake::scryptSolveImportedSymlink target property ${_Lib}::${_Component}::${TGT_PROPERTY} was not defined")
+    message(STATUS "WARNING : BDKTools.cmake::bdkSolveImportedSymlink target property ${_Lib}::${_Component}::${TGT_PROPERTY} was not defined")
     return()
   endif()
 
-  #message("    ----  BEFORE BDKTools.cmake::scryptSolveImportedSymlink ${TGT_PROPERTY}[${_lib_${_PRPTY}}]")
+  #message("    ----  BEFORE BDKTools.cmake::bdkSolveImportedSymlink ${TGT_PROPERTY}[${_lib_${_PRPTY}}]")
   if(IS_SYMLINK ${_lib_${_PRPTY}})
     get_filename_component(_solved_symlink_file ${_lib_${_PRPTY}} REALPATH)
     if(EXISTS ${_solved_symlink_file})
       set_target_properties(${_Lib}::${_Component} PROPERTIES ${TGT_PROPERTY} ${_solved_symlink_file})
     else()
-      message(FATAL_ERROR "BDKTools.cmake::scryptSolveImportedSymlink, file [${_solved_symlink_file}] doesn't exist")
+      message(FATAL_ERROR "BDKTools.cmake::bdkSolveImportedSymlink, file [${_solved_symlink_file}] doesn't exist")
     endif()
   else()
-    message(STATUS "WARNING : BDKTools.cmake::scryptSolveImportedSymlink ${_Lib}::${_Component}::${TGT_PROPERTY}[${_lib_${_PRPTY}}] is not a symlink")
+    message(STATUS "WARNING : BDKTools.cmake::bdkSolveImportedSymlink ${_Lib}::${_Component}::${TGT_PROPERTY}[${_lib_${_PRPTY}}] is not a symlink")
   endif()
   #get_property(test_lib_${_PRPTY} TARGET ${_Lib}::${_Component} PROPERTY ${TGT_PROPERTY})
   #message("    ----  AFTER  BDKTools.cmake::solveImportedSymlink ${TGT_PROPERTY}[${test_lib_${_PRPTY}}]")
@@ -238,9 +238,9 @@ endfunction()
 ####   _Lib could be Boost, Qt5
 ####   _Component is the component of the library
 ####   Example Boost::system, Qt5::Core ...
-####      scryptFixImportedTargetSymlink(Boost system)
-####      scryptFixImportedTargetSymlink(Qt5 Core)
-function(scryptFixImportedTargetSymlink _Lib _Component)
+####      bdkFixImportedTargetSymlink(Boost system)
+####      bdkFixImportedTargetSymlink(Qt5 Core)
+function(bdkFixImportedTargetSymlink _Lib _Component)
   if(CMAKE_CONFIGURATION_TYPES)## If config-like system, do nothing
     return()
   endif()
@@ -252,9 +252,9 @@ function(scryptFixImportedTargetSymlink _Lib _Component)
     foreach(_BuildType IN LISTS _BuildTypeList)
       #message(" ++ CALL _PRPTY[${_PRPTY}]  _BuildType[${_BuildType}]")#Debug Log
       if(_BuildType)
-        scryptSolveImportedSymlink(${_Lib} ${_Component} ${_PRPTY} ${_BuildType})
+        bdkSolveImportedSymlink(${_Lib} ${_Component} ${_PRPTY} ${_BuildType})
       else()
-        scryptSolveImportedSymlink(${_Lib} ${_Component} ${_PRPTY} "")
+        bdkSolveImportedSymlink(${_Lib} ${_Component} ${_PRPTY} "")
       endif()
     endforeach()
   endforeach()
@@ -262,13 +262,13 @@ endfunction()
 
 #### Append to a global set (CACHE) without duplicate. If the list is not created, it will be created in CACHE
 #### Usage :
-####     scryptAppendToGlobalSet(mylist "newElem")
-function(scryptAppendToGlobalSet listVar newElem)
+####     bdkAppendToGlobalSet(mylist "newElem")
+function(bdkAppendToGlobalSet listVar newElem)
   if(NOT ${listVar})
     set(${listVar} "${newElem}" CACHE INTERNAL "Global List [${listVar}]" FORCE)
   else()
     if("${newElem}" IN_LIST ${listVar})
-      message(STATUS " scryptAppendToGlobalSet WARNING : [${newElem}] already exist in list [${listVar}]")
+      message(STATUS " bdkAppendToGlobalSet WARNING : [${newElem}] already exist in list [${listVar}]")
     else()
       set(${listVar} "${${listVar}};${newElem}" CACHE INTERNAL "Global List [${listVar}]" FORCE)
     endif()
@@ -278,8 +278,8 @@ endfunction()###################################################################
 
 #### List all subdirectories (absolute path) given the parent directory
 #### Usage :
-####     scryptListSubDir(result ${VAR_HOLDING_PARENT_DIRECTORY})
-function(scryptListSubDir result _parentdir)
+####     bdkListSubDir(result ${VAR_HOLDING_PARENT_DIRECTORY})
+function(bdkListSubDir result _parentdir)
   if(NOT IS_DIRECTORY ${_parentdir})
     message(FATAL_ERROR "[${_parentdir}] is not an existing directory")
   endif()
@@ -295,8 +295,8 @@ function(scryptListSubDir result _parentdir)
 endfunction()############################################################################
 
 #### Usage : Do not forget to put the double quote around the list variable
-####     scryptPrintList("MY_LIST_VARIABLE" "${MY_LIST_VARIABLE}")
-function(scryptPrintList varName listVar)
+####     bdkPrintList("MY_LIST_VARIABLE" "${MY_LIST_VARIABLE}")
+function(bdkPrintList varName listVar)
   if(NOT listVar)
     message(FATAL_ERROR "[${listVar}] variable is not defined")
   endif()
@@ -308,8 +308,8 @@ endfunction()###################################################################
 
 #### From RELEASE/DEBUG give Release/Debu
 #### Usage :
-####     scryptGetBuildTypeFromBUILDTYPE(BuildType DEBUG)
-function(scryptGetBuildTypeFromBUILDTYPE BuildType BUILDTYPE)
+####     bdkGetBuildTypeFromBUILDTYPE(BuildType DEBUG)
+function(bdkGetBuildTypeFromBUILDTYPE BuildType BUILDTYPE)
   if(${BUILDTYPE} STREQUAL "RELEASE")
     set(${BuildType} Release PARENT_SCOPE)
     return()
@@ -323,15 +323,15 @@ endfunction()###################################################################
 
 #### Get The source Branch from git
 #### Usage :
-####     scryptGetGitBranch(myVar)                             # will investigate in ${CMAKE_SOURCE_DIR}
-####     scryptGetGitBranch(myVar "${OTHER_SOURCE_REPO_DIR}")
-function(scryptGetGitBranch)
+####     bdkGetGitBranch(myVar)                             # will investigate in ${CMAKE_SOURCE_DIR}
+####     bdkGetGitBranch(myVar "${OTHER_SOURCE_REPO_DIR}")
+function(bdkGetGitBranch)
     list(LENGTH ARGN _NB_ARGS)
     list(GET ARGN 0 result)
     if(_NB_ARGS GREATER 1)
         list(GET ARGN 1 _CUSTOM_REPO)
         if(NOT EXISTS "${_CUSTOM_REPO}")
-            message(FATAL_ERROR "scryptGetGitBranch call for inexisting directory [${_CUSTOM_REPO}]")
+            message(FATAL_ERROR "bdkGetGitBranch call for inexisting directory [${_CUSTOM_REPO}]")
         endif()
     endif()
 
@@ -354,15 +354,15 @@ endfunction()###################################################################
 
 #### Get abreviation git commit hash of the last commit
 #### Usage :
-####     scryptGetGitCommitHash(myVar)                             # will investigate in ${CMAKE_SOURCE_DIR}
-####     scryptGetGitCommitHash(myVar "${OTHER_SOURCE_REPO_DIR}")
-function(scryptGetGitCommitHash)
+####     bdkGetGitCommitHash(myVar)                             # will investigate in ${CMAKE_SOURCE_DIR}
+####     bdkGetGitCommitHash(myVar "${OTHER_SOURCE_REPO_DIR}")
+function(bdkGetGitCommitHash)
     list(LENGTH ARGN _NB_ARGS)
     list(GET ARGN 0 result)
     if(_NB_ARGS GREATER 1)
         list(GET ARGN 1 _CUSTOM_REPO)
         if(NOT EXISTS "${_CUSTOM_REPO}")
-            message(FATAL_ERROR "scryptGetGitBranch call for inexisting directory [${_CUSTOM_REPO}]")
+            message(FATAL_ERROR "bdkGetGitBranch call for inexisting directory [${_CUSTOM_REPO}]")
         endif()
     endif()
 
@@ -397,15 +397,15 @@ endfunction()###################################################################
 
 #### Get last commit date time from git
 #### Usage :
-####     scryptGetGitCommitDateTime(myVar)                             # will investigate in ${CMAKE_SOURCE_DIR}
-####     scryptGetGitCommitDateTime(myVar "${OTHER_SOURCE_REPO_DIR}")
-function(scryptGetGitCommitDateTime)
+####     bdkGetGitCommitDateTime(myVar)                             # will investigate in ${CMAKE_SOURCE_DIR}
+####     bdkGetGitCommitDateTime(myVar "${OTHER_SOURCE_REPO_DIR}")
+function(bdkGetGitCommitDateTime)
     list(LENGTH ARGN _NB_ARGS)
     list(GET ARGN 0 result)
     if(_NB_ARGS GREATER 1)
         list(GET ARGN 1 _CUSTOM_REPO)
         if(NOT EXISTS "${_CUSTOM_REPO}")
-            message(FATAL_ERROR "scryptGetGitBranch call for inexisting directory [${_CUSTOM_REPO}]")
+            message(FATAL_ERROR "bdkGetGitBranch call for inexisting directory [${_CUSTOM_REPO}]")
         endif()
     endif()
 
@@ -427,18 +427,18 @@ endfunction()###################################################################
 
 #### Get date time of the current moment
 #### Usage :
-####     scryptGetBuildDateTime(myVar)
-function(scryptGetBuildDateTime result)
+####     bdkGetBuildDateTime(myVar)
+function(bdkGetBuildDateTime result)
     string(TIMESTAMP _build_datetime_UTD "%d-%m-%Y %H:%M:%S")
     set(${result} ${_build_datetime_UTD} PARENT_SCOPE)
 endfunction()############################################################################
 
 #### Print a property value of a TARGET
 #### Usage :
-####     scryptPrintProperty(Boost::system IMPORTED_LOCATION_DEBUG)
-function(scryptPrintProperty tgt prop)
+####     bdkPrintProperty(Boost::system IMPORTED_LOCATION_DEBUG)
+function(bdkPrintProperty tgt prop)
   if(NOT TARGET ${tgt})
-      message(FATAL_ERROR " scryptPrintProperty [${tgt}] is not a TARGET")
+      message(FATAL_ERROR " bdkPrintProperty [${tgt}] is not a TARGET")
   endif()
 
   get_property(s TARGET ${tgt} PROPERTY ${prop} SET)
@@ -455,10 +455,10 @@ endfunction()###################################################################
 
 #### Print useful propertes value of a TARGET
 #### Usage :
-####     scryptPrintProperties(Boost::system)
-function(scryptPrintProperties tgt)
+####     bdkPrintProperties(Boost::system)
+function(bdkPrintProperties tgt)
   if(NOT TARGET ${tgt})
-      message(FATAL_ERROR " scryptPrintProperties [${tgt}] is not a TARGET")
+      message(FATAL_ERROR " bdkPrintProperties [${tgt}] is not a TARGET")
   endif()
 
   set(props ## TODO comment out (NOT REMOVE) the useless property from this list
@@ -755,6 +755,6 @@ function(scryptPrintProperties tgt)
 )
 
   foreach(p ${props})
-    scryptPrintProperty("${tgt}" "${p}")
+    bdkPrintProperty("${tgt}" "${p}")
   endforeach()
 endfunction()############################################################################

@@ -66,9 +66,9 @@ function(HelpFindPythonPackage package_name output)# ouput YES/NO
   endif()
 endfunction()
 
-function(scryptPrintPythonInfo)
-  scryptPrintProperties(Python::Interpreter)
-  scryptPrintProperties(Python::Python)
+function(bdkPrintPythonInfo)
+  bdkPrintProperties(Python::Interpreter)
+  bdkPrintProperties(Python::Python)
   message(" --")
   message(" ---------- Python_FOUND [${Python_FOUND}]")
   message(" ---------- Python_EXECUTABLE [${Python_EXECUTABLE}]")

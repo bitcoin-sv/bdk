@@ -5,7 +5,7 @@
 #  Copyright (c) 2020 nChain Limited. All rights reserved       #
 #################################################################
 
-## Build scrypt requires locating bsv source code
+## Build bdk requires locating bsv source code
 if(NOT DEFINED BDK_BSV_ROOT_DIR)#
     message(FATAL_ERROR "Unable to locate bsv source code by BDK_BSV_ROOT_DIR")
 endif()

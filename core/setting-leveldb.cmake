@@ -34,9 +34,9 @@ endmacro()
 
 if(NOT MSVC)
   ## leveldb use a different set of compilation flags
-  scrypt_add_compiler_flag(-Wno-sign-compare -Wno-implicit-fallthrough)
-  scrypt_add_c_compiler_flag(-Wno-strict-prototypes)
-  scrypt_remove_compiler_flags(-Wstrict-prototypes)
+  bdk_add_compiler_flag(-Wno-sign-compare -Wno-implicit-fallthrough)
+  bdk_add_c_compiler_flag(-Wno-strict-prototypes)
+  bdk_remove_compiler_flags(-Wstrict-prototypes)
 endif()
 
 set(BDK_BSV_LEVELDB_ROOT "${BDK_BSV_ROOT_DIR}/src/leveldb")
@@ -214,6 +214,6 @@ install(TARGETS leveldb leveldb-sse4.2 memenv DESTINATION "lib" COMPONENT leveld
 
 if(NOT MSVC)
   ## leveldb restore compiler flags as it is
-  scrypt_add_c_compiler_flag(-Wstrict-prototypes)
-  scrypt_remove_compiler_flags(-Wno-sign-compare -Wno-implicit-fallthrough -Wno-strict-prototypes)
+  bdk_add_c_compiler_flag(-Wstrict-prototypes)
+  bdk_remove_compiler_flags(-Wno-sign-compare -Wno-implicit-fallthrough -Wno-strict-prototypes)
 endif()

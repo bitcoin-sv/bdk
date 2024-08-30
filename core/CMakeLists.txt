@@ -9,7 +9,7 @@ if (NOT (Boost_FOUND AND OPENSSL_FOUND))
   message(FATAL_ERROR "Boost and OpenSSL are required to build bdk_core")
 endif()
 
-## Build scrypt requires locating bsv source code
+## Build bdk requires locating bsv source code
 if(NOT DEFINED BDK_BSV_ROOT_DIR)#
   message(FATAL_ERROR "Unable to locate bsv source code by BDK_BSV_ROOT_DIR")
 endif()
@@ -33,7 +33,7 @@ configure_file(${BDK_VERSION_HPP_IN} ${BDK_VERSION_HPP})
 
 set(BSV_MINIMAL_FILES ${BSV_MINIMAL_HDR_FILES} ${BSV_MINIMAL_SRC_FILES})
 set(UNIFIED_INSTALL_HEADERS_STR "\n#include \"core/BDKVersion.hpp\"\n\n")
-#scryptPrintList("BSV_MINIMAL_FILES" "${BSV_MINIMAL_FILES}")## Help to debug
+#bdkPrintList("BSV_MINIMAL_FILES" "${BSV_MINIMAL_FILES}")## Help to debug
 
 ## Helper files activate some settings for bsv and secp256k1 native source codes
 include("${CMAKE_CURRENT_SOURCE_DIR}/setting-bitcoin.cmake")
@@ -87,7 +87,7 @@ if(WIN32)
   target_link_libraries(bdk_core Crypt32.lib Ws2_32)
 endif()
 target_compile_definitions(bdk_core PUBLIC HAVE_CONFIG_H BOOST_THREAD_USE_LIB BOOST_SP_USE_STD_ATOMIC BOOST_AC_USE_STD_ATOMIC)
-scryptLinkTargetToBoost(bdk_core Boost::boost)
+bdkLinkTargetToBoost(bdk_core Boost::boost)
 
 set_property(TARGET bdk_core PROPERTY FOLDER "core")
 

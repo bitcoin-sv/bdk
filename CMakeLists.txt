@@ -39,9 +39,9 @@ option(BDK_BUILD_MODULES "Activate the build of modules" ON)
 option(BDK_BUILD_BSV_TESTS "Activate the build of bsv tests" ON)
 
 # Language binding modules are all built by default. Activate one will deactivate other
-option(SKIP_MODULE_JAVA "Skip building and testing the Java module" OFF)
-option(SKIP_MODULE_PYTHON "Skip building and testing the Python module" OFF)
-option(SKIP_MODULE_GOLANG "Skip building and testing the Golang module" OFF)
+option(BUILD_MODULE_JAVA "Build and test the Java module" ON)
+option(BUILD_MODULE_PYTHON "Build and test the Python module" ON)
+option(BUILD_MODULE_GOLANG "Build and test the Golang module" ON)
 
 if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin")
     message(STATUS "Hot fix when building on Mac OS, boost broke the build")
@@ -53,7 +53,7 @@ endif()
 ## Use -DBDK_BSV_SRC_ROOT=/path/to/sv_root
 include(cmake/modules/FindBSVSourceHelper.cmake)
 HelpFindBSVSource()
-#scryptPrintBSVSourceInfo()#Print help to debug
+#bdkPrintBSVSourceInfo()#Print help to debug
 
 ## Global version should be the maximum of all version numbers
 set(BDK_VERSION_MAJOR "1" CACHE INTERNAL "Script Engine SDK major version")
@@ -68,7 +68,7 @@ endif()
 
 ## Init CMake, find all external packages and eventually build them if necessary
 include(cmake/BDKInit.cmake)
-scryptInitCMake()
+bdkInitCMake()
 
 ## Everything in core should be includable from everywhere
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/core)
