@@ -46,14 +46,14 @@ Dependencies marked optional apply if you wish to run the unit tests. See [Tests
 - Make sure the `JAVA_TOOLS` environment variable is set to the location of `junit4.jar` and `hamcreast.jar`
 By default all languange binding modules are built. If users don't want to build java module, add `-BUILD_MODULE_JAVA=OFF` to cmake command, it will deactivate build of the java binding.
 
-## Building Script Engine SDK
-It is recommended that a build directory **build** is created outside of Script Engine SDK source code directory. See [directories structure](directories.md).
+## Building Bitcoin Development Kit
+It is recommended that a build directory **build** is created outside of Bitcoin Development Kit source code directory. See [directories structure](directories.md).
 
 ##### Windows
 
 From the build directory:
 
-To build Script Engine SDK
+To build Bitcoin Development Kit
 ```console
 cmake -G"Visual Studio 17 2022" -A x64 ..\bdk && cmake --build . --target ALL_BUILD --config Debug && cmake --build . --target ALL_BUILD --config Release
 ```
@@ -67,7 +67,7 @@ or
 ctest -C Debug
 ```
 
-To create a Windows installer for Script Engine SDK you will need to install [NSIS 3.04](https://nsis.sourceforge.io/Download), then
+To create a Windows installer for Bitcoin Development Kit you will need to install [NSIS 3.04](https://nsis.sourceforge.io/Download), then
 ```console 
 cpack -G NSIS -C Release
 ```
@@ -76,7 +76,7 @@ cpack -G NSIS -C Release
 
 From the build directory:
 
-To build Script Engine SDK
+To build Bitcoin Development Kit
 ```console
 cmake ../bdk -DCUSTOM_SYSTEM_OS_NAME=Ubuntu; time -p make -j8
 ```
@@ -93,7 +93,7 @@ cpack -G TGZ
 ```
 
 ## Tests
-Once the build tools and libraries are prepared, some post installation steps are required to let the Script Engine SDK build system know how to find everything:
+Once the build tools and libraries are prepared, some post installation steps are required to let the Bitcoin Development Kit build system know how to find everything:
 
 ##### C++ on Linux
 ```console
@@ -103,7 +103,7 @@ ctest
 
 ##### Java test from IntelliJ IDEA
 
-In general to run script engine java test from any IDE, users need to let the IDE know where to load the bdk.jar package and where is the location of the bdk_jni runtime library. Below is the explanation of how to do it with IntelliJ IDEA.
+In general to run BDK java test from any IDE, users need to let the IDE know where to load the bdk.jar package and where is the location of the bdk_jni runtime library. Below is the explanation of how to do it with IntelliJ IDEA.
 
 Ctrl-Shift-A then type "Import project from existing source". Select directory $BDK, click next next a few time until reaching
 

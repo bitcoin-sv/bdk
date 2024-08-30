@@ -1,9 +1,9 @@
-# Script Engine SDK Versioning
+# Bitcoin Development Kit Versioning
 
-This document contains a description of the proposed versioning strategy for the Script Engine SDK.
+This document contains a description of the proposed versioning strategy for the Bitcoin Development Kit.
 
-The SDK consists of a number of components
-* The SDK "core" which contains script engine code taken over from SV, and common code used by lnaguage bindings.
+The BDK consists of a number of components
+* The BDK "core" which contains core code taken over from SV, and common code used by lnaguage bindings.
 * Language bindings. 
 
 The object model can be found in documentation/docs/ObjectModel.md
@@ -33,7 +33,7 @@ If the Java binding version is bumped from "1.2.3" to "1.3.0" and the Python bin
 
 ## Dependency on SV
 
-The script engine SDK is built against an instance of the SV source, however that instance of the SV source does not need to keep pace with SV releases or SV development branches.
+The Bitcoin Development Kit is built against an instance of the SV source, however that instance of the SV source does not need to keep pace with SV releases or SV development branches.
 The build process pulls in a version of the SV source (release or development branches), and that code is labelled with the SDK version.
 I.e. The version of the SV source used does not directly affect the SDK version.
 

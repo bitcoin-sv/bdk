@@ -1,6 +1,6 @@
 ## Getting started
 
-Script engine SDK provides a facilities to work with Bitcoin SV scripts with different languages. It has the core part building all fundamental script's functionalities as a C++ library and different modules imlementing extras features. Those modules can be language binding (Java, Python) allowing developers from these programming background to develop scripts. Users are able to extend the functionalities by implementing their own modules.
+Bitcoin Development Kit provides a facilities to work with Bitcoin SV scripts with different languages. It has the core part building all fundamental script's functionalities as a C++ library and different modules imlementing extras features. Those modules can be language binding (Java, Python) allowing developers from these programming background to develop scripts. Users are able to extend the functionalities by implementing their own modules.
 
 - [Directories Structure](directories.md)
 - [Development build](build.md)
@@ -8,7 +8,7 @@ Script engine SDK provides a facilities to work with Bitcoin SV scripts with dif
 
 ---
 
-After unpacking the Script Engine SDK installer to the local machine, the content of the installation directory looks as below
+After unpacking the Bitcoin Development Kit installer to the local machine, the content of the installation directory looks as below
 
 ```
 |-- bdk_install
@@ -24,15 +24,15 @@ After unpacking the Script Engine SDK installer to the local machine, the conten
 
 - File `include/core/BDKVersion.hpp` contains full version's information of how and when the installer was built.
 - `include/core/sv` directory contains all `*.h` and `*.hpp` files from bsv source code.
-- `include/core` directory contains all extra `*.h` and `*.hpp` files declaring additional functionalities in Script Engine SDK core.
+- `include/core` directory contains all extra `*.h` and `*.hpp` files declaring additional functionalities in Bitcoin Development Kit core.
 - lib directory contains all archives (static) and runtime (shared) libraries.
 - Documentation directory contains html documents.
 
 ## Usages
-Script Engine SDK is a multi languages library, it allows users to work with `C++`, `Java` and `Python`.
+Bitcoin Development Kit is a multi languages library, it allows users to work with `C++`, `Java` and `Python`.
 
 #### C++
-To build a C++ program using Script Engine SDK, it needs to link with the installed Script Engine SDK:
+To build a C++ program using Bitcoin Development Kit, it needs to link with the installed Bitcoin Development Kit:
 
 - Let compiler know additional include directories are
     - `/path/to/bdk_install/include`

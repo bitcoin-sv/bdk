@@ -13,13 +13,13 @@ if(NOT (JNI_FOUND AND Java_FOUND))
   message(WARNING "Unable to find Java JDK on the system. Skip building java binding module")
   return()
 endif()
-set(BDK_JAR_BASE_NAME bdk CACHE INTERNAL "Name of the Script Engine SDK Java package")
-set(BDK_JAVA_JNI_NAME bdk_jni CACHE INTERNAL "Name of the Script Engine SDK JNI runtime library")
+set(BDK_JAR_BASE_NAME bdk CACHE INTERNAL "Name of the Bitcoin Development Kit Java package")
+set(BDK_JAVA_JNI_NAME JavaBDK CACHE INTERNAL "Name of the Bitcoin Development Kit JNI runtime library")
 
 #### Java module version as increment of core version
-##createIncrementVersion(BDK_JAVA_VERSION_MAJOR ${BDK_CORE_VERSION_MAJOR} 1 "script engine java major version")
-##createIncrementVersion(BDK_JAVA_VERSION_MINOR ${BDK_CORE_VERSION_MINOR} 0 "script engine java minor version")
-##createIncrementVersion(BDK_JAVA_VERSION_PATCH ${BDK_CORE_VERSION_PATCH} 0 "script engine java patch version")
+##createIncrementVersion(BDK_JAVA_VERSION_MAJOR ${BDK_CORE_VERSION_MAJOR} 1 "BDK java major version")
+##createIncrementVersion(BDK_JAVA_VERSION_MINOR ${BDK_CORE_VERSION_MINOR} 0 "BDK java minor version")
+##createIncrementVersion(BDK_JAVA_VERSION_PATCH ${BDK_CORE_VERSION_PATCH} 0 "BDK java patch version")
 set(BDK_JAVA_VERSION_MAJOR 1)
 set(BDK_JAVA_VERSION_MINOR 0)
 set(BDK_JAVA_VERSION_PATCH 1)
@@ -27,16 +27,16 @@ set(BDK_JAVA_VERSION_STRING "${BDK_JAVA_VERSION_MAJOR}.${BDK_JAVA_VERSION_MINOR}
 
 ## Test maximum of global version
 if(${BDK_VERSION_STRING} LESS ${BDK_JAVA_VERSION_STRING})
-  message("Script Engine SDK global version should be the max of all version numbers")
+  message("Bitcoin Development Kit global version should be the max of all version numbers")
   message("BDK_VERSION_STRING=${BDK_VERSION_STRING} while BDK_JAVA_VERSION_STRING=${BDK_JAVA_VERSION_STRING}")
 endif()
 
 #### Generate config file for java  #####
-set(PACKAGE_INFO_JAVA_IN ${CMAKE_CURRENT_SOURCE_DIR}/PackageInfo.java.in CACHE INTERNAL "Template package info for java script engine")
-set(PACKAGE_INFO_JAVA ${BDK_GENERATED_TOOLS_DIR}/PackageInfo.java CACHE INTERNAL "Package info for java script engine")
+set(PACKAGE_INFO_JAVA_IN ${CMAKE_CURRENT_SOURCE_DIR}/PackageInfo.java.in CACHE INTERNAL "Template package info for java BDK")
+set(PACKAGE_INFO_JAVA ${BDK_GENERATED_TOOLS_DIR}/PackageInfo.java CACHE INTERNAL "Package info for java BDK")
 configure_file(${PACKAGE_INFO_JAVA_IN} ${PACKAGE_INFO_JAVA})
 
-#####  Building jar package for Script Engine SDK
+#####  Building jar package for Bitcoin Development Kit
 file(GLOB JAVA_SRC_FILES ${CMAKE_CURRENT_SOURCE_DIR}/*.java)
 set(JAVA_SRC_FILES ${JAVA_SRC_FILES} ${PACKAGE_INFO_JAVA})
 

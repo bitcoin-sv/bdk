@@ -11,14 +11,14 @@ if(NOT (Python_FOUND AND Python_EXECUTABLE AND Python_Development_FOUND))
 endif()
 
 #### Python module version as increment of core version
-createIncrementVersion(BDK_PYTHON_VERSION_MAJOR ${BDK_CORE_VERSION_MAJOR} 0 "script engine python major version")
-createIncrementVersion(BDK_PYTHON_VERSION_MINOR ${BDK_CORE_VERSION_MINOR} 1 "script engine python minor version")
-createIncrementVersion(BDK_PYTHON_VERSION_PATCH ${BDK_CORE_VERSION_PATCH} 0 "script engine python patch version")
+createIncrementVersion(BDK_PYTHON_VERSION_MAJOR ${BDK_CORE_VERSION_MAJOR} 0 "BDK python major version")
+createIncrementVersion(BDK_PYTHON_VERSION_MINOR ${BDK_CORE_VERSION_MINOR} 1 "BDK python minor version")
+createIncrementVersion(BDK_PYTHON_VERSION_PATCH ${BDK_CORE_VERSION_PATCH} 0 "BDK python patch version")
 set(BDK_PYTHON_VERSION_STRING "${BDK_PYTHON_VERSION_MAJOR}.${BDK_PYTHON_VERSION_MINOR}.${BDK_PYTHON_VERSION_PATCH}")
 
 ## Test maximum of global version
 if(${BDK_VERSION_STRING} LESS ${BDK_PYTHON_VERSION_STRING})
-  message("Script Engine SDK global version should be the max of all version numbers")
+  message("Bitcoin Development Kit global version should be the max of all version numbers")
   message("BDK_VERSION_STRING=${BDK_VERSION_STRING} while BDK_PYTHON_VERSION_STRING=${BDK_PYTHON_VERSION_STRING}")
 endif()
 

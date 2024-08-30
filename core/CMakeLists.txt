@@ -22,7 +22,7 @@ set(BDK_CORE_VERSION_STRING "${BDK_CORE_VERSION_MAJOR}.${BDK_CORE_VERSION_MINOR}
 
 ## Test maximum of global version
 if(${BDK_VERSION_STRING} LESS ${BDK_CORE_VERSION_STRING})
-  message("Script Engine SDK global version should be the max of all version numbers")
+  message("Bitcoin Development Kit global version should be the max of all version numbers")
   message("BDK_VERSION_STRING=${BDK_VERSION_STRING} while BDK_CORE_VERSION_STRING=${BDK_CORE_VERSION_STRING}")
 endif()
 
@@ -125,7 +125,7 @@ foreach(_bsv_hdr ${BSV_MINIMAL_HDR_FILES})
   set(UNIFIED_INSTALL_HEADERS_STR "${UNIFIED_INSTALL_HEADERS_STR}#include \"${_install_rl}\"\n")
 endforeach()
 # Install extra core header files
-set(UNIFIED_INSTALL_HEADERS_STR "${UNIFIED_INSTALL_HEADERS_STR}\n// Include extra script engine files in core\n")
+set(UNIFIED_INSTALL_HEADERS_STR "${UNIFIED_INSTALL_HEADERS_STR}\n// Include extra BDK files in core\n")
 foreach(_extra_hdr ${BDK_CORE_EXTRA_HDR_FILES})
   install(FILES ${_extra_hdr} DESTINATION "${default_install_include_core_dir}" COMPONENT bdk_core)
 

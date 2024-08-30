@@ -15,7 +15,7 @@
  *        DO NOT MODIFY
  */
 
-///!  Global version of Script Engine SDK
+///!  Global version of Bitcoin Development Kit
 const static int BDK_VERSION_MAJOR = ${BDK_VERSION_MAJOR};
 const static int BDK_VERSION_MINOR = ${BDK_VERSION_MINOR};
 const static int BDK_VERSION_PATCH = ${BDK_VERSION_PATCH};
@@ -26,7 +26,7 @@ const static std::string SOURCE_GIT_COMMIT_HASH     = "${SOURCE_GIT_COMMIT_HASH}
 const static std::string SOURCE_GIT_COMMIT_DATETIME = "${SOURCE_GIT_COMMIT_DATETIME}";
 const static std::string BDK_BUILD_DATETIME_UTC   = "${BDK_BUILD_DATETIME_UTC}";
 
-///!  Version of bitcoin on which Script Engine SDK has been built
+///!  Version of Bitcoin SV on which BDK has been built
 const static int BSV_CLIENT_VERSION_MAJOR    = ${BSV_CLIENT_VERSION_MAJOR};
 const static int BSV_CLIENT_VERSION_MINOR    = ${BSV_CLIENT_VERSION_MINOR};
 const static int BSV_CLIENT_VERSION_REVISION = ${BSV_CLIENT_VERSION_REVISION};
@@ -36,7 +36,7 @@ const static std::string BSV_GIT_COMMIT_BRANCH   = "${BSV_GIT_COMMIT_BRANCH}";
 const static std::string BSV_GIT_COMMIT_HASH     = "${BSV_GIT_COMMIT_HASH}";
 const static std::string BSV_GIT_COMMIT_DATETIME = "${BSV_GIT_COMMIT_DATETIME}";
 
-///!  Version of C++ core Script Engine SDK
+///!  Version of C++ core Bitcoin Development Kit
 const static int BDK_CORE_VERSION_MAJOR = ${BDK_CORE_VERSION_MAJOR};
 const static int BDK_CORE_VERSION_MINOR = ${BDK_CORE_VERSION_MINOR};
 const static int BDK_CORE_VERSION_PATCH = ${BDK_CORE_VERSION_PATCH};

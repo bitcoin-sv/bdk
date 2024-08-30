@@ -36,8 +36,8 @@ function(cryptFindBSVDir)#######################################################
   ## Function try to find the BSV source code and set the cache variable BDK_BSV_ROOT_DIR
   ##   If user define -DBSV_ROOT, it will be use
   ##   If user define environment variable BSV_ROOT, it will be used
-  ##   If inside the script engine project, there are a directory '${CMAKE_SOURCE_DIR}/bitcoin-sv', then it will be used      ## jenkins build
-  ##   If alongside the script engine project, there are a directory ${CMAKE_SOURCE_DIR}/../bitcoin-svsv, then it will be used  ## local development
+  ##   If inside the BDK project, there are a directory '${CMAKE_SOURCE_DIR}/bitcoin-sv', then it will be used      ## jenkins build
+  ##   If alongside the BDK project, there are a directory ${CMAKE_SOURCE_DIR}/../bitcoin-svsv, then it will be used  ## local development
   ##   If non of them exist, then it will be clone from source into '${CMAKE_SOURCE_DIR}/bitcoin-sv'
   if(DEFINED BSV_ROOT)
     file(TO_CMAKE_PATH "${BSV_ROOT}" _CMAKE_PATH)

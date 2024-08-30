@@ -7,7 +7,7 @@
 extern "C" {
 #endif
 
-///!  Version of C++ core Script Engine SDK
+///!  Version of C++ core Bitcoin Development Kit
 int VersionMajor();
 int VersionMinor();
 int VersionPatch();

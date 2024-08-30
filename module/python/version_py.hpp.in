@@ -15,7 +15,7 @@
  *        DO NOT MODIFY
  */
 
-///!  Version of C++ core Script Engine SDK
+///!  Version of C++ core Bitcoin Development Kit
 const static int BDK_PYTHON_VERSION_MAJOR = ${BDK_PYTHON_VERSION_MAJOR};
 const static int BDK_PYTHON_VERSION_MINOR = ${BDK_PYTHON_VERSION_MINOR};
 const static int BDK_PYTHON_VERSION_PATCH = ${BDK_PYTHON_VERSION_PATCH};

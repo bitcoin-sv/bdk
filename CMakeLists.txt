@@ -49,16 +49,16 @@ if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin")
     add_definitions(-DBOOST_NO_CXX98_FUNCTION_BASE)
 endif()
 
-## script engine built is based on source files from bsv code.
+## BDK built is based on source files from bsv code.
 ## Use -DBDK_BSV_SRC_ROOT=/path/to/sv_root
 include(cmake/modules/FindBSVSourceHelper.cmake)
 HelpFindBSVSource()
 #bdkPrintBSVSourceInfo()#Print help to debug
 
 ## Global version should be the maximum of all version numbers
-set(BDK_VERSION_MAJOR "1" CACHE INTERNAL "Script Engine SDK major version")
-set(BDK_VERSION_MINOR "0" CACHE INTERNAL "Script Engine SDK minor version")
-set(BDK_VERSION_PATCH "1" CACHE INTERNAL "Script Engine SDK patch version")
+set(BDK_VERSION_MAJOR "1" CACHE INTERNAL "Bitcoin Development Kit major version")
+set(BDK_VERSION_MINOR "0" CACHE INTERNAL "Bitcoin Development Kit minor version")
+set(BDK_VERSION_PATCH "1" CACHE INTERNAL "Bitcoin Development Kit patch version")
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)## Always include the current directory
 

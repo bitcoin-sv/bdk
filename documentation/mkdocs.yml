@@ -10,7 +10,7 @@
 ##    # Open the browsers http://localhost:8000
 ##
 ##
-site_name: script engine
+site_name: Bitcoin Development Kit
 
 nav:
     - About : index.md

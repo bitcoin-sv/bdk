@@ -10,7 +10,7 @@ HelpFindJavaJDK()
 #bdkPrintJavaJDKInfo()#Debug Log
 
 if(NOT (JNI_FOUND AND Java_FOUND AND BDK_JAR))
-  message(STATUS "Unable to find Java JDK and script engine SDK")
+  message(STATUS "Unable to find Java JDK and Bitcoin Development Kit")
   message(STATUS "       JNI_FOUND  [${JNI_FOUND}]")
   message(STATUS "       Java_FOUND [${Java_FOUND}]")
   message(STATUS "       BDK_JAR [${BDK_JAR}]")

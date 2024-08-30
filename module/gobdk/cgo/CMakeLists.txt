@@ -7,14 +7,14 @@
 
 
 #### BDK Go module version as increment of core version
-createIncrementVersion(BDK_GOLANG_VERSION_MAJOR ${BDK_CORE_VERSION_MAJOR} 0 "script engine golang major version")
-createIncrementVersion(BDK_GOLANG_VERSION_MINOR ${BDK_CORE_VERSION_MINOR} 1 "script engine golang minor version")
-createIncrementVersion(BDK_GOLANG_VERSION_PATCH ${BDK_CORE_VERSION_PATCH} 0 "script engine golang patch version")
+createIncrementVersion(BDK_GOLANG_VERSION_MAJOR ${BDK_CORE_VERSION_MAJOR} 0 "BDK golang major version")
+createIncrementVersion(BDK_GOLANG_VERSION_MINOR ${BDK_CORE_VERSION_MINOR} 1 "BDK golang minor version")
+createIncrementVersion(BDK_GOLANG_VERSION_PATCH ${BDK_CORE_VERSION_PATCH} 0 "BDK golang patch version")
 set(BDK_GOLANG_VERSION_STRING "${BDK_GOLANG_VERSION_MAJOR}.${BDK_GOLANG_VERSION_MINOR}.${BDK_GOLANG_VERSION_PATCH}")
 
 ## Test maximum of global version
 if(${BDK_VERSION_STRING} LESS ${BDK_GOLANG_VERSION_STRING})
-  message("Script Engine SDK global version should be the max of all version numbers")
+  message("Bitcoin Development Kit global version should be the max of all version numbers")
   message("BDK_VERSION_STRING=${BDK_VERSION_STRING} while BDK_GOLANG_VERSION_STRING=${BDK_GOLANG_VERSION_STRING}")
 endif()
 
