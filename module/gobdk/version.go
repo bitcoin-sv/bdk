@@ -1,8 +1,7 @@
 package gobdk
 
 /*
-#cgo CFLAGS: -I${SRCDIR}/cgo/include
-#cgo LDFLAGS: -L${SRCDIR}/cgo/lib -lGoBDK -lstdc++
+#cgo LDFLAGS: -lGoBDK -lbdk_core -lstdc++
 #include "cgo/version_cgo.h"
 #include "core/BDKVersion.h"
 */

@@ -15,9 +15,9 @@ if(NOT DEFINED BDK_BSV_ROOT_DIR)#
 endif()
 
 #### Generate version C++  #####
-set(BDK_VERSION_H_IN ${CMAKE_CURRENT_SOURCE_DIR}/BDKVersion.h.in CACHE INTERNAL "Template File for C++ version")
-set(BDK_VERSION_H ${BDK_GENERATED_HPP_DIR}/BDKVersion.h CACHE INTERNAL "HPP File for framework version config")
-configure_file(${BDK_VERSION_H_IN} ${BDK_VERSION_H})
+set(BDK_VERSION_CPP_IN ${CMAKE_CURRENT_SOURCE_DIR}/BDKVersion.cpp.in CACHE INTERNAL "Template File for C++ version")
+set(BDK_VERSION_CPP ${BDK_GENERATED_CPP_DIR}/BDKVersion.cpp CACHE INTERNAL "CPP File for framework version config")
+configure_file(${BDK_VERSION_CPP_IN} ${BDK_VERSION_CPP})
 
 set(BSV_MINIMAL_FILES ${BSV_MINIMAL_HDR_FILES} ${BSV_MINIMAL_SRC_FILES})
 set(UNIFIED_INSTALL_HEADERS_STR "\n#include \"core/BDKVersion.hpp\"\n\n")
@@ -50,7 +50,7 @@ foreach(_bitcoin_file ${BSV_MINIMAL_FILES})
     source_group(TREE ${BDK_BSV_ROOT_DIR} PREFIX "bitcoin HDR" FILES "${_bitcoin_file}")
   endif()
 endforeach()
-source_group("_generated" FILES "${BITCOIN_CONFIG_FILE}" "${BDK_VERSION_H}")
+source_group("_generated" FILES "${BITCOIN_CONFIG_FILE}" "${BDK_VERSION_CPP}")
 
 ## any .cpp .hpp file added here will be added group with bsv file to build the core.
 file(GLOB_RECURSE BDK_CORE_EXTRA_HDR_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp" "${CMAKE_CURRENT_SOURCE_DIR}/*.h")
@@ -66,7 +66,7 @@ foreach(_extra_file ${BDK_CORE_EXTRA_HDR_FILES} ${BDK_CORE_EXTRA_SRC_FILES})
 endforeach()
 
 ## Build bdk_core as a library using bsv source code
-add_library(bdk_core ${BITCOIN_CONFIG_FILE} ${BDK_VERSION_H} ${BDK_CORE_HDR_FILES} ${BDK_CORE_SRC_FILES})
+add_library(bdk_core ${BITCOIN_CONFIG_FILE} ${BDK_VERSION_CPP} ${BDK_CORE_HDR_FILES} ${BDK_CORE_SRC_FILES})
 #set_target_properties(bdk_core PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS 1)
 target_include_directories(bdk_core PUBLIC ${BSV_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(bdk_core ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT} secp256k1 ${UNIVALUE_LIB} OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono)
@@ -82,8 +82,6 @@ set_property(TARGET bdk_core PROPERTY FOLDER "core")
 ## Install the binary library
 install(TARGETS bdk_core DESTINATION "lib" COMPONENT bdk_core)
 
-## Install version.hpp file
-install(FILES "${BDK_VERSION_H}" DESTINATION "include/core" COMPONENT bdk_core)
 ## Install bitcoin config file
 install(FILES ${BITCOIN_CONFIG_FILE} DESTINATION "include/core/config" COMPONENT bdk_core)
  

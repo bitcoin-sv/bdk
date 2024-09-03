@@ -20,16 +20,16 @@ endif()
 
 #### Generate version golang binding #####
 set(BDK_HEADER_GLOB_IN ${CMAKE_CURRENT_SOURCE_DIR}/include/gobdk.h.in CACHE INTERNAL "File globing all cgo header files in installation")
-set(BDK_VERSION_GOLANG_H_IN ${CMAKE_CURRENT_SOURCE_DIR}/include/version_cgo.h.in CACHE INTERNAL "Template File for golang version")
-set(BDK_VERSION_GOLANG_H ${BDK_GENERATED_HPP_DIR}/version_cgo.h CACHE INTERNAL "Header File for golang version")
-configure_file(${BDK_VERSION_GOLANG_H_IN} ${BDK_VERSION_GOLANG_H})
+set(BDK_VERSION_GOLANG_CPP_IN ${CMAKE_CURRENT_SOURCE_DIR}/src/version_cgo.cpp.in CACHE INTERNAL "Template File for golang version")
+set(BDK_VERSION_GOLANG_CPP ${BDK_GENERATED_CPP_DIR}/version_cgo.cpp CACHE INTERNAL "Source File for golang version")
+configure_file(${BDK_VERSION_GOLANG_CPP_IN} ${BDK_VERSION_GOLANG_CPP})
 
 set(_GO_MODULE_NAME GoBDK)
 set(_GO_MODULE_HEADER_FILES
-    ${BDK_VERSION_GOLANG_H}
     ${CMAKE_CURRENT_SOURCE_DIR}/include/asm_cgo.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/interpreter_cgo.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/global_scriptconfig.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/version_cgo.h
 )
 
 set(_GO_MODULE_SOURCE_FILES
@@ -38,9 +38,10 @@ set(_GO_MODULE_SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/global_scriptconfig.cpp
 )
 
-add_library(${_GO_MODULE_NAME} SHARED ${_GO_MODULE_HEADER_FILES} ${_GO_MODULE_SOURCE_FILES})
+add_library(${_GO_MODULE_NAME} SHARED ${_GO_MODULE_HEADER_FILES} ${_GO_MODULE_SOURCE_FILES} ${BDK_VERSION_GOLANG_CPP})
 target_link_libraries(${_GO_MODULE_NAME} PUBLIC bdk_core ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT} secp256k1 ${UNIVALUE_LIB} OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono)
 target_include_directories(${_GO_MODULE_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+source_group("_generated" FILES "${BDK_VERSION_GOLANG_CPP}")
 
 if(CMAKE_CONFIGURATION_TYPES)
   set_target_properties(${_GO_MODULE_NAME} PROPERTIES FOLDER "module/golang" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d
@@ -49,5 +50,5 @@ else()
 endif()
 
 install(TARGETS ${_GO_MODULE_NAME} DESTINATION "bin" COMPONENT GoModules)
-install(FILES ${BDK_VERSION_GOLANG_H} ${_GO_MODULE_HEADER_FILES} DESTINATION "include/cgo" COMPONENT GoModules)
+install(FILES ${_GO_MODULE_HEADER_FILES} DESTINATION "include/cgo" COMPONENT GoModules)
 install(FILES ${BDK_HEADER_GLOB_IN} DESTINATION "include/cgo" RENAME "gobdk.h" COMPONENT GoModules)

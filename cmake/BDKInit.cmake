@@ -69,6 +69,13 @@ macro(bdkCreateGeneratedHppDir)
   include_directories("${BDK_GENERATED_HPP_DIR}")
 endmacro()
 
+#### Create directory in binary tree to put all generated cpp files
+macro(bdkCreateGeneratedCppDir)
+  set(BDK_GENERATED_CPP_DIR "${CMAKE_BINARY_DIR}/generated/cpp" CACHE STRING "Directory containing all generated cpp files")
+  file(MAKE_DIRECTORY "${BDK_GENERATED_CPP_DIR}")
+  include_directories("${BDK_GENERATED_CPP_DIR}")
+endmacro()
+
 #### Create directory in binary tree to put all generated tools files
 macro(bdkCreateGeneratedToolsDir)
   set(BDK_GENERATED_TOOLS_DIR "${CMAKE_BINARY_DIR}/generated/tools" CACHE STRING "Directory containing all generated tools")
@@ -113,6 +120,7 @@ macro(bdkInitCMake)
   bdkGetOSInfo()
   bdkCreateGeneratedDir()
   bdkCreateGeneratedHppDir()
+  bdkCreateGeneratedCppDir()
   bdkCreateGeneratedToolsDir()
   #bdkPrintOSInfo()#Debug Log
 
