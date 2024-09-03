@@ -5,8 +5,8 @@
 #include <map>
 #include <iostream>
 
-#include <version.hpp>    // global and core versions
-#include <version_py.hpp>
+#include <BDKVersion.h>    // global and core versions
+#include <version_py.h>
 
 #include <interpreter_bdk.hpp>
 
@@ -102,28 +102,28 @@ initmyextension(void)
     PyModule_AddIntConstant(module, "BSV_CLIENT_VERSION_MAJOR", BSV_CLIENT_VERSION_MAJOR);
     PyModule_AddIntConstant(module, "BSV_CLIENT_VERSION_MINOR", BSV_CLIENT_VERSION_MINOR);
     PyModule_AddIntConstant(module, "BSV_CLIENT_VERSION_REVISION", BSV_CLIENT_VERSION_REVISION);
-    PyModule_AddStringConstant(module, "BSV_VERSION_STRING", BSV_VERSION_STRING.c_str());
+    PyModule_AddStringConstant(module, "BSV_VERSION_STRING", BSV_VERSION_STRING);
 
-    PyModule_AddStringConstant(module, "BSV_GIT_COMMIT_TAG_OR_BRANCH", BSV_GIT_COMMIT_TAG_OR_BRANCH.c_str());
-    PyModule_AddStringConstant(module, "BSV_GIT_COMMIT_HASH", BSV_GIT_COMMIT_HASH.c_str());
-    PyModule_AddStringConstant(module, "BSV_GIT_COMMIT_DATETIME", BSV_GIT_COMMIT_DATETIME.c_str());
+    PyModule_AddStringConstant(module, "BSV_GIT_COMMIT_TAG_OR_BRANCH", BSV_GIT_COMMIT_TAG_OR_BRANCH);
+    PyModule_AddStringConstant(module, "BSV_GIT_COMMIT_HASH", BSV_GIT_COMMIT_HASH);
+    PyModule_AddStringConstant(module, "BSV_GIT_COMMIT_DATETIME", BSV_GIT_COMMIT_DATETIME);
 
     /* Version information inherited from BDK core */
     PyModule_AddIntConstant(module, "BDK_VERSION_MAJOR", BDK_VERSION_MAJOR);
     PyModule_AddIntConstant(module, "BDK_VERSION_MINOR", BDK_VERSION_MINOR);
     PyModule_AddIntConstant(module, "BDK_VERSION_PATCH", BDK_VERSION_PATCH);
-    PyModule_AddStringConstant(module, "BDK_VERSION_STRING", BDK_VERSION_STRING.c_str());
+    PyModule_AddStringConstant(module, "BDK_VERSION_STRING", BDK_VERSION_STRING);
 
-    PyModule_AddStringConstant(module, "SOURCE_GIT_COMMIT_TAG_OR_BRANCH", SOURCE_GIT_COMMIT_TAG_OR_BRANCH.c_str());
-    PyModule_AddStringConstant(module, "SOURCE_GIT_COMMIT_HASH", SOURCE_GIT_COMMIT_HASH.c_str());
-    PyModule_AddStringConstant(module, "SOURCE_GIT_COMMIT_DATETIME", SOURCE_GIT_COMMIT_DATETIME.c_str());
-    PyModule_AddStringConstant(module, "BDK_BUILD_DATETIME_UTC", BDK_BUILD_DATETIME_UTC.c_str());
+    PyModule_AddStringConstant(module, "SOURCE_GIT_COMMIT_TAG_OR_BRANCH", SOURCE_GIT_COMMIT_TAG_OR_BRANCH);
+    PyModule_AddStringConstant(module, "SOURCE_GIT_COMMIT_HASH", SOURCE_GIT_COMMIT_HASH);
+    PyModule_AddStringConstant(module, "SOURCE_GIT_COMMIT_DATETIME", SOURCE_GIT_COMMIT_DATETIME);
+    PyModule_AddStringConstant(module, "BDK_BUILD_DATETIME_UTC", BDK_BUILD_DATETIME_UTC);
 
     /* Specific version for python binding module */
     PyModule_AddIntConstant(module, "BDK_PYTHON_VERSION_MAJOR", BDK_PYTHON_VERSION_MAJOR);
     PyModule_AddIntConstant(module, "BDK_PYTHON_VERSION_MINOR", BDK_PYTHON_VERSION_MINOR);
     PyModule_AddIntConstant(module, "BDK_PYTHON_VERSION_PATCH", BDK_PYTHON_VERSION_PATCH);
-    PyModule_AddStringConstant(module, "BDK_PYTHON_VERSION_STRING", BDK_PYTHON_VERSION_STRING.c_str());
+    PyModule_AddStringConstant(module, "BDK_PYTHON_VERSION_STRING", BDK_PYTHON_VERSION_STRING);
 #if PY_MAJOR_VERSION >= 3
     return module;
 #endif

@@ -23,12 +23,12 @@ if(${BDK_VERSION_STRING} LESS ${BDK_PYTHON_VERSION_STRING})
 endif()
 
 #### Generate version python binding #####
-set(BDK_VERSION_PYTHON_HPP_IN ${CMAKE_CURRENT_SOURCE_DIR}/version_py.hpp.in CACHE INTERNAL "Template File for python version")
-set(BDK_VERSION_PYTHON_HPP ${BDK_GENERATED_HPP_DIR}/version_py.hpp CACHE INTERNAL "HPP File for python version")
-configure_file(${BDK_VERSION_PYTHON_HPP_IN} ${BDK_VERSION_PYTHON_HPP})
+set(BDK_VERSION_PYTHON_H_IN ${CMAKE_CURRENT_SOURCE_DIR}/version_py.h.in CACHE INTERNAL "Template File for python version")
+set(BDK_VERSION_PYTHON_H ${BDK_GENERATED_HPP_DIR}/version_py.h CACHE INTERNAL "HPP File for python version")
+configure_file(${BDK_VERSION_PYTHON_H_IN} ${BDK_VERSION_PYTHON_H})
 
 set(_PY_MODULE_NAME PyBDK)
-set(_PY_MODULE_SOURCE_FILES "${BDK_VERSION_PYTHON_HPP}" "${CMAKE_CURRENT_SOURCE_DIR}/PyBDK.cpp")
+set(_PY_MODULE_SOURCE_FILES "${BDK_VERSION_PYTHON_H}" "${CMAKE_CURRENT_SOURCE_DIR}/PyBDK.cpp")
 
 Python_add_library(${_PY_MODULE_NAME} ${_PY_MODULE_SOURCE_FILES})
 target_link_libraries(${_PY_MODULE_NAME} PRIVATE bdk_core OpenSSL::Crypto OpenSSL::SSL)

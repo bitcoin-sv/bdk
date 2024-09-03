@@ -19,14 +19,14 @@ if(${BDK_VERSION_STRING} LESS ${BDK_GOLANG_VERSION_STRING})
 endif()
 
 #### Generate version golang binding #####
-set(BDK_VERSION_GOLANG_H_IN ${CMAKE_CURRENT_SOURCE_DIR}/include/version_cgo.h.in CACHE INTERNAL "Template File for python version")
-set(BDK_VERSION_GOLANG_H ${BDK_GENERATED_HPP_DIR}/version_cgo.h CACHE INTERNAL "HPP File for python version")
+set(BDK_HEADER_GLOB_IN ${CMAKE_CURRENT_SOURCE_DIR}/include/gobdk.h.in CACHE INTERNAL "File globing all cgo header files in installation")
+set(BDK_VERSION_GOLANG_H_IN ${CMAKE_CURRENT_SOURCE_DIR}/include/version_cgo.h.in CACHE INTERNAL "Template File for golang version")
+set(BDK_VERSION_GOLANG_H ${BDK_GENERATED_HPP_DIR}/version_cgo.h CACHE INTERNAL "Header File for golang version")
 configure_file(${BDK_VERSION_GOLANG_H_IN} ${BDK_VERSION_GOLANG_H})
 
 set(_GO_MODULE_NAME GoBDK)
 set(_GO_MODULE_HEADER_FILES
     ${BDK_VERSION_GOLANG_H}
-    ${CMAKE_CURRENT_SOURCE_DIR}/include/gobdk.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/asm_cgo.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/interpreter_cgo.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/global_scriptconfig.h
@@ -50,3 +50,4 @@ endif()
 
 install(TARGETS ${_GO_MODULE_NAME} DESTINATION "bin" COMPONENT GoModules)
 install(FILES ${BDK_VERSION_GOLANG_H} ${_GO_MODULE_HEADER_FILES} DESTINATION "include/cgo" COMPONENT GoModules)
+install(FILES ${BDK_HEADER_GLOB_IN} DESTINATION "include/cgo" RENAME "gobdk.h" COMPONENT GoModules)

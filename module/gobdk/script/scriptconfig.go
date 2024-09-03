@@ -26,7 +26,7 @@ import (
 /*
 #cgo LDFLAGS: -lGoBDK -lstdc++ -lm
 #include <stdlib.h>
-#include "gobdk.h"
+#include <cgo/gobdk.h>
 */
 import "C"
 

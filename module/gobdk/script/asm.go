@@ -18,7 +18,7 @@ package script
 
 /*
 #cgo LDFLAGS: -lGoBDK -lstdc++ -lm
-#include "gobdk.h"
+#include <cgo/gobdk.h>
 #include <stdlib.h>
 */
 import "C"
