@@ -1,4 +1,3 @@
-#include <version_cgo.h>
 #include <interpreter_cgo.h>
 #include <interpreter_bdk.hpp>
 

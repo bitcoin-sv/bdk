@@ -13,25 +13,34 @@
  *        DO NOT MODIFY
  */
 
-///!  Version of Bitcoin SV on which BDK has been built
-const static int BSV_CLIENT_VERSION_MAJOR    = ${BSV_CLIENT_VERSION_MAJOR};
-const static int BSV_CLIENT_VERSION_MINOR    = ${BSV_CLIENT_VERSION_MINOR};
-const static int BSV_CLIENT_VERSION_REVISION = ${BSV_CLIENT_VERSION_REVISION};
-const static char *BSV_VERSION_STRING  = "${BSV_VERSION_STRING}";
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-const static char *BSV_GIT_COMMIT_TAG_OR_BRANCH   = "${BSV_GIT_COMMIT_TAG_OR_BRANCH}";
-const static char *BSV_GIT_COMMIT_HASH     = "${BSV_GIT_COMMIT_HASH}";
-const static char *BSV_GIT_COMMIT_DATETIME = "${BSV_GIT_COMMIT_DATETIME}";
+///!  Version of Bitcoin SV on which BDK has been built
+extern const int BSV_CLIENT_VERSION_MAJOR    = ${BSV_CLIENT_VERSION_MAJOR};
+extern const int BSV_CLIENT_VERSION_MINOR    = ${BSV_CLIENT_VERSION_MINOR};
+extern const int BSV_CLIENT_VERSION_REVISION = ${BSV_CLIENT_VERSION_REVISION};
+extern const char* BSV_VERSION_STRING  = "${BSV_VERSION_STRING}";
+
+extern const char* BSV_GIT_COMMIT_TAG_OR_BRANCH   = "${BSV_GIT_COMMIT_TAG_OR_BRANCH}";
+extern const char* BSV_GIT_COMMIT_HASH     = "${BSV_GIT_COMMIT_HASH}";
+extern const char* BSV_GIT_COMMIT_DATETIME = "${BSV_GIT_COMMIT_DATETIME}";
 
 ///!  Global version of Bitcoin Development Kit
-const static int BDK_VERSION_MAJOR = ${BDK_VERSION_MAJOR};
-const static int BDK_VERSION_MINOR = ${BDK_VERSION_MINOR};
-const static int BDK_VERSION_PATCH = ${BDK_VERSION_PATCH};
-const static char *BDK_VERSION_STRING = "${BDK_VERSION_STRING}";
+extern const int BDK_VERSION_MAJOR = ${BDK_VERSION_MAJOR};
+extern const int BDK_VERSION_MINOR = ${BDK_VERSION_MINOR};
+extern const int BDK_VERSION_PATCH = ${BDK_VERSION_PATCH};
+extern const char* BDK_VERSION_STRING = "${BDK_VERSION_STRING}";
 
-const static char *SOURCE_GIT_COMMIT_TAG_OR_BRANCH   = "${SOURCE_GIT_COMMIT_TAG_OR_BRANCH}";
-const static char *SOURCE_GIT_COMMIT_HASH     = "${SOURCE_GIT_COMMIT_HASH}";
-const static char *SOURCE_GIT_COMMIT_DATETIME = "${SOURCE_GIT_COMMIT_DATETIME}";
-const static char *BDK_BUILD_DATETIME_UTC   = "${BDK_BUILD_DATETIME_UTC}";
+extern const char* SOURCE_GIT_COMMIT_TAG_OR_BRANCH   = "${SOURCE_GIT_COMMIT_TAG_OR_BRANCH}";
+extern const char* SOURCE_GIT_COMMIT_HASH     = "${SOURCE_GIT_COMMIT_HASH}";
+extern const char* SOURCE_GIT_COMMIT_DATETIME = "${SOURCE_GIT_COMMIT_DATETIME}";
+extern const char* BDK_BUILD_DATETIME_UTC   = "${BDK_BUILD_DATETIME_UTC}";
+
+#ifdef __cplusplus
+}
+
+#endif
 
 #endif /* BDK_CORE_VERSION_H */

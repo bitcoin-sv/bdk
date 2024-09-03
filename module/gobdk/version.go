@@ -4,11 +4,13 @@ package gobdk
 #cgo CFLAGS: -I${SRCDIR}/cgo/include
 #cgo LDFLAGS: -L${SRCDIR}/cgo/lib -lGoBDK -lstdc++
 #include "cgo/version_cgo.h"
+#include "core/BDKVersion.h"
 */
 import "C"
 
 // /!  Version of Bitcoin SV on which BDK has been built
-func BSV_CLIENT_VERSION_MAJOR() int    { return int(C.BSV_CLIENT_VERSION_MAJOR) }
+func BSV_CLIENT_VERSION_MAJOR() int { return int(C.BSV_CLIENT_VERSION_MAJOR) }
+
 func BSV_CLIENT_VERSION_MINOR() int    { return int(C.BSV_CLIENT_VERSION_MINOR) }
 func BSV_CLIENT_VERSION_REVISION() int { return int(C.BSV_CLIENT_VERSION_REVISION) }
 func BSV_VERSION_STRING() string       { return C.GoString(C.BSV_VERSION_STRING) }

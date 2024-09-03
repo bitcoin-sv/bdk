@@ -12,8 +12,9 @@ import (
 // main code
 func main() {
 
+	fmt.Println("BSV version Major   : ", gobdk.BSV_CLIENT_VERSION_MAJOR())
 	fmt.Println("BSV version string  : ", gobdk.BSV_VERSION_STRING())
-	fmt.Println("GoBDK version string major : ", gobdk.BDK_GOLANG_VERSION_PATCH())
+	fmt.Println("GoBDK version major : ", gobdk.BDK_GOLANG_VERSION_PATCH())
 	fmt.Println("GoBDK version string : ", gobdk.BDK_GOLANG_VERSION_STRING())
 
 	settings := config.LoadSetting(
