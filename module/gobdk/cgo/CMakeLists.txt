@@ -29,6 +29,7 @@ set(_GO_MODULE_HEADER_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/include/asm_cgo.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/interpreter_cgo.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/global_scriptconfig.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/script_error_cgo.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/version_cgo.h
 )
 
@@ -36,6 +37,7 @@ set(_GO_MODULE_SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/asm_cgo.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/interpreter_cgo.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/global_scriptconfig.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/script_error_cgo.cpp
 )
 
 add_library(${_GO_MODULE_NAME} SHARED ${_GO_MODULE_HEADER_FILES} ${_GO_MODULE_SOURCE_FILES} ${BDK_VERSION_GOLANG_CPP})

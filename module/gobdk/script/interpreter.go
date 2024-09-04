@@ -19,17 +19,41 @@ package script
 /*
 #cgo LDFLAGS: -lGoBDK -lstdc++ -lm
 #include <cgo/gobdk.h>
+#include <core/script/script_flags.h>
 */
 import "C"
 
 import (
+	"errors"
 	"unsafe"
 )
 
+// ScriptVerificationFlags calculates the flags to be used when verifying scripts
+// It is calculated based on the locking script and the boolean isPostChronical
+// If the node parameter -genesis is set to true, then the argument isPostChronical is false
+// Otherwise, isPostChronical is true
+//
+// By convention, if the returned flag is greater than SCRIPT_FLAG_LAST in C/C++ code
+// It means an exception has been thrown and handled from the C/C++ layer
+func ScriptVerificationFlags(lScript []byte, isChronicle bool) (uint, error) {
+	lScriptPtr := (*C.char)(unsafe.Pointer(&lScript[0]))
+
+	cgoFlags := uint(C.cgo_script_verification_flags(lScriptPtr, C.int(len(lScript)), C.bool(isChronicle)))
+	if cgoFlags > C.SCRIPT_FLAG_LAST {
+		return cgoFlags, errors.New("CGO EXCEPTION : Exception has been thrown and handled in C/C++ layer")
+	}
+	return cgoFlags, nil
+}
+
 // ExecuteNoVerify executes the script without verification
-func ExecuteNoVerify(script []byte, consensus bool, flag uint) int {
+func ExecuteNoVerify(script []byte, consensus bool, flag uint) ScriptError {
 	scriptPtr := (*C.char)(unsafe.Pointer(&script[0]))
-	return int(C.cgo_execute_no_verify(scriptPtr, C.int(len(script)), C.bool(consensus), C.uint(flag)))
+	errCode := int(C.cgo_execute_no_verify(scriptPtr, C.int(len(script)), C.bool(consensus), C.uint(flag)))
+
+	if errCode == int(SCRIPT_ERR_OK) {
+		return nil
+	}
+	return ScriptErrorImpl{errCode: ScriptErrorCode(errCode)}
 }
 
 // Execute executes the script with verification
@@ -37,19 +61,15 @@ func Execute(script []byte, consensus bool, flag uint,
 	tx []byte,
 	index int,
 	amount uint64,
-) int {
+) ScriptError {
 	scriptPtr := (*C.char)(unsafe.Pointer(&script[0]))
 	txPtr := (*C.char)(unsafe.Pointer(&tx[0]))
-	return int(C.cgo_execute(scriptPtr, C.int(len(script)), C.bool(consensus), C.uint(flag), txPtr, C.int(len(tx)), C.int(index), C.ulonglong(amount)))
-}
+	errCode := int(C.cgo_execute(scriptPtr, C.int(len(script)), C.bool(consensus), C.uint(flag), txPtr, C.int(len(tx)), C.int(index), C.ulonglong(amount)))
 
-// ScriptVerificationFlags calculates the flags to be used when verifying scripts
-// It is calculated based on the locking script and the boolean isPostChronical
-// If the node parameter -genesis is set to true, then the argument isPostChronical is false
-// Otherwise, isPostChronical is true
-func ScriptVerificationFlags(lScript []byte, isChronicle bool) uint {
-	lScriptPtr := (*C.char)(unsafe.Pointer(&lScript[0]))
-	return uint(C.cgo_script_verification_flags(lScriptPtr, C.int(len(lScript)), C.bool(isChronicle)))
+	if errCode == int(SCRIPT_ERR_OK) {
+		return nil
+	}
+	return ScriptErrorImpl{errCode: ScriptErrorCode(errCode)}
 }
 
 // Verify verify the unlocking and locking script
@@ -58,9 +78,15 @@ func Verify(uScript []byte, lScript []byte,
 	tx []byte,
 	index int,
 	amount uint64,
-) int {
+) ScriptError {
 	uScriptPtr := (*C.char)(unsafe.Pointer(&uScript[0]))
 	lScriptPtr := (*C.char)(unsafe.Pointer(&lScript[0]))
 	txPtr := (*C.char)(unsafe.Pointer(&tx[0]))
-	return int(C.cgo_verify(uScriptPtr, C.int(len(uScript)), lScriptPtr, C.int(len(lScript)), C.bool(consensus), C.uint(flag), txPtr, C.int(len(tx)), C.int(index), C.ulonglong(amount)))
+
+	errCode := int(C.cgo_verify(uScriptPtr, C.int(len(uScript)), lScriptPtr, C.int(len(lScript)), C.bool(consensus), C.uint(flag), txPtr, C.int(len(tx)), C.int(index), C.ulonglong(amount)))
+
+	if errCode == int(SCRIPT_ERR_OK) {
+		return nil
+	}
+	return ScriptErrorImpl{errCode: ScriptErrorCode(errCode)}
 }

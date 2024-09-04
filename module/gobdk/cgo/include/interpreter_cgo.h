@@ -8,6 +8,18 @@ extern "C" {
 #endif
 
 /**
+ * All code called from C/C++ did not handle exception.
+ * We handle it here and return and 'absurd' value so golang layer can recognize
+ * the returned result is an exception
+ * 
+ * For script evaluation/verification, if an exception was thrown, it will be handled
+ * here, and return SCRIPT_ERR_ERROR_COUNT+1
+ * 
+ * For cgo_script_verification_flags, if an exception was thrown, it will be handled
+ * here, and return SCRIPT_FLAG_LAST+1
+ */
+
+/**
  * cgo_script_verification_flags calculates the flags to be used when verifying script
  */
 unsigned int cgo_script_verification_flags(const char* lScriptPtr, int lScriptLen, bool isChronicle);

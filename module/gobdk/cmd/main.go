@@ -28,8 +28,8 @@ func main() {
 	asmStrRecover := goscript.ToASM(script)
 	fmt.Println("ASM Str         : ", asmStr)
 	fmt.Println("ASM Str Recover : ", asmStrRecover)
-	e := goscript.ExecuteNoVerify(script, true, uint(0))
-	fmt.Println("Result executing script : ", e)
+	eErr := goscript.ExecuteNoVerify(script, true, uint(0))
+	fmt.Println("Result executing script : ", eErr)
 
 	uScriptHex := "483045022100b1d382f8e5a3d125774cde860bf6286c22aaf93351fb78a2ef7262d1632f563902203688f6fecc895cb6e14fea436e34b1615d077da18e14fbdbf11395838b0181a84121034ee1f76a1460923e18bcb273c26a9b317df6644e41e49ba21dbd7c654537bc7f"
 	lScriptHex := "76a914fbb460d3176afe507a83a3b74b167e198f20f44f88ac"
@@ -42,8 +42,8 @@ func main() {
 	inIndex := 0
 	satoshis := uint64(100000)
 	//blockHeight := uint64(620538)
-	flags := goscript.ScriptVerificationFlags(lScript, true)
+	flags, _ := goscript.ScriptVerificationFlags(lScript, true)
 
-	v := goscript.Verify(uScript, lScript, true, flags, tx, inIndex, satoshis)
-	fmt.Println("Result verifying script : ", v)
+	vErr := goscript.Verify(uScript, lScript, true, flags, tx, inIndex, satoshis)
+	fmt.Println("Result verifying script : ", vErr)
 }
