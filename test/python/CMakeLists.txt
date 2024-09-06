@@ -5,6 +5,11 @@
 #  Copyright (c) 2019 nChain Limited. All rights reserved       #
 #################################################################
 
+if(NOT TARGET Python::Interpreter)
+  message(WARNING "Missing Python, skip building Python tests")
+  return()
+endif()
+
 if(NOT (Python_FOUND AND Python_EXECUTABLE AND Python_Development_FOUND))
     message(WARNING "Unable to find Python on the system. Skip building Python tests")
     return()

@@ -5,13 +5,18 @@
 #  Copyright (c) 2020 nChain Limited. All rights reserved       #
 #################################################################
 
+if(NOT Boost_FOUND)
+  message(WARNING "Unable to find boost for C++ unit test, skip testing core")
+  return()
+endif()
+
 ## Test setting requires locating bsv source code
 if(NOT DEFINED BDK_BSV_ROOT_DIR)#
   message(FATAL_ERROR "Unable to locate bsv source code by BDK_BSV_ROOT_DIR")
 endif()
 # This file is mainly copied from ${BDK_BSV_ROOT_DIR}/sv/src/test/CMakeLists.txt with slightl modifications
 #######################################################################
-message("Including tests from ${BDK_BSV_ROOT_DIR} ...")
+message("Building BSV tests from ${BDK_BSV_ROOT_DIR} ...")
 
 set(BDK_BSV_TEST_ROOT "${BDK_BSV_ROOT_DIR}/src/test")
 set(BDK_BSV_TESTSUITE_MODULE "${BDK_BSV_ROOT_DIR}/cmake/modules/TestSuite.cmake")
@@ -91,7 +96,7 @@ file(WRITE "${MODIFIED_SCRIPTFLAGS_H}" "${MODIFIED_CONTENTS}")
 
 ####################################################################################################################
 ## Test files *cpp here are mainly extract of bsv source code ######################################################
-add_executable(test_core
+add_executable(test_bsv
                "${BDK_BSV_TEST_ROOT}/jsonutil.h"
                #"${BDK_BSV_TEST_ROOT}/scriptflags.h" This file is replaced by the hotfix modified file
                "${MODIFIED_SCRIPTFLAGS_H}"
@@ -109,9 +114,31 @@ add_executable(test_core
                #"${BDK_BSV_TEST_ROOT}/opcode_tests.cpp
 )
 
-target_link_libraries(test_core ${CMAKE_DL_LIBS} bdk_core OpenSSL::Crypto OpenSSL::SSL)
+target_link_libraries(test_bsv ${CMAKE_DL_LIBS} bdk_core OpenSSL::Crypto OpenSSL::SSL)
 if(WIN32)
-  target_link_libraries(test_core Crypt32.lib Ws2_32)
+  target_link_libraries(test_bsv Crypt32.lib Ws2_32)
 endif()
-target_include_directories(test_core PRIVATE "${BDK_BSV_TEST_ROOT}" "${HOTFIX_DIRECTORY_SCRIPTFLAGS}")
-bdk_add_unit_test(test_core)
+target_include_directories(test_bsv PRIVATE "${BDK_BSV_TEST_ROOT}" "${HOTFIX_DIRECTORY_SCRIPTFLAGS}")
+bdk_add_unit_test(test_bsv)
+
+####################################################################################
+## Test for the bdk core part ######################################################
+message("Building BDK core tests ...")
+
+add_executable(test_interpreter "${CMAKE_CURRENT_SOURCE_DIR}/test_interpreter.cpp")
+target_link_libraries(test_interpreter ${CMAKE_DL_LIBS} bdk_core OpenSSL::Crypto OpenSSL::SSL)
+bdk_add_unit_test(test_interpreter)
+
+add_executable(test_assembler "${CMAKE_CURRENT_SOURCE_DIR}/test_assembler.cpp")
+target_link_libraries(test_assembler ${CMAKE_DL_LIBS} bdk_core OpenSSL::Crypto OpenSSL::SSL)
+bdk_add_unit_test(test_assembler)
+
+if(CMAKE_CONFIGURATION_TYPES)
+  set_target_properties(test_bsv PROPERTIES FOLDER "test/core/bsv" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d
+  set_target_properties(test_interpreter PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d
+  set_target_properties(test_assembler PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d
+else()
+  set_target_properties(test_bsv PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
+  set_target_properties(test_interpreter PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
+  set_target_properties(test_assembler PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
+endif()

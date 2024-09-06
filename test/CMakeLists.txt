@@ -5,15 +5,6 @@
 #  Copyright (c) 2020 nChain Limited. All rights reserved       #
 #################################################################
 
-if(NOT Boost_FOUND)
-  message(STATUS "BDK WARNS : Boost was not found on your system, unit tests will not be built")
-  return()
-endif()
-
-if(NOT TARGET Python::Interpreter)
-  message(FATAL_ERROR "Python Interpreter is required to run tests on CI")
-endif()
-
 macro(bdk_add_unit_test _targetName)
   if(NOT TARGET ${_targetName})
       message(FATAL_ERROR " [${_targetName}] is not a TARGET")
@@ -35,17 +26,8 @@ macro(bdk_add_unit_test _targetName)
 endmacro()
 
 if(BDK_BUILD_BSV_TESTS)## Broken now as dependencies has been reduce to minimal
-  add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/bsv")
+  add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/core")
 endif()
-
-add_executable(test_interpreter "${CMAKE_CURRENT_SOURCE_DIR}/test_interpreter.cpp")
-target_link_libraries(test_interpreter ${CMAKE_DL_LIBS} bdk_core OpenSSL::Crypto OpenSSL::SSL)
-bdk_add_unit_test(test_interpreter)
-
-add_executable(test_assembler "${CMAKE_CURRENT_SOURCE_DIR}/test_assembler.cpp")
-target_link_libraries(test_assembler ${CMAKE_DL_LIBS} bdk_core OpenSSL::Crypto OpenSSL::SSL)
-bdk_add_unit_test(test_assembler)
-
 
 ## Test binding modules
 if(BUILD_MODULE_JAVA)
