@@ -2,8 +2,8 @@ package gobdk
 
 /*
 #cgo LDFLAGS: -lGoBDK -lbdk_core -lstdc++
-#include "cgo/version_cgo.h"
-#include "core/BDKVersion.h"
+#include <cgo/version_cgo.h>
+#include <core/BDKVersion.h>
 */
 import "C"
 

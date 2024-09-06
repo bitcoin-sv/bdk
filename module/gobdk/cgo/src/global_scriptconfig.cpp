@@ -1,9 +1,9 @@
-#include <global_scriptconfig.h>
-
 #include <iostream>
 #include <string>
 
 #include <config.h>
+#include <cgo/global_scriptconfig.h>
+
 
 const char* SetGlobalScriptConfig(
         unsigned long long maxOpsPerScriptPolicyIn,

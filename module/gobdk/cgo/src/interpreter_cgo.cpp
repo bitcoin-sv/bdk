@@ -1,8 +1,8 @@
-#include <interpreter_cgo.h>
-#include <interpreter_bdk.hpp>
-#include <script/script_flags.h>
-
 #include <iostream>
+
+#include <script/script_flags.h>
+#include <core/interpreter_bdk.hpp>
+#include <cgo/interpreter_cgo.h>
 
 unsigned int cgo_script_verification_flags(const char* lScriptPtr, int lScriptLen, bool isChronicle)
 {

@@ -18,8 +18,8 @@ package script
 
 /*
 #cgo LDFLAGS: -lGoBDK -lstdc++ -lm
-#include <cgo/gobdk.h>
 #include <stdlib.h>
+#include <cgo/gobdk.h>
 */
 import "C"
 

@@ -1,8 +1,6 @@
 #ifndef __SCRIPT_ERROR_CGO_H__
 #define __SCRIPT_ERROR_CGO_H__
 
-#include <stdbool.h>
-
 #ifdef __cplusplus
 extern "C" {
 #endif

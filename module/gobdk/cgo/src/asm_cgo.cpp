@@ -5,8 +5,8 @@
 #include <sstream>
 
 #include <script.h>
-#include <assembler.h>
-#include <asm_cgo.h>
+#include <core/assembler.h>
+#include <cgo/asm_cgo.h>
 
 const char* cgo_from_asm(const char* asmPtr, int asmLen, int* scriptLen)
 {

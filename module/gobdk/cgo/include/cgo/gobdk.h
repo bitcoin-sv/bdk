@@ -3,14 +3,12 @@
 
 /**
  *  File globing all headers to a single one
- *  This file is uniquely to be used in installation directory
- *  Not use this in the C/C++ building
- * 
  */
 
-#include <cgo/version_cgo.h>
 #include <cgo/asm_cgo.h>
 #include <cgo/global_scriptconfig.h>
 #include <cgo/interpreter_cgo.h>
+#include <cgo/script_error_cgo.h>
+#include <cgo/version_cgo.h>
 
 #endif /* __GO_BDK_H__ */

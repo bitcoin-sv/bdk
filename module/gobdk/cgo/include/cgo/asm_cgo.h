@@ -1,8 +1,6 @@
 #ifndef __ASM_CGO_H__
 #define __ASM_CGO_H__
 
-#include <stdbool.h>
-
 #ifdef __cplusplus
 extern "C" {
 #endif
