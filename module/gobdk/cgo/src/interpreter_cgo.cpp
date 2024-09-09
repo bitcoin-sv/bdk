@@ -11,7 +11,7 @@ unsigned int cgo_script_verification_flags(const char* lScriptPtr, int lScriptLe
         const std::span<const uint8_t> lScript(p, lScriptLen);
         return bsv::script_verification_flags(lScript, isChronicle);
     } catch (const std::exception& e) {
-        std::cout<< "CGO EXCEPTION : " <<__FILE__ <<":"<<__LINE__ << "    at " << __func__ <<std::endl;
+        std::cout<< "CGO EXCEPTION : " <<__FILE__ <<":"<<__LINE__ << "    at " << __func__ <<std::endl<< e.what() <<std::endl ;
         return SCRIPT_FLAG_LAST+1;
     }
 }

@@ -19,7 +19,7 @@ package script
 /*
 #cgo LDFLAGS: -lGoBDK -lstdc++ -lm
 #include <cgo/gobdk.h>
-#include <core/script/script_flags.h>
+#include <script/script_flags.h>
 */
 import "C"
 

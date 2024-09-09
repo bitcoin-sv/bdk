@@ -14,6 +14,12 @@ using namespace std;
 
 // This method of flags calculation was found in $BSV/src/bitcoin-tx.cpp in Chronicle release 1.2.0
 unsigned int bsv::script_verification_flags(const std::span<const uint8_t> locking_script, const bool isPostChronical){
+    // The core C++ code IsP2SH use index operator[22] without checking the size
+    // which is dangerous (undefined behaviour). We check and throw exception here
+    if (locking_script.size() < 23) {
+        throw std::out_of_range("Invalid locking script size");
+    }
+
     const ProtocolEra ActiveEra { isPostChronical ? ProtocolEra::PostChronicle : ProtocolEra::PostGenesis };
     const ProtocolEra utxoEra { IsP2SH(locking_script)? ProtocolEra::PreGenesis : ActiveEra };
     const unsigned int flags = (unsigned int )(StandardScriptVerifyFlags(ActiveEra) | InputScriptVerifyFlags(ActiveEra, utxoEra));
