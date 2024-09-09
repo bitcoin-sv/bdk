@@ -16,7 +16,7 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/.vscode/launch.json.in ${CMAKE_CURREN
 
 message(INFO "Preparing go vendor for testing GoBDK")
 execute_process(
-  COMMAND ${GO_EXECUTABLE} mod tidy && ${GO_EXECUTABLE} mod vendor
+  COMMAND ${GO_EXECUTABLE} mod vendor
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
