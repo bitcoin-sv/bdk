@@ -27,3 +27,11 @@ func TestExceptionFlagsCalculation(t *testing.T) {
 		assert.Nil(t, err, "No exception for correct size of locking script")
 	})
 }
+
+func TestExceptionBadTransaction(t *testing.T) {
+	t.Run("Bad tx serialization", func(t *testing.T) {
+		err := goscript.Verify([]byte{0}, []byte{0}, true, 0, []byte{0}, 0, 0)
+		assert.NotNil(t, err, "Expect error")
+		assert.Equal(t, err.Code(), goscript.SCRIPT_ERR_CGO_EXCEPTION, "Expect exception error")
+	})
+}

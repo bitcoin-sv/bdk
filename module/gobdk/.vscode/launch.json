@@ -14,7 +14,7 @@
       "buildFlags": "",
       "env": {"LD_LIBRARY_PATH":"${env:BDK_INSTALL_ROOT}/bin:${env:LD_LIBRARY_PATH}"
         ,"CGO_LDFLAGS":"-L${env:BDK_INSTALL_ROOT}/lib -L${env:BDK_INSTALL_ROOT}/bin ${env:CGO_LDFLAGS}"
-        ,"CGO_CFLAGS":"-I${env:BDK_INSTALL_ROOT}/include ${env:CGO_CFLAGS}"
+        ,"CGO_CFLAGS":"-I${env:BDK_INSTALL_ROOT}/include/core -I${env:BDK_INSTALL_ROOT}/include ${env:CGO_CFLAGS}"
         ,"GOBDK_SCRIPTCONFIG_MAXOPSPERSCRIPTPOLICY":"1"
         ,"GOBDK_SCRIPTCONFIG_MAXSCRIPTNUMLENGTHPOLICY":"2"
         ,"GOBDK_SCRIPTCONFIG_MAXSCRIPTSIZEPOLICY":"3"

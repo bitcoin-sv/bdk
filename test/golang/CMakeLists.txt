@@ -14,6 +14,12 @@ endif()
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/.vscode/launch.json.in ${CMAKE_CURRENT_SOURCE_DIR}/.vscode/launch.json @ONLY)
 
+message(INFO "Preparing go vendor for testing GoBDK")
+execute_process(
+  COMMAND ${GO_EXECUTABLE} mod tidy && ${GO_EXECUTABLE} mod vendor
+  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
 ## Get all test file
 file(GLOB GOLANG_TEST_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*_test.go")
 
