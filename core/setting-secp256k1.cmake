@@ -40,6 +40,10 @@ if(NOT MSVC)
   set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -O3")
 endif()
 
+# We can disable the test building for secp256k1 here as it is not our job
+set(SECP256K1_BUILD_TESTS OFF)
+set(SECP256K1_BUILD_EXHAUSTIVE_TESTS OFF)
+
 add_subdirectory("${BDK_BSV_ROOT_DIR}/src/secp256k1" ${CMAKE_CURRENT_BINARY_DIR}/secp256k1)
 
 set(_BSV_SECP256K1_INSTALL_HDR_FILES
