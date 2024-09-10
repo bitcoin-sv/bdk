@@ -49,6 +49,7 @@ func ToASM(script []byte) string {
 	scriptPtr := (*C.char)(unsafe.Pointer(&script[0]))
 	scriptLen := len(script)
 	asmStr := C.cgo_to_asm(scriptPtr, C.int(scriptLen))
+	defer C.free(unsafe.Pointer(asmStr))
 	asmGoStr := C.GoString(asmStr)
 	return asmGoStr
 }
