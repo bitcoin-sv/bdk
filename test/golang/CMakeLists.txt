@@ -49,3 +49,10 @@ foreach(golang_test_file ${GOLANG_TEST_FILES})
 
 endforeach()
 
+# To test memory leak while running all GoBDK tests :
+#
+# Build the test binary
+#     CGO_CFLAGS="-I${BDK_INSTALL_ROOT}/include" CGO_LDFLAGS="-L${BDK_INSTALL_ROOT}/lib -L${BDK_INSTALL_ROOT}/bin" go test -c -o testGoBDK
+# Run the test using valgrind
+#     LD_LIBRARY_PATH="${BDK_INSTALL_ROOT}/bin" valgrind --leak-check=full --show-reachable=yes --track-origins=yes --log-file=valgrind.log ./testGoBDK
+# Check the file valgrind.log to see if there are any memory leaks
