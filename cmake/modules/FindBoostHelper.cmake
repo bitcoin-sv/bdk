@@ -26,7 +26,7 @@ function(presetBoostVariable)###################################################
     set(Boost_USE_STATIC_LIBS ON CACHE BOOL "Preset variable to find boost" FORCE)
   endif()
   if(NOT Boost_USE_STATIC_RUNTIME)
-    set(Boost_USE_STATIC_RUNTIME OFF CACHE BOOL "Preset variable to find boost" FORCE)
+    set(Boost_USE_STATIC_RUNTIME ON CACHE BOOL "Preset variable to find boost" FORCE)
   endif()
   if(NOT Boost_USE_MULTITHREADED)
     set(Boost_USE_MULTITHREADED ON CACHE BOOL "Preset variable to find boost" FORCE)
