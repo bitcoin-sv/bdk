@@ -70,6 +70,11 @@ add_library(bdk_core ${BITCOIN_CONFIG_FILE} ${BDK_VERSION_CPP} ${BDK_CORE_HDR_FI
 target_include_directories(bdk_core PUBLIC ${BSV_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(bdk_core ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT} secp256k1 ${UNIVALUE_LIB} OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono)
 
+if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU") # remove warning on linux
+    # Add the warning suppression flag to a specific source file
+    set_source_files_properties("${BDK_BSV_ROOT_DIR}/src/script/sign.cpp" PROPERTIES COMPILE_FLAGS "-Wno-stringop-overread")
+endif()
+
 if(WIN32)
   target_link_libraries(bdk_core Crypt32.lib Ws2_32)
 endif()
