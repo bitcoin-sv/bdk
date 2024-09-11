@@ -63,7 +63,7 @@ set(BDK_VERSION_PATCH "1" CACHE INTERNAL "Bitcoin Development Kit patch version"
 set(CMAKE_INCLUDE_CURRENT_DIR ON)## Always include the current directory
 
 if(MSVC)
-  add_definitions(-D_SCL_SECURE_NO_WARNINGS -DNOMINMAX)
+  add_definitions(-D_SCL_SECURE_NO_WARNINGS -DNOMINMAX -D_SILENCE_CXX20_OLD_SHARED_PTR_ATOMIC_SUPPORT_DEPRECATION_WARNING)
 endif()
 
 ## Init CMake, find all external packages and eventually build them if necessary
