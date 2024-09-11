@@ -32,7 +32,7 @@ Note that when building in Mac OS with clang, it only work with boost 1.78. As i
 - No additional requirements if Python is installed with Debug symbols
 
 ### Dependencies
-Dependencies marked optional apply if you wish to run the unit tests. See [Tests](#Tests) for more details.
+Dependencies marked optional apply if you wish to run the unit tests. See [Tests](#tests) for more details.
 
 ### Environment Variables
 

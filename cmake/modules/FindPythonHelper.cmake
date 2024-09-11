@@ -51,6 +51,7 @@ macro(HelpFindMkdocs)###########################################################
 endmacro()
 
 function(HelpFindPythonPackage package_name output)# ouput YES/NO
+
   #python -m pip show ${package_name}
   execute_process(
     COMMAND ${Python_EXECUTABLE} -m pip show "${package_name}"
@@ -59,7 +60,8 @@ function(HelpFindPythonPackage package_name output)# ouput YES/NO
     ERROR_VARIABLE  _STD_ERROR
     OUTPUT_STRIP_TRAILING_WHITESPACE
   )
-  if(${_CMD_RETURN} EQUAL 0 AND NOT _STD_ERROR)
+
+  if(${_CMD_RETURN} EQUAL 0)
     set (${output} TRUE PARENT_SCOPE)
   else()
     set (${output} FALSE PARENT_SCOPE)

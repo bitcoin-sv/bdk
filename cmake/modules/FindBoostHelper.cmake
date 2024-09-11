@@ -124,6 +124,11 @@ macro(HelpFindBoost)############################################################
     message(FATAL_ERROR "Boost has been found previously, this function should be call only once through the entire build process")
   endif()
 
+  if(POLICY CMP0144) ## Remove warning
+    cmake_policy(SET CMP0144 NEW)
+    cmake_policy(SET CMP0167 NEW)
+  endif()
+
   presetBoostVariable()
 
   if(CUSTOM_BOOST_ROOT)
