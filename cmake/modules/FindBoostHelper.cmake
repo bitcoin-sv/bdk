@@ -26,13 +26,13 @@ function(presetBoostVariable)###################################################
     set(Boost_USE_STATIC_LIBS ON CACHE BOOL "Preset variable to find boost" FORCE)
   endif()
   if(NOT Boost_USE_STATIC_RUNTIME)
-    set(Boost_USE_STATIC_RUNTIME ON CACHE BOOL "Preset variable to find boost" FORCE)
+    set(Boost_USE_STATIC_RUNTIME OFF CACHE BOOL "Preset variable to find boost" FORCE)
   endif()
   if(NOT Boost_USE_MULTITHREADED)
     set(Boost_USE_MULTITHREADED ON CACHE BOOL "Preset variable to find boost" FORCE)
   endif()
 
-  ##set(Boost_NO_BOOST_CMAKE ON CACHE BOOL "Prevent usage of cmake from boost (dodgy)" FORCE)## Fix for boost 1.72 MVSC 2019. Maybe later version can work without this setting
+  set(Boost_NO_BOOST_CMAKE ON CACHE BOOL "Prevent usage of cmake from boost (dodgy)" FORCE)## Fix for boost 1.72 MVSC 2019. Maybe later version can work without this setting
 endfunction()
 
 #### Linking with found boost
@@ -127,6 +127,13 @@ macro(HelpFindBoost)############################################################
   if (NOT MSVC)
     if(POLICY CMP0144) ## Remove warning
       cmake_policy(SET CMP0144 NEW)
+    endif()
+
+    if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+      # On MacOS, boost build doesn't deliver cmake modules.
+      # TODO : Build boost using cmake might deliver cmake modules
+      cmake_policy(SET CMP0167 OLD)
+    else()
       cmake_policy(SET CMP0167 NEW)
     endif()
   endif()
