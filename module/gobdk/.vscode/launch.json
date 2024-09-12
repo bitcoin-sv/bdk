@@ -13,6 +13,7 @@
       "cwd": "${workspaceFolder}",
       "buildFlags": "",
       "env": {"LD_LIBRARY_PATH":"${env:BDK_INSTALL_ROOT}/bin:${env:LD_LIBRARY_PATH}"
+        //For go run on MacOS,"CGO_LDFLAGS":"-L${env:BDK_INSTALL_ROOT}/lib -L${env:BDK_INSTALL_ROOT}/bin -Wl,-rpath,${env:BDK_INSTALL_ROOT}/bin ${env:CGO_LDFLAGS}"
         ,"CGO_LDFLAGS":"-L${env:BDK_INSTALL_ROOT}/lib -L${env:BDK_INSTALL_ROOT}/bin ${env:CGO_LDFLAGS}"
         ,"CGO_CFLAGS":"-I${env:BDK_INSTALL_ROOT}/include/core -I${env:BDK_INSTALL_ROOT}/include ${env:CGO_CFLAGS}"
         ,"GOBDK_SCRIPTCONFIG_MAXOPSPERSCRIPTPOLICY":"1"

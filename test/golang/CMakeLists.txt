@@ -43,8 +43,16 @@ foreach(golang_test_file ${GOLANG_TEST_FILES})
       set(_tpost_fix d)
       set(_builddir debug)
     endif()
+
+    set(_buildpath "${CMAKE_BINARY_DIR}/x64/${_builddir}")
+    set(_cgo_ldflags "-L${_buildpath}")
+    if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+      # On MacOS, need to add rpath to the CGO_LDFLAGS
+      set(_cgo_ldflags "${_cgo_ldflags} -Wl,-rpath,${_buildpath}")
+    endif()
+
     add_test(NAME ${golang_test_name}${_tpost_fix} COMMAND ${GO_EXECUTABLE} test ${golang_test_file})
-    set_tests_properties(${golang_test_name}${_tpost_fix} PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" ENVIRONMENT "CGO_CFLAGS=-I${BDK_BSV_ROOT_DIR}/src -I${CMAKE_SOURCE_DIR} -I${CMAKE_SOURCE_DIR}/module/gobdk/cgo/include;CGO_LDFLAGS=-L${CMAKE_BINARY_DIR}/x64/${_builddir};LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}/x64/${_builddir}")
+    set_tests_properties(${golang_test_name}${_tpost_fix} PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" ENVIRONMENT "CGO_CFLAGS=-I${BDK_BSV_ROOT_DIR}/src -I${CMAKE_SOURCE_DIR} -I${CMAKE_SOURCE_DIR}/module/gobdk/cgo/include;CGO_LDFLAGS=${_cgo_ldflags};LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}/x64/${_builddir}")
   endif()
 
 endforeach()
