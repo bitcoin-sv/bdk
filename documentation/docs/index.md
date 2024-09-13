@@ -13,8 +13,8 @@ After unpacking the Bitcoin Development Kit installer to the local machine, the 
 ```
 |-- bdk_install
 |       |-- include
+|              |-- bitcoin-sv header files
 |              |-- core
-|                    |-- sv
 |              |-- secp256k1
 |              |-- univalue
 |       |-- lib
@@ -23,7 +23,7 @@ After unpacking the Bitcoin Development Kit installer to the local machine, the 
 ```
 
 - File `include/core/BDKVersion.h` contains full version's information of how and when the installer was built.
-- `include/core/sv` directory contains all `*.h` and `*.hpp` files from bsv source code.
+- `include` directory contains all `*.h` and `*.hpp` files from bsv source code.
 - `include/core` directory contains all extra `*.h` and `*.hpp` files declaring additional functionalities in Bitcoin Development Kit core.
 - lib directory contains all archives (static) and runtime (shared) libraries.
 - Documentation directory contains html documents.

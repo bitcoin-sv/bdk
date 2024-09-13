@@ -1,5 +1,22 @@
 FROM golang:1.21.0-bullseye
 
+# This docker file prepare environment to build the full bdk inside a docker
+#
+# To build it
+#
+#      docker build -t bdk:dev .
+#
+# To run and test it, assuming there are the bitcoin-sv source code along side with bdk
+#
+#      # $PWD is the parent/parent directory containing source code of both bitcoin-sv and bdk
+#      docker run -it --name buildbdk --rm --mount type=bind,source="${PWD}",target=/development bdk:dev /bin/bash
+#
+# Then inside the docker
+#
+#      cd /development && mkdir dockerbuild && cd build && cmake ../bitcoin-sv/bdk/ -DCUSTOM_SYSTEM_OS_NAME=docker && make -j8 && make install && make test && cpack -G TGZ
+#
+#
+
 WORKDIR /download
 
 # Install build dependencies
@@ -41,7 +58,10 @@ RUN wget https://www.openssl.org/source/openssl-3.0.9.tar.gz \
 
 ENV OPENSSL_ROOT_DIR=/usr/local/openssl-3.0.9
 
-WORKDIR /development
+## Cleanup the download
+RUN rm -fR /download/*
 
 ## Config so git command work. It is needed to retrieve the source code version
 RUN git config --global --add safe.directory '*'
+
+WORKDIR /development

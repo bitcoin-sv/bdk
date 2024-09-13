@@ -1,35 +1,42 @@
 ## Getting the source code
 Building Bitcoin Development Kit requires the source for both BDK and bsv repositories. 
 
-For nChain developers, the best way to do this is to have a BitBucket account setup with [ssh key access](https://confluence.atlassian.com/bitbucket/set-up-an-ssh-key-728138079.html). If other access is available, the source code should be organised as per the directory structure outlined in [directories structure](directories.md)
+If other access is available, the source code should be organised as per the directory structure outlined in [directories structure](directories.md)
 
 ## Prerequisites
 ##### General
-- [Python 3.12 (64-bit)](https://www.python.org/downloads/release/python-3125) or later
-**Windows**: If using the executable installer, ensure the "Download debugging symbols" and the "Download debug binaries" installation options are selected. 
+- [Python 3.12 (64-bit)](https://www.python.org/downloads/release/python-3125) or later. For _windows_, if using the executable installer, ensure the "Download debugging symbols" and the "Download debug binaries" installation options are selected. 
 - The following python packages are needed to install and build documentation and to run tests.
 ```console
 python -m pip install pytest junitparser mkdocs pymdown-extensions plantuml_markdown
 ```
+- C++ 20 compatible compiler
 - [CMake 3.30.2](https://cmake.org/download/) or later
-- [Boost 1.86](https://www.boost.org/doc/libs/1_78_0/) or later.
+- [Boost 1.78](https://www.boost.org/doc/libs/1_78_0/) or later. On _windows_, it can use Boost 1.86
 - [OpenSSL 3.0.9](https://openssl-library.org/source/index.html) or later (or 1.1.1b).
 - [BSV 1.2.0](https://github.com/bitcoin-sv/bitcoin-sv/releases) exact version.
-- Please make sure MSBuild is in the PATH.
-**Linux**: static libraries and must be compiled with `fPIC` on.
-- C++ 20 compatible compiler
-**Windows**: Visual Studio Community Edition 2022 on windows
-**Linux**: g++13 on Linux
-**MacOS**: clang 15 on Mac OS
+
+Static libraries (boost and openssl) must be compiled with `fPIC` on.
+
+- Windows : Visual Studio Community Edition 2022 on windows, make sure MSBuild is in the PATH.
+- Linux : g++13 on Linux
+- MacOS : clang 15 on Mac OS
 
 Note that when building in Mac OS with clang, it only work with boost 1.78. As in boost 1.86, it seems the `boost::uuids::uuid::data_type` has changed, making the reinterpret_cast at `src/serialize.h:989` broken.
 
 ##### Java module
-- Java JDK 8 or later
+- Java JDK 11 or later
 - Download testng jar files `guice-4.1.0.jar`, `jcommander-1.72.jar`, `snakeyaml-1.21.jar` and `testng-7.1.0.jar`
 - The `JAVA_TOOLS` environment variable must be setup pointing to the directory containing these files
+
+If these packages above is not dowloaded and setup with `JAVA_TOOLS`, cmake can manage on its own, but it'll require internet connection.
+
 ##### Python module
 - No additional requirements if Python is installed with Debug symbols
+
+##### Golang module
+Golang binding built with CGO is working fine on Linux and Mac OS. For windows, it is not well tested, as the linking with DLL is not common.
+The golang module is build into a shared library, then CGO will link dynamically to it.
 
 ### Dependencies
 Dependencies marked optional apply if you wish to run the unit tests. See [Tests](#tests) for more details.
@@ -78,8 +85,9 @@ From the build directory:
 
 To build Bitcoin Development Kit
 ```console
-cmake ../bdk -DCUSTOM_SYSTEM_OS_NAME=Ubuntu; time -p make -j8
+cmake ../bdk && make -j8
 ```
+
 If you want to build in debug mode, add the flag `-DCMAKE_BUILD_TYPE=Debug` to the cmake command.
 
 To run tests
@@ -131,3 +139,20 @@ Then the test is ready to run/debug. To debug java code, and jni C++ call:
 - Change VM option `-Djava.library.path="$CMAKE_BUILD_DIR/x64/debug` 
 - add the argument "-Ddebug=1" to VM options
 - use the method "PackageInfo.getPID()" to get the pid of the proccess and use C++ debugger "attach to process" functionality.
+
+##### Golang module enabling cgo
+
+When a project use gobdk, it has to enable cgo, and set some environments variable to cgo know where to find the installed `GoBDK`. Assuming the `bdk` package was unpacked to a directory `BDK_INSTALL_ROOT`.
+
+On Linux :
+```
+export CGO_CFLAGS="-I${BDK_INSTALL_ROOT}/include ${CGO_CFLAGS}"
+export CGO_LDFLAGS="-L${BDK_INSTALL_ROOT}/lib -L${BDK_INSTALL_ROOT}/bin ${CGO_LDFLAGS}"
+export LD_LIBRARY_PATH="${BDK_INSTALL_ROOT}/bin:${LD_LIBRARY_PATH}"
+```
+
+On Mac OS :
+```
+export CGO_CFLAGS="-I${BDK_INSTALL_ROOT}/include ${CGO_CFLAGS}"
+export CGO_LDFLAGS="-L${BDK_INSTALL_ROOT}/lib -L${BDK_INSTALL_ROOT}/bin -Wl,-rpath,${BDK_INSTALL_ROOT}/bin ${CGO_LDFLAGS}"
+```

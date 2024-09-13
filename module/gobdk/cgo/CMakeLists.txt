@@ -8,7 +8,7 @@
 
 #### BDK Go module version as increment of core version
 createIncrementVersion(BDK_GOLANG_VERSION_MAJOR ${BDK_VERSION_MAJOR} 0 "BDK golang major version")
-createIncrementVersion(BDK_GOLANG_VERSION_MINOR ${BDK_VERSION_MINOR} 1 "BDK golang minor version")
+createIncrementVersion(BDK_GOLANG_VERSION_MINOR ${BDK_VERSION_MINOR} 0 "BDK golang minor version")
 createIncrementVersion(BDK_GOLANG_VERSION_PATCH ${BDK_VERSION_PATCH} 0 "BDK golang patch version")
 set(BDK_GOLANG_VERSION_STRING "${BDK_GOLANG_VERSION_MAJOR}.${BDK_GOLANG_VERSION_MINOR}.${BDK_GOLANG_VERSION_PATCH}")
 

@@ -15,12 +15,12 @@ func TestVersionBSV(t *testing.T) {
 
 func TestVersionBDK(t *testing.T) {
 	assert.Equal(t, 1, gobdk.BDK_VERSION_MAJOR(), "BDK Version Major")
-	assert.Equal(t, 0, gobdk.BDK_VERSION_MINOR(), "BDK Version Minor")
-	assert.Equal(t, 1, gobdk.BDK_VERSION_PATCH(), "BDK Version Patch")
+	assert.Equal(t, 2, gobdk.BDK_VERSION_MINOR(), "BDK Version Minor")
+	assert.Equal(t, 0, gobdk.BDK_VERSION_PATCH(), "BDK Version Patch")
 }
 
 func TestVersionGoBDK(t *testing.T) {
 	assert.Equal(t, 1, gobdk.BDK_GOLANG_VERSION_MAJOR(), "GoBDK Version Major")
-	assert.Equal(t, 1, gobdk.BDK_GOLANG_VERSION_MINOR(), "GoBDK Version Minor")
-	assert.Equal(t, 1, gobdk.BDK_GOLANG_VERSION_PATCH(), "GoBDK Version Patch")
+	assert.Equal(t, 2, gobdk.BDK_GOLANG_VERSION_MINOR(), "GoBDK Version Minor")
+	assert.Equal(t, 0, gobdk.BDK_GOLANG_VERSION_PATCH(), "GoBDK Version Patch")
 }

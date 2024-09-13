@@ -34,7 +34,7 @@ else()
 endif()
 
 ## Package version is the tagorbranch, or if tagorbranch not confirm semver2, will be the commit hash
-set(BDK_PACKAGE_VERSION "v${SOURCE_GIT_COMMIT_TAG_OR_BRANCH}")
+set(BDK_PACKAGE_VERSION "${SOURCE_GIT_COMMIT_TAG_OR_BRANCH}")
 string(REGEX MATCH "^v?[0-9]+\\.[0-9]+\\.[0-9]+(-[a-zA-Z0-9]+)?$" IS_SEMVER "${SOURCE_GIT_COMMIT_TAG_OR_BRANCH}")
 if(NOT IS_SEMVER)
   set(BDK_PACKAGE_VERSION "${SOURCE_GIT_COMMIT_HASH}")

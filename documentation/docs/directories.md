@@ -4,7 +4,7 @@
 |---bdk
 |    |---core
 |    |---documentation
-|    |---sv
+|    |---bitcoin-sv
 |    |---modules
 |         |---example
 |         |---java
