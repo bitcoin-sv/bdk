@@ -24,7 +24,7 @@ RUN wget https://github.com/Kitware/CMake/releases/download/v3.30.0/cmake-3.30.0
     && tar -xvzf cmake-3.30.0-linux-x86_64.tar.gz                                                    \
     && mv cmake-3.30.0-linux-x86_64 /usr/local/cmake-3.30.0
 
-    ENV PATH="/usr/local/cmake-3.30.0/bin:$PATH"
+ENV PATH="/usr/local/cmake-3.30.0/bin:$PATH"
 
 # Build from source Boost 1.78.0 - static only
 RUN wget https://boostorg.jfrog.io/artifactory/main/release/1.78.0/source/boost_1_78_0.tar.gz  \
@@ -44,4 +44,4 @@ ENV OPENSSL_ROOT_DIR=/usr/local/openssl-3.0.9
 WORKDIR /development
 
 ## Config so git command work. It is needed to retrieve the source code version
-git config --global --add safe.directory '*'
+RUN git config --global --add safe.directory '*'

@@ -12,7 +12,12 @@ if(NOT GO_EXECUTABLE)
   return()
 endif()
 
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/.vscode/launch.json.in ${CMAKE_CURRENT_SOURCE_DIR}/.vscode/launch.json @ONLY)
+# To have a vscode launch.json file to run and debug tests inside vscode
+# Add -DCONFIGURE_GOBDK_VSCODE=ON on cmake command
+if(CONFIGURE_GOBDK_VSCODE)
+  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/.vscode/launch.json.in ${CMAKE_CURRENT_SOURCE_DIR}/.vscode/launch.json @ONLY)
+endif()
+
 
 message(INFO "Preparing go vendor for testing GoBDK")
 execute_process(
