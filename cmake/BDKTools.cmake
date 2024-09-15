@@ -343,11 +343,12 @@ function(bdkGetGitTagOrBranch)
     ### get git tag, if not exist, return branch
     # Get the current working branch
     execute_process(
-      COMMAND git describe --tags --exact-match $(git rev-parse HEAD) 2>/dev/null || git symbolic-ref --short HEAD
+      COMMAND /bin/sh -c "git describe --tags --exact-match $(git rev-parse HEAD) 2>/dev/null || git symbolic-ref --short HEAD"
       WORKING_DIRECTORY ${_REPO_DIR}
       OUTPUT_VARIABLE _Tag_Or_Branch
       OUTPUT_STRIP_TRAILING_WHITESPACE
     )
+
     set(${result} ${_Tag_Or_Branch} PARENT_SCOPE)
 endfunction()############################################################################
 
