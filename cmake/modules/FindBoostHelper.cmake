@@ -11,16 +11,23 @@ endif()
 set(FindBoostHelper_Include TRUE)
 
 #### Before building boost, need to install bzip2-devel, python-devel
-#### build boost
-#### Build command on linux
-#### sudo ./b2 --with=all link=shared,static runtime-link=shared
-####  Build command on Windows (same?)
+#### Build boost
+#### From boost 1.86.0, cmake doesn't maintain findpackage boost module
+#### It is maintained by Boost themself. So the boost build have to deliver cmake modules
+#### To get this, boost need to be build/install by cmake
+####
+####   Download the boost source version containing cmake build
+####       https://github.com/boostorg/boost/releases/download/boost-1.86.0/boost-1.86.0-cmake.7z
+####   Build command on linux
+####       cmake ../boost_1_86_0_cmake -DCMAKE_INSTALL_PREFIX=/path/to/install/dir/boost_1_86_0_cmake -DCMAKE_POSITION_INDEPENDENT_CODE=ON && make -j8 && make install
+####   Build command on Windows (same?)
+####       cmake ..\boost_1_86_0_cmake -G"Visual Studio 17 2022" -A x64 -DCMAKE_INSTALL_PREFIX=C:\Path\To\Install\Folder\boost_1_86_0_cmake -DCMAKE_POSITION_INDEPENDENT_CODE=ON && msbuild Boost.sln -maxcpucount:4 /p:Configuration=Debug && msbuild Boost.sln -maxcpucount:4 /p:Configuration=Release && cmake --install . --config Debug && cmake --install . --config Release
 #### TODO better document how to fully build boost on Linux and Windows
 ####     Make sure special component like Boost::python, Boost::mpi (not priority) are built correctly
 
 #### Preset some variable to find and import boost dynamically
 function(presetBoostVariable)##########################################################################
-  set(boost_MINIMUM_REQUIRED 1.76 CACHE INTERNAL "Preset variable to find boost" FORCE)
+  set(boost_MINIMUM_REQUIRED 1.86 CACHE INTERNAL "Preset variable to find boost" FORCE)
   ## http://stackoverflow.com/questions/6646405/how-do-you-add-boost-libraries-in-cmakelists-txt
   if(NOT Boost_USE_STATIC_LIBS)
     set(Boost_USE_STATIC_LIBS ON CACHE BOOL "Preset variable to find boost" FORCE)
@@ -32,7 +39,6 @@ function(presetBoostVariable)###################################################
     set(Boost_USE_MULTITHREADED ON CACHE BOOL "Preset variable to find boost" FORCE)
   endif()
 
-  set(Boost_NO_BOOST_CMAKE ON CACHE BOOL "Prevent usage of cmake from boost (dodgy)" FORCE)## Fix for boost 1.72 MVSC 2019. Maybe later version can work without this setting
 endfunction()
 
 #### Linking with found boost
@@ -124,18 +130,11 @@ macro(HelpFindBoost)############################################################
     message(FATAL_ERROR "Boost has been found previously, this function should be call only once through the entire build process")
   endif()
 
-  if (NOT MSVC)
-    if(POLICY CMP0144) ## Remove warning
-      cmake_policy(SET CMP0144 NEW)
-    endif()
-
-    if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-      # On MacOS, boost build doesn't deliver cmake modules.
-      # TODO : Build boost using cmake might deliver cmake modules
-      cmake_policy(SET CMP0167 OLD)
-    else()
-      cmake_policy(SET CMP0167 NEW)
-    endif()
+  if(POLICY CMP0144) ## Remove warning
+    cmake_policy(SET CMP0144 NEW)
+  endif()
+  if(POLICY CMP0167) ## Remove warning
+    cmake_policy(SET CMP0167 NEW)
   endif()
 
   presetBoostVariable()
