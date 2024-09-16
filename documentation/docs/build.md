@@ -12,7 +12,7 @@ python -m pip install pytest junitparser mkdocs pymdown-extensions plantuml_mark
 ```
 - C++ 20 compatible compiler
 - [CMake 3.30.2](https://cmake.org/download/) or later
-- [Boost 1.78](https://www.boost.org/doc/libs/1_78_0/) or later. On _windows_, it can use Boost 1.86
+- [Boost 1.85](https://www.boost.org/doc/libs/1_85_0/) or later. On _Mac OS_, Boost 1.86 will break the compiler clang
 - [OpenSSL 3.0.9](https://openssl-library.org/source/index.html) or later (or 1.1.1b).
 - [BSV 1.2.0](https://github.com/bitcoin-sv/bitcoin-sv/releases) exact version.
 

@@ -12,22 +12,27 @@ set(FindBoostHelper_Include TRUE)
 
 #### Before building boost, need to install bzip2-devel, python-devel
 #### Build boost
-#### From boost 1.86.0, cmake doesn't maintain findpackage boost module
+#### From boost 1.85.0, cmake doesn't maintain findpackage boost module
 #### It is maintained by Boost themself. So the boost build have to deliver cmake modules
 #### To get this, boost need to be build/install by cmake
 ####
 ####   Download the boost source version containing cmake build
-####       https://github.com/boostorg/boost/releases/download/boost-1.86.0/boost-1.86.0-cmake.7z
+####       https://github.com/boostorg/boost/releases/download/boost-1.85.0/boost-1.85.0-cmake.7z
 ####   Build command on linux
-####       cmake ../boost_1_86_0_cmake -DCMAKE_INSTALL_PREFIX=/path/to/install/dir/boost_1_86_0_cmake -DCMAKE_POSITION_INDEPENDENT_CODE=ON && make -j8 && make install
+####       cmake ../boost_1_85_0_cmake -DCMAKE_INSTALL_PREFIX=/path/to/install/dir/boost_1_85_0_cmake -DCMAKE_POSITION_INDEPENDENT_CODE=ON && make -j8 && make install
 ####   Build command on Windows (same?)
-####       cmake ..\boost_1_86_0_cmake -G"Visual Studio 17 2022" -A x64 -DCMAKE_INSTALL_PREFIX=C:\Path\To\Install\Folder\boost_1_86_0_cmake -DCMAKE_POSITION_INDEPENDENT_CODE=ON && msbuild Boost.sln -maxcpucount:4 /p:Configuration=Debug && msbuild Boost.sln -maxcpucount:4 /p:Configuration=Release && cmake --install . --config Debug && cmake --install . --config Release
+####       cmake ..\boost_1_85_0_cmake -G"Visual Studio 17 2022" -A x64 -DCMAKE_INSTALL_PREFIX=C:\Path\To\Install\Folder\boost_1_85_0_cmake -DCMAKE_POSITION_INDEPENDENT_CODE=ON && msbuild Boost.sln -maxcpucount:4 /p:Configuration=Debug && msbuild Boost.sln -maxcpucount:4 /p:Configuration=Release && cmake --install . --config Debug && cmake --install . --config Release
 #### TODO better document how to fully build boost on Linux and Windows
 ####     Make sure special component like Boost::python, Boost::mpi (not priority) are built correctly
+####
+#### Note :
+####     Linking with boost 1.86.0 works only on linux and windows. On Mac OS, the clang compiler doesn't
+####     like the change of boost::uuid::uuid data type, which will fail due to the reinterpret_cast
+####     in the file ${BDK_BSV_ROOT_DIR}/src/serialize.h line 989 and 999
 
 #### Preset some variable to find and import boost dynamically
 function(presetBoostVariable)##########################################################################
-  set(boost_MINIMUM_REQUIRED 1.86 CACHE INTERNAL "Preset variable to find boost" FORCE)
+  set(boost_MINIMUM_REQUIRED 1.85 CACHE INTERNAL "Preset variable to find boost" FORCE)
   ## http://stackoverflow.com/questions/6646405/how-do-you-add-boost-libraries-in-cmakelists-txt
   if(NOT Boost_USE_STATIC_LIBS)
     set(Boost_USE_STATIC_LIBS ON CACHE BOOL "Preset variable to find boost" FORCE)
