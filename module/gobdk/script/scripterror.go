@@ -2,7 +2,6 @@ package script
 
 import (
 	"fmt"
-	"unsafe"
 )
 
 // To make this work on local dev
@@ -116,7 +115,6 @@ func errorCode2String(e ScriptErrorCode) string {
 	}
 
 	errCStr := C.cgo_script_error_string(C.int(int(e)))
-	defer C.free(unsafe.Pointer(errCStr))
 	errStr := C.GoString(errCStr)
 	return errStr
 }
@@ -126,6 +124,13 @@ type ScriptError interface {
 	error
 	Code() ScriptErrorCode
 	SetInternal(err error)
+}
+
+// NewScriptError create a new script error
+func NewScriptError(code ScriptErrorCode) ScriptError {
+	return ScriptErrorImpl{
+		errCode: code,
+	}
 }
 
 // ScriptErrorImpl implement the interface ScriptError
