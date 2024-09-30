@@ -33,7 +33,15 @@ import "C"
 // SetGlobalScriptConfig set config globally for script operations
 func SetGlobalScriptConfig(config goconfig.ScriptConfig) error {
 
-	errCStr := C.SetGlobalScriptConfig(
+	errChainParamsCStr := C.SetGlobalChainParams(C.CString(config.ChainNetwork))
+	errChainParams := C.GoString(errChainParamsCStr)
+	C.free(unsafe.Pointer(errChainParamsCStr))
+
+	if len(errChainParams) > 0 {
+		return fmt.Errorf("error while setting global chain prams %v", errChainParams)
+	}
+
+	errScriptConfigCStr := C.SetGlobalScriptConfig(
 		C.ulonglong(config.MaxOpsPerScriptPolicy),
 		C.ulonglong(config.MaxScriptNumLengthPolicy),
 		C.ulonglong(config.MaxScriptSizePolicy),
@@ -42,12 +50,12 @@ func SetGlobalScriptConfig(config goconfig.ScriptConfig) error {
 		C.ulonglong(config.MaxStackMemoryUsagePolicy),
 	)
 
-	errGoStr := C.GoString(errCStr)
-	C.free(unsafe.Pointer(errCStr))
+	errScriptConfig := C.GoString(errScriptConfigCStr)
+	C.free(unsafe.Pointer(errScriptConfigCStr))
 
-	if len(errGoStr) < 1 {
-		return nil
+	if len(errScriptConfig) > 0 {
+		return fmt.Errorf("error while setting global config for script %v", errScriptConfig)
 	}
 
-	return fmt.Errorf("error while setting global config for script %v", errGoStr)
+	return nil
 }

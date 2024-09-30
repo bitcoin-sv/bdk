@@ -8,6 +8,7 @@ package config
 
 const (
 	// Script config in environment
+	keyChainNetwork                 = "gobdk.scriptconfig.keyChainNetwork"
 	keyMaxOpsPerScriptPolicy        = "gobdk.scriptconfig.maxopsperscriptpolicy"
 	keyMaxScriptNumLengthPolicy     = "gobdk.scriptconfig.maxscriptnumlengthpolicy"
 	keyMaxScriptSizePolicy          = "gobdk.scriptconfig.maxscriptsizepolicy"

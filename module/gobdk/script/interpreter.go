@@ -53,7 +53,7 @@ func ScriptVerificationFlags(lScript []byte, isChronicle bool) (uint32, error) {
 func ScriptVerificationFlagsV2(lScript []byte, blockHeight uint32) (uint32, error) {
 	lScriptPtr := (*C.char)(unsafe.Pointer(&lScript[0]))
 
-	cgoFlags := uint32(C.cgo_script_verification_flags_v2(lScriptPtr, C.int(len(lScript)), C.uint32_t(blockHeight)))
+	cgoFlags := uint32(C.cgo_script_verification_flags_v2(lScriptPtr, C.int(len(lScript)), C.int32_t(blockHeight)))
 	if cgoFlags > C.SCRIPT_FLAG_LAST {
 		return cgoFlags, errors.New("CGO EXCEPTION : Exception has been thrown and handled in C/C++ layer")
 	}

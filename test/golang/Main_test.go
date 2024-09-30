@@ -1,0 +1,34 @@
+package main
+
+import (
+	"os"
+	"testing"
+
+	bdkconfig "github.com/bitcoin-sv/bdk/module/gobdk/config"
+	bdkscript "github.com/bitcoin-sv/bdk/module/gobdk/script"
+)
+
+func TestMain(m *testing.M) {
+	// Setup code (runs before all tests)
+	setup()
+
+	// Run the tests
+	code := m.Run()
+
+	// Cleanup code (runs after all tests)
+	teardown()
+
+	// Exit with the appropriate code
+	os.Exit(code)
+}
+
+func setup() {
+	bdkScriptConfig := bdkconfig.ScriptConfig{
+		ChainNetwork: "main",
+	}
+
+	bdkscript.SetGlobalScriptConfig(bdkScriptConfig)
+}
+
+func teardown() {
+}

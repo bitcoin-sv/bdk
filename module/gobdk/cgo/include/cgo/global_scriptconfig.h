@@ -19,6 +19,13 @@ const char* SetGlobalScriptConfig(
         unsigned long long maxStackMemoryUsagePolicy
     );
 
+/**
+ * Set Chain Params globally for the core C++. It return the error string if any
+ *
+ * The caller is responsible to free memory
+ */
+const char* SetGlobalChainParams(const char* networkStr);
+
 #ifdef __cplusplus
 }
 #endif

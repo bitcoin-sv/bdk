@@ -17,14 +17,19 @@ const char* SetGlobalScriptConfig(
 
         try {
             std::string err;
+            bool ok=true;
             auto& gConfig = GlobalConfig::GetModifiableGlobalConfig();
-            auto ok1 = gConfig.SetMaxOpsPerScriptPolicy(maxOpsPerScriptPolicyIn, &err);
-            auto ok2 = gConfig.SetMaxScriptNumLengthPolicy(maxScriptNumLengthPolicyIn, &err);
-            auto ok3 = gConfig.SetMaxScriptSizePolicy(maxScriptSizePolicyIn, &err);
-            auto ok4 = gConfig.SetMaxPubKeysPerMultiSigPolicy(maxPubKeysPerMultiSigIn, &err);
-            auto ok5 = gConfig.SetMaxStackMemoryUsage(maxStackMemoryUsageConsensusIn, maxStackMemoryUsagePolicyIn, &err);
+            if (maxOpsPerScriptPolicyIn > 0)
+                ok = ok && gConfig.SetMaxOpsPerScriptPolicy(maxOpsPerScriptPolicyIn, &err);
+            if (maxScriptNumLengthPolicyIn > 0)
+                ok = ok && gConfig.SetMaxScriptNumLengthPolicy(maxScriptNumLengthPolicyIn, &err);
+            if (maxScriptSizePolicyIn > 0)
+                ok = ok && gConfig.SetMaxScriptSizePolicy(maxScriptSizePolicyIn, &err);
+            if (maxPubKeysPerMultiSigIn > 0)
+                ok = ok &&  gConfig.SetMaxPubKeysPerMultiSigPolicy(maxPubKeysPerMultiSigIn, &err);
+            if (maxStackMemoryUsageConsensusIn > 0 || maxStackMemoryUsagePolicyIn > 0)
+                ok = ok && gConfig.SetMaxStackMemoryUsage(maxStackMemoryUsageConsensusIn, maxStackMemoryUsagePolicyIn, &err);
 
-            auto ok = (ok1 &&  ok2 && ok3 && ok4 && ok5);
             if (err.empty() && !ok ) {
                 err = "Unknown error while setting global config for script";
             }
@@ -36,7 +41,26 @@ const char* SetGlobalScriptConfig(
             char* cstr = new char[err.size() + 1];// +1 for the null terminator
             std::strcpy(cstr, err.c_str());
         } catch (const std::exception& e) {
-            cstr = "CGO EXCEPTION : Exception has been thrown and handled in C/C++ layer";
+            std::stringstream ss;
+            ss <<  "CGO EXCEPTION : " <<__FILE__ <<":"<<__LINE__ <<"    at " <<__func__ << " "<< e.what()<<std::endl;
+            std::string errStr = ss.str();
+            cstr = errStr.c_str();
+        }
+
+        return cstr;
+    }
+
+const char* SetGlobalChainParams(const char* networkStr) {
+        const char* cstr = nullptr;
+
+        try {
+            const std::string network(networkStr);
+            SelectParams(network); // throw exception if wrong network string
+        } catch (const std::exception& e) {
+            std::stringstream ss;
+            ss <<  "CGO EXCEPTION : " <<__FILE__ <<":"<<__LINE__ <<"    at " <<__func__ << " "<< e.what()<<std::endl;
+            std::string errStr = ss.str();
+            cstr = errStr.c_str();
         }
 
         return cstr;

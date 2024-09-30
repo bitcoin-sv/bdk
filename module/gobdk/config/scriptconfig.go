@@ -3,6 +3,7 @@ package config
 // ScriptConfig hold the settings that impact the script operations
 // There are equivalent in the bitcoin.conf file
 type ScriptConfig struct {
+	ChainNetwork                 string `mapstructure:"chainNetwork" json:"chainNetwork" validate:"required"`
 	MaxOpsPerScriptPolicy        uint64 `mapstructure:"maxOpsPerScriptPolicy" json:"maxOpsPerScriptPolicy" validate:"required"`
 	MaxScriptNumLengthPolicy     uint64 `mapstructure:"maxScriptNumLengthPolicy" json:"maxScriptNumLengthPolicy" validate:"required"`
 	MaxScriptSizePolicy          uint64 `mapstructure:"maxScriptSizePolicy" json:"maxScriptSizePolicy" validate:"required"`
@@ -16,6 +17,11 @@ type ScriptConfig struct {
 func LoadScriptConfig() SettingLoader {
 
 	return func(s *Setting) error {
+
+		s.scriptConfig.ChainNetwork = s.env.GetString(keyChainNetwork)
+		if s.scriptConfig.ChainNetwork == "" {
+			s.scriptConfig.ChainNetwork = "main" // Default to mainnet if not set
+		}
 
 		s.scriptConfig.MaxOpsPerScriptPolicy = s.env.GetUint64(keyMaxOpsPerScriptPolicy)
 		s.scriptConfig.MaxScriptNumLengthPolicy = s.env.GetUint64(keyMaxScriptNumLengthPolicy)
