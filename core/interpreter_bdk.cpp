@@ -3,17 +3,84 @@
 #include <base58.h>
 #include <chainparams.h>
 #include <config.h>
+#include <protocol_era.h>
 #include <script/script.h>
 #include <core_io.h>
 #include <script/interpreter.h>
+#include <script/script_flags.h>
 
 #include <stdexcept>
 
 using namespace std;
 
 
+// This method of flags calculation was replicated from $BSV/src/validation.cpp::GetBlockScriptFlags in Chronicle release 1.2.0
+// The version implemented here has been slightly modified to adapt to the context of independant library
+uint32_t bsv::script_verification_flags_v2(const std::span<const uint8_t> locking_script, int32_t blockHeight) {
+    const Config& config = GlobalConfig::GetConfig();
+    const Consensus::Params& consensusparams = config.GetChainParams().GetConsensus();
+    uint32_t flags = SCRIPT_VERIFY_NONE;
+
+    // We check if the utxo is P2SH by the content of the locking script, rather
+    // than by the block height of the utxo
+    try {
+        if (IsP2SH(locking_script)) {
+            flags |= SCRIPT_VERIFY_P2SH;
+        }
+    }
+    catch (const std::exception& e) {
+    }
+
+    // Start enforcing the DERSIG (BIP66) rule
+    if ((blockHeight + 1) >= consensusparams.BIP66Height) {
+        flags |= SCRIPT_VERIFY_DERSIG;
+    }
+
+    // Start enforcing CHECKLOCKTIMEVERIFY (BIP65) rule
+    if ((blockHeight + 1) >= consensusparams.BIP65Height) {
+        flags |= SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY;
+    }
+
+    // Start enforcing BIP112 (CSV).
+    if ((blockHeight + 1) >= consensusparams.CSVHeight) {
+        flags |= SCRIPT_VERIFY_CHECKSEQUENCEVERIFY;
+    }
+
+    // If the UAHF is enabled, we start accepting replay protected txns
+    if (blockHeight >= consensusparams.uahfHeight) { // (IsUAHFenabled(config, blockHeight))
+        flags |= SCRIPT_VERIFY_STRICTENC;
+        flags |= SCRIPT_ENABLE_SIGHASH_FORKID;
+    }
+
+    // If the DAA HF is enabled, we start rejecting transaction that use a high
+    // s in their signature. We also make sure that signature that are supposed
+    // to fail (for instance in multisig or other forms of smart contracts) are
+    // null.
+    if (blockHeight >= config.GetChainParams().GetConsensus().daaHeight) { // (IsDAAEnabled(config, blockHeight))
+        flags |= SCRIPT_VERIFY_LOW_S;
+        flags |= SCRIPT_VERIFY_NULLFAIL;
+    }
+
+    if (IsProtocolActive(GetProtocolEra(config, blockHeight + 1), ProtocolName::Genesis)) {
+        flags |= SCRIPT_GENESIS;
+        flags |= SCRIPT_VERIFY_SIGPUSHONLY;
+    }
+
+    if (IsProtocolActive(GetProtocolEra(config, blockHeight + 1), ProtocolName::Chronicle)) {
+        flags |= SCRIPT_CHRONICLE;
+        flags &= ~SCRIPT_VERIFY_LOW_S;
+        flags &= ~SCRIPT_VERIFY_SIGPUSHONLY;
+    }
+
+    return flags;
+}
+
+
 // This method of flags calculation was found in $BSV/src/bitcoin-tx.cpp in Chronicle release 1.2.0
-unsigned int bsv::script_verification_flags(const std::span<const uint8_t> locking_script, const bool isPostChronical){
+// It is calculated based on the locking script and the boolean isPostChronical
+// If the node parameter -genesis is set to true, then the argument isPostChronical is false
+// Otherwise, isPostChronical is true
+uint32_t bsv::script_verification_flags(const std::span<const uint8_t> locking_script, const bool isPostChronical){
     // The core C++ code IsP2SH use index operator[22] without checking the size
     // which is dangerous (undefined behaviour). We check and throw exception here
     if (locking_script.size() < 23) {
@@ -22,7 +89,7 @@ unsigned int bsv::script_verification_flags(const std::span<const uint8_t> locki
 
     const ProtocolEra ActiveEra { isPostChronical ? ProtocolEra::PostChronicle : ProtocolEra::PostGenesis };
     const ProtocolEra utxoEra { IsP2SH(locking_script)? ProtocolEra::PreGenesis : ActiveEra };
-    const unsigned int flags = (unsigned int )(StandardScriptVerifyFlags(ActiveEra) | InputScriptVerifyFlags(ActiveEra, utxoEra));
+    const uint32_t flags = (StandardScriptVerifyFlags(ActiveEra) | InputScriptVerifyFlags(ActiveEra, utxoEra));
     return flags;
 }
 

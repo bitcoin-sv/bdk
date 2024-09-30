@@ -35,10 +35,25 @@ import (
 //
 // By convention, if the returned flag is greater than SCRIPT_FLAG_LAST in C/C++ code
 // It means an exception has been thrown and handled from the C/C++ layer
-func ScriptVerificationFlags(lScript []byte, isChronicle bool) (uint, error) {
+func ScriptVerificationFlags(lScript []byte, isChronicle bool) (uint32, error) {
 	lScriptPtr := (*C.char)(unsafe.Pointer(&lScript[0]))
 
-	cgoFlags := uint(C.cgo_script_verification_flags(lScriptPtr, C.int(len(lScript)), C.bool(isChronicle)))
+	cgoFlags := uint32(C.cgo_script_verification_flags(lScriptPtr, C.int(len(lScript)), C.bool(isChronicle)))
+	if cgoFlags > C.SCRIPT_FLAG_LAST {
+		return cgoFlags, errors.New("CGO EXCEPTION : Exception has been thrown and handled in C/C++ layer")
+	}
+	return cgoFlags, nil
+}
+
+// ScriptVerificationFlags calculates the flags to be used when verifying scripts
+// It is calculated based on the locking script and current block height
+//
+// By convention, if the returned flag is greater than SCRIPT_FLAG_LAST in C/C++ code
+// It means an exception has been thrown and handled from the C/C++ layer
+func ScriptVerificationFlagsV2(lScript []byte, blockHeight uint32) (uint32, error) {
+	lScriptPtr := (*C.char)(unsafe.Pointer(&lScript[0]))
+
+	cgoFlags := uint32(C.cgo_script_verification_flags_v2(lScriptPtr, C.int(len(lScript)), C.uint32_t(blockHeight)))
 	if cgoFlags > C.SCRIPT_FLAG_LAST {
 		return cgoFlags, errors.New("CGO EXCEPTION : Exception has been thrown and handled in C/C++ layer")
 	}

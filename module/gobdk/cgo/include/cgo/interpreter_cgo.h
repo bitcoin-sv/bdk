@@ -2,6 +2,7 @@
 #define __INTERPRETER_CGO_H__
 
 #include <stdbool.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -21,8 +22,16 @@ extern "C" {
 
 /**
  * cgo_script_verification_flags calculates the flags to be used when verifying script
+ * This method calculates the flags based on the era of the protocol (block height)
  */
-unsigned int cgo_script_verification_flags(const char* lScriptPtr, int lScriptLen, bool isChronicle);
+uint32_t cgo_script_verification_flags(const char* lScriptPtr, int lScriptLen, bool isChronicle);
+
+/**
+ * cgo_script_verification_flags_v2 calculates the flags to be used when verifying script
+ * This method calculates the flags based on the block height
+ */
+uint32_t cgo_script_verification_flags_v2(const char* lScriptPtr, int lScriptLen, int32_t blockHeight);
+
 
 /**
  *  cgo_execute executes the script without verifying. Useful for simple script playing

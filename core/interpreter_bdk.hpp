@@ -6,16 +6,14 @@
 #include <script/script_error.h>
 #include <string>
 #include <vector>
-#include <cstdint>
+#include <stdint.h>
 
 namespace bsv
 {
 
     // script_verification_flags calculates the flags to be used when verifying scripts
-    // It is calculated based on the locking script and the boolean isPostChronical
-    // If the node parameter -genesis is set to true, then the argument isPostChronical is false
-    // Otherwise, isPostChronical is true
-    unsigned int script_verification_flags(const std::span<const uint8_t> locking_script, const bool isPostChronical);
+    uint32_t script_verification_flags(const std::span<const uint8_t> locking_script, const bool isPostChronical);
+    uint32_t script_verification_flags_v2(const std::span<const uint8_t> locking_script, int32_t blockHeight);
 
     ScriptError execute(std::span<const uint8_t> script,
                         bool consensus,

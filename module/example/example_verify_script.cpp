@@ -19,13 +19,15 @@
 
 int main(int argc, char* argv[])
 {
-    const std::string uScriptHex = "483045022100b1d382f8e5a3d125774cde860bf6286c22aaf93351fb78a2ef7262d1632f563902203688f6fecc895cb6e14fea436e34b1615d077da18e14fbdbf11395838b0181a84121034ee1f76a1460923e18bcb273c26a9b317df6644e41e49ba21dbd7c654537bc7f";
-    const std::string lScriptHex = "76a914fbb460d3176afe507a83a3b74b167e198f20f44f88ac";
-    const std::string txHex = "01000000012341c8f267c6a1a407b1f09d134e42cfbdf2ebc91aff8cd4365d131380fcd580000000006b483045022100b1d382f8e5a3d125774cde860bf6286c22aaf93351fb78a2ef7262d1632f563902203688f6fecc895cb6e14fea436e34b1615d077da18e14fbdbf11395838b0181a84121034ee1f76a1460923e18bcb273c26a9b317df6644e41e49ba21dbd7c654537bc7fffffffff01a0860100000000001976a914fbb460d3176afe507a83a3b74b167e198f20f44f88ac00000000";
+    SelectParams(CBaseChainParams::MAIN);
+
+    const std::string uScriptHex = "48304502207ec38d0a4ef79c3a4286ba3e5a5b6ede1fa678af9242465140d78a901af9e4e0022100c26c377d44b761469cf0bdcdbf4931418f2c5a02ce6b72bbb7af52facd7228c1014104bc9eb4fe4cb53e35df7e7734c4c3cd91c6af7840be80f4a1fff283e2cd6ae8f7713cb263a4590263240e3c01ec36bc603c32281ac08773484dc69b8152e48cec";
+    const std::string lScriptHex = "76a9148ac9bdc626352d16e18c26f431e834f9aae30e2888ac";
+    const std::string txHex = "0100000001febe0cbd7d87d44cbd4b5adac0a5bfcdbd2b672c9113f5d74a6459a2b85569db010000008b48304502207ec38d0a4ef79c3a4286ba3e5a5b6ede1fa678af9242465140d78a901af9e4e0022100c26c377d44b761469cf0bdcdbf4931418f2c5a02ce6b72bbb7af52facd7228c1014104bc9eb4fe4cb53e35df7e7734c4c3cd91c6af7840be80f4a1fff283e2cd6ae8f7713cb263a4590263240e3c01ec36bc603c32281ac08773484dc69b8152e48cecffffffff0230424700000000001976a9148ac9bdc626352d16e18c26f431e834f9aae30e2888ac1027000000000000166a148ac9bdc626352d16e18c26f431e834f9aae30e2800000000";
 
     const int inIndex = 0;
-    const uint64_t satoshis = 100000;
-    const uint64_t  blockHeight = 620538;
+    const uint64_t satoshis = 4700000;
+    const uint64_t  blockHeight = 253237;
 
     const std::vector<uint8_t> uScriptBin = ParseHex(uScriptHex);
     const std::vector<uint8_t> lScriptBin = ParseHex(lScriptHex);        
@@ -40,7 +42,9 @@ int main(int argc, char* argv[])
     std::cout << "Unlocking Script : " << std::endl << uScriptASM << std::endl << std::endl;
     std::cout << "Locking Script : " << std::endl << lScriptASM << std::endl << std::endl;
 
-    const unsigned int flags = bsv::script_verification_flags(lScript, true);
+    //const unsigned int flags = bsv::script_verification_flags(lScript, false);
+    const uint32_t flags = bsv::script_verification_flags_v2(lScript, blockHeight);
+
     auto ret = bsv::verify(uScript, lScript, true, flags, tx, inIndex, satoshis);
     std::cout << "Verification Script Return " << ret << std::endl;
     std::cout << "End Of Program "  << std::endl;

@@ -4,7 +4,7 @@
 #include <core/interpreter_bdk.hpp>
 #include <cgo/interpreter_cgo.h>
 
-unsigned int cgo_script_verification_flags(const char* lScriptPtr, int lScriptLen, bool isChronicle)
+uint32_t cgo_script_verification_flags(const char* lScriptPtr, int lScriptLen, bool isChronicle)
 {
     try {
         const uint8_t* p = static_cast<const uint8_t*>(reinterpret_cast<const void*>(lScriptPtr));
@@ -13,6 +13,19 @@ unsigned int cgo_script_verification_flags(const char* lScriptPtr, int lScriptLe
     } catch (const std::exception& e) {
         std::cout<< "CGO EXCEPTION : " <<__FILE__ <<":"<<__LINE__ << "    at " << __func__ <<std::endl<< e.what() <<std::endl ;
         return SCRIPT_FLAG_LAST+1;
+    }
+}
+
+uint32_t cgo_script_verification_flags_v2(const char* lScriptPtr, int lScriptLen, int32_t blockHeight)
+{
+    try {
+        const uint8_t* p = static_cast<const uint8_t*>(reinterpret_cast<const void*>(lScriptPtr));
+        const std::span<const uint8_t> lScript(p, lScriptLen);
+        return bsv::script_verification_flags_v2(lScript, blockHeight);
+    }
+    catch (const std::exception& e) {
+        std::cout << "CGO EXCEPTION : " << __FILE__ << ":" << __LINE__ << "    at " << __func__ << std::endl << e.what() << std::endl;
+        return SCRIPT_FLAG_LAST + 1;
     }
 }
 
