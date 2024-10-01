@@ -137,13 +137,11 @@ int main(int argc, char* argv[])
 
         auto uScriptASM = bsv::to_asm(uScript);
         auto lScriptASM = bsv::to_asm(lScript);
-        //std::cout << "Unlocking Script : " << std::endl << uScriptASM << std::endl << std::endl;
-        //std::cout << "Locking Script : " << std::endl << lScriptASM << std::endl << std::endl;
+        std::cout << "Unlocking Script : " << std::endl << uScriptASM << std::endl << std::endl;
+        std::cout << "Locking Script : " << std::endl << lScriptASM << std::endl << std::endl;
 
         //const unsigned int flags = bsv::script_verification_flags(lScript, false);
         uint32_t flags = bsv::script_verification_flags_v2(lScript, blockHeight);
-
-        flags |= SCRIPT_UTXO_AFTER_GENESIS;// HACKING HERE, need to find real solution
 
         ret = bsv::verify(uScript, lScript, true, flags, tx, inIndex, satoshis);
     }

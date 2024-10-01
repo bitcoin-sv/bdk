@@ -72,6 +72,11 @@ uint32_t bsv::script_verification_flags_v2(const std::span<const uint8_t> lockin
         flags &= ~SCRIPT_VERIFY_SIGPUSHONLY;
     }
 
+    // Trying to get the utxoEra using a combination of methods in $BSV/src/bitcoin-tx.cpp
+    // To get the InputScriptVerifyFlags from the utxo
+    const ProtocolEra ActiveEra{ GetProtocolEra(config, blockHeight) };
+    const ProtocolEra utxoEra{ IsP2SH(locking_script) ? ProtocolEra::PreGenesis : ActiveEra };
+    flags |= InputScriptVerifyFlags(ActiveEra, utxoEra);
     return flags;
 }
 
