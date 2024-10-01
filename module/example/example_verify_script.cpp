@@ -17,20 +17,27 @@
 #include "assembler.h"
 #include "utilstrencodings.h"
 
-int main(int argc, char* argv[])
-{
-    SelectParams(CBaseChainParams::MAIN);
+#include <iostream>
+#include <fstream>
+#include <boost/program_options.hpp>
+#include <boost/property_tree/ptree.hpp>
+#include <boost/property_tree/json_parser.hpp>
 
-    const std::string uScriptHex = "48304502207ec38d0a4ef79c3a4286ba3e5a5b6ede1fa678af9242465140d78a901af9e4e0022100c26c377d44b761469cf0bdcdbf4931418f2c5a02ce6b72bbb7af52facd7228c1014104bc9eb4fe4cb53e35df7e7734c4c3cd91c6af7840be80f4a1fff283e2cd6ae8f7713cb263a4590263240e3c01ec36bc603c32281ac08773484dc69b8152e48cec";
-    const std::string lScriptHex = "76a9148ac9bdc626352d16e18c26f431e834f9aae30e2888ac";
-    const std::string txHex = "0100000001febe0cbd7d87d44cbd4b5adac0a5bfcdbd2b672c9113f5d74a6459a2b85569db010000008b48304502207ec38d0a4ef79c3a4286ba3e5a5b6ede1fa678af9242465140d78a901af9e4e0022100c26c377d44b761469cf0bdcdbf4931418f2c5a02ce6b72bbb7af52facd7228c1014104bc9eb4fe4cb53e35df7e7734c4c3cd91c6af7840be80f4a1fff283e2cd6ae8f7713cb263a4590263240e3c01ec36bc603c32281ac08773484dc69b8152e48cecffffffff0230424700000000001976a9148ac9bdc626352d16e18c26f431e834f9aae30e2888ac1027000000000000166a148ac9bdc626352d16e18c26f431e834f9aae30e2800000000";
+namespace po = boost::program_options;
+namespace pt = boost::property_tree;
+
+ScriptError runExampleVerification() {
+
+    const std::string uScriptHex = "";
+    const std::string lScriptHex = "";
+    const std::string txHex = "";
 
     const int inIndex = 0;
-    const uint64_t satoshis = 4700000;
-    const uint64_t  blockHeight = 253237;
+    const uint64_t satoshis = 4338;
+    const uint64_t  blockHeight = 720808;
 
     const std::vector<uint8_t> uScriptBin = ParseHex(uScriptHex);
-    const std::vector<uint8_t> lScriptBin = ParseHex(lScriptHex);        
+    const std::vector<uint8_t> lScriptBin = ParseHex(lScriptHex);
     const std::vector<uint8_t> txBin = ParseHex(txHex);
 
     const std::span<const uint8_t> uScript(uScriptBin);
@@ -46,7 +53,107 @@ int main(int argc, char* argv[])
     const uint32_t flags = bsv::script_verification_flags_v2(lScript, blockHeight);
 
     auto ret = bsv::verify(uScript, lScript, true, flags, tx, inIndex, satoshis);
+    return ret;
+}
+
+int main(int argc, char* argv[])
+{
+
+    std::string jsonFilePath;
+    std::string network{ CBaseChainParams::MAIN };
+
+    // Define and parse the command line options
+    po::options_description desc("Allowed options");
+    desc.add_options()
+        ("help,h", "produce help message")
+        ("json-file,j", po::value<std::string>(&jsonFilePath)->required(), "path to the JSON file")
+        ("network,n", po::value<std::string>(&network), "Network type : main, test, regtest, stn");
+
+    po::variables_map vm;
+    try {
+        po::store(po::parse_command_line(argc, argv, desc), vm);
+        if (vm.count("help")) {
+            std::cout << desc << std::endl;
+            return 0;
+        }
+        po::notify(vm); // throws error if required arguments are missing
+    }
+    catch (po::error& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+        std::cerr << desc << std::endl;
+        return 1;
+    }
+
+    // Read and parse the JSON file
+    SelectParams(network);
+    pt::ptree root;
+    try {
+        std::ifstream jsonFile(jsonFilePath);
+        if (!jsonFile.is_open()) {
+            throw std::runtime_error("Could not open file: " + jsonFilePath);
+        }
+
+        // Parse the JSON into the property tree
+        pt::read_json(jsonFile, root);
+
+        // Close the file
+        jsonFile.close();
+    }
+    catch (const std::exception& e) {
+        std::cerr << "Failed to parse JSON file from "<< jsonFilePath  <<". Error : " << e.what() << std::endl;
+        return 1;
+    }
+
+    /*
+     * The JSON must be of this format
+        {
+            "uScript": "",
+            "lScript": "",
+            "txBytes": "",
+            "flags": 1394182,
+            "input": 0,
+            "satoshis": 4338,
+            "blockHeight": 720808
+        }
+    */
+    ScriptError ret;
+    try {
+
+        const std::string uScriptHex = root.get<std::string>("uScript");
+        const std::string lScriptHex = root.get<std::string>("lScript");
+        const std::string txHex = root.get<std::string>("txBytes");
+
+        const int inIndex = root.get<int>("input");
+        const uint64_t satoshis = root.get<uint64_t>("satoshis");;
+        const uint64_t  blockHeight = root.get<uint64_t>("blockHeight");;
+
+        const std::vector<uint8_t> uScriptBin = ParseHex(uScriptHex);
+        const std::vector<uint8_t> lScriptBin = ParseHex(lScriptHex);
+        const std::vector<uint8_t> txBin = ParseHex(txHex);
+
+        const std::span<const uint8_t> uScript(uScriptBin);
+        const std::span<const uint8_t> lScript(lScriptBin.data(), lScriptBin.size());
+        const std::span<const uint8_t> tx(txBin.data(), txBin.size());
+
+        auto uScriptASM = bsv::to_asm(uScript);
+        auto lScriptASM = bsv::to_asm(lScript);
+        //std::cout << "Unlocking Script : " << std::endl << uScriptASM << std::endl << std::endl;
+        //std::cout << "Locking Script : " << std::endl << lScriptASM << std::endl << std::endl;
+
+        //const unsigned int flags = bsv::script_verification_flags(lScript, false);
+        uint32_t flags = bsv::script_verification_flags_v2(lScript, blockHeight);
+
+        flags |= SCRIPT_UTXO_AFTER_GENESIS;// HACKING HERE, need to find real solution
+
+        ret = bsv::verify(uScript, lScript, true, flags, tx, inIndex, satoshis);
+    }
+    catch (const pt::ptree_bad_path& e) {
+        std::cerr << "Error parsing JSON : " << e.what() << std::endl;
+    }
+
+    //ret = runExampleVerification();
     std::cout << "Verification Script Return " << ret << std::endl;
-    std::cout << "End Of Program "  << std::endl;
+    std::cout << "End Of Program " << std::endl;
+
     return 0;
 }
