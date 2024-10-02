@@ -63,11 +63,11 @@ set(CMAKE_C_FLAGS_RELEASE "{BACKUP_CMAKE_C_FLAGS_RELEASE}")
 ## Install secp256k1 the *.h header files should be kept as secp256k1 structure    ####################################
 set(UNIFIED_INSTALL_HEADERS_STR "${UNIFIED_INSTALL_HEADERS_STR}\n// Include files for secp256k1\n")
 foreach(_secp256k1_pubhdr ${_BSV_SECP256K1_INSTALL_HDR_FILES})
-  install(FILES ${_secp256k1_pubhdr} DESTINATION "include/secp256k1" COMPONENT secp256k1)
+  install(FILES ${_secp256k1_pubhdr} DESTINATION "include/secp256k1/include" COMPONENT secp256k1)
 
   ## Calculate the relative path for include file in installer
   get_filename_component(_f ${_secp256k1_pubhdr} NAME)
-  set(_install_rl "secp256k1/${_f}")
+  set(_install_rl "secp256k1//include/${_f}")
   set(UNIFIED_INSTALL_HEADERS_STR "${UNIFIED_INSTALL_HEADERS_STR}#include \"${_install_rl}\"\n")
 endforeach()
 install(TARGETS secp256k1 DESTINATION "lib" COMPONENT secp256k1)
