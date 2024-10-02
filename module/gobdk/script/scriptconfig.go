@@ -33,15 +33,11 @@ import "C"
 // SetGlobalScriptConfig set config globally for script operations
 func SetGlobalScriptConfig(config goconfig.ScriptConfig) error {
 
-	errChainParamsCStr := C.SetGlobalChainParams(C.CString(config.ChainNetwork))
-	errChainParams := C.GoString(errChainParamsCStr)
-	C.free(unsafe.Pointer(errChainParamsCStr))
-
-	if len(errChainParams) > 0 {
-		return fmt.Errorf("error while setting global chain prams %v", errChainParams)
-	}
+	networkCStr := C.CString(config.ChainNetwork)
+	defer C.free(unsafe.Pointer(networkCStr))
 
 	errScriptConfigCStr := C.SetGlobalScriptConfig(
+		networkCStr,
 		C.ulonglong(config.MaxOpsPerScriptPolicy),
 		C.ulonglong(config.MaxScriptNumLengthPolicy),
 		C.ulonglong(config.MaxScriptSizePolicy),
@@ -51,10 +47,10 @@ func SetGlobalScriptConfig(config goconfig.ScriptConfig) error {
 	)
 
 	errScriptConfig := C.GoString(errScriptConfigCStr)
-	C.free(unsafe.Pointer(errScriptConfigCStr))
+	defer C.free(unsafe.Pointer(errScriptConfigCStr))
 
 	if len(errScriptConfig) > 0 {
-		return fmt.Errorf("error while setting global config for script %v", errScriptConfig)
+		return fmt.Errorf("error while setting global config for script engine %v", errScriptConfig)
 	}
 
 	return nil

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"testing"
 
@@ -27,7 +28,10 @@ func setup() {
 		ChainNetwork: "main",
 	}
 
-	bdkscript.SetGlobalScriptConfig(bdkScriptConfig)
+	err := bdkscript.SetGlobalScriptConfig(bdkScriptConfig)
+	if err != nil {
+		panic(fmt.Errorf("unable to setup test, error : %w", err))
+	}
 }
 
 func teardown() {

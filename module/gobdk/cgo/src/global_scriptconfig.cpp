@@ -6,6 +6,7 @@
 
 
 const char* SetGlobalScriptConfig(
+        const char* chainNetwork,
         unsigned long long maxOpsPerScriptPolicyIn,
         unsigned long long maxScriptNumLengthPolicyIn,
         unsigned long long maxScriptSizePolicyIn,
@@ -13,12 +14,26 @@ const char* SetGlobalScriptConfig(
         unsigned long long maxStackMemoryUsageConsensusIn,
         unsigned long long maxStackMemoryUsagePolicyIn
     ) {
-        const char* cstr = nullptr;
+        char* errStr = nullptr;
 
         try {
             std::string err;
-            bool ok=true;
             auto& gConfig = GlobalConfig::GetModifiableGlobalConfig();
+
+            // Set the Chain Params and the genesis/chronicle height in config.
+            // We have to set these heights because they are used inside the config
+            // not inside the ChainParams
+            const std::string network(chainNetwork);
+            SelectParams(network); // throw exception if wrong network string
+            const CChainParams& chainparams = gConfig.GetChainParams(); // ChainParams after setting the chain network
+            if (!gConfig.SetGenesisActivationHeight(chainparams.GetConsensus().genesisHeight, &err)) {
+                throw std::runtime_error("unable to set genesis activation height : " + err);
+            }
+            if (!gConfig.SetChronicleActivationHeight(chainparams.GetConsensus().chronicleHeight, &err)) {
+                throw std::runtime_error("unable to set chronicle activation height : " + err);
+            }
+
+            bool ok=true;
             if (maxOpsPerScriptPolicyIn > 0)
                 ok = ok && gConfig.SetMaxOpsPerScriptPolicy(maxOpsPerScriptPolicyIn, &err);
             if (maxScriptNumLengthPolicyIn > 0)
@@ -38,30 +53,15 @@ const char* SetGlobalScriptConfig(
                 return nullptr;
             }
 
-            char* cstr = new char[err.size() + 1];// +1 for the null terminator
-            std::strcpy(cstr, err.c_str());
+            errStr = new char[err.size() + 1];// +1 for the null terminator
+            std::strcpy(errStr, err.c_str());
         } catch (const std::exception& e) {
             std::stringstream ss;
             ss <<  "CGO EXCEPTION : " <<__FILE__ <<":"<<__LINE__ <<"    at " <<__func__ << " "<< e.what()<<std::endl;
-            std::string errStr = ss.str();
-            cstr = errStr.c_str();
+            std::string expStr = ss.str();
+            errStr = new char[expStr.size() + 1];
+            std::strcpy(errStr, expStr.c_str());  // Copy the string data
         }
 
-        return cstr;
-    }
-
-const char* SetGlobalChainParams(const char* networkStr) {
-        const char* cstr = nullptr;
-
-        try {
-            const std::string network(networkStr);
-            SelectParams(network); // throw exception if wrong network string
-        } catch (const std::exception& e) {
-            std::stringstream ss;
-            ss <<  "CGO EXCEPTION : " <<__FILE__ <<":"<<__LINE__ <<"    at " <<__func__ << " "<< e.what()<<std::endl;
-            std::string errStr = ss.str();
-            cstr = errStr.c_str();
-        }
-
-        return cstr;
+        return errStr;
     }

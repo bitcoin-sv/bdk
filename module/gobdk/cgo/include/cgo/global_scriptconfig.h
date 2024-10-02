@@ -8,9 +8,10 @@ extern "C" {
 /**
  * Set ScriptConfig globally for the core C++. It return the error string if any
  * 
- * The caller is responsible to free memory
+ * The caller is responsible to free memory of the returned char*
  */
 const char* SetGlobalScriptConfig(
+        const char* chainNetwork,
         unsigned long long maxOpsPerScriptPolicy,
         unsigned long long maxScriptNumLengthPolicy,
         unsigned long long maxScriptSizePolicy,
@@ -18,13 +19,6 @@ const char* SetGlobalScriptConfig(
         unsigned long long maxStackMemoryUsageConsensus,
         unsigned long long maxStackMemoryUsagePolicy
     );
-
-/**
- * Set Chain Params globally for the core C++. It return the error string if any
- *
- * The caller is responsible to free memory
- */
-const char* SetGlobalChainParams(const char* networkStr);
 
 #ifdef __cplusplus
 }
