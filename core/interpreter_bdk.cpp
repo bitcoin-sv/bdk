@@ -14,6 +14,64 @@
 using namespace std;
 
 
+std::string bsv::SetGlobalScriptConfig(
+    std::string chainNetwork,
+    int64_t maxOpsPerScriptPolicyIn,
+    int64_t maxScriptNumLengthPolicyIn,
+    int64_t maxScriptSizePolicyIn,
+    int64_t maxPubKeysPerMultiSigIn,
+    int64_t maxStackMemoryUsageConsensusIn,
+    int64_t maxStackMemoryUsagePolicyIn
+)
+{
+
+    std::string err;
+    try {
+
+        auto& gConfig = GlobalConfig::GetModifiableGlobalConfig();
+
+        // Set the Chain Params and the genesis/chronicle height in config.
+        // We have to set these heights because they are used inside the config
+        // not inside the ChainParams
+        SelectParams(chainNetwork); // throw exception if wrong network string
+        const CChainParams& chainparams = gConfig.GetChainParams(); // ChainParams after setting the chain network
+        if (!gConfig.SetGenesisActivationHeight(chainparams.GetConsensus().genesisHeight, &err)) {
+            throw std::runtime_error("unable to set genesis activation height : " + err);
+        }
+        if (!gConfig.SetChronicleActivationHeight(chainparams.GetConsensus().chronicleHeight, &err)) {
+            throw std::runtime_error("unable to set chronicle activation height : " + err);
+        }
+
+        bool ok=true;
+        if (maxOpsPerScriptPolicyIn > 0)
+            ok = ok && gConfig.SetMaxOpsPerScriptPolicy(maxOpsPerScriptPolicyIn, &err);
+        if (maxScriptNumLengthPolicyIn > 0)
+            ok = ok && gConfig.SetMaxScriptNumLengthPolicy(maxScriptNumLengthPolicyIn, &err);
+        if (maxScriptSizePolicyIn > 0)
+            ok = ok && gConfig.SetMaxScriptSizePolicy(maxScriptSizePolicyIn, &err);
+        if (maxPubKeysPerMultiSigIn > 0)
+            ok = ok &&  gConfig.SetMaxPubKeysPerMultiSigPolicy(maxPubKeysPerMultiSigIn, &err);
+        if (maxStackMemoryUsageConsensusIn > 0 || maxStackMemoryUsagePolicyIn > 0)
+            ok = ok && gConfig.SetMaxStackMemoryUsage(maxStackMemoryUsageConsensusIn, maxStackMemoryUsagePolicyIn, &err);
+
+        if (err.empty() && !ok ) {
+            err = "Unknown error while setting global config for script";
+        }
+
+        if (err.empty()) {
+            return err;
+        }
+
+    } catch (const std::exception& e) {
+        std::stringstream ss;
+        ss <<  "CGO EXCEPTION : " <<__FILE__ <<":"<<__LINE__ <<"    at " <<__func__ << " "<< e.what()<<std::endl;
+        err = ss.str();
+    }
+
+    return err;
+}
+
+
 // This method of flags calculation was replicated from $BSV/src/validation.cpp::GetBlockScriptFlags in Chronicle release 1.2.0
 // The version implemented here has been slightly modified to adapt to the context of independant library
 uint32_t bsv::script_verification_flags_v2(const std::span<const uint8_t> locking_script, int32_t blockHeight) {

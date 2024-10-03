@@ -11,6 +11,19 @@
 namespace bsv
 {
 
+    /**
+     * Set ScriptConfig globally for the core C++. It return the error string if any
+     */
+    std::string SetGlobalScriptConfig(
+        std::string chainNetwork,
+        int64_t maxOpsPerScriptPolicy,
+        int64_t maxScriptNumLengthPolicy,
+        int64_t maxScriptSizePolicy,
+        int64_t maxPubKeysPerMultiSig,
+        int64_t maxStackMemoryUsageConsensus,
+        int64_t maxStackMemoryUsagePolicy
+    );
+
     // script_verification_flags calculates the flags to be used when verifying scripts
     uint32_t script_verification_flags(const std::span<const uint8_t> locking_script, const bool isPostChronical);
     uint32_t script_verification_flags_v2(const std::span<const uint8_t> locking_script, int32_t blockHeight);

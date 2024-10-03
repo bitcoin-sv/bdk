@@ -36,14 +36,14 @@ func SetGlobalScriptConfig(config goconfig.ScriptConfig) error {
 	networkCStr := C.CString(config.ChainNetwork)
 	defer C.free(unsafe.Pointer(networkCStr))
 
-	errScriptConfigCStr := C.SetGlobalScriptConfig(
+	errScriptConfigCStr := C.CgoSetGlobalScriptConfig(
 		networkCStr,
-		C.ulonglong(config.MaxOpsPerScriptPolicy),
-		C.ulonglong(config.MaxScriptNumLengthPolicy),
-		C.ulonglong(config.MaxScriptSizePolicy),
-		C.ulonglong(config.MaxPubKeysPerMultiSig),
-		C.ulonglong(config.MaxStackMemoryUsageConsensus),
-		C.ulonglong(config.MaxStackMemoryUsagePolicy),
+		C.int64_t(config.MaxOpsPerScriptPolicy),
+		C.int64_t(config.MaxScriptNumLengthPolicy),
+		C.int64_t(config.MaxScriptSizePolicy),
+		C.int64_t(config.MaxPubKeysPerMultiSig),
+		C.int64_t(config.MaxStackMemoryUsageConsensus),
+		C.int64_t(config.MaxStackMemoryUsagePolicy),
 	)
 
 	errScriptConfig := C.GoString(errScriptConfigCStr)
