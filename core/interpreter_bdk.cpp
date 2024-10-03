@@ -13,6 +13,13 @@
 
 using namespace std;
 
+// These definitions are copied from $BSV_ROOT/src/chainparams.cpp
+// We use them to know what chain we are on, by reading the consensus
+// variable consensus.genesisHeight
+#define GENESIS_ACTIVATION_MAIN                 620538
+#define GENESIS_ACTIVATION_STN                  100
+#define GENESIS_ACTIVATION_TESTNET              1344302
+#define GENESIS_ACTIVATION_REGTEST              10000
 
 std::string bsv::SetGlobalScriptConfig(
     std::string chainNetwork,
@@ -71,6 +78,44 @@ std::string bsv::SetGlobalScriptConfig(
     return err;
 }
 
+// Check if the P2SH script is activated on different chains. We provide our own approach
+// to replace the BSV code
+//
+//     https://github.com/bitcoin-sv/bitcoin-sv/blob/master/src/validation.cpp#L2882
+//
+// As we don't have the block time in our calculations, we use the precise block heigh
+// to detect the P2SH_ACTIVATION_TIME
+bool is_p2sh_activated(const Config& config, int32_t blockHeight) {
+    // We detect the chain using the genesis height on the consensus of the chain params
+    const Consensus::Params& consensusparams = config.GetChainParams().GetConsensus();
+    const int32_t genesisHeight = consensusparams.genesisHeight;
+    const bool isMainNet = (genesisHeight == GENESIS_ACTIVATION_MAIN);
+    const bool isTestNet = (genesisHeight == GENESIS_ACTIVATION_TESTNET);
+    const bool isSTNNet = (genesisHeight == GENESIS_ACTIVATION_STN);
+    const bool isRegTest = (genesisHeight == GENESIS_ACTIVATION_REGTEST);
+
+    // If non of the network was detected, that mean something is wrong
+    if (!(isMainNet || isTestNet || isSTNNet || isRegTest)) {
+        std::stringstream ss;
+        ss <<  "EXCEPTION unable to detect chain : " <<__FILE__ <<":"<<__LINE__ <<"    at " <<__func__ <<std::endl;
+        throw std::runtime_error(ss.str());
+    }
+
+    // P2SH_ACTIVATION_TIME = 1333234914; // 31 March 2012 23:01:54
+    // Our onchain analysis provide
+    //     Mainnet block 173799  2012-03-31 23:01:54
+    //     Mainnet block 173800  2012-03-31 23:24:39
+    //     Testnet block    513  2011-02-03 15:52:39
+    //     Testnet block    514  2012-05-24 14:54:10
+    // There are only two cases where P2SH is not activated
+    if (isMainNet && blockHeight<173800)
+        return false;
+    if (isTestNet && blockHeight<514)
+        return false;
+
+    // For STN or regtest, P2SH is always activated as they all started after P2SH_ACTIVATION_TIME
+    return true;
+}
 
 // This method of flags calculation was replicated from $BSV/src/validation.cpp::GetBlockScriptFlags in Chronicle release 1.2.0
 // The version implemented here has been slightly modified to adapt to the context of independant library
@@ -82,7 +127,7 @@ uint32_t bsv::script_verification_flags_v2(const std::span<const uint8_t> lockin
     // We check if the utxo is P2SH by the content of the locking script, rather
     // than by the block height of the utxo
     try {
-        if (IsP2SH(locking_script)) {
+        if (is_p2sh_activated(config, blockHeight) && IsP2SH(locking_script)) {
             flags |= SCRIPT_VERIFY_P2SH;
         }
     }
