@@ -85,7 +85,15 @@ int main(int argc, char* argv[])
     }
 
     // Read and parse the JSON file
-    SelectParams(network);
+    const std::string err = bsv::SetGlobalScriptConfig(
+        network,
+        int64_t(0), int64_t(0), int64_t(0), int64_t(0), int64_t(0), int64_t(0)
+    );
+    if (!err.empty()) {
+        std::cout << "Error Setting Global Config " << err << std::endl;
+        return 1;
+    }
+
     pt::ptree root;
     try {
         std::ifstream jsonFile(jsonFilePath);
@@ -150,6 +158,7 @@ int main(int argc, char* argv[])
     }
 
     //ret = runExampleVerification();
+    std::cout << "Chain " << network << std::endl;
     std::cout << "Verification Script Return " << ret << std::endl;
     std::cout << "End Of Program " << std::endl;
 
