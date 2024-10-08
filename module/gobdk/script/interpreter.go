@@ -36,9 +36,13 @@ import (
 // By convention, if the returned flag is greater than SCRIPT_FLAG_LAST in C/C++ code
 // It means an exception has been thrown and handled from the C/C++ layer
 func ScriptVerificationFlags(lScript []byte, isChronicle bool) (uint32, error) {
-	lScriptPtr := (*C.char)(unsafe.Pointer(&lScript[0]))
+	lenLScript := len(lScript)
+	lScriptPtr := nil
+	if lenLScript > 0 {
+		lScriptPtr := (*C.char)(unsafe.Pointer(&lScript[0]))
+	}
 
-	cgoFlags := uint32(C.cgo_script_verification_flags(lScriptPtr, C.int(len(lScript)), C.bool(isChronicle)))
+	cgoFlags := uint32(C.cgo_script_verification_flags(lScriptPtr, C.int(lenLScript), C.bool(isChronicle)))
 	if cgoFlags > C.SCRIPT_FLAG_LAST {
 		return cgoFlags, errors.New("CGO EXCEPTION : Exception has been thrown and handled in C/C++ layer")
 	}
@@ -51,9 +55,13 @@ func ScriptVerificationFlags(lScript []byte, isChronicle bool) (uint32, error) {
 // By convention, if the returned flag is greater than SCRIPT_FLAG_LAST in C/C++ code
 // It means an exception has been thrown and handled from the C/C++ layer
 func ScriptVerificationFlagsV2(lScript []byte, blockHeight uint32) (uint32, error) {
-	lScriptPtr := (*C.char)(unsafe.Pointer(&lScript[0]))
+	lenLScript := len(lScript)
+	lScriptPtr := nil
+	if lenLScript > 0 {
+		lScriptPtr := (*C.char)(unsafe.Pointer(&lScript[0]))
+	}
 
-	cgoFlags := uint32(C.cgo_script_verification_flags_v2(lScriptPtr, C.int(len(lScript)), C.int32_t(blockHeight)))
+	cgoFlags := uint32(C.cgo_script_verification_flags_v2(lScriptPtr, C.int(lenLScript), C.int32_t(blockHeight)))
 	if cgoFlags > C.SCRIPT_FLAG_LAST {
 		return cgoFlags, errors.New("CGO EXCEPTION : Exception has been thrown and handled in C/C++ layer")
 	}
@@ -62,8 +70,13 @@ func ScriptVerificationFlagsV2(lScript []byte, blockHeight uint32) (uint32, erro
 
 // ExecuteNoVerify executes the script without verification
 func ExecuteNoVerify(script []byte, consensus bool, flag uint) ScriptError {
-	scriptPtr := (*C.char)(unsafe.Pointer(&script[0]))
-	errCode := int(C.cgo_execute_no_verify(scriptPtr, C.int(len(script)), C.bool(consensus), C.uint(flag)))
+	lenScript := len(script)
+	scriptPtr := nil
+	if lenScript > 0 {
+		scriptPtr := (*C.char)(unsafe.Pointer(&script[0]))
+	}
+
+	errCode := int(C.cgo_execute_no_verify(scriptPtr, C.int(lenScript), C.bool(consensus), C.uint(flag)))
 
 	if errCode == int(SCRIPT_ERR_OK) {
 		return nil
@@ -77,9 +90,20 @@ func Execute(script []byte, consensus bool, flag uint,
 	index int,
 	amount uint64,
 ) ScriptError {
-	scriptPtr := (*C.char)(unsafe.Pointer(&script[0]))
-	txPtr := (*C.char)(unsafe.Pointer(&tx[0]))
-	errCode := int(C.cgo_execute(scriptPtr, C.int(len(script)), C.bool(consensus), C.uint(flag), txPtr, C.int(len(tx)), C.int(index), C.ulonglong(amount)))
+	lenScript, lenTx := len(script), len(tx)
+	scriptPtr, txPtr := nil, nil
+	if lenScript > 0 {
+		scriptPtr := (*C.char)(unsafe.Pointer(&script[0]))
+	}
+
+	if lenTx > 0 {
+		txPtr := (*C.char)(unsafe.Pointer(&tx[0]))
+	} else {
+		// If Tx is nil or empty, just execute the script without verification
+		return ExecuteNoVerify(script, consensus, flag)
+	}
+
+	errCode := int(C.cgo_execute(scriptPtr, C.int(lenScript), C.bool(consensus), C.uint(flag), txPtr, C.int(lenTx), C.int(index), C.ulonglong(amount)))
 
 	if errCode == int(SCRIPT_ERR_OK) {
 		return nil
@@ -94,11 +118,29 @@ func Verify(uScript []byte, lScript []byte,
 	index int,
 	amount uint64,
 ) ScriptError {
-	uScriptPtr := (*C.char)(unsafe.Pointer(&uScript[0]))
-	lScriptPtr := (*C.char)(unsafe.Pointer(&lScript[0]))
-	txPtr := (*C.char)(unsafe.Pointer(&tx[0]))
 
-	errCode := int(C.cgo_verify(uScriptPtr, C.int(len(uScript)), lScriptPtr, C.int(len(lScript)), C.bool(consensus), C.uint(flag), txPtr, C.int(len(tx)), C.int(index), C.ulonglong(amount)))
+	lenUScript, lenLScript, lenTx := len(uScript), len(lScript), len(tx)
+	uScriptPtr, lScriptPtr, txPtr := nil, nil, nil
+
+	if lenUScript > 0 {
+		uScriptPtr := (*C.char)(unsafe.Pointer(&uScript[0]))
+	} else {
+		// If Unlocking script is empty, then execute the script with Locking script
+		return Execute(lScript, consensus, flag, tx, index, amount)
+	}
+
+	if lenLScript > 0 {
+		lScriptPtr := (*C.char)(unsafe.Pointer(&lScript[0]))
+	} else {
+		// If Locking script is empty, then execute the script with Unlocking script
+		return Execute(uScript, consensus, flag, tx, index, amount)
+	}
+
+	if lenTx > 0 {
+		txPtr := (*C.char)(unsafe.Pointer(&tx[0]))
+	}
+
+	errCode := int(C.cgo_verify(uScriptPtr, C.int(lenUScript), lScriptPtr, C.int(lenLScript), C.bool(consensus), C.uint(flag), txPtr, C.int(lenTx), C.int(index), C.ulonglong(amount)))
 
 	if errCode == int(SCRIPT_ERR_OK) {
 		return nil

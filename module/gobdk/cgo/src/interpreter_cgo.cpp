@@ -7,8 +7,11 @@
 uint32_t cgo_script_verification_flags(const char* lScriptPtr, int lScriptLen, bool isChronicle)
 {
     try {
-        const uint8_t* p = static_cast<const uint8_t*>(reinterpret_cast<const void*>(lScriptPtr));
-        const std::span<const uint8_t> lScript(p, lScriptLen);
+        std::span<const uint8_t> lScript ;
+        if (lScriptPtr != nullptr && lScriptLen > 0) {
+            const uint8_t* pL = static_cast<const uint8_t*>(reinterpret_cast<const void*>(lScriptPtr));
+            lScript = std::span<const uint8_t>(pL, lScriptLen);
+        }
         return bsv::script_verification_flags(lScript, isChronicle);
     } catch (const std::exception& e) {
         std::cout<< "CGO EXCEPTION : " <<__FILE__ <<":"<<__LINE__ << "    at " << __func__ <<std::endl<< e.what() <<std::endl ;
@@ -19,8 +22,11 @@ uint32_t cgo_script_verification_flags(const char* lScriptPtr, int lScriptLen, b
 uint32_t cgo_script_verification_flags_v2(const char* lScriptPtr, int lScriptLen, int32_t blockHeight)
 {
     try {
-        const uint8_t* p = static_cast<const uint8_t*>(reinterpret_cast<const void*>(lScriptPtr));
-        const std::span<const uint8_t> lScript(p, lScriptLen);
+        std::span<const uint8_t> lScript ;
+        if (lScriptPtr != nullptr && lScriptLen > 0) {
+            const uint8_t* pL = static_cast<const uint8_t*>(reinterpret_cast<const void*>(lScriptPtr));
+            lScript = std::span<const uint8_t>(pL, lScriptLen);
+        }
         return bsv::script_verification_flags_v2(lScript, blockHeight);
     }
     catch (const std::exception& e) {
@@ -32,8 +38,11 @@ uint32_t cgo_script_verification_flags_v2(const char* lScriptPtr, int lScriptLen
 int cgo_execute_no_verify(const char* scriptPtr, int scriptLen, bool consensus, unsigned int flags)
 {
     try {
-        const uint8_t* p = static_cast<const uint8_t*>(reinterpret_cast<const void*>(scriptPtr));
-        const std::span<const uint8_t> script(p, scriptLen);
+        std::span<const uint8_t> script ;
+        if (scriptPtr != nullptr && scriptLen > 0) {
+            const uint8_t* pS = static_cast<const uint8_t*>(reinterpret_cast<const void*>(scriptPtr));
+            script = std::span<const uint8_t>(pS, scriptLen);
+        }
         return bsv::execute(script, consensus, flags);
     } catch (const std::exception& e) {
         std::cout<< "CGO EXCEPTION : " <<__FILE__ <<":"<<__LINE__ << "    at " << __func__ <<std::endl;
@@ -50,12 +59,17 @@ int cgo_execute(const char* scriptPtr, int scriptLen,
                 unsigned long long amount)
 {
     try {
-        const uint8_t* pS = static_cast<const uint8_t*>(reinterpret_cast<const void*>(scriptPtr));
-        const std::span<const uint8_t> script(pS, scriptLen);
+        std::span<const uint8_t> script ;
+        if (scriptPtr != nullptr && scriptLen > 0) {
+            const uint8_t* pS = static_cast<const uint8_t*>(reinterpret_cast<const void*>(scriptPtr));
+            script = std::span<const uint8_t>(pS, scriptLen);
+        }
 
-        const uint8_t* pT = static_cast<const uint8_t*>(reinterpret_cast<const void*>(txPtr));
-        const std::span<const uint8_t> tx(pT, txLen);
-
+        std::span<const uint8_t> tx;
+        if (txPtr != nullptr && txLen > 0) {
+            const uint8_t* pT = static_cast<const uint8_t*>(reinterpret_cast<const void*>(txPtr));
+            tx = std::span<const uint8_t>(pT, txLen);
+        }
 
         return bsv::execute(script, consensus, flags, tx, index, amount);
     } catch (const std::exception& e) {
@@ -74,11 +88,17 @@ int cgo_verify(const char* uScriptPtr, int uScriptLen,
                unsigned long long amount)
 {
     try {
-        const uint8_t* pU = static_cast<const uint8_t*>(reinterpret_cast<const void*>(uScriptPtr));
-        const std::span<const uint8_t> uScript(pU, uScriptLen);
+        std::span<const uint8_t> uScript ;
+        if (uScriptPtr != nullptr && uScriptLen > 0) {
+            const uint8_t* pU = static_cast<const uint8_t*>(reinterpret_cast<const void*>(uScriptPtr));
+            uScript = std::span<const uint8_t>(pU, uScriptLen);
+        }
 
-        const uint8_t* pL = static_cast<const uint8_t*>(reinterpret_cast<const void*>(lScriptPtr));
-        const std::span<const uint8_t> lScript(pL, lScriptLen);
+        std::span<const uint8_t> lScript ;
+        if (lScriptPtr != nullptr && lScriptLen > 0) {
+            const uint8_t* pL = static_cast<const uint8_t*>(reinterpret_cast<const void*>(lScriptPtr));
+            lScript = std::span<const uint8_t>(pL, lScriptLen);
+        }
 
         const uint8_t* pT = static_cast<const uint8_t*>(reinterpret_cast<const void*>(txPtr));
         const std::span<const uint8_t> tx(pT, txLen);
