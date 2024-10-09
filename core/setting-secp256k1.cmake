@@ -46,6 +46,14 @@ set(SECP256K1_BUILD_EXHAUSTIVE_TESTS OFF)
 
 add_subdirectory("${BDK_BSV_ROOT_DIR}/src/secp256k1" ${CMAKE_CURRENT_BINARY_DIR}/secp256k1)
 
+## Set the IDE Folder to the created targets for secp256k1 to the right place #########
+set(_targetList bench bench_ecmult bench_internal secp256k1 secp256k1_precomputed)
+foreach(_t ${_targetList})
+  if(TARGET ${_t})
+    set_target_properties(${_t} PROPERTIES  FOLDER "core/secp256k1" DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})
+  endif()
+endforeach()
+
 set(_BSV_SECP256K1_INSTALL_HDR_FILES
   "${BDK_BSV_ROOT_DIR}/src/secp256k1/include/secp256k1.h"
   "${BDK_BSV_ROOT_DIR}/src/secp256k1/include/secp256k1_ellswift.h"
@@ -55,7 +63,6 @@ set(_BSV_SECP256K1_INSTALL_HDR_FILES
   "${BDK_BSV_ROOT_DIR}/src/secp256k1/include/secp256k1_extrakeys.h"
   "${BDK_BSV_ROOT_DIR}/src/secp256k1/include/secp256k1_recovery.h"
 )
-
 ## Restore CMAKE_C_FLAGS_RELEASE after the hotfix for secp256k1 build
 set(CMAKE_C_FLAGS_RELEASE "{BACKUP_CMAKE_C_FLAGS_RELEASE}")
 
