@@ -22,5 +22,5 @@ func TestVersionBDK(t *testing.T) {
 func TestVersionGoBDK(t *testing.T) {
 	assert.Equal(t, 1, gobdk.BDK_GOLANG_VERSION_MAJOR(), "GoBDK Version Major")
 	assert.Equal(t, 2, gobdk.BDK_GOLANG_VERSION_MINOR(), "GoBDK Version Minor")
-	assert.Equal(t, 0, gobdk.BDK_GOLANG_VERSION_PATCH(), "GoBDK Version Patch")
+	assert.Equal(t, 2, gobdk.BDK_GOLANG_VERSION_PATCH(), "GoBDK Version Patch")
 }
