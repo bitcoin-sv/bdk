@@ -5,11 +5,28 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "CMD Main",
+      "name": "WOC Getter",
       "type": "go",
       "request": "launch",
       "mode": "debug",
-      "program": "${workspaceFolder}/cmd/main.go",
+      "program": "${workspaceFolder}/cmd/woc/",
+      "cwd": "${workspaceFolder}",
+      "buildFlags": "",
+      "env": {},
+      "args": [
+        "fetch","--network","main", "--file-path","./data/test.txs"
+        //"block","--network","main", "--block-height","100"
+        //"tx","--network","main", "--txID","654cf5a35962eb2f2404666187b0f9759e802b0c54e1a7ed05efd09e7d041423", "--standard"        
+        //"verify","--network","main", "--file-path","foo bar"
+      ],
+      "showLog": true
+    },
+    {
+      "name": "Example Main",
+      "type": "go",
+      "request": "launch",
+      "mode": "debug",
+      "program": "${workspaceFolder}/cmd/example/main.go",
       "cwd": "${workspaceFolder}",
       "buildFlags": "",
       "env": {"LD_LIBRARY_PATH":"${env:BDK_INSTALL_ROOT}/bin:${env:LD_LIBRARY_PATH}"
