@@ -71,7 +71,7 @@ func execFetch(cmd *cobra.Command, args []string) {
 		woc.DefaultRateLimit(),
 	)
 
-	data := NewCSVData(api, cmdFetchFilePath)
+	data := NewCSVDataWriter(api, cmdFetchFilePath)
 	defer data.Close()
 
 	// If maxBlock is not set, then query the chaintip to get the max block
@@ -109,7 +109,7 @@ func execFetch(cmd *cobra.Command, args []string) {
 //////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////
 
-type csvData struct {
+type csvDataWriter struct {
 	api       *woc.APIClient
 	file      *os.File
 	filepath  string
@@ -117,7 +117,7 @@ type csvData struct {
 	lastBlock uint64
 }
 
-func NewCSVData(api *woc.APIClient, f string) *csvData {
+func NewCSVDataWriter(api *woc.APIClient, f string) *csvDataWriter {
 
 	fileExisted := fileExists(f)
 	file, err := os.OpenFile(f, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
@@ -133,7 +133,7 @@ func NewCSVData(api *woc.APIClient, f string) *csvData {
 		file.WriteString(csvHeaderLine)
 	}
 
-	return &csvData{
+	return &csvDataWriter{
 		api:       api,
 		file:      file,
 		filepath:  f,
@@ -144,7 +144,7 @@ func NewCSVData(api *woc.APIClient, f string) *csvData {
 
 // fetchBlock fetch the full extended txs from the provided block height
 // if nbTx < 1, then fetch the full block
-func (d *csvData) fetchBlock(blockHeight uint64, nbTx int) error {
+func (d *csvDataWriter) fetchBlock(blockHeight uint64, nbTx int) error {
 	listTxID, errListTxID := woc.GetListTxFromBlock(d.api, blockHeight)
 	if errListTxID != nil {
 		return fmt.Errorf("network : %v, block %v, failed to get list of txIDs", network, blockHeight)
@@ -172,6 +172,6 @@ func (d *csvData) fetchBlock(blockHeight uint64, nbTx int) error {
 	return nil
 }
 
-func (d *csvData) Close() {
+func (d *csvDataWriter) Close() {
 	d.file.Close()
 }

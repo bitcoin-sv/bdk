@@ -5,6 +5,7 @@ go 1.22.6
 replace github.com/libsv/go-bt/v2 => github.com/ordishs/go-bt/v2 v2.2.12
 
 require (
+	github.com/gocarina/gocsv v0.0.0-20240520201108-78e41c74b4b1
 	github.com/libsv/go-bt/v2 v2.2.5
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/viper v1.19.0

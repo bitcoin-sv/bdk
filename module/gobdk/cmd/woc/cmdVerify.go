@@ -1,13 +1,17 @@
 package main
 
 import (
+	"encoding/hex"
 	"fmt"
+	"log"
+	"os"
 
-	"github.com/bitcoin-sv/bdk/module/gobdk/cmd/woc/woc"
+	"github.com/gocarina/gocsv"
+	"github.com/libsv/go-bt/v2"
 	"github.com/spf13/cobra"
 )
 
-var filePath string
+var cmdVerifyFilePath string
 
 // cmdVerify represents the test command
 var cmdVerify = &cobra.Command{
@@ -19,28 +23,46 @@ var cmdVerify = &cobra.Command{
 
 func init() {
 	// Define the --file-path flag for the test command
-	cmdVerify.Flags().StringVarP(&filePath, "file-path", "f", "", "Path to the test file (required)")
-	cmdVerify.MarkFlagRequired("file-path") // Make the --file-path flag required
+	cmdVerify.Flags().StringVarP(&cmdVerifyFilePath, "file-path", "f", "", "Path to the test file (required)")
+	cmdVerify.MarkFlagRequired("file-path")
 
 	cmdRoot.AddCommand(cmdVerify)
 }
 
+type csvDataRecord struct {
+	ChainNet      string
+	BlockHeight   uint64
+	TXID          string
+	TxHexExtended string
+}
+
 func execVerify(cmd *cobra.Command, args []string) {
-	api := woc.NewAPIClient(
-		network,
-		woc.DefaultRateLimit(),
-	)
-	//txID : 2d05f0c9c3e1c226e63b5fac240137687544cf631cd616fd34fd188fc9020866
-	//if json, err := woc.GetBlockChainInfo(api); err != nil {
-	//if json, err := woc.GetBlockByHeight(api, 100); err != nil {
-	//if json, err := woc.GetTxHex(api, "2d05f0c9c3e1c226e63b5fac240137687544cf631cd616fd34fd188fc9020866"); err != nil {
-	//if json, err := woc.GetChainTip(api); err != nil {
-	//if json, err := woc.GetTxHexExtended(api, "654cf5a35962eb2f2404666187b0f9759e802b0c54e1a7ed05efd09e7d041423"); err != nil {
-	if json, err := woc.GetListTxFromBlock(api, 107000); err != nil {
-		panic(err)
-	} else {
-		fmt.Println(json)
+
+	file, err := os.OpenFile(cmdVerifyFilePath, os.O_RDWR|os.O_CREATE, os.ModePerm)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer file.Close()
+
+	var csvData []csvDataRecord
+	if err := gocsv.UnmarshalFile(file, &csvData); err != nil {
+		log.Fatal(err)
 	}
 
-	fmt.Printf("Fetching block at height: %d on network: %s\n", cmdBlockHeight, network)
+	for i, record := range csvData {
+		fmt.Printf("Person %d: %+v\n", i, record)
+
+		tx, err := bt.NewTxFromString(record.TxHexExtended)
+		if err != nil || tx == nil {
+			log.Println(fmt.Errorf("error parsing extended tx at record %v, txID : %v", i, record.TXID))
+			continue
+		}
+
+		txHexExtended := hex.EncodeToString(tx.ExtendedBytes())
+		if txHexExtended != record.TxHexExtended {
+			log.Fatal(fmt.Errorf("error recovering extended tx at record %v, txID : %v", i, record.TXID))
+		} else {
+			log.Println("tx ok")
+		}
+	}
 }

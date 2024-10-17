@@ -14,10 +14,10 @@
       "buildFlags": "",
       "env": {},
       "args": [
-        "fetch","--network","main", "--file-path","./data/test.txs"
+        //"fetch","--network","main", "--file-path","./data/test.csv"
         //"block","--network","main", "--block-height","100"
         //"tx","--network","main", "--txID","654cf5a35962eb2f2404666187b0f9759e802b0c54e1a7ed05efd09e7d041423", "--standard"        
-        //"verify","--network","main", "--file-path","foo bar"
+        "verify","--network","main", "--file-path","./data/small_test.csv"
       ],
       "showLog": true
     },
