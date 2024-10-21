@@ -156,3 +156,47 @@ On Mac OS :
 export CGO_CFLAGS="-I${BDK_INSTALL_ROOT}/include ${CGO_CFLAGS}"
 export CGO_LDFLAGS="-L${BDK_INSTALL_ROOT}/lib -L${BDK_INSTALL_ROOT}/bin -Wl,-rpath,${BDK_INSTALL_ROOT}/bin ${CGO_LDFLAGS}"
 ```
+
+##### Prepare environment to build and test on MacOS X (ARM)
+
+Download and install CMake 3.30.5 (Make sure the correct version)
+Either install by brew or download and install the prebuilt from https://cmake.org/download/
+
+Prepare some directories
+
+```
+export DEV_DIR=$HOME/development/devtool
+mkdir -p $DEV_DIR
+export DOWNLOAD_DIR=$HOME/Downloads/src
+mkdir -p $DOWNLOAD_DIR && cd $DOWNLOAD_DIR
+```
+
+Build OpenSSL 3.0.14 from Source (About 5 minutes)
+```
+export OPENSSL_ROOT_DIR=$DEV_DIR/openssl-3.0.14
+brew install perl zlib
+# If not Mac ARM64, adapt "darwin64-arm64-cc" appropriately 
+cd $DOWNLOAD_DIR && wget https://www.openssl.org/source/openssl-3.0.14.tar.gz && tar -xvzf openssl-3.0.14.tar.gz && cd $DOWNLOAD_DIR/openssl-3.0.14 && ./Configure darwin64-arm64-cc -no-shared --prefix=$OPENSSL_ROOT_DIR --openssldir=$OPENSSL_ROOT_DIR && make -j8 && make install
+```
+
+Build BOOST 1.85.0 from Source (About 5 minutes)
+
+```
+export BOOST_ROOT=$DEV_DIR/boost_1_85_0
+cd $DOWNLOAD_DIR && wget https://github.com/boostorg/boost/releases/download/boost-1.85.0/boost-1.85.0-cmake.tar.gz && tar -xvzf boost-1.85.0-cmake.tar.gz && cd boost-1.85.0 && mkdir build && cd build && cmake .. -DBUILD_SHARED_LIBS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX=$BOOST_ROOT && make -j8 && make install
+```
+
+Build and test bdk (About 5 minutes). It'll need to download the source of bitcoin-sv so we'll have the structure
+
+```
+     $DOWNLOAD_DIR 
+          |- bitcoin-sv
+          |- bdk
+```
+
+Then run build/test/install/pack the bdk
+
+```
+cd $DOWNLOAD_DIR # Download the source code of bsv 1.2.0 inside this directory and name it bitcoin-sv
+cd $DOWNLOAD_DIR && git clone git@github.com:bitcoin-sv/bdk.git && cd bdk && mkdir build && cd build && cmake .. && make -j8 && ctest && make install && cpack -G TGZ
+```
