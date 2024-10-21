@@ -1,9 +1,12 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"log"
 	"log/slog"
 	"os"
+	"time"
 
 	"github.com/bitcoin-sv/bdk/module/gobdk/cmd/woc/woc"
 	"github.com/spf13/cobra"
@@ -87,28 +90,67 @@ func execFetch(cmd *cobra.Command, args []string) {
 
 	blockStep := (maxBlock - minBlock) / maxNbTx
 	mandatoryBlocks := woc.GetMandatoryBlocks(network)
-	for iBlock := minBlock; iBlock < maxBlock; iBlock += blockStep {
+	iBlock := minBlock
+	startTime := time.Now()
+	for iBlock < maxBlock {
 
 		// Fetch/drain the mandatory blocks in higher priority
 		for len(mandatoryBlocks) > 0 && iBlock > mandatoryBlocks[0] {
 			mBlock := mandatoryBlocks[0]
-			slog.Info(fmt.Sprintf("fetching full mandatory block %v", mBlock))
+			slog.Info(fmt.Sprintf("Fetching full mandatory block %v", mBlock))
 			if err := data.fetchBlock(mBlock, 0); err != nil {
-				slog.Error(fmt.Sprintf("failed to fetch for mandatory block block %v, error \n%v\n", mBlock, err))
+				errStr := fmt.Sprintf("Failed to fetch mandatory block %v, error : %v", mBlock, err)
+				var notFoundErr *emptyBlockError
+				if errors.As(err, &notFoundErr) {
+					slog.Warn(errStr)
+				} else {
+					slog.Error(errStr)
+				}
+
 			}
 			mandatoryBlocks = mandatoryBlocks[1:]
 		}
 
-		// Fetch 1 tx on the block
+		// Fetch 1 tx for the "normal" block
 		if err := data.fetchBlock(iBlock, 1); err != nil {
-			slog.Error(fmt.Sprintf("failed to fetch for block %v, error \n%v\n", iBlock, err))
+			var notFoundErr *emptyBlockError
+			if errors.As(err, &notFoundErr) {
+				slog.Warn(fmt.Sprintf("Modifying the next block to fetch due to the empty block %v, next fetch will be %v", iBlock, iBlock+1))
+				iBlock += 1
+				continue
+			} else {
+				slog.Error(fmt.Sprintf("Failed to fetch for block %v, error \n%v\n", iBlock, err))
+			}
 		}
+
+		iBlock += blockStep
 	}
+
+	elapsed := time.Since(startTime)
+	tps := float64(data.txCount) / elapsed.Seconds()
+	log.Printf("TOTAL fetched %v txs, network %v within %v, Average TPS %.2f", data.txCount, network, elapsed, tps)
 }
 
 //////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////
 
+// emptyBlockError is thrown in case a block does not have any tx,
+// or equivalently the block have only a coinbase transaction
+type emptyBlockError struct {
+	blockHeight uint64
+}
+
+func (e *emptyBlockError) Error() string {
+	return fmt.Sprintf("empty block %v", e.blockHeight)
+}
+
+func NewEmptyBlockErrorError(h uint64) *emptyBlockError {
+	return &emptyBlockError{
+		blockHeight: h,
+	}
+}
+
+// csvDataWriter hold the data to handle smoothly the I/O operations
 type csvDataWriter struct {
 	api       *woc.APIClient
 	file      *os.File
@@ -147,26 +189,36 @@ func NewCSVDataWriter(api *woc.APIClient, f string) *csvDataWriter {
 func (d *csvDataWriter) fetchBlock(blockHeight uint64, nbTx int) error {
 	listTxID, errListTxID := woc.GetListTxFromBlock(d.api, blockHeight)
 	if errListTxID != nil {
-		return fmt.Errorf("network : %v, block %v, failed to get list of txIDs", network, blockHeight)
+		return fmt.Errorf("network : %v, block %v, failed to get list of txIDs\n\nerror\n%w", network, blockHeight, errListTxID)
 	}
 
 	if len(listTxID) < 1 {
-		return fmt.Errorf("network : %v, block %v, skip block having only coinbase transaction", network, blockHeight)
+		return NewEmptyBlockErrorError(blockHeight)
 	}
 
 	nbTxToFetch := min(len(listTxID), nbTx)
-	txToFetch := listTxID[:nbTxToFetch]
+	if nbTx == 0 {
+		nbTxToFetch = len(listTxID)
+	}
 
+	txToFetch := listTxID[:nbTxToFetch]
+	slog.Info(fmt.Sprintf("Fetching %v txs for block %v", nbTxToFetch, blockHeight))
+
+	aggregatedErrStr := ""
 	for _, txID := range txToFetch {
 		txHexExtended, errTxHexExtended := woc.GetTxHexExtended(d.api, txID)
 		if errTxHexExtended != nil {
-			slog.Error(fmt.Sprintf("Network : %v, Tx %v, error getting extended transaction. Error \n\n%v\n", network, txID, errTxHexExtended))
+			aggregatedErrStr += fmt.Sprintf("Failed to fetch Tx : %v, Block : %v, Network %v. Error \n%v\n\n", txID, blockHeight, network, errTxHexExtended)
 		}
 
-		csvLine := fmt.Sprintf("%v, %v, %v, %v\n", network, blockHeight, txID, txHexExtended)
+		csvLine := fmt.Sprintf("%v,%v,%v,%v\n", network, blockHeight, txID, txHexExtended)
 		d.file.WriteString(csvLine)
 		//fmt.Println(csvLine)
 		d.txCount += 1
+	}
+
+	if len(aggregatedErrStr) > 1 {
+		return fmt.Errorf("error fetching %v txs for block %v, network %v, \n%v", len(txToFetch), blockHeight, network, aggregatedErrStr)
 	}
 
 	return nil

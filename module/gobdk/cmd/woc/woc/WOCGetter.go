@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"sort"
 
 	"github.com/libsv/go-bt/v2"
 	"github.com/libsv/go-bt/v2/bscript"
@@ -85,6 +86,11 @@ var importantBlocks = map[string][]uint64{
 // GetMandatoryBlocks returns all the important blocks as marked in node params
 func GetMandatoryBlocks(network string) []uint64 {
 	if blocks, ok := importantBlocks[network]; ok {
+
+		// Sort before returning the blocks slice
+		sort.Slice(blocks, func(i, j int) bool {
+			return blocks[i] > blocks[j]
+		})
 		return blocks
 	}
 	return []uint64{}
