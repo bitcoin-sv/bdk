@@ -89,7 +89,7 @@ func GetMandatoryBlocks(network string) []uint64 {
 
 		// Sort before returning the blocks slice
 		sort.Slice(blocks, func(i, j int) bool {
-			return blocks[i] > blocks[j]
+			return blocks[i] < blocks[j]
 		})
 		return blocks
 	}

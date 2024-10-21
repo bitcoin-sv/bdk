@@ -1,11 +1,14 @@
 package main
 
 import (
+	"encoding/csv"
 	"errors"
 	"fmt"
 	"log"
 	"log/slog"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/bitcoin-sv/bdk/module/gobdk/cmd/woc/woc"
@@ -88,6 +91,11 @@ func execFetch(cmd *cobra.Command, args []string) {
 		}
 	}
 
+	// If data file already exist, then fetch from its last block height
+	if data.lastBlock > 0 {
+		minBlock = max(data.lastBlock, minBlock)
+	}
+
 	blockStep := (maxBlock - minBlock) / maxNbTx
 	mandatoryBlocks := woc.GetMandatoryBlocks(network)
 	iBlock := minBlock
@@ -167,20 +175,51 @@ func NewCSVDataWriter(api *woc.APIClient, f string) *csvDataWriter {
 		panic(fmt.Sprintf("Error opening file: %v", err))
 	}
 
-	// Write header if the file doesn't exist before
-	// TODO : if file existed, read the last line to get the last block
-	//        it can be usefull to skip block if it is already fetched in the data
+	iLine, iBlock := uint64(0), uint64(0)
 	if !fileExisted {
 		csvHeaderLine := "ChainNet, BlockHeight, TXID, TxHexExtended\n"
 		file.WriteString(csvHeaderLine)
+	} else {
+		// Read the existing csv file
+		file, err := os.Open(f)
+		if err != nil {
+			log.Fatalf("Failed to open file: %s", err)
+		}
+		defer file.Close()
+
+		reader := csv.NewReader(file)
+
+		for {
+			record, err := reader.Read() // Read one line (record)
+			if err != nil {
+				if err.Error() == "EOF" { // If end of file is reached, break
+					break
+				}
+				log.Fatalf("Error reading file %v:%v, error %s", f, iLine, err)
+			}
+
+			// Start processing only from second line
+			if iLine > 0 {
+				blockHeightStr := strings.TrimSpace(record[1])
+				blockHeight, err := strconv.ParseUint(blockHeightStr, 10, 64)
+				if err != nil {
+					log.Fatalf("Error parsing block height  %v:%v, error %s", f, iLine, err)
+				}
+				if blockHeight > iBlock {
+					iBlock = blockHeight
+				}
+			}
+			iLine += 1
+		}
+
 	}
 
 	return &csvDataWriter{
 		api:       api,
 		file:      file,
 		filepath:  f,
-		txCount:   0,
-		lastBlock: 0,
+		txCount:   iLine - 1,
+		lastBlock: iBlock,
 	}
 }
 
