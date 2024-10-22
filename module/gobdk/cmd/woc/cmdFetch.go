@@ -24,6 +24,7 @@ const maxNbTx = uint64(10000)
 var nbTx = maxNbTx
 var minBlock = defaultMinBlock
 var maxBlock = uint64(0)
+var skipMandatoryBlock = false
 
 // fileExists checks if the file exist
 func fileExists(filename string) bool {
@@ -67,6 +68,7 @@ func init() {
 	cmdFetch.Flags().Uint64VarP(&nbTx, "nb-tx", "n", maxNbTx, fmt.Sprintf("number of tx to fetch, default %v", maxNbTx))
 	cmdFetch.Flags().Uint64VarP(&minBlock, "block-min", "l", defaultMinBlock, fmt.Sprintf("min block to fetch, defaulted to %v as it is the first block having more than 1 tx", defaultMinBlock))
 	cmdFetch.Flags().Uint64VarP(&maxBlock, "block-max", "u", 0, fmt.Sprintf("max block to fetch. Default %v", maxBlock))
+	cmdFetch.Flags().BoolVarP(&skipMandatoryBlock, "skip-mandatory", "s", false, fmt.Sprintf("Skip fetching mandatory blocks. It means all blocks will be fully fetched. This options is useful when fetching a few full blocks. Default %v", false))
 
 	cmdRoot.AddCommand(cmdFetch)
 }
@@ -96,12 +98,17 @@ func execFetch(cmd *cobra.Command, args []string) {
 		minBlock = max(data.lastBlock, minBlock)
 	}
 
-	blockStep := (maxBlock - minBlock) / maxNbTx
-	mandatoryBlocks := woc.GetMandatoryBlocks(network)
+	mandatoryBlocks := []uint64{}
+	if !skipMandatoryBlock {
+		mandatoryBlocks = woc.GetMandatoryBlocks(network)
+	} else {
+		slog.Warn("Used of --skip-mandatory, all blocks will be fetched fully")
+	}
+
+	blockStep := ((maxBlock - minBlock) / maxNbTx) + 1 // Always positive
 	iBlock := minBlock
 	startTime := time.Now()
 	for iBlock < maxBlock {
-
 		// Fetch/drain the mandatory blocks in higher priority
 		for len(mandatoryBlocks) > 0 && iBlock > mandatoryBlocks[0] {
 			mBlock := mandatoryBlocks[0]
@@ -119,8 +126,13 @@ func execFetch(cmd *cobra.Command, args []string) {
 			mandatoryBlocks = mandatoryBlocks[1:]
 		}
 
-		// Fetch 1 tx for the "normal" block
-		if err := data.fetchBlock(iBlock, 1); err != nil {
+		// Fetch 1 tx for the "normal" block. If skipMandatoryBlock is used
+		// All blocks will be fully fetched. This option is useful when download a few single blocks
+		nbTxInBlock := 1
+		if skipMandatoryBlock {
+			nbTxInBlock = 0
+		}
+		if err := data.fetchBlock(iBlock, nbTxInBlock); err != nil {
 			var notFoundErr *emptyBlockError
 			if errors.As(err, &notFoundErr) {
 				slog.Warn(fmt.Sprintf("Modifying the next block to fetch due to the empty block %v, next fetch will be %v", iBlock, iBlock+1))
