@@ -88,6 +88,7 @@ func execVerify(cmd *cobra.Command, args []string) {
 
 	globalStartTime, localStartTime := time.Now(), time.Now()
 	localCount, globalCount := -1, -1
+	nbFailed := 0
 	for i, record := range csvData {
 		localCount += 1
 		globalCount += 1
@@ -97,7 +98,7 @@ func execVerify(cmd *cobra.Command, args []string) {
 			timeNow := time.Now()
 			elapsed := timeNow.Sub(localStartTime)
 			tps := float64(localCount) / elapsed.Seconds()
-			log.Printf("Processed %8d txs, TPS %13.2f", localCount, tps)
+			log.Printf("Processed %8d txs, TPS %13.2f,     Total : %8d txs, elapsed : %v", localCount, tps, globalCount, timeNow.Sub(globalStartTime).String())
 			localCount = 0
 			localStartTime = timeNow
 		}
@@ -120,12 +121,13 @@ func execVerify(cmd *cobra.Command, args []string) {
 		//Test the script veriry
 		if err := verifyScript(tx, uint32(record.BlockHeight)); err != nil {
 			log.Printf("ERROR verifying record at %v, txID : %v, error \n\n%v\n\n", i, record.TXID, err)
+			nbFailed += 1
 		}
 	}
 
 	elapsed := time.Since(globalStartTime)
 	tps := float64(globalCount) / elapsed.Seconds()
-	log.Printf("TOTAL processed %8d txs, GLOBAL TPS %13.2f", globalCount, tps)
+	log.Printf("TOTAL processed %8d txs, GLOBAL TPS %13.2f, FAILED : %v", globalCount, tps, nbFailed)
 }
 
 // //////////////////////////////////////////////////////////////////////////////////////////////
@@ -149,14 +151,11 @@ func verifyScript(tx *bt.Tx, blockHeight uint32) error {
 
 		// isPostChronicle now is unknow, in future, it need to be calculate based on block height
 		//flags, errF := bdkscript.ScriptVerificationFlags(*in.PreviousTxScript, false)
-		log.Println("DEBUG CGO THREAD ScriptVerificationFlagsV2 Before")
-		flags, errF := bdkscript.ScriptVerificationFlagsV2(*in.PreviousTxScript, blockHeight)
+		flags, errF := bdkscript.ScriptVerificationFlagsV2(*in.PreviousTxScript, blockHeight-1)
 		if errF != nil {
 			return fmt.Errorf("failed to calculate flags from prev locking script, flags : %v, error: %v", flags, errF)
 		}
-		log.Println("DEBUG CGO THREAD ScriptVerificationFlagsV2 After")
 
-		log.Println("DEBUG CGO THREAD Verify Before")
 		if errV := bdkscript.Verify(*in.UnlockingScript, *in.PreviousTxScript, true, uint(flags), tx.Bytes(), i, in.PreviousTxSatoshis); errV != nil {
 			// Helpful logging to get full information to debug separately in GoBDK
 
@@ -176,7 +175,6 @@ func verifyScript(tx *bt.Tx, blockHeight uint32) error {
 			errorLogMsg := fmt.Sprintf("Failed to verify script in go-bdk, error : \n\n%v\n\n", string(errLogData))
 			return fmt.Errorf("Failed to verify script: %w\n\nerror detail\n\n%v", errV, errorLogMsg)
 		}
-		log.Println("DEBUG CGO THREAD Verify After")
 	}
 
 	return nil
