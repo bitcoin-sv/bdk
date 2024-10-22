@@ -17,11 +17,12 @@
         ,"CGO_CFLAGS":"-I${env:BDK_INSTALL_ROOT}/include/core -I${env:BDK_INSTALL_ROOT}/include ${env:CGO_CFLAGS}"
       },
       "args": [
-        "fetch","--network","main", "--skip-mandatory", "--block-min", "620538", "--block-max", "620539", "--file-path","./data/mainnet_b620538.csv"
+        //"fetch","--network","main", "--skip-mandatory", "--block-min", "620538", "--block-max", "620539", "--file-path","./data/mainnet_b620538.csv"
         //"fetch","--network","main", "--file-path","./data/mainnet_test.csv"
         //"block","--network","main", "--block-height","100"
         //"tx","--network","main", "--txID","654cf5a35962eb2f2404666187b0f9759e802b0c54e1a7ed05efd09e7d041423", "--standard"        
         //"verify","--network","main", "--file-path","./data/small_test.csv", "--check-only"
+        "merge", "--file-a", "./data/small_test1.csv", "--file-b", "./data/small_test2.csv", "--file-out", "./data/small_test_merged.csv"
       ],
       "showLog": true
     },

@@ -5,13 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"os"
-	"strings"
 	"time"
 
 	bdkconfig "github.com/bitcoin-sv/bdk/module/gobdk/config"
 	bdkscript "github.com/bitcoin-sv/bdk/module/gobdk/script"
-	"github.com/gocarina/gocsv"
 	"github.com/libsv/go-bt/v2"
 	"github.com/spf13/cobra"
 )
@@ -37,13 +34,6 @@ func init() {
 	cmdRoot.AddCommand(cmdVerify)
 }
 
-type csvDataRecord struct {
-	ChainNet      string
-	BlockHeight   uint64
-	TXID          string
-	TxHexExtended string
-}
-
 func setGlobalScriptConfig(network string) error {
 	bdkScriptConfig := bdkconfig.ScriptConfig{
 		ChainNetwork: network,
@@ -64,23 +54,13 @@ func execVerify(cmd *cobra.Command, args []string) {
 		log.Fatal(fmt.Sprintf("ERROR while setting global script config with network %v, error \n\n%v\n\n", network, err))
 	}
 
-	file, err := os.OpenFile(cmdVerifyFilePath, os.O_RDWR|os.O_CREATE, os.ModePerm)
+	csvData, err := ReadCSVFile(cmdVerifyFilePath)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer file.Close()
 
-	var csvData []csvDataRecord
-	if err := gocsv.UnmarshalFile(file, &csvData); err != nil {
-		log.Fatal(err)
-	}
-
-	// Post process, trim all leading and trailing whitespace
+	// Check the network is consistent
 	for i := 0; i < len(csvData); i++ {
-		csvData[i].ChainNet = strings.TrimSpace(csvData[i].ChainNet)
-		csvData[i].TXID = strings.TrimSpace(csvData[i].TXID)
-		csvData[i].TxHexExtended = strings.TrimSpace(csvData[i].TxHexExtended)
-
 		if csvData[i].ChainNet != network {
 			log.Fatal(fmt.Sprintf("ERROR record %v, inconsistent network. Data %v, input %v", csvData[i].ChainNet, network))
 		}
@@ -98,7 +78,7 @@ func execVerify(cmd *cobra.Command, args []string) {
 			timeNow := time.Now()
 			elapsed := timeNow.Sub(localStartTime)
 			tps := float64(localCount) / elapsed.Seconds()
-			log.Printf("Processed %8d txs, TPS %13.2f,     Total : %8d txs, elapsed : %v", localCount, tps, globalCount, timeNow.Sub(globalStartTime).String())
+			log.Printf("Processed %6d txs, TPS %13.2f,     Total : %12d txs, elapsed : %8.2f s", localCount, tps, globalCount, timeNow.Sub(globalStartTime).Seconds())
 			localCount = 0
 			localStartTime = timeNow
 		}

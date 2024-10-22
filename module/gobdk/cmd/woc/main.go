@@ -29,8 +29,7 @@ var cmdRoot = &cobra.Command{
 }
 
 func init() {
-	cmdRoot.PersistentFlags().StringVarP(&network, "network", "c", "", "Specify the network chain (required)")
-	cmdRoot.MarkPersistentFlagRequired("network")
+	cmdRoot.PersistentFlags().StringVarP(&network, "network", "c", "main", "Specify the network chain")
 }
 
 // main adds all child commands to the root command and sets flags appropriately.

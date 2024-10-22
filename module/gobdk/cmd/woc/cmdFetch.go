@@ -189,8 +189,7 @@ func NewCSVDataWriter(api *woc.APIClient, f string) *csvDataWriter {
 
 	iLine, iBlock := uint64(0), uint64(0)
 	if !fileExisted {
-		csvHeaderLine := "ChainNet, BlockHeight, TXID, TxHexExtended\n"
-		file.WriteString(csvHeaderLine)
+		file.WriteString(fmt.Sprintf("%v\n", CSVHeaders))
 	} else {
 		// Read the existing csv file
 		file, err := os.Open(f)
@@ -262,7 +261,14 @@ func (d *csvDataWriter) fetchBlock(blockHeight uint64, nbTx int) error {
 			aggregatedErrStr += fmt.Sprintf("Failed to fetch Tx : %v, Block : %v, Network %v. Error \n%v\n\n", txID, blockHeight, network, errTxHexExtended)
 		}
 
-		csvLine := fmt.Sprintf("%v,%v,%v,%v\n", network, blockHeight, txID, txHexExtended)
+		record := CsvDataRecord{
+			ChainNet:      network,
+			BlockHeight:   blockHeight,
+			TXID:          txID,
+			TxHexExtended: txHexExtended,
+		}
+
+		csvLine := fmt.Sprintf("%v\n", record.CSVLine())
 		d.file.WriteString(csvLine)
 		//fmt.Println(csvLine)
 		d.txCount += 1
