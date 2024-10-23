@@ -22,3 +22,8 @@ add_executable(example_verify_script "${CMAKE_CURRENT_SOURCE_DIR}/example_verify
 target_link_libraries(example_verify_script ${CMAKE_DL_LIBS} bdk_core OpenSSL::Crypto OpenSSL::SSL)
 bdkLinkTargetToBoost(example_verify_script Boost::boost Boost::program_options)
 set_target_properties(example_verify_script PROPERTIES  FOLDER "module/example" DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})
+
+add_executable(example_extendedtx "${CMAKE_CURRENT_SOURCE_DIR}/example_extendedtx.cpp")
+target_link_libraries(example_extendedtx ${CMAKE_DL_LIBS} bdk_core OpenSSL::Crypto OpenSSL::SSL)
+bdkLinkTargetToBoost(example_extendedtx Boost::boost Boost::program_options)
+set_target_properties(example_extendedtx PROPERTIES  FOLDER "module/example" DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})
