@@ -61,6 +61,14 @@ int cgo_verify(const char* uScriptPtr, int uScriptLen,
                int index,
                unsigned long long amount);
 
+
+/**
+ *  cgo_verify_extend verifies the extended transaction
+ *  It iterates through all the locking and unlocking scripts to verifies
+ *  It return when the first error encountered
+ */
+int cgo_verify_extend(const char* extendedTxPtr, int extendedTxLen, int32_t blockHeight);
+
 #ifdef __cplusplus
 }
 #endif

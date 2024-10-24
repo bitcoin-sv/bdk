@@ -147,3 +147,23 @@ func Verify(uScript []byte, lScript []byte,
 	}
 	return ScriptErrorImpl{errCode: ScriptErrorCode(errCode)}
 }
+
+// VerifyExtend verify the entire extended transaction
+// It iterates through all the locking and unlocking scripts to verifies
+// It return when the first error encountered
+func VerifyExtend(extendedTX []byte, blockHeight uint32) ScriptError {
+
+	lenTx := len(extendedTX)
+	var txPtr *C.char
+
+	if lenTx > 0 {
+		txPtr = (*C.char)(unsafe.Pointer(&extendedTX[0]))
+	}
+
+	errCode := int(C.cgo_verify_extend(txPtr, C.int(lenTx), C.int32_t(blockHeight)))
+
+	if errCode == int(SCRIPT_ERR_OK) {
+		return nil
+	}
+	return ScriptErrorImpl{errCode: ScriptErrorCode(errCode)}
+}
