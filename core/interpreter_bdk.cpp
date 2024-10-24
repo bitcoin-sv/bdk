@@ -1,4 +1,5 @@
 #include <interpreter_bdk.hpp>
+#include <extendedTx.hpp>
 
 #include <base58.h>
 #include <chainparams.h>
@@ -419,3 +420,36 @@ ScriptError bsv::verify(const std::span<const uint8_t> unlocking_script,
                        amount);
 }
 
+ScriptError bsv::verify_extend(std::span<const uint8_t> extendedTX, int32_t blockHeight) {
+
+    const char* begin{ reinterpret_cast<const char*>(extendedTX.data()) };
+    const char* end{ reinterpret_cast<const char*>(extendedTX.data() + extendedTX.size()) };
+    CDataStream tx_stream(begin, end, SER_NETWORK, PROTOCOL_VERSION);
+    CMutableTransactionExtended eTX;
+    tx_stream >> eTX;
+
+    if (!tx_stream.empty())
+    {
+        throw std::runtime_error("error serializing extended tx");
+    }
+
+    for (size_t index = 0; index < eTX.vutxo.size(); ++index) {
+        const uint64_t amount = eTX.vutxo[index].nValue.GetSatoshis();
+        const CScript& lscript = eTX.vutxo[index].scriptPubKey; //   locking script
+        const CScript& uscript = eTX.mtx.vin[index].scriptSig;  // unlocking script
+
+        const uint32_t flagsV2 = script_verification_flags_v2(lscript, blockHeight);
+
+        ScriptError sERR = verify_impl(
+            uscript,
+            lscript,
+            true, flagsV2, eTX.mtx,
+            index,
+            amount);
+        if (sERR != SCRIPT_ERR_OK) {
+            return sERR;
+        }
+    }
+
+    return SCRIPT_ERR_OK;
+}

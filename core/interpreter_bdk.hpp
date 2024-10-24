@@ -59,6 +59,10 @@ namespace bsv
                        std::span<const uint8_t> tx,
                        int index,
                        int64_t amount);
+
+    // Verify extended tx in one go. It will iterate through all the input and verify
+    // It returns the first encountered verification error
+    ScriptError verify_extend(std::span<const uint8_t> extendedTX, int32_t blockHeight);
 };
 
 #endif /* __INTERPRETER_BDK_HPP__ */

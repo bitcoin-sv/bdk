@@ -139,10 +139,12 @@ bdk_add_unit_test(test_interpreter)
 
 if(CMAKE_CONFIGURATION_TYPES)
   set_target_properties(test_bsv PROPERTIES FOLDER "test/core/bsv" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d
-  set_target_properties(test_interpreter PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d
   set_target_properties(test_assembler PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d
+  set_target_properties(test_extended_tx PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d
+  set_target_properties(test_interpreter PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d
 else()
   set_target_properties(test_bsv PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
-  set_target_properties(test_interpreter PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
   set_target_properties(test_assembler PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
+  set_target_properties(test_extended_tx PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
+  set_target_properties(test_interpreter PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
 endif()
