@@ -125,13 +125,17 @@ bdk_add_unit_test(test_bsv)
 ## Test for the bdk core part ######################################################
 message("Building BDK core tests ...")
 
-add_executable(test_interpreter "${CMAKE_CURRENT_SOURCE_DIR}/test_interpreter.cpp")
-target_link_libraries(test_interpreter ${CMAKE_DL_LIBS} bdk_core OpenSSL::Crypto OpenSSL::SSL)
-bdk_add_unit_test(test_interpreter)
-
 add_executable(test_assembler "${CMAKE_CURRENT_SOURCE_DIR}/test_assembler.cpp")
 target_link_libraries(test_assembler ${CMAKE_DL_LIBS} bdk_core OpenSSL::Crypto OpenSSL::SSL)
 bdk_add_unit_test(test_assembler)
+
+add_executable(test_extended_tx "${CMAKE_CURRENT_SOURCE_DIR}/test_extended_tx.cpp")
+target_link_libraries(test_extended_tx ${CMAKE_DL_LIBS} bdk_core OpenSSL::Crypto OpenSSL::SSL)
+bdk_add_unit_test(test_extended_tx)
+
+add_executable(test_interpreter "${CMAKE_CURRENT_SOURCE_DIR}/test_interpreter.cpp")
+target_link_libraries(test_interpreter ${CMAKE_DL_LIBS} bdk_core OpenSSL::Crypto OpenSSL::SSL)
+bdk_add_unit_test(test_interpreter)
 
 if(CMAKE_CONFIGURATION_TYPES)
   set_target_properties(test_bsv PROPERTIES FOLDER "test/core/bsv" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d

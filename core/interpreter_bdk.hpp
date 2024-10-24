@@ -1,12 +1,14 @@
-#ifndef __SCRIPT_ENGINE_IF_H__
-#define __SCRIPT_ENGINE_IF_H__
+#ifndef __INTERPRETER_BDK_HPP__
+#define __INTERPRETER_BDK_HPP__
 
-#include <span>
+
 
 #include <script/script_error.h>
+
+#include <span>
 #include <string>
 #include <vector>
-#include <stdint.h>
+#include <cstdint>
 
 namespace bsv
 {
@@ -59,4 +61,4 @@ namespace bsv
                        int64_t amount);
 };
 
-#endif
+#endif /* __INTERPRETER_BDK_HPP__ */
