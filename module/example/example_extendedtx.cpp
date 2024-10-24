@@ -2,40 +2,28 @@
 
 #include <cassert>
 #include <iostream>
-#include <sstream>
-
-#include "base58.h"
-#include "chainparams.h"
-#include "config.h"
-#include "core_io.h"
-#include "key.h"
-#include "script/script_num.h"
-#include "univalue/include/univalue.h"
-
-#include "interpreter_bdk.hpp"
-#include "extendedTx.hpp"
-
-#include "assembler.h"
-#include "utilstrencodings.h"
-
 #include <iostream>
 #include <fstream>
+#include <sstream>
+#include <vector>
+#include <string>
+#include <stdexcept>
+
+
 #include <boost/program_options.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/json_parser.hpp>
 
+#include "extendedTx.hpp"
+#include "assembler.h"
+#include "utilstrencodings.h"
+
 namespace po = boost::program_options;
 namespace pt = boost::property_tree;
 
-const std::string TxID = "60e3920864b99579668161d1d9a4b76bf0fd49ae8fda5ea3bed31cdbacb4c7fc";
-const std::string TxHex = "010000000231d47120addc0d5c301942d6eb23d8bff4bfff61fd92ad9d373c497d2cf43a7d000000008c493046022100c987a6cbe33fa15d9006a9cbe8d3dba8a07aa71b8875e517ba96f906216c5b8e022100b905193089b4fe0679dda92619227d703342e268e41b61fc2199d707dbc0802e014104148012523fb728b260fe2cca2320f64145acb8f5d96b6b04fe3f59eca93f8f2c37269189d578510b33146c5d399e2f6e08dcec2ec01547562204036513782a11ffffffffdc316d815277ef68f92a05d51986fa7518e650fc3b3419b8637190ec14b41a33000000008a47304402200fb302faa9c2fa11e42459fac4c37ed9a7d5145e9768f374dfc5a589a487840302206230a7f00b98c1277ca085d9b8eea1a021814bb6fc5145da880cb7ec3f5de2900141049ff521df5486529bdc03d98f530c89fc2c68c4fc333dae7721f43f24c106177a2fbe8410344d54e2ec860f313733e08fdf910d1c1ec13d1aff38a34377c843a3ffffffff0200b85fe6010000001976a9149d2ca1a6a7af6112078a5991983013e84ba5ef3588ac402c4b43000000001976a9148933ffc1e779f20d603afd6c19ba50081a2881d288ac00000000";
-const std::string TxHexExtended = "010000000000000000ef0231d47120addc0d5c301942d6eb23d8bff4bfff61fd92ad9d373c497d2cf43a7d000000008c493046022100c987a6cbe33fa15d9006a9cbe8d3dba8a07aa71b8875e517ba96f906216c5b8e022100b905193089b4fe0679dda92619227d703342e268e41b61fc2199d707dbc0802e014104148012523fb728b260fe2cca2320f64145acb8f5d96b6b04fe3f59eca93f8f2c37269189d578510b33146c5d399e2f6e08dcec2ec01547562204036513782a11ffffffff006fe0d6010000001976a914fa479b2c6d09bfbff12668fa1d20a0b2bd73494088acdc316d815277ef68f92a05d51986fa7518e650fc3b3419b8637190ec14b41a33000000008a47304402200fb302faa9c2fa11e42459fac4c37ed9a7d5145e9768f374dfc5a589a487840302206230a7f00b98c1277ca085d9b8eea1a021814bb6fc5145da880cb7ec3f5de2900141049ff521df5486529bdc03d98f530c89fc2c68c4fc333dae7721f43f24c106177a2fbe8410344d54e2ec860f313733e08fdf910d1c1ec13d1aff38a34377c843a3ffffffff4075ca52000000001976a914d1d323d7e48d4b3fbe8e4ae160b0f6f1dbbabdb288ac0200b85fe6010000001976a9149d2ca1a6a7af6112078a5991983013e84ba5ef3588ac402c4b43000000001976a9148933ffc1e779f20d603afd6c19ba50081a2881d288ac00000000";
 
-
-////////////////////////////////////////////////////////////////////////////////
-
-void TestTxExtended() {
-    const std::vector<uint8_t> etxBin = ParseHex(TxHexExtended);
+void testTxExtended(const std::string& txID, const std::string& txHexExtended) {
+    const std::vector<uint8_t> etxBin = ParseHex(txHexExtended);
     const std::span<const uint8_t> etx(etxBin.data(), etxBin.size());
 
     const char* begin{ reinterpret_cast<const char*>(etx.data()) };
@@ -49,36 +37,155 @@ void TestTxExtended() {
     os << eTX;
     const std::vector<uint8_t> outBin(os.begin(), os.end());
     const std::string recovTxHexExtended = bsv::Bin2Hex(outBin);
-    if (TxHexExtended == recovTxHexExtended) {
-        std::cout << "Recover hex string OK" << std::endl;
-    }
-    else {
-        std::cout << "Recover hex string Failed" << std::endl << std::endl
-            << "Origin  Hex" << std::endl << TxHexExtended << std::endl << std::endl
-            << "Recover Hex" << std::endl << recovTxHexExtended << std::endl << std::endl;
+    if (txHexExtended != recovTxHexExtended) {
+        throw std::runtime_error("ERROR recover extended hex for TxID " + txID);
     }
 
-    std::cout << "End Of serialization extended tx : " << eTX.mtx.GetId().ToString() << std::endl;
+    const std::string recovTxID = eTX.mtx.GetId().ToString();
+    if (txID != recovTxID) {
+        throw std::runtime_error("ERROR recover txID for TxID " + txID);
+    }
+}
+
+// Function to trim leading and trailing whitespace
+std::string trim(const std::string& str) {
+    auto start = str.begin();
+    while (start != str.end() && std::isspace(*start)) {
+        start++;
+    }
+
+    auto end = str.end();
+    do {
+        end--;
+    } while (std::distance(start, end) > 0 && std::isspace(*end));
+
+    return std::string(start, end + 1);
+}
+
+// Enhanced split function to handle quotes
+std::vector<std::string> split(const std::string& line, char delimiter = ',') {
+    std::vector<std::string> result;
+    std::string token;
+    bool inQuotes = false;
+    std::stringstream ss;
+
+    for (char ch : line) {
+        if (ch == '"') {
+            // Toggle the inQuotes flag when encountering a double-quote
+            inQuotes = !inQuotes;
+            continue; // Skip the quote itself
+        }
+
+        if (ch == delimiter && !inQuotes) {
+            // If we encounter a delimiter outside quotes, push the token
+            result.push_back(trim(ss.str()));
+            ss.str(""); // Clear the stream for the next token
+            ss.clear();
+        }
+        else {
+            // Otherwise, add the character to the token (even if it's a comma inside quotes)
+            ss << ch;
+        }
+    }
+
+    if (inQuotes) {
+        throw std::runtime_error("missing double quote");
+    }
+
+    // Add the last token after the loop
+    result.push_back(trim(ss.str()));
+
+    return result;
+}
+
+// Function to read a CSV file
+std::vector<std::vector<std::string>> parseCSV(const std::string& filename) {
+    std::ifstream file(filename);
+    std::vector<std::vector<std::string>> data;
+    std::string line;
+
+    if (!file.is_open()) {
+        std::cerr << "Error opening file: " << filename << std::endl;
+        return data;
+    }
+
+    // Read each line of the file
+    int iLine(0);
+    while (std::getline(file, line)) {
+        std::vector<std::string> row;
+        try {
+            row = split(line);
+        }
+        catch (std::exception e) {
+            std::cout << "ERROR bad csv line " << iLine + 1 << " error " << e.what();
+            ++iLine;
+            continue;
+        }
+
+        //Skip the header
+        if (iLine > 0) {
+            data.push_back(row);
+        }
+
+        ++iLine;
+    }
+
+    file.close();
+    return data;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-
-void TestTx() {
-    const std::vector<uint8_t> txBin = ParseHex(TxHex);
-    const std::span<const uint8_t> tx(txBin.data(), txBin.size());
-
-    const char* begin{ reinterpret_cast<const char*>(tx.data()) };
-    const char* end{ reinterpret_cast<const char*>(tx.data() + tx.size()) };
-    CDataStream tx_stream(begin, end, SER_NETWORK, PROTOCOL_VERSION);
-    CMutableTransaction mtx;
-    tx_stream >> mtx;
-    std::cout << "End Of serialization tx : " << mtx.GetId().ToString() << std::endl;
-}
-
+// This program read the csv file of format
+//     ChainNet, BlockHeight, TXID, TxHexExtended
+// And test to serialize and unserialize of the extended transaction
 int main(int argc, char* argv[])
 {
-    TestTx();
-    TestTxExtended();
-    std::cout << "End Of Program " << std::endl;
+    std::string csvFilePath;
+
+    // Define and parse the command line options
+    po::options_description desc("Allowed options");
+    desc.add_options()
+        ("help,h", "produce help message")
+        ("csv-file,f", po::value<std::string>(&csvFilePath)->required(), "path to the csv file");
+
+    po::variables_map vm;
+    try {
+        po::store(po::parse_command_line(argc, argv, desc), vm);
+        if (vm.count("help")) {
+            std::cout << desc << std::endl;
+            return 0;
+        }
+        po::notify(vm); // throws error if required arguments are missing
+    }
+    catch (po::error& e) {
+        std::cerr << "Error: " << e.what() << std::endl;
+        std::cerr << desc << std::endl;
+        return 1;
+    }
+
+    const auto csvData = parseCSV(csvFilePath);
+    for (size_t i = 0; i < csvData.size();++i) {
+        auto line = csvData[i];
+        //std::cout << std::endl;
+        //for (auto record : line) {
+        //    std::cout << "["<< record << "]" << std::endl;
+        //}
+        //std::cout << std::endl;
+        if (line.size() != 4) {
+            throw std::runtime_error("bad line " + std::to_string(i) + " there are only " + ::to_string(line.size()) + " elements");
+        }
+
+        const std::string& TxID = line[2];
+        const std::string& TxHexExtended = line[3];
+
+        try {
+            testTxExtended(TxID, TxHexExtended);
+        }
+        catch (std::exception e) {
+            std::cout << "ERROR test line : " << i + 1 << e.what() << std::endl;
+        }
+    }
+
+    std::cout << "End Of Program, total tested " << csvData.size() << " lines" << std::endl;
     return 0;
 }
