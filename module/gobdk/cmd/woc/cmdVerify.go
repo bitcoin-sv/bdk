@@ -15,6 +15,7 @@ import (
 
 var cmdVerifyFilePath string
 var cmdVerifyCheckHexOnly = false
+var cmdVerifyVerifyExtend = false
 
 // cmdVerify represents the test command
 var cmdVerify = &cobra.Command{
@@ -30,6 +31,7 @@ func init() {
 	cmdVerify.MarkFlagRequired("file-path")
 
 	cmdVerify.Flags().BoolVarP(&cmdVerifyCheckHexOnly, "check-only", "t", false, "Check parsing the extended hex only")
+	cmdVerify.Flags().BoolVarP(&cmdVerifyVerifyExtend, "verify-extend", "e", false, "Run VerifyExtend instead of verify")
 
 	cmdRoot.AddCommand(cmdVerify)
 }
@@ -98,20 +100,36 @@ func execVerify(cmd *cobra.Command, args []string) {
 			continue
 		}
 
-		//Test the script veriry
-		if err := verifyScript(tx, uint32(record.BlockHeight)); err != nil {
-			log.Printf("ERROR verifying record at %v, txID : %v, error \n\n%v\n\n", i, record.TXID, err)
-			nbFailed += 1
+		if cmdVerifyVerifyExtend {
+			if err := verifyScriptExtend(tx, uint32(record.BlockHeight)); err != nil {
+				log.Printf("ERROR verifying record at %v, txID : %v, error \n\n%v\n\n", i, record.TXID, err)
+				nbFailed += 1
+			}
+		} else {
+			//Test the script veriry
+			if err := verifyScript(tx, uint32(record.BlockHeight)); err != nil {
+				log.Printf("ERROR verifying record at %v, txID : %v, error \n\n%v\n\n", i, record.TXID, err)
+				nbFailed += 1
+			}
 		}
 	}
 
 	elapsed := time.Since(globalStartTime)
 	tps := float64(globalCount) / elapsed.Seconds()
-	log.Printf("TOTAL processed %8d txs, GLOBAL TPS %13.2f, FAILED : %v", globalCount, tps, nbFailed)
+	log.Printf("TOTAL processed %8d txs, elapsed : %8.2f s,    GLOBAL TPS %13.2f, FAILED : %v", globalCount, elapsed.Seconds(), tps, nbFailed)
 }
 
 // //////////////////////////////////////////////////////////////////////////////////////////////
 // //////////////////////////////////////////////////////////////////////////////////////////////
+
+// Test new version of verificator
+func verifyScriptExtend(tx *bt.Tx, blockHeight uint32) error {
+	txBin := tx.ExtendedBytes()
+	if errV := bdkscript.VerifyExtend(txBin, blockHeight-1); errV != nil {
+		return errV
+	}
+	return nil
+}
 
 // Copied exactly the verify in ubsv
 func verifyScript(tx *bt.Tx, blockHeight uint32) error {

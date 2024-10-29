@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/hex"
 	"fmt"
 	"os"
 	"strings"
@@ -16,6 +17,7 @@ type CsvDataRecord struct {
 	BlockHeight   uint64
 	TXID          string
 	TxHexExtended string
+	TxBinExtended []byte
 }
 
 // CSVLine print the data record to a string line
@@ -42,6 +44,12 @@ func ReadCSVFile(filepath string) ([]CsvDataRecord, error) {
 		ret[i].ChainNet = strings.TrimSpace(ret[i].ChainNet)
 		ret[i].TXID = strings.TrimSpace(ret[i].TXID)
 		ret[i].TxHexExtended = strings.TrimSpace(ret[i].TxHexExtended)
+
+		txBin, err := hex.DecodeString(ret[i].TxHexExtended)
+		if err != nil {
+			return ret, fmt.Errorf("failed to decode hex for line %v, TxID %v, error %v", i, ret[i].TXID, err)
+		}
+		ret[i].TxBinExtended = txBin
 	}
 
 	return ret, nil
