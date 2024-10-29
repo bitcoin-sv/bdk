@@ -1,0 +1,80 @@
+name: Manual Build Dependancies
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-and-upload:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        arch: [amd64, arm64]
+      fail-fast: false
+
+    env:
+      BOOST_VERSION : 1.85.0
+      OPENSSL_VERSION : 3.4.0
+      INSTALL_NAME: "dependancies_${{ matrix.os }}_${{ matrix.arch }}"
+
+    steps:
+    - name: Set up job
+      run: |
+        echo "Running on OS ${{ matrix.os }} with architecture ${{ matrix.arch }}"
+        echo "BOOST_URL=https://github.com/boostorg/boost/releases/download/boost-$BOOST_VERSION/boost-$BOOST_VERSION-cmake.tar.gz" >> $GITHUB_ENV
+        echo "OPENSSL_URL=https://www.openssl.org/source/openssl-$OPENSSL_VERSION.tar.gz" >> $GITHUB_ENV
+        echo "INSTALL_DIR=${{ github.workspace }}/$INSTALL_NAME" >> $GITHUB_ENV
+        echo "BOOST_ROOT=${{ github.workspace }}/$INSTALL_NAME/boost_$BOOST_VERSION" >> $GITHUB_ENV
+        echo "OPENSSL_ROOT_DIR=${{ github.workspace }}/$INSTALL_NAME/openssl_$OPENSSL_VERSION" >> $GITHUB_ENV
+        cat $GITHUB_ENV
+
+    - name: Check out repository
+      uses: actions/checkout@v2
+
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.x'
+
+    - name: Prepare environment
+      run: |
+        if [[ ${{ matrix.os }} == 'ubuntu-latest' ]]; then
+          sudo apt-get update
+          sudo apt-get install -y build-essential g++ wget
+        fi
+        mkdir -p $BOOST_ROOT
+        mkdir -p $OPENSSL_ROOT_DIR
+
+    - name: Build Boost using cmake
+      run: |
+        wget -q $BOOST_URL -O "boost-$BOOST_VERSION-cmake.tar.gz"
+        tar -xzf "boost-$BOOST_VERSION-cmake.tar.gz"
+        mkdir -p "boost-$BOOST_VERSION/build"
+        cmake -B "./boost-$BOOST_VERSION/build" -S "./boost-$BOOST_VERSION" -DBUILD_SHARED_LIBS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX="$BOOST_ROOT"
+        cmake --build "./boost-$BOOST_VERSION/build" -j$(nproc) --target install
+
+    - name: Build OpenSSL
+      run: |
+        wget -q "$OPENSSL_URL" -O "openssl-$OPENSSL_VERSION.tar.gz"
+        tar -xzf "openssl-$OPENSSL_VERSION.tar.gz"
+        cd "openssl-$OPENSSL_VERSION"
+        ./config no-shared no-tests no-docs no-dso no-engine --prefix="$OPENSSL_ROOT_DIR" --openssldir="$OPENSSL_ROOT_DIR"
+        make -j$(nproc)
+        make install_sw
+
+    - name: Create archive
+      run: |
+        cd ${{ github.workspace }}
+        pwd && ls
+        tar -czf "$INSTALL_NAME.tar.gz" "$INSTALL_NAME"
+      shell: bash
+
+    # - name: Upload artifact
+    #   uses: actions/upload-release-asset@v1
+    #   with:
+    #     upload_url: ${{ github.event.inputs.release_url }}
+    #     asset_path: $INSTALL_NAME.tar.gz
+    #     asset_name: $INSTALL_NAME.tar.gz
+    #     asset_content_type: application/gzip
+    #   env:
+    #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
