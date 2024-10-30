@@ -1,44 +1,45 @@
-name: Manual Build Dependancies
+name: Manual Build Dependencies
 
 on:
   workflow_dispatch:
 
 jobs:
-  build-and-upload:
-    runs-on: ${{ matrix.os }}
+  build-upload-dependencies:
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
-        arch: [amd64, arm64]
+        os: [linux-arm64, ubuntu-24.04, macos-15]
       fail-fast: false
+    runs-on: ${{ matrix.os }}
 
     env:
       BOOST_VERSION : 1.85.0
       OPENSSL_VERSION : 3.4.0
-      INSTALL_NAME: "dependancies_${{ matrix.os }}_${{ matrix.arch }}"
 
     steps:
-    - name: Set up job
-      run: |
-        echo "Running on OS ${{ matrix.os }} with architecture ${{ matrix.arch }}"
-        echo "BOOST_URL=https://github.com/boostorg/boost/releases/download/boost-$BOOST_VERSION/boost-$BOOST_VERSION-cmake.tar.gz" >> $GITHUB_ENV
-        echo "OPENSSL_URL=https://www.openssl.org/source/openssl-$OPENSSL_VERSION.tar.gz" >> $GITHUB_ENV
-        echo "INSTALL_DIR=${{ github.workspace }}/$INSTALL_NAME" >> $GITHUB_ENV
-        echo "BOOST_ROOT=${{ github.workspace }}/$INSTALL_NAME/boost_$BOOST_VERSION" >> $GITHUB_ENV
-        echo "OPENSSL_ROOT_DIR=${{ github.workspace }}/$INSTALL_NAME/openssl_$OPENSSL_VERSION" >> $GITHUB_ENV
-        cat $GITHUB_ENV
-
     - name: Check out repository
       uses: actions/checkout@v2
 
-    - name: Set up Python
+    - name: Set up Python 3
       uses: actions/setup-python@v2
       with:
         python-version: '3.x'
 
-    - name: Prepare environment
+    - name: Set Environment Variables
       run: |
-        if [[ ${{ matrix.os }} == 'ubuntu-latest' ]]; then
+        OS_ARCH="$(uname -s | tr 'A-Z' 'a-z')_$(uname -m)"
+        PACKAGE_NAME="dependancies_$OS_ARCH"
+        echo "Building $PACKAGE_NAME on $OS_ARCH"
+        echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
+        echo "BOOST_URL=https://github.com/boostorg/boost/releases/download/boost-$BOOST_VERSION/boost-$BOOST_VERSION-cmake.tar.gz" >> $GITHUB_ENV
+        echo "OPENSSL_URL=https://www.openssl.org/source/openssl-$OPENSSL_VERSION.tar.gz" >> $GITHUB_ENV
+        echo "INSTALL_DIR=${{ github.workspace }}/$PACKAGE_NAME" >> $GITHUB_ENV
+        echo "BOOST_ROOT=${{ github.workspace }}/$PACKAGE_NAME/boost_$BOOST_VERSION" >> $GITHUB_ENV
+        echo "OPENSSL_ROOT_DIR=${{ github.workspace }}/$PACKAGE_NAME/openssl_$OPENSSL_VERSION" >> $GITHUB_ENV
+        cat $GITHUB_ENV
+
+    - name: Prepare Environment
+      run: |
+        if [[ ${{ matrix.os }} == *'ubuntu'* ]]; then
           sudo apt-get update
           sudo apt-get install -y build-essential g++ wget
         fi
@@ -65,16 +66,13 @@ jobs:
     - name: Create archive
       run: |
         cd ${{ github.workspace }}
-        pwd && ls
-        tar -czf "$INSTALL_NAME.tar.gz" "$INSTALL_NAME"
+        tar -czf "$PACKAGE_NAME.tar.gz" "$PACKAGE_NAME"
       shell: bash
 
-    # - name: Upload artifact
-    #   uses: actions/upload-release-asset@v1
-    #   with:
-    #     upload_url: ${{ github.event.inputs.release_url }}
-    #     asset_path: $INSTALL_NAME.tar.gz
-    #     asset_name: $INSTALL_NAME.tar.gz
-    #     asset_content_type: application/gzip
-    #   env:
-    #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Upload artifact using github cli
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        TAG_NAME="depcy"
+        ASSET_PATH="./${{ env.PACKAGE_NAME }}.tar.gz"
+        gh release upload $TAG_NAME $ASSET_PATH --repo ${{ github.repository }} --clobber
