@@ -1,0 +1,97 @@
+name: Build BDK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-bdk:
+    strategy:
+      matrix:
+        os: [linux-arm64-8-core, ubuntu-24.04, macos-15, windows-2022]
+      fail-fast: false
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - name: Check out repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python 3
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
+
+      ## Download and setup environment varialbe
+      ## BSV_ROOT, BOOST_ROOT, OPENSSL_ROOT_DIR, JAVA_HOME
+    - name: Prepare Environment and Dependencies Unix
+      if: runner.os != 'Windows'
+      run: |
+        python -m pip install --upgrade pip --break-system-packages
+        python -m pip install -U pytest junitparser mkdocs pymdown-extensions plantuml_markdown --break-system-packages
+      
+        if [[ ${{ matrix.os }} == *'ubuntu'* ]]; then
+          sudo apt-get update
+          sudo apt-get install -y build-essential g++ wget unzip
+          wget ${{ secrets.BSV_120BETA_URL }}
+          unzip bitcoin-sv-staging.zip && mv bitcoin-sv-staging bitcoin-sv
+          echo "BSV_ROOT=${{ github.workspace }}/bitcoin-sv" >> $GITHUB_ENV
+          wget https://github.com/bitcoin-sv/bdk/releases/download/depcy/dependancies_linux_x86_64.tar.gz
+          tar -xzf dependancies_linux_x86_64.tar.gz
+          echo "DEPENDENCIES_DIR=${{ github.workspace }}/dependancies_linux_x86_64" >> $GITHUB_ENV
+          echo "BOOST_ROOT=${{ github.workspace }}/dependancies_linux_x86_64/boost_1.85.0" >> $GITHUB_ENV
+          echo "OPENSSL_ROOT_DIR=${{ github.workspace }}/dependancies_linux_x86_64/openssl_3.4.0" >> $GITHUB_ENV
+          echo "JAVA_HOME=$JAVA_HOME_17_X64" >> $GITHUB_ENV
+        fi
+        if [[ ${{ matrix.os }} == *'linux'* ]]; then
+          sudo apt-get update
+          sudo apt-get install -y build-essential g++ wget unzip
+          wget ${{ secrets.BSV_120BETA_URL }}
+          unzip bitcoin-sv-staging.zip && mv bitcoin-sv-staging bitcoin-sv
+          echo "BSV_ROOT=${{ github.workspace }}/bitcoin-sv" >> $GITHUB_ENV
+          wget https://github.com/bitcoin-sv/bdk/releases/download/depcy/dependancies_linux_aarch64.tar.gz
+          tar -xzf dependancies_linux_aarch64.tar.gz
+          echo "DEPENDENCIES_DIR=${{ github.workspace }}/dependancies_linux_aarch64" >> $GITHUB_ENV
+          echo "BOOST_ROOT=${{ github.workspace }}/dependancies_linux_aarch64/boost_1.85.0" >> $GITHUB_ENV
+          echo "OPENSSL_ROOT_DIR=${{ github.workspace }}/dependancies_linux_aarch64/openssl_3.4.0" >> $GITHUB_ENV
+          echo "JAVA_HOME=/usr/lib/jvm/temurin-17-jdk-arm64" >> $GITHUB_ENV
+        fi
+        if [[ ${{ matrix.os }} == *'macos'* ]]; then
+          brew install unzip
+          wget ${{ secrets.BSV_120BETA_URL }}
+          unzip bitcoin-sv-staging.zip && mv bitcoin-sv-staging bitcoin-sv
+          echo "BSV_ROOT=${{ github.workspace }}/bitcoin-sv" >> $GITHUB_ENV
+          wget https://github.com/bitcoin-sv/bdk/releases/download/depcy/dependancies_darwin_arm64.tar.gz
+          tar -xzf dependancies_darwin_arm64.tar.gz
+          echo "DEPENDENCIES_DIR=${{ github.workspace }}/dependancies_darwin_arm64" >> $GITHUB_ENV
+          echo "BOOST_ROOT=${{ github.workspace }}/dependancies_darwin_arm64/boost_1.85.0" >> $GITHUB_ENV
+          echo "OPENSSL_ROOT_DIR=${{ github.workspace }}/dependancies_darwin_arm64/openssl_3.4.0" >> $GITHUB_ENV
+          echo "JAVA_HOME=$JAVA_HOME_17_arm64" >> $GITHUB_ENV
+        fi
+
+    - name: Build and Test BDK Unix
+      if: runner.os != 'Windows'
+      run: |      
+        mkdir -p "build"
+        cmake -B build -S "."
+        cmake --build build --parallel 4
+        ctest --output-on-failure --test-dir build
+
+    - name: Prepare Environment and Dependencies for Windows
+      if: runner.os == 'Windows'
+      run: |
+        Invoke-WebRequest -Uri "${{ secrets.BSV_120BETA_URL }}" -OutFile "bitcoin-sv-staging.zip"
+        Expand-Archive -Path "bitcoin-sv-staging.zip" -DestinationPath "."
+        Rename-Item -Path "bitcoin-sv-staging" -NewName "bitcoin-sv"
+        echo "BSV_ROOT=${{ github.workspace }}\bitcoin-sv" >> $GITHUB_ENV
+        Invoke-WebRequest -Uri "https://github.com/bitcoin-sv/bdk/releases/download/depcy/dependancies_windows_x86_64.zip" -OutFile "dependancies_windows_x86_64.zip"
+        Expand-Archive -Path "dependancies_windows_x86_64.zip" -DestinationPath "."
+
+    ## On windows, build and test only core C++ module
+    - name: Build and Test BDK Windows
+      if: runner.os == 'Windows'
+      run: |
+        mkdir "build"
+        cmake -G"Visual Studio 17 2022" -A x64 -B "build" -S "." -DBUILD_MODULE_JAVA=OFF -DBUILD_MODULE_PYTHON=OFF -DBUILD_MODULE_GOLANG=OFF -DBOOST_ROOT="./dependancies_windows_x86_64/boost_1.85.0" -DOPENSSL_ROOT_DIR="./dependancies_windows_x86_64/openssl_3.0.14"
+        cmake --build build --config Debug --parallel 4
+        ctest --output-on-failure --test-dir build -C Debug --parallel 4
+        cmake --build build --config Release --parallel 4
+        ctest --output-on-failure --test-dir build -C Release --parallel 4
