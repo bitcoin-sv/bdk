@@ -43,13 +43,21 @@ set(_GO_MODULE_SOURCE_FILES
 add_library(${_GO_MODULE_NAME} SHARED ${_GO_MODULE_HEADER_FILES} ${_GO_MODULE_SOURCE_FILES} ${BDK_VERSION_GOLANG_CPP})
 target_link_libraries(${_GO_MODULE_NAME} PUBLIC bdk_core ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT} secp256k1 ${UNIVALUE_LIB} OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono)
 target_include_directories(${_GO_MODULE_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR})
+
+add_library(static-${_GO_MODULE_NAME} STATIC ${_GO_MODULE_HEADER_FILES} ${_GO_MODULE_SOURCE_FILES} ${BDK_VERSION_GOLANG_CPP})
+target_link_libraries(static-${_GO_MODULE_NAME} PUBLIC bdk_core ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT} secp256k1 ${UNIVALUE_LIB} OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono)
+target_include_directories(static-${_GO_MODULE_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR})
+
 source_group("_generated" FILES "${BDK_VERSION_GOLANG_CPP}")
 
 if(CMAKE_CONFIGURATION_TYPES)
   set_target_properties(${_GO_MODULE_NAME} PROPERTIES FOLDER "module/golang" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d
+  set_target_properties(static-${_GO_MODULE_NAME} PROPERTIES FOLDER "module/golang" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d
 else()
   set_target_properties(${_GO_MODULE_NAME} PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
+  set_target_properties(static-${_GO_MODULE_NAME} PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
 endif()
 
 install(TARGETS ${_GO_MODULE_NAME} DESTINATION "bin" COMPONENT GoModules)
+install(TARGETS static-${_GO_MODULE_NAME} DESTINATION "lib" COMPONENT GoModules)
 install(FILES ${_GO_MODULE_HEADER_FILES} DESTINATION "include/cgo" COMPONENT GoModules)

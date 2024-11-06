@@ -44,6 +44,6 @@ func main() {
 	//blockHeight := uint64(620538)
 	flags, _ := goscript.ScriptVerificationFlags(lScript, true)
 
-	vErr := goscript.Verify(uScript, lScript, true, flags, tx, inIndex, satoshis)
+	vErr := goscript.Verify(uScript, lScript, true, uint(flags), tx, inIndex, satoshis)
 	fmt.Println("Result verifying script : ", vErr)
 }
