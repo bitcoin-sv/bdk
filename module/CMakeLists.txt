@@ -21,7 +21,7 @@ message(STATUS "Building modules ...")
 add_subdirectory(example)
 
 if(BUILD_MODULE_GOLANG)
-	add_subdirectory(gobdk/cgo)
+	add_subdirectory(gobdk/bdkcgo)
 else()
 	message(STATUS "Building Golang module has been disabled")
 endif()

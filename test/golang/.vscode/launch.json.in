@@ -13,7 +13,7 @@
       "cwd": "${workspaceFolder}",
       "buildFlags": "",
       "env": {
-        "CGO_CFLAGS":"-I@BDK_BSV_ROOT_DIR@/src -I@CMAKE_SOURCE_DIR@ -I@CMAKE_SOURCE_DIR@/module/gobdk/cgo/include"
+        "CGO_CFLAGS":"-I@CMAKE_SOURCE_DIR@/module/gobdk"
         //For go run on MacOS,"CGO_LDFLAGS":"-L@CMAKE_BINARY_DIR@/x64/release -Wl,-rpath,@CMAKE_BINARY_DIR@/x64/release"
         ,"CGO_LDFLAGS":"-L@CMAKE_BINARY_DIR@/x64/release"
         ,"LD_LIBRARY_PATH":"@CMAKE_BINARY_DIR@/x64/release"

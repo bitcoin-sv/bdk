@@ -12,9 +12,9 @@
       "program": "${workspaceFolder}/cmd/woc/",
       "cwd": "${workspaceFolder}",
       "buildFlags": "",
-      "env": {"LD_LIBRARY_PATH":"${env:BDK_INSTALL_ROOT}/bin:${env:LD_LIBRARY_PATH}"
-        ,"CGO_LDFLAGS":"-L${env:BDK_INSTALL_ROOT}/lib -L${env:BDK_INSTALL_ROOT}/bin ${env:CGO_LDFLAGS}"
-        ,"CGO_CFLAGS":"-I${env:BDK_INSTALL_ROOT}/include/core -I${env:BDK_INSTALL_ROOT}/include ${env:CGO_CFLAGS}"
+      "env": {"LD_LIBRARY_PATH":"${env:BDK_INSTALL_ROOT}/bin/cgo:${env:LD_LIBRARY_PATH}"
+        ,"CGO_LDFLAGS":"-L${env:BDK_INSTALL_ROOT}/bin ${env:CGO_LDFLAGS}"
+        ,"CGO_CFLAGS":"-I${env:BDK_INSTALL_ROOT}/include ${env:CGO_CFLAGS}"
       },
       "args": [
         //"fetch","--network","main", "--skip-mandatory", "--block-min", "620538", "--block-max", "620539", "--file-path","./data/mainnet_b620538.csv"
@@ -34,9 +34,9 @@
       "program": "${workspaceFolder}/cmd/example/main.go",
       "cwd": "${workspaceFolder}",
       "buildFlags": "",
-      "env": {"LD_LIBRARY_PATH":"${env:BDK_INSTALL_ROOT}/bin:${env:LD_LIBRARY_PATH}"
+      "env": {
         //For go run on MacOS,"CGO_LDFLAGS":"-L${env:BDK_INSTALL_ROOT}/lib -L${env:BDK_INSTALL_ROOT}/bin -Wl,-rpath,${env:BDK_INSTALL_ROOT}/bin ${env:CGO_LDFLAGS}"
-        ,"CGO_LDFLAGS":"-L${env:BDK_INSTALL_ROOT}/lib -L${env:BDK_INSTALL_ROOT}/bin ${env:CGO_LDFLAGS}"
+        "CGO_LDFLAGS":"-L${env:BDK_INSTALL_ROOT}/lib ${env:CGO_LDFLAGS}"
         ,"CGO_CFLAGS":"-I${env:BDK_INSTALL_ROOT}/include/core -I${env:BDK_INSTALL_ROOT}/include ${env:CGO_CFLAGS}"
         ,"GOBDK_SCRIPTCONFIG_MAXOPSPERSCRIPTPOLICY":"1"
         ,"GOBDK_SCRIPTCONFIG_MAXSCRIPTNUMLENGTHPOLICY":"2"

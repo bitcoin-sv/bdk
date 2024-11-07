@@ -42,6 +42,8 @@ option(BDK_BUILD_BSV_TESTS "Activate the build of bsv tests" ON)
 option(BUILD_MODULE_JAVA "Build and test the Java module" ON)
 option(BUILD_MODULE_PYTHON "Build and test the Python module" ON)
 option(BUILD_MODULE_GOLANG "Build and test the Golang module" ON)
+option(INSTALL_GOBDK_INSOURCE "Install the static stand alone GoBDK in source directory (module/gobdk)" ON)
+
 
 if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin")
     message(STATUS "Hot fix when building on Mac OS, boost broke the build")

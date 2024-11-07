@@ -1,31 +1,17 @@
 package script
 
-// To make this work on local dev
-//   Build the full bdk library, make install it to a specific location. Then set the environment variables
-//
-//     export BDK_INSTALL_ROOT=/path/to/install/directory
-//     export CGO_LDFLAGS="-L${BDK_INSTALL_ROOT}/lib -L${BDK_INSTALL_ROOT}/bin"
-//     export CGO_CFLAGS="-I${BDK_INSTALL_ROOT}/include/core -I${BDK_INSTALL_ROOT}/include"
-//     export LD_LIBRARY_PATH="${BDK_INSTALL_ROOT}/bin:${LD_LIBRARY_PATH}"
-//
-// To make a build inside docker, the same, i.e
-//   - Get the docker images that have all the necessary dependencies for C++ build
-//   - Build this bdk libraries, and make install it to a location
-//   - Copy the installed files to the release image. To optimize, copy only the neccessary part,
-//   - For golang module, copy only the shared library go, and headers in cgo.
-// There might be other system shared library that is required for the executable, just copy them
-// to the release docker image. Use lld to know which one is missing.
-
-/*
-#cgo LDFLAGS: -lGoBDK -lstdc++ -lm
-#include <stdlib.h>
-#include <cgo/gobdk.h>
-*/
-import "C"
-
 import (
 	"unsafe"
+
+	_ "github.com/bitcoin-sv/bdk/module/gobdk/bdkcgo"
 )
+
+/*
+#cgo CFLAGS: -I./..
+#include <stdlib.h>
+#include <bdkcgo/include/gobdk.h>
+*/
+import "C"
 
 // FromASM take input as a string of script in assembler language
 // give output as the script binary.
