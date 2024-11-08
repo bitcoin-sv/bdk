@@ -42,7 +42,7 @@ else()
 	message(STATUS "Testing Python module has been disabled")
 endif()
 
-if(BUILD_MODULE_GOLANG)
+if(BUILD_MODULE_GOLANG AND NOT MSVC)
 	add_subdirectory(golang)
 else()
 	message(STATUS "Testing Golang module has been disabled")
