@@ -2,7 +2,7 @@
 
 #include <script/script_flags.h>
 #include <core/interpreter_bdk.hpp>
-#include <bdkcgo/include/interpreter_cgo.h>
+#include <bdkcgo/interpreter_cgo.h>
 
 uint32_t cgo_script_verification_flags(const char* lScriptPtr, int lScriptLen, bool isChronicle)
 {

@@ -1,8 +1,9 @@
 package secp256k1
 
 /*
-#cgo CFLAGS: -I./..
-#include <bdkcgo/include/gobdk.h>
+#cgo CFLAGS: -I${SRCDIR}/..
+#include <stdlib.h>
+#include <bdkcgo/gobdk.h>
 */
 import "C"
 

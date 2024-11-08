@@ -20,17 +20,18 @@ endif()
 
 #### Generate version golang binding #####
 set(BDK_VERSION_GOLANG_CPP_IN ${CMAKE_CURRENT_SOURCE_DIR}/src/version_cgo.cpp.in CACHE INTERNAL "Template File for golang version")
-set(BDK_VERSION_GOLANG_CPP ${BDK_GENERATED_CPP_DIR}/bdkcgo/version_cgo.cpp CACHE INTERNAL "Source File for golang version")
+set(BDK_VERSION_GOLANG_CPP ${BDK_GENERATED_CPP_DIR}/bdkcgo/src/version_cgo.cpp CACHE INTERNAL "Source File for golang version")
 configure_file(${BDK_VERSION_GOLANG_CPP_IN} ${BDK_VERSION_GOLANG_CPP})
 
 set(_GO_MODULE_NAME GoBDK)
 set(_GO_MODULE_HEADER_FILES
-    ${CMAKE_CURRENT_SOURCE_DIR}/include/asm_cgo.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/include/interpreter_cgo.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/include/gobdk.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/include/global_scriptconfig.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/include/script_error_cgo.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/include/version_cgo.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/asm_cgo.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/interpreter_cgo.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/gobdk.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/global_scriptconfig.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/script_error_cgo.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/version_cgo.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/secp256k1_cloned.h # added here to be installed but won't be include twice as it use the same guard SECP256K1_H
 )
 
 set(_GO_MODULE_SOURCE_FILES
@@ -61,9 +62,9 @@ else()
   set_target_properties(${_GO_MODULE_NAME} PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
 endif()
 
-install(TARGETS ${_GO_MODULE_NAME} DESTINATION "bin/bdkcgo/bin" COMPONENT GoModules)
+install(TARGETS ${_GO_MODULE_NAME} DESTINATION "bin/bdkcgo" COMPONENT GoModules)
 install(TARGETS static-${_GO_MODULE_NAME} DESTINATION "lib" COMPONENT GoModules)
-install(FILES ${_GO_MODULE_HEADER_FILES} DESTINATION "include/bdkcgo/include" COMPONENT GoModules)
+install(FILES ${_GO_MODULE_HEADER_FILES} DESTINATION "include/bdkcgo" COMPONENT GoModules)
 
 ## Merge the gobdk only for unix base system
 if(UNIX)
@@ -113,10 +114,10 @@ if(UNIX)
                   WORKING_DIRECTORY ${buildDir}
                   COMMENT "Merge all in one ${mergedArchive}")
 
-  install(FILES "${buildDir}/${mergedArchive}" DESTINATION "lib/bdkcgo/lib" COMPONENT GoModules)
+  install(FILES "${buildDir}/${mergedArchive}" DESTINATION "lib/bdkcgo" COMPONENT GoModules)
   if (INSTALL_GOBDK_INSOURCE)
-    install(FILES "${buildDir}/${mergedArchive}" DESTINATION "lib/bdkcgo/lib" COMPONENT GoModules)
-    add_custom_command(TARGET MergeGoBDK POST_BUILD COMMAND cp "${buildDir}/${mergedArchive}" "${CMAKE_SOURCE_DIR}/module/gobdk/bdkcgo/lib/${mergedArchive}"
+    install(FILES "${buildDir}/${mergedArchive}" DESTINATION "lib/bdkcgo" COMPONENT GoModules)
+    add_custom_command(TARGET MergeGoBDK POST_BUILD COMMAND cp "${buildDir}/${mergedArchive}" "${CMAKE_SOURCE_DIR}/module/gobdk/bdkcgo/${mergedArchive}"
       COMMENT "Install insource ${mergedArchive}"
     )
   endif()

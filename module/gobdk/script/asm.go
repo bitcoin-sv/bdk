@@ -7,9 +7,9 @@ import (
 )
 
 /*
-#cgo CFLAGS: -I./..
+#cgo CFLAGS: -I${SRCDIR}/..
 #include <stdlib.h>
-#include <bdkcgo/include/gobdk.h>
+#include <bdkcgo/gobdk.h>
 */
 import "C"
 

@@ -2,9 +2,8 @@
 #include <string>
 
 #include <config.h>
-#include <bdkcgo/include/global_scriptconfig.h>
 #include <core/interpreter_bdk.hpp>
-
+#include <bdkcgo/global_scriptconfig.h>
 
 const char* CgoSetGlobalScriptConfig(
         const char* chainNetwork,

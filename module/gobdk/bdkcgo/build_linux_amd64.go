@@ -1,15 +1,15 @@
 package bdkcgo
 
 /*
-#cgo CFLAGS: -I./..
-#cgo LDFLAGS: -L./../bdkcgo/lib -lGoBDK_linux_x86_64 -lstdc++ -lm
+#cgo CFLAGS: -I${SRCDIR}/..
+#cgo LDFLAGS: -L${SRCDIR}/../bdkcgo -lGoBDK_linux_x86_64 -lstdc++ -lm
 
-#include <bdkcgo/include/gobdk.h>
-#include <bdkcgo/include/asm_cgo.h>
-#include <bdkcgo/include/global_scriptconfig.h>
-#include <bdkcgo/include/interpreter_cgo.h>
-#include <bdkcgo/include/script_error_cgo.h>
-#include <bdkcgo/include/version_cgo.h>
+#include <bdkcgo/gobdk.h>
+#include <bdkcgo/asm_cgo.h>
+#include <bdkcgo/global_scriptconfig.h>
+#include <bdkcgo/interpreter_cgo.h>
+#include <bdkcgo/script_error_cgo.h>
+#include <bdkcgo/version_cgo.h>
 */
 import "C"
 

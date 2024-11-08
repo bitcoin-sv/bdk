@@ -1,8 +1,8 @@
 package gobdk
 
 /*
-#cgo CFLAGS: -I.
-#include <bdkcgo/include/gobdk.h>
+#cgo CFLAGS: -I${SRCDIR}
+#include <bdkcgo/gobdk.h>
 */
 import "C"
 

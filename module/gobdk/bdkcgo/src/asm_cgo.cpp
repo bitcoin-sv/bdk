@@ -6,7 +6,7 @@
 
 #include <script.h>
 #include <core/assembler.h>
-#include <bdkcgo/include/asm_cgo.h>
+#include <bdkcgo/asm_cgo.h>
 
 const char* cgo_from_asm(const char* asmPtr, int asmLen, int* scriptLen)
 {
