@@ -2,7 +2,7 @@ package bdkcgo
 
 /*
 #cgo CFLAGS: -I${SRCDIR}/..
-#cgo LDFLAGS: -L${SRCDIR}/../bdkcgo -libGoBDK_darwin_arm64 -lstdc++ -lm
+#cgo LDFLAGS: -L${SRCDIR}/../bdkcgo -lGoBDK_darwin_arm64 -lstdc++ -lm
 
 #include <bdkcgo/gobdk.h>
 #include <bdkcgo/asm_cgo.h>
