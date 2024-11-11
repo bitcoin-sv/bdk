@@ -51,33 +51,16 @@ foreach(golang_test_file ${GOLANG_TEST_FILES})
   if(CMAKE_CONFIGURATION_TYPES)
     set(_tpost_fix d)
     add_test(NAME ${golang_test_name} COMMAND ${GO_EXECUTABLE} test Main_test.go ${golang_test_file} CONFIGURATIONS Release)
-    set_tests_properties(${golang_test_name} PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" ENVIRONMENT "CGO_CFLAGS=-I${BDK_BSV_ROOT_DIR}/src -I${CMAKE_SOURCE_DIR} -I${CMAKE_SOURCE_DIR}/module/gobdk/cgo/include;CGO_LDFLAGS=-L${CMAKE_BINARY_DIR}/x64/release")
+    set_tests_properties(${golang_test_name} PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
     add_test(NAME ${golang_test_name}${_tpost_fix} COMMAND ${GO_EXECUTABLE} test Main_test.go ${golang_test_file} CONFIGURATIONS Debug)
-    set_tests_properties(${golang_test_name}${_tpost_fix} PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" ENVIRONMENT "CGO_CFLAGS=-I${BDK_BSV_ROOT_DIR}/src -I${CMAKE_SOURCE_DIR} -I${CMAKE_SOURCE_DIR}/module/gobdk/cgo/include;CGO_LDFLAGS=-L${CMAKE_BINARY_DIR}/x64/debug")
+    set_tests_properties(${golang_test_name}${_tpost_fix} PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
   else()
-    set(_builddir release)
     if(${CMAKE_BUILD_TYPE} STREQUAL "Debug")
       set(_tpost_fix d)
-      set(_builddir debug)
-    endif()
-
-    set(_buildpath "${CMAKE_BINARY_DIR}/x64/${_builddir}")
-    set(_cgo_ldflags "-L${_buildpath}")
-    if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-      # On MacOS, need to add rpath to the CGO_LDFLAGS
-      set(_cgo_ldflags "${_cgo_ldflags} -Wl,-rpath,${_buildpath}")
     endif()
 
     add_test(NAME ${golang_test_name}${_tpost_fix} COMMAND ${GO_EXECUTABLE} test Main_test.go ${golang_test_file})
-    set_tests_properties(${golang_test_name}${_tpost_fix} PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" ENVIRONMENT "CGO_CFLAGS=-I${BDK_BSV_ROOT_DIR}/src -I${CMAKE_SOURCE_DIR} -I${CMAKE_SOURCE_DIR}/module/gobdk/cgo/include;CGO_LDFLAGS=${_cgo_ldflags};LD_LIBRARY_PATH=${CMAKE_BINARY_DIR}/x64/${_builddir}")
+    set_tests_properties(${golang_test_name}${_tpost_fix} PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
   endif()
 
 endforeach()
-
-# To test memory leak while running all GoBDK tests :
-#
-# Build the test binary
-#     CGO_CFLAGS="-I${BDK_INSTALL_ROOT}/include" CGO_LDFLAGS="-L${BDK_INSTALL_ROOT}/lib -L${BDK_INSTALL_ROOT}/bin" go test -c -o testGoBDK
-# Run the test using valgrind
-#     LD_LIBRARY_PATH="${BDK_INSTALL_ROOT}/bin" valgrind --leak-check=full --show-reachable=yes --track-origins=yes --log-file=valgrind.log ./testGoBDK
-# Check the file valgrind.log to see if there are any memory leaks
