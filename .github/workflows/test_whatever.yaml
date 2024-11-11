@@ -1,0 +1,84 @@
+name: Test workflow
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-bdk:
+    strategy:
+      matrix:
+        os: [linux-arm64-8-core, ubuntu-24.04, macos-15]
+      fail-fast: false
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Prepare Environment and Dependencies Unix
+        if: runner.os != 'Windows'
+        run: |
+          echo "OS_ARCH=$(uname -s | tr 'A-Z' 'a-z')_$(uname -m)" >> $GITHUB_ENV
+
+      # Modify or create a unique file per OS
+      - name: Generate OS-specific file
+        run: |
+          echo $OS_ARCH
+          echo ${{ env.OS_ARCH }}
+          echo "Hello $OS_ARCH" > ./module/gobdk/bdkcgo/libGoBDK_${{ env.OS_ARCH }}.txt
+
+      # Upload each OS-specific file as an artifact
+      - name: Upload OS-specific artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: libGoBDK_${{ env.OS_ARCH }}.txt
+          path: ./module/gobdk/bdkcgo/libGoBDK_${{ env.OS_ARCH }}.txt
+          retention-days: 1
+          overwrite: true
+
+  gather-and-commit:
+    # Use a single OS for gathering artifacts and committing
+    runs-on: ubuntu-latest
+    needs: build-bdk  # Run this job only after all matrix jobs succeed
+    if: ${{ success() }}  # Only run if all builds succeed
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Download all artifacts from each OS-specific build
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          # pattern: libGoBDK_*.txt
+          path: ./tmp_artifact
+
+      # Move downloaded files into the repository's module directory
+      - name: Show module/gobdk/bdkcgo/
+        run: |
+          find ./tmp_artifact -type f -name 'libGoBDK_*_*.*' -exec mv {} ./module/gobdk/bdkcgo/ \;
+          ls ./module/gobdk/bdkcgo/
+
+      # Commit and push the changes
+      - name: Commit and push changes
+        run: |
+          # Set up git for GitHub Actions bot
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Add and commit the changes
+          git add ./module/gobdk/bdkcgo/libGoBDK_*_*.*
+          git status
+
+          # Commit only there are something new that has been added
+          if ! git diff --cached --quiet; then
+            git config --global user.name "github-actions[bot]"
+            git config --global user.email "github-actions[bot]@users.noreply.github.com"
+            git commit -m "Automated commit of modified files"
+          else
+            echo "No changes to commit"
+          fi
+
+          BRANCH_NAME=${GITHUB_REF#refs/heads/}
+          echo "BRANCH_NAME=$BRANCH_NAME"
+          git status
