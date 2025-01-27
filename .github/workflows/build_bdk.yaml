@@ -12,7 +12,7 @@ jobs:
   build-bdk:
     strategy:
       matrix:
-        os: [linux-arm64, ubuntu-24.04, macos-15, windows-2022]
+        os: [linux-arm64-8-core, ubuntu-24.04, macos-15, windows-2022]
       fail-fast: false
     runs-on: ${{ matrix.os }}
 
