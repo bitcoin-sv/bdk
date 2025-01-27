@@ -27,6 +27,17 @@ using namespace bsv;
 
 BOOST_AUTO_TEST_SUITE(test_interpreter)
 
+BOOST_AUTO_TEST_CASE(custom_genesis_height)
+{
+    const int32_t customGH = 123;
+    SetGlobalScriptConfig("main", 1, 2, 3, 4, 5, 6); // Set genesis height to default
+    const auto defaultGH = bsv::GetGenesisActivationHeight();
+    BOOST_CHECK(defaultGH != customGH);
+    SetGlobalScriptConfig("main", 1, 2, 3, 4, 5, 6, customGH);
+    const auto setGH = bsv::GetGenesisActivationHeight();
+    BOOST_CHECK_EQUAL(customGH, setGH);
+}
+
 BOOST_AUTO_TEST_CASE(pure_scripts)
 {
     using test_data_type = tuple<vector<uint8_t>, ScriptError>;
