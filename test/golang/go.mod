@@ -4,7 +4,7 @@ go 1.22.6
 
 require (
 	github.com/bitcoin-sv/bdk/module/gobdk v0.0.0-20240904084246-cb0e25691dc9
-	github.com/stretchr/testify v1.9.0
+	github.com/stretchr/testify v1.10.0
 )
 
 require (
