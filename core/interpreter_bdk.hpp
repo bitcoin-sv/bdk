@@ -23,8 +23,11 @@ namespace bsv
         int64_t maxScriptSizePolicy,
         int64_t maxPubKeysPerMultiSig,
         int64_t maxStackMemoryUsageConsensus,
-        int64_t maxStackMemoryUsagePolicy
+        int64_t maxStackMemoryUsagePolicy,
+        int32_t customGenesisHeight = 0
     );
+
+    int32_t GetGenesisActivationHeight();
 
     // script_verification_flags calculates the flags to be used when verifying scripts
     uint32_t script_verification_flags(const std::span<const uint8_t> locking_script, const bool isPostChronical);

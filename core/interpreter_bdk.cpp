@@ -29,10 +29,10 @@ std::string bsv::SetGlobalScriptConfig(
     int64_t maxScriptSizePolicyIn,
     int64_t maxPubKeysPerMultiSigIn,
     int64_t maxStackMemoryUsageConsensusIn,
-    int64_t maxStackMemoryUsagePolicyIn
+    int64_t maxStackMemoryUsagePolicyIn,
+    int32_t customGenesisHeight
 )
 {
-
     std::string err;
     try {
 
@@ -43,12 +43,17 @@ std::string bsv::SetGlobalScriptConfig(
         // not inside the ChainParams
         SelectParams(chainNetwork); // throw exception if wrong network string
         const CChainParams& chainparams = gConfig.GetChainParams(); // ChainParams after setting the chain network
-        if (!gConfig.SetGenesisActivationHeight(chainparams.GetConsensus().genesisHeight, &err)) {
+        const int32_t gh = (customGenesisHeight > 0) ? customGenesisHeight : chainparams.GetConsensus().genesisHeight;
+        if (!gConfig.SetGenesisActivationHeight(gh, &err)) {
             throw std::runtime_error("unable to set genesis activation height : " + err);
         }
         if (!gConfig.SetChronicleActivationHeight(chainparams.GetConsensus().chronicleHeight, &err)) {
             throw std::runtime_error("unable to set chronicle activation height : " + err);
         }
+        if (gh > chainparams.GetConsensus().chronicleHeight) {
+            throw std::runtime_error("genesis activation height was set higher than chronicle height");
+        }
+
 
         bool ok=true;
         if (maxOpsPerScriptPolicyIn > 0)
@@ -77,6 +82,11 @@ std::string bsv::SetGlobalScriptConfig(
     }
 
     return err;
+}
+
+int32_t bsv::GetGenesisActivationHeight() {
+    auto& gConfig = GlobalConfig::GetConfig();
+    return gConfig.GetGenesisActivationHeight();
 }
 
 // Check if the P2SH script is activated on different chains. We provide our own approach
