@@ -15,4 +15,5 @@ const (
 	keyMaxPubKeysPerMultiSig        = "gobdk.scriptconfig.maxpubkeyspermultisig"
 	keyMaxStackMemoryUsageConsensus = "gobdk.scriptconfig.maxstackmemoryusageconsensus"
 	keyMaxStackMemoryUsagePolicy    = "gobdk.scriptconfig.maxstackmemoryusagepolicy"
+	keyGenesisActivationHeight      = "gobdk.scriptconfig.genesisactivationheight"
 )
