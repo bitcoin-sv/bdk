@@ -30,6 +30,7 @@ func SetGlobalScriptConfig(config goconfig.ScriptConfig) error {
 		C.int64_t(config.MaxPubKeysPerMultiSig),
 		C.int64_t(config.MaxStackMemoryUsageConsensus),
 		C.int64_t(config.MaxStackMemoryUsagePolicy),
+		C.int32_t(config.GenesisActivationHeight),
 	)
 
 	errScriptConfig := C.GoString(errScriptConfigCStr)
@@ -40,4 +41,10 @@ func SetGlobalScriptConfig(config goconfig.ScriptConfig) error {
 	}
 
 	return nil
+}
+
+// GetGenesisActivationHeight get the genesis activation height being set  from the global config
+func GetGenesisActivationHeight() uint32 {
+	h := C.CgoGetGenesisActivationHeight()
+	return uint32(h)
 }

@@ -19,8 +19,14 @@ const char* CgoSetGlobalScriptConfig(
         int64_t maxScriptSizePolicy,
         int64_t maxPubKeysPerMultiSig,
         int64_t maxStackMemoryUsageConsensus,
-        int64_t maxStackMemoryUsagePolicy
+        int64_t maxStackMemoryUsagePolicy,
+        int32_t customGenesisHeight
     );
+
+/**
+ * Get custom genefis activation height being set in the global config
+ */
+int32_t CgoGetGenesisActivationHeight();
 
 #ifdef __cplusplus
 }

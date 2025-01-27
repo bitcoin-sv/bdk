@@ -12,7 +12,8 @@ const char* CgoSetGlobalScriptConfig(
         int64_t maxScriptSizePolicyIn,
         int64_t maxPubKeysPerMultiSigIn,
         int64_t maxStackMemoryUsageConsensusIn,
-        int64_t maxStackMemoryUsagePolicyIn
+        int64_t maxStackMemoryUsagePolicyIn,
+        int32_t customGenesisHeightIn
     ) {
         std::string err;
         try {
@@ -24,7 +25,8 @@ const char* CgoSetGlobalScriptConfig(
                 maxScriptSizePolicyIn,
                 maxPubKeysPerMultiSigIn,
                 maxStackMemoryUsageConsensusIn,
-                maxStackMemoryUsagePolicyIn
+                maxStackMemoryUsagePolicyIn,
+                customGenesisHeightIn
             );
         } catch (const std::exception& e) {
             std::stringstream ss;
@@ -40,3 +42,7 @@ const char* CgoSetGlobalScriptConfig(
 
         return nullptr;
     }
+
+int32_t CgoGetGenesisActivationHeight() {
+    return bsv::GetGenesisActivationHeight();
+}
