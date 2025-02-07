@@ -61,7 +61,7 @@ void testTxExtended(const int32_t blockHeight, const std::string& txID, const st
         genesisHeight
     );
 
-    const ScriptError ret = bsv::verify_extend(etxBin, blockHeight, true);
+    const ScriptError ret = bsv::verify_extend(etxBin, blockHeight-1, true);
     if (ret != SCRIPT_ERR_OK) {
         throw std::runtime_error("ERROR verify script for TxID " + txID);
     }

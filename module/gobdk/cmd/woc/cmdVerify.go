@@ -125,7 +125,7 @@ func execVerify(cmd *cobra.Command, args []string) {
 // Test new version of verificator
 func verifyScriptExtend(tx *bt.Tx, blockHeight uint32) error {
 	txBin := tx.ExtendedBytes()
-	if errV := bdkscript.VerifyExtend(txBin, blockHeight-1); errV != nil {
+	if errV := bdkscript.VerifyExtend(txBin, blockHeight-1, true); errV != nil {
 		return errV
 	}
 	return nil

@@ -362,7 +362,7 @@ BOOST_AUTO_TEST_CASE(test_verify_extend)
 
     const std::vector<uint8_t> etxBin = ParseHex(TxHexExtended);
     const std::span<const uint8_t> etx(etxBin.data(), etxBin.size());
-    const auto status = bsv::verify_extend(etx, blockHeight + 1, true);
+    const auto status = bsv::verify_extend(etx, blockHeight - 1, true);
     BOOST_CHECK_EQUAL(SCRIPT_ERR_OK, status);
 }
 
