@@ -56,6 +56,6 @@ func TestScriptVerifyExtend(t *testing.T) {
 
 	eTx, _ := hex.DecodeString(eTxHEX)
 
-	err := goscript.VerifyExtend(eTx, blockHeight+1)
+	err := goscript.VerifyExtend(eTx, blockHeight-1, true)
 	assert.Nil(t, err, "VerifyExtend should return no error")
 }

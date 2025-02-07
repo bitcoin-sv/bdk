@@ -140,7 +140,7 @@ func Verify(uScript []byte, lScript []byte,
 // VerifyExtend verify the entire extended transaction
 // It iterates through all the locking and unlocking scripts to verifies
 // It return when the first error encountered
-func VerifyExtend(extendedTX []byte, blockHeight uint32) ScriptError {
+func VerifyExtend(extendedTX []byte, blockHeight uint32, consensus bool) ScriptError {
 
 	lenTx := len(extendedTX)
 	var txPtr *C.char
@@ -149,7 +149,7 @@ func VerifyExtend(extendedTX []byte, blockHeight uint32) ScriptError {
 		txPtr = (*C.char)(unsafe.Pointer(&extendedTX[0]))
 	}
 
-	errCode := int(C.cgo_verify_extend(txPtr, C.int(lenTx), C.int32_t(blockHeight)))
+	errCode := int(C.cgo_verify_extend(txPtr, C.int(lenTx), C.int32_t(blockHeight), C.bool(consensus)))
 
 	if errCode == int(SCRIPT_ERR_OK) {
 		return nil
