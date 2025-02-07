@@ -67,7 +67,7 @@ int cgo_verify(const char* uScriptPtr, int uScriptLen,
  *  It iterates through all the locking and unlocking scripts to verifies
  *  It return when the first error encountered
  */
-int cgo_verify_extend(const char* extendedTxPtr, int extendedTxLen, int32_t blockHeight);
+int cgo_verify_extend(const char* extendedTxPtr, int extendedTxLen, int32_t blockHeight, bool consensus);
 
 #ifdef __cplusplus
 }
