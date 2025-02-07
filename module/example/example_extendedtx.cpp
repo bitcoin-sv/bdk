@@ -17,12 +17,13 @@
 #include "extendedTx.hpp"
 #include "assembler.h"
 #include "utilstrencodings.h"
+#include "interpreter_bdk.hpp"
 
 namespace po = boost::program_options;
 namespace pt = boost::property_tree;
 
 
-void testTxExtended(const std::string& txID, const std::string& txHexExtended) {
+void testTxExtended(const int32_t blockHeight, const std::string& txID, const std::string& txHexExtended) {
     const std::vector<uint8_t> etxBin = ParseHex(txHexExtended);
     const std::span<const uint8_t> etx(etxBin.data(), etxBin.size());
 
@@ -44,6 +45,25 @@ void testTxExtended(const std::string& txID, const std::string& txHexExtended) {
     const std::string recovTxID = eTX.mtx.GetId().ToString();
     if (txID != recovTxID) {
         throw std::runtime_error("ERROR recover txID for TxID " + txID);
+    }
+
+    // Test verify extend
+    const std::string network = "main";
+    const int32_t genesisHeight = 620538;
+    const std::string err = bsv::SetGlobalScriptConfig(
+        "main",
+        int64_t(0),
+        int64_t(0),
+        int64_t(0),
+        int64_t(0),
+        int64_t(0),
+        int64_t(0),
+        genesisHeight
+    );
+
+    const ScriptError ret = bsv::verify_extend(etxBin, blockHeight, true);
+    if (ret != SCRIPT_ERR_OK) {
+        throw std::runtime_error("ERROR verify script for TxID " + txID);
     }
 }
 
@@ -178,8 +198,14 @@ int main(int argc, char* argv[])
         const std::string& TxID = line[2];
         const std::string& TxHexExtended = line[3];
 
+        std::stringstream ss(line[1]);
+        int32_t blockHeight;
+        if (!(ss >> blockHeight)){
+            throw std::runtime_error("failed to convert to uint32 block height");
+        }
+
         try {
-            testTxExtended(TxID, TxHexExtended);
+            testTxExtended(blockHeight, TxID, TxHexExtended);
         }
         catch (std::exception e) {
             std::cout << "ERROR test line : " << i + 1 << e.what() << std::endl;

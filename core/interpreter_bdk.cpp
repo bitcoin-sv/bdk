@@ -430,7 +430,7 @@ ScriptError bsv::verify(const std::span<const uint8_t> unlocking_script,
                        amount);
 }
 
-ScriptError bsv::verify_extend(std::span<const uint8_t> extendedTX, int32_t blockHeight) {
+ScriptError bsv::verify_extend(std::span<const uint8_t> extendedTX, int32_t blockHeight, bool consensus) {
 
     const char* begin{ reinterpret_cast<const char*>(extendedTX.data()) };
     const char* end{ reinterpret_cast<const char*>(extendedTX.data() + extendedTX.size()) };
@@ -453,7 +453,7 @@ ScriptError bsv::verify_extend(std::span<const uint8_t> extendedTX, int32_t bloc
         ScriptError sERR = verify_impl(
             uscript,
             lscript,
-            true, flagsV2, eTX.mtx,
+            consensus, flagsV2, eTX.mtx,
             index,
             amount);
         if (sERR != SCRIPT_ERR_OK) {

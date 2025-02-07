@@ -110,14 +110,14 @@ int cgo_verify(const char* uScriptPtr, int uScriptLen,
     }
 }
 
-int cgo_verify_extend(const char* extendedTxPtr, int extendedTxLen, int32_t blockHeight) {
+int cgo_verify_extend(const char* extendedTxPtr, int extendedTxLen, int32_t blockHeight, bool consensus) {
     try {
         std::span<const uint8_t> extendedTx ;
         if (extendedTxPtr != nullptr && extendedTxLen > 0) {
             const uint8_t* pTX = static_cast<const uint8_t*>(reinterpret_cast<const void*>(extendedTxPtr));
             extendedTx = std::span<const uint8_t>(pTX, extendedTxLen);
         }
-        return bsv::verify_extend(extendedTx, blockHeight);
+        return bsv::verify_extend(extendedTx, blockHeight, consensus);
     } catch (const std::exception& e) {
         std::cout<< "CGO EXCEPTION : " <<__FILE__ <<":"<<__LINE__ << "    at " << __func__ <<std::endl;
         return SCRIPT_ERR_ERROR_COUNT+1;
