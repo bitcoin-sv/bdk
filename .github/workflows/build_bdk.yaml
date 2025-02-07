@@ -19,6 +19,9 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
 
       - name: Set up Python 3
         uses: actions/setup-python@v4
@@ -146,7 +149,7 @@ jobs:
             echo "No changes to commit"
           fi
 
-          BRANCH_NAME=${GITHUB_REF#refs/heads/}
+          BRANCH_NAME=${{ github.head_ref }}
           echo "BRANCH_NAME=$BRANCH_NAME"
           git log -2
           git push -u origin $BRANCH_NAME
