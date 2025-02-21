@@ -42,7 +42,7 @@ func TestScriptVerify(t *testing.T) {
 	inIndex := 0
 	satoshis := uint64(100000)
 	blockHeight := uint32(620538)
-	//flags, _ := goscript.ScriptVerificationFlags(lScript, true)
+	//flags, _ := goscript.ScriptVerificationFlagsV1(lScript, true)
 	flags, _ := goscript.ScriptVerificationFlagsV2(lScript, blockHeight)
 
 	err := goscript.Verify(uScript, lScript, true, uint(flags), tx, inIndex, satoshis)

@@ -24,7 +24,7 @@ extern "C" {
  * cgo_script_verification_flags calculates the flags to be used when verifying script
  * This method calculates the flags based on the era of the protocol (block height)
  */
-uint32_t cgo_script_verification_flags(const char* lScriptPtr, int lScriptLen, bool isChronicle);
+uint32_t cgo_script_verification_flags_v1(const char* lScriptPtr, int lScriptLen, bool isChronicle);
 
 /**
  * cgo_script_verification_flags_v2 calculates the flags to be used when verifying script
