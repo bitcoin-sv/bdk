@@ -24,14 +24,14 @@ const SCRIPT_FLAG_LAST = 1 << 22
 //
 // By convention, if the returned flag is greater than SCRIPT_FLAG_LAST in C/C++ code
 // It means an exception has been thrown and handled from the C/C++ layer
-func ScriptVerificationFlags(lScript []byte, isChronicle bool) (uint32, error) {
+func ScriptVerificationFlagsV1(lScript []byte, isChronicle bool) (uint32, error) {
 	lenLScript := len(lScript)
 	var lScriptPtr *C.char
 	if lenLScript > 0 {
 		lScriptPtr = (*C.char)(unsafe.Pointer(&lScript[0]))
 	}
 
-	cgoFlags := uint32(C.cgo_script_verification_flags(lScriptPtr, C.int(lenLScript), C.bool(isChronicle)))
+	cgoFlags := uint32(C.cgo_script_verification_flags_v1(lScriptPtr, C.int(lenLScript), C.bool(isChronicle)))
 	if cgoFlags > SCRIPT_FLAG_LAST {
 		return cgoFlags, errors.New("CGO EXCEPTION : Exception has been thrown and handled in C/C++ layer")
 	}
