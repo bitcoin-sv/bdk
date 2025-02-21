@@ -4,7 +4,7 @@
 #include <core/interpreter_bdk.hpp>
 #include <bdkcgo/interpreter_cgo.h>
 
-uint32_t cgo_script_verification_flags(const char* lScriptPtr, int lScriptLen, bool isChronicle)
+uint32_t cgo_script_verification_flags_v1(const char* lScriptPtr, int lScriptLen, bool isChronicle)
 {
     try {
         std::span<const uint8_t> lScript ;
@@ -12,7 +12,7 @@ uint32_t cgo_script_verification_flags(const char* lScriptPtr, int lScriptLen, b
             const uint8_t* pL = static_cast<const uint8_t*>(reinterpret_cast<const void*>(lScriptPtr));
             lScript = std::span<const uint8_t>(pL, lScriptLen);
         }
-        return bsv::script_verification_flags(lScript, isChronicle);
+        return bsv::script_verification_flags_v1(lScript, isChronicle);
     } catch (const std::exception& e) {
         std::cout<< "CGO EXCEPTION : " <<__FILE__ <<":"<<__LINE__ << "    at " << __func__ <<std::endl<< e.what() <<std::endl ;
         return SCRIPT_FLAG_LAST+1;

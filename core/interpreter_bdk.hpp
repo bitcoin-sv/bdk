@@ -30,7 +30,8 @@ namespace bsv
     int32_t GetGenesisActivationHeight();
 
     // script_verification_flags calculates the flags to be used when verifying scripts
-    uint32_t script_verification_flags(const std::span<const uint8_t> locking_script, const bool isPostChronical);
+    uint32_t script_verification_flags_v1(const std::span<const uint8_t> locking_script, const bool isPostChronical);
+    uint32_t script_verification_flags_v2(const std::span<const uint8_t> locking_script, int32_t blockHeight);
     uint32_t script_verification_flags_v2(const std::span<const uint8_t> locking_script, int32_t blockHeight);
 
     ScriptError execute(std::span<const uint8_t> script,

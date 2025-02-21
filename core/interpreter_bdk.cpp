@@ -199,7 +199,7 @@ uint32_t bsv::script_verification_flags_v2(const std::span<const uint8_t> lockin
 // It is calculated based on the locking script and the boolean isPostChronical
 // If the node parameter -genesis is set to true, then the argument isPostChronical is false
 // Otherwise, isPostChronical is true
-uint32_t bsv::script_verification_flags(const std::span<const uint8_t> locking_script, const bool isPostChronical){
+uint32_t bsv::script_verification_flags_v1(const std::span<const uint8_t> locking_script, const bool isPostChronical){
     // The core C++ code IsP2SH use index operator[22] without checking the size
     // which is dangerous (undefined behaviour). We check and throw exception here
     if (locking_script.size() < 23) {
