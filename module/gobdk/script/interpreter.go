@@ -156,3 +156,33 @@ func VerifyExtend(extendedTX []byte, blockHeight uint32, consensus bool) ScriptE
 	}
 	return ScriptErrorImpl{errCode: ScriptErrorCode(errCode)}
 }
+
+// VerifyExtendFull verify the entire extended transaction
+// It iterates through all the locking and unlocking scripts to verifies
+// It return when the first error encountered
+//
+// It has the extra array of utxo heights that allow to calculate the precise flags
+// For each utxo
+func VerifyExtendFull(extendedTX []byte, utxoHeights []uint32, blockHeight uint32, consensus bool) ScriptError {
+
+	lenTx := len(extendedTX)
+	var txPtr *C.char
+
+	if lenTx > 0 {
+		txPtr = (*C.char)(unsafe.Pointer(&extendedTX[0]))
+	}
+
+	lenUtxo := len(utxoHeights)
+
+	var utxoPtr *C.int32_t
+	if lenUtxo > 0 {
+		utxoPtr = (*C.int32_t)(unsafe.Pointer(&utxoHeights[0]))
+	}
+
+	errCode := int(C.cgo_verify_extend_full(txPtr, C.int(lenTx), utxoPtr, C.int(lenUtxo), C.int32_t(blockHeight), C.bool(consensus)))
+
+	if errCode == int(SCRIPT_ERR_OK) {
+		return nil
+	}
+	return ScriptErrorImpl{errCode: ScriptErrorCode(errCode)}
+}
