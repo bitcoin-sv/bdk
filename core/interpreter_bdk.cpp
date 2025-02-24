@@ -221,7 +221,7 @@ uint32_t get_block_script_flags(const std::span<const uint8_t> locking_script, i
 }
 
 // Use of
-//   GetScriptVerifyFlags(config, protocolEra)     // Might need to use replication of GetBlockScriptFlags as the flags v2
+//   GetBlockScriptFlags                          // Might consider to use GetScriptVerifyFlags(config, protocolEra)
 //   InputScriptVerifyFlags(protocolEra, utxoEra)
 // For now this method doesn't use lscript, we keep it as input here just in case we need it later
 uint32_t bsv::script_verification_flags(const std::span<const uint8_t> lscript, int32_t utxoHeight, int32_t blockHeight) {
