@@ -30,8 +30,8 @@ namespace bsv
     int32_t GetGenesisActivationHeight();
 
     // script_verification_flags calculates the flags to be used when verifying scripts
+    uint32_t script_verification_flags(const std::span<const uint8_t> locking_script, int32_t utxoHeight, int32_t blockHeight); // The most accurate
     uint32_t script_verification_flags_v1(const std::span<const uint8_t> locking_script, const bool isPostChronical);
-    uint32_t script_verification_flags_v2(const std::span<const uint8_t> locking_script, int32_t blockHeight);
     uint32_t script_verification_flags_v2(const std::span<const uint8_t> locking_script, int32_t blockHeight);
 
     ScriptError execute(std::span<const uint8_t> script,
@@ -67,6 +67,12 @@ namespace bsv
     // Verify extended tx in one go. It will iterate through all the input and verify
     // It returns the first encountered verification error
     ScriptError verify_extend(std::span<const uint8_t> extendedTX, int32_t blockHeight, bool consensus);
+
+    // Verify extended tx in one go. It will iterate through all the input and verify
+    // It returns the first encountered verification error
+    // This version use additional parameters : the list of utxo heights.
+    // It allows to calculate precisely the flags corresponding to each utxo
+    ScriptError verify_extend_full(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool consensus);
 };
 
 #endif /* __INTERPRETER_BDK_HPP__ */

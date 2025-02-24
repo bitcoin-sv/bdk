@@ -21,7 +21,7 @@ extern "C" {
  */
 
 /**
- * cgo_script_verification_flags calculates the flags to be used when verifying script
+ * cgo_script_verification_flags_v1 calculates the flags to be used when verifying script
  * This method calculates the flags based on the era of the protocol (block height)
  */
 uint32_t cgo_script_verification_flags_v1(const char* lScriptPtr, int lScriptLen, bool isChronicle);
@@ -32,6 +32,11 @@ uint32_t cgo_script_verification_flags_v1(const char* lScriptPtr, int lScriptLen
  */
 uint32_t cgo_script_verification_flags_v2(const char* lScriptPtr, int lScriptLen, int32_t blockHeight);
 
+/**
+ * cgo_script_verification_flags calculates the flags to be used when verifying script
+ * This method calculates precisely flags for each utxo using the utxo heights
+ */
+uint32_t cgo_script_verification_flags(const char* lScriptPtr, int lScriptLen, int32_t utxoHeight, int32_t blockHeight);
 
 /**
  *  cgo_execute executes the script without verifying. Useful for simple script playing
@@ -68,6 +73,16 @@ int cgo_verify(const char* uScriptPtr, int uScriptLen,
  *  It return when the first error encountered
  */
 int cgo_verify_extend(const char* extendedTxPtr, int extendedTxLen, int32_t blockHeight, bool consensus);
+
+/**
+ *  cgo_verify_extend_full verifies the extended transaction
+ *  It iterates through all the locking and unlocking scripts to verifies
+ *  It return when the first error encountered
+ *
+ *  It use an extra array of utxo heights to calculate precisely the flags for each utxo
+ *  This array lenght must match the number of utxo in the given extended transactions
+ */
+int cgo_verify_extend_full(const char* extendedTxPtr, int extendedTxLen, const int32_t* hUTXOsPtr, int hUTXOsLen, int32_t blockHeight, bool consensus);
 
 #ifdef __cplusplus
 }
