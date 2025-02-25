@@ -11,6 +11,8 @@
 #include <script/script_flags.h>
 
 #include <stdexcept>
+#include <iostream>
+#include <chrono>
 
 using namespace std;
 
@@ -431,11 +433,10 @@ namespace
                             const CScript& locking_script,
                             const bool consensus,
                             const unsigned int flags,
-                            const CMutableTransaction& mtx,
+                            const CTransaction& tx,
                             const int index,
                             const int64_t amount)
     {
-        const CTransaction tx(mtx);
         if(!tx.vin.empty() && !tx.vout.empty())
         {
             const Amount amt{amount};
@@ -478,11 +479,12 @@ ScriptError bsv::verify(const std::span<const uint8_t> unlocking_script,
                                  "supplied tx data");
     }
 
+    const CTransaction ctx(mtx);
     return verify_impl(CScript(unlocking_script.data(), unlocking_script.data() + unlocking_script.size()),
                        CScript(locking_script.data(), locking_script.data() + locking_script.size()),
                        consensus,
                        flags,
-                       mtx,
+                       ctx,
                        index,
                        amount);
 }
@@ -500,6 +502,7 @@ ScriptError bsv::verify_extend(std::span<const uint8_t> extendedTX, int32_t bloc
         throw std::runtime_error("error serializing extended tx");
     }
 
+    const CTransaction ctx(eTX.mtx);
     for (size_t index = 0; index < eTX.vutxo.size(); ++index) {
         const uint64_t amount = eTX.vutxo[index].nValue.GetSatoshis();
         const CScript& lscript = eTX.vutxo[index].scriptPubKey; //   locking script
@@ -510,7 +513,7 @@ ScriptError bsv::verify_extend(std::span<const uint8_t> extendedTX, int32_t bloc
         ScriptError sERR = verify_impl(
             uscript,
             lscript,
-            consensus, flagsV2, eTX.mtx,
+            consensus, flagsV2, ctx,
             index,
             amount);
         if (sERR != SCRIPT_ERR_OK) {
@@ -537,6 +540,7 @@ ScriptError bsv::verify_extend_full(std::span<const uint8_t> extendedTX, std::sp
         throw std::runtime_error("inconsistent utxo heights and number of utxo");
     }
 
+    const CTransaction ctx(eTX.mtx);
     for (size_t index = 0; index < eTX.vutxo.size(); ++index) {
         const uint64_t amount = eTX.vutxo[index].nValue.GetSatoshis();
         const CScript& lscript = eTX.vutxo[index].scriptPubKey; //   locking script
@@ -548,7 +552,7 @@ ScriptError bsv::verify_extend_full(std::span<const uint8_t> extendedTX, std::sp
         ScriptError sERR = verify_impl(
             uscript,
             lscript,
-            consensus, flags, eTX.mtx,
+            consensus, flags, ctx,
             index,
             amount);
         if (sERR != SCRIPT_ERR_OK) {
