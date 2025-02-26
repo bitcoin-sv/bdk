@@ -109,7 +109,7 @@ if(UNIX)
   string(TOLOWER ${OsArch} os_arch)
   set(mergedArchive "libGoBDK_${os_arch}.a")
   add_custom_target(MergeGoBDK ALL
-                  COMMAND ${CMAKE_AR} rcs "${mergedArchive}" "${buildDir}/merge_gobdk/*/*.o"
+                  COMMAND ${CMAKE_AR} rcs "${mergedArchive}" ${buildDir}/merge_gobdk/*/*.o
                   DEPENDS static-${_GO_MODULE_NAME}
                   WORKING_DIRECTORY ${buildDir}
                   COMMENT "Merge all in one ${mergedArchive}")
