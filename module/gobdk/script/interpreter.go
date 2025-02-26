@@ -24,14 +24,14 @@ const SCRIPT_FLAG_LAST = 1 << 22
 //
 // By convention, if the returned flag is greater than SCRIPT_FLAG_LAST in C/C++ code
 // It means an exception has been thrown and handled from the C/C++ layer
-func ScriptVerificationFlags(lScript []byte, isChronicle bool) (uint32, error) {
+func ScriptVerificationFlagsV1(lScript []byte, isChronicle bool) (uint32, error) {
 	lenLScript := len(lScript)
 	var lScriptPtr *C.char
 	if lenLScript > 0 {
 		lScriptPtr = (*C.char)(unsafe.Pointer(&lScript[0]))
 	}
 
-	cgoFlags := uint32(C.cgo_script_verification_flags(lScriptPtr, C.int(lenLScript), C.bool(isChronicle)))
+	cgoFlags := uint32(C.cgo_script_verification_flags_v1(lScriptPtr, C.int(lenLScript), C.bool(isChronicle)))
 	if cgoFlags > SCRIPT_FLAG_LAST {
 		return cgoFlags, errors.New("CGO EXCEPTION : Exception has been thrown and handled in C/C++ layer")
 	}
@@ -150,6 +150,36 @@ func VerifyExtend(extendedTX []byte, blockHeight uint32, consensus bool) ScriptE
 	}
 
 	errCode := int(C.cgo_verify_extend(txPtr, C.int(lenTx), C.int32_t(blockHeight), C.bool(consensus)))
+
+	if errCode == int(SCRIPT_ERR_OK) {
+		return nil
+	}
+	return ScriptErrorImpl{errCode: ScriptErrorCode(errCode)}
+}
+
+// VerifyExtendFull verify the entire extended transaction
+// It iterates through all the locking and unlocking scripts to verifies
+// It return when the first error encountered
+//
+// It has the extra array of utxo heights that allow to calculate the precise flags
+// For each utxo
+func VerifyExtendFull(extendedTX []byte, utxoHeights []uint32, blockHeight uint32, consensus bool) ScriptError {
+
+	lenTx := len(extendedTX)
+	var txPtr *C.char
+
+	if lenTx > 0 {
+		txPtr = (*C.char)(unsafe.Pointer(&extendedTX[0]))
+	}
+
+	lenUtxo := len(utxoHeights)
+
+	var utxoPtr *C.int32_t
+	if lenUtxo > 0 {
+		utxoPtr = (*C.int32_t)(unsafe.Pointer(&utxoHeights[0]))
+	}
+
+	errCode := int(C.cgo_verify_extend_full(txPtr, C.int(lenTx), utxoPtr, C.int(lenUtxo), C.int32_t(blockHeight), C.bool(consensus)))
 
 	if errCode == int(SCRIPT_ERR_OK) {
 		return nil

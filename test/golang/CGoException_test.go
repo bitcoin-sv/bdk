@@ -11,19 +11,19 @@ import (
 func TestExceptionFlagsCalculation(t *testing.T) {
 	t.Run("Out-of-bound exception", func(t *testing.T) {
 		lScript := make([]byte, 22)
-		_, err := goscript.ScriptVerificationFlags(lScript, true)
+		_, err := goscript.ScriptVerificationFlagsV1(lScript, true)
 		assert.NotNil(t, err, "Expect exception error")
 	})
 
 	t.Run("Correct size locking script", func(t *testing.T) {
 		lScript := make([]byte, 23)
-		_, err := goscript.ScriptVerificationFlags(lScript, true)
+		_, err := goscript.ScriptVerificationFlagsV1(lScript, true)
 		assert.Nil(t, err, "No exception for correct size of locking script")
 	})
 
 	t.Run("Correct size locking script ++", func(t *testing.T) {
 		lScript := make([]byte, 24)
-		_, err := goscript.ScriptVerificationFlags(lScript, true)
+		_, err := goscript.ScriptVerificationFlagsV1(lScript, true)
 		assert.Nil(t, err, "No exception for correct size of locking script")
 	})
 }

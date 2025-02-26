@@ -148,7 +148,7 @@ func verifyScript(tx *bt.Tx, blockHeight uint32) error {
 		}
 
 		// isPostChronicle now is unknow, in future, it need to be calculate based on block height
-		//flags, errF := bdkscript.ScriptVerificationFlags(*in.PreviousTxScript, false)
+		//flags, errF := bdkscript.ScriptVerificationFlagsV1(*in.PreviousTxScript, false)
 		flags, errF := bdkscript.ScriptVerificationFlagsV2(*in.PreviousTxScript, blockHeight-1)
 		if errF != nil {
 			return fmt.Errorf("failed to calculate flags from prev locking script, flags : %v, error: %v", flags, errF)
