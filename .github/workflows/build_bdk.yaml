@@ -16,6 +16,10 @@ jobs:
       fail-fast: false
     runs-on: ${{ matrix.os }}
 
+    env:
+      GO111MODULE : on
+      GOFLAGS : -mod=vendor
+
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -79,6 +83,7 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           mkdir -p "build"
+          rm -fR ./build/* && rm -fR test/golang/vendor/*
           cmake -B build -S "." -DINSTALL_GOBDK_INSOURCE=ON
           cmake --build build --parallel 4
           ctest --output-on-failure --test-dir build
