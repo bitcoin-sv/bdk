@@ -11,6 +11,8 @@
 #include <script/script_flags.h>
 
 #include <stdexcept>
+#include <iostream>
+#include <chrono>
 
 using namespace std;
 
@@ -128,9 +130,40 @@ bool is_p2sh_activated(const Config& config, int32_t blockHeight) {
     return true;
 }
 
-// This method of flags calculation was replicated from $BSV/src/validation.cpp::GetBlockScriptFlags in Chronicle release 1.2.0
-// The version implemented here has been slightly modified to adapt to the context of independant library
-uint32_t bsv::script_verification_flags_v2(const std::span<const uint8_t> locking_script, int32_t blockHeight) {
+// clone of GetScriptVerifyFlags
+//
+// get_script_verify_flags is a clone of GetScriptVerifyFlags in chronicle version
+// In chronical version, GetScriptVerifyFlags is defined in $BSV/src/validation.cpp, if we include this file
+// into our compilation, what'll include a lot of other files that make the whole dependencies explode.
+// This is why we'd rather clone this function here and use it.
+uint32_t get_script_verify_flags(const Config &config, ProtocolEra era)
+{
+    // Get verification flags for overall script - individual UTXOs may need
+    // to add/remove flags (done by CheckInputScripts).
+    uint32_t scriptVerifyFlags { StandardScriptVerifyFlags(era) };
+    if (!config.GetChainParams().RequireStandard())
+    {
+        if (config.IsSetPromiscuousMempoolFlags())
+        {
+            scriptVerifyFlags = config.GetPromiscuousMempoolFlags();
+        }
+        scriptVerifyFlags |= SCRIPT_ENABLE_SIGHASH_FORKID;
+    }
+
+    return scriptVerifyFlags;
+}
+
+// clone eand modified of GetBlockScriptFlags
+//
+// get_block_script_flags is a clone and slight modified version of GetBlockScriptFlags.
+// Same reason as GetScriptVerifyFlags, we don't want to include $BSV/src/validation.cpp that will explode
+// dependencies, we clone it here. We also modify it slightly as the native GetBlockScriptFlags use the struct
+// BlockIndex as input, while we don't have that, we use blockHeight
+//
+// This slight modification skip the handling of grace period using GetMedianTimePast
+// See
+//    https://github.com/bitcoin-sv/bitcoin-sv/blob/master/src/validation.cpp#L2882
+uint32_t get_block_script_flags(const std::span<const uint8_t> locking_script, int32_t blockHeight) {
     const Config& config = GlobalConfig::GetConfig();
     const Consensus::Params& consensusparams = config.GetChainParams().GetConsensus();
     uint32_t flags = SCRIPT_VERIFY_NONE;
@@ -186,12 +219,38 @@ uint32_t bsv::script_verification_flags_v2(const std::span<const uint8_t> lockin
         flags &= ~SCRIPT_VERIFY_SIGPUSHONLY;
     }
 
+    return flags;
+}
+
+// Use of
+//   GetBlockScriptFlags                          // Might consider to use GetScriptVerifyFlags(config, protocolEra)
+//   InputScriptVerifyFlags(protocolEra, utxoEra)
+// For now this method doesn't use lscript, we keep it as input here just in case we need it later
+uint32_t bsv::script_verification_flags(const std::span<const uint8_t> lscript, int32_t utxoHeight, int32_t blockHeight) {
+
+    const Config& config = GlobalConfig::GetConfig();
+    const ProtocolEra activeEra{ GetProtocolEra(config, blockHeight) };
+    const ProtocolEra utxoEra{ GetProtocolEra(config, utxoHeight) };
+
+    // const uint32_t scriptVerifyFlags = get_script_verify_flags(config, activeEra);
+    const uint32_t scriptVerifyFlags = get_block_script_flags(lscript, blockHeight);
+    const uint32_t perInputScriptFlags { InputScriptVerifyFlags(activeEra, utxoEra) };
+    return scriptVerifyFlags | perInputScriptFlags;
+}
+
+// This method of flags calculation was replicated from $BSV/src/validation.cpp::GetBlockScriptFlags in Chronicle release 1.2.0
+// The version implemented here has been slightly modified to adapt to the context of independant library
+uint32_t bsv::script_verification_flags_v2(const std::span<const uint8_t> locking_script, int32_t blockHeight) {
+    const Config& config = GlobalConfig::GetConfig();
+
+    const uint32_t blockVerifyFlabgs = get_block_script_flags(locking_script, blockHeight);
+
     // Trying to get the utxoEra using a combination of methods in $BSV/src/bitcoin-tx.cpp
     // To get the InputScriptVerifyFlags from the utxo
-    const ProtocolEra ActiveEra{ GetProtocolEra(config, blockHeight) };
-    const ProtocolEra utxoEra{ IsP2SH(locking_script) ? ProtocolEra::PreGenesis : ActiveEra };
-    flags |= InputScriptVerifyFlags(ActiveEra, utxoEra);
-    return flags;
+    const ProtocolEra activeEra{ GetProtocolEra(config, blockHeight) };
+    const ProtocolEra utxoEra{ IsP2SH(locking_script) ? ProtocolEra::PreGenesis : activeEra };
+    const uint32_t perInputScriptFlags { InputScriptVerifyFlags(activeEra, utxoEra) };
+    return blockVerifyFlabgs | perInputScriptFlags;
 }
 
 
@@ -199,7 +258,7 @@ uint32_t bsv::script_verification_flags_v2(const std::span<const uint8_t> lockin
 // It is calculated based on the locking script and the boolean isPostChronical
 // If the node parameter -genesis is set to true, then the argument isPostChronical is false
 // Otherwise, isPostChronical is true
-uint32_t bsv::script_verification_flags(const std::span<const uint8_t> locking_script, const bool isPostChronical){
+uint32_t bsv::script_verification_flags_v1(const std::span<const uint8_t> locking_script, const bool isPostChronical){
     // The core C++ code IsP2SH use index operator[22] without checking the size
     // which is dangerous (undefined behaviour). We check and throw exception here
     if (locking_script.size() < 23) {
@@ -374,11 +433,10 @@ namespace
                             const CScript& locking_script,
                             const bool consensus,
                             const unsigned int flags,
-                            const CMutableTransaction& mtx,
+                            const CTransaction& tx,
                             const int index,
                             const int64_t amount)
     {
-        const CTransaction tx(mtx);
         if(!tx.vin.empty() && !tx.vout.empty())
         {
             const Amount amt{amount};
@@ -421,11 +479,12 @@ ScriptError bsv::verify(const std::span<const uint8_t> unlocking_script,
                                  "supplied tx data");
     }
 
+    const CTransaction ctx(mtx);
     return verify_impl(CScript(unlocking_script.data(), unlocking_script.data() + unlocking_script.size()),
                        CScript(locking_script.data(), locking_script.data() + locking_script.size()),
                        consensus,
                        flags,
-                       mtx,
+                       ctx,
                        index,
                        amount);
 }
@@ -443,6 +502,7 @@ ScriptError bsv::verify_extend(std::span<const uint8_t> extendedTX, int32_t bloc
         throw std::runtime_error("error serializing extended tx");
     }
 
+    const CTransaction ctx(eTX.mtx);
     for (size_t index = 0; index < eTX.vutxo.size(); ++index) {
         const uint64_t amount = eTX.vutxo[index].nValue.GetSatoshis();
         const CScript& lscript = eTX.vutxo[index].scriptPubKey; //   locking script
@@ -453,7 +513,46 @@ ScriptError bsv::verify_extend(std::span<const uint8_t> extendedTX, int32_t bloc
         ScriptError sERR = verify_impl(
             uscript,
             lscript,
-            consensus, flagsV2, eTX.mtx,
+            consensus, flagsV2, ctx,
+            index,
+            amount);
+        if (sERR != SCRIPT_ERR_OK) {
+            return sERR;
+        }
+    }
+
+    return SCRIPT_ERR_OK;
+}
+
+ScriptError bsv::verify_extend_full(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool consensus) {
+
+    const char* begin{ reinterpret_cast<const char*>(extendedTX.data()) };
+    const char* end{ reinterpret_cast<const char*>(extendedTX.data() + extendedTX.size()) };
+    CDataStream tx_stream(begin, end, SER_NETWORK, PROTOCOL_VERSION);
+    CMutableTransactionExtended eTX;
+    tx_stream >> eTX;
+
+    if (!tx_stream.empty()) {
+        throw std::runtime_error("error serializing extended tx");
+    }
+
+    if (eTX.vutxo.size() != utxoHeights.size()) {
+        throw std::runtime_error("inconsistent utxo heights and number of utxo");
+    }
+
+    const CTransaction ctx(eTX.mtx);
+    for (size_t index = 0; index < eTX.vutxo.size(); ++index) {
+        const uint64_t amount = eTX.vutxo[index].nValue.GetSatoshis();
+        const CScript& lscript = eTX.vutxo[index].scriptPubKey; //   locking script
+        const CScript& uscript = eTX.mtx.vin[index].scriptSig;  // unlocking script
+
+        const int32_t utxoHeight { utxoHeights[index] };
+        const uint32_t flags = bsv::script_verification_flags(lscript, utxoHeight, blockHeight);
+
+        ScriptError sERR = verify_impl(
+            uscript,
+            lscript,
+            consensus, flags, ctx,
             index,
             amount);
         if (sERR != SCRIPT_ERR_OK) {

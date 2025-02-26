@@ -49,7 +49,7 @@ ScriptError runExampleVerification() {
     std::cout << "Unlocking Script : " << std::endl << uScriptASM << std::endl << std::endl;
     std::cout << "Locking Script : " << std::endl << lScriptASM << std::endl << std::endl;
 
-    //const unsigned int flags = bsv::script_verification_flags(lScript, false);
+    //const unsigned int flags = bsv::script_verification_flags_v1(lScript, false);
     const uint32_t flags = bsv::script_verification_flags_v2(lScript, blockHeight);
 
     auto ret = bsv::verify(uScript, lScript, true, flags, tx, inIndex, satoshis);
@@ -148,7 +148,7 @@ int main(int argc, char* argv[])
         std::cout << "Unlocking Script : " << std::endl << uScriptASM << std::endl << std::endl;
         std::cout << "Locking Script : " << std::endl << lScriptASM << std::endl << std::endl;
 
-        //const unsigned int flags = bsv::script_verification_flags(lScript, false);
+        //const unsigned int flags = bsv::script_verification_flags_v1(lScript, false);
         uint32_t flags = bsv::script_verification_flags_v2(lScript, blockHeight);
 
         ret = bsv::verify(uScript, lScript, true, flags, tx, inIndex, satoshis);
