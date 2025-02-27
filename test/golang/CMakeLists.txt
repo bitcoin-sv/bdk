@@ -18,16 +18,11 @@ if(CONFIGURE_GOBDK_VSCODE)
   configure_file(${CMAKE_CURRENT_SOURCE_DIR}/.vscode/launch.json.in ${CMAKE_CURRENT_SOURCE_DIR}/.vscode/launch.json @ONLY)
 endif()
 
-message(INFO "Preparing go vendor for testing GoBDK")
-execute_process(
-  COMMAND ${GO_EXECUTABLE} mod vendor
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-)
-
-message(INFO "Clean test cache GoBDK")
-execute_process(
-  COMMAND ${GO_EXECUTABLE} clean -testcache
-  WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+## Add preparatory command as a test, to make it executed before all other tests
+## All other go test in this directory will depend to this setup
+add_test(NAME test_GoBDKSetup
+  COMMAND bash -c "echo '####  GoBDK test setup  ####' &&  rm -fR ${CMAKE_CURRENT_SOURCE_DIR}/vendor && ${GO_EXECUTABLE} mod tidy && ${GO_EXECUTABLE} mod vendor && ${GO_EXECUTABLE} clean -testcache && echo '####  End GoBDK test setup####'"
+  PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
 )
 
 ## Get all test file
@@ -51,16 +46,16 @@ foreach(golang_test_file ${GOLANG_TEST_FILES})
   if(CMAKE_CONFIGURATION_TYPES)
     set(_tpost_fix d)
     add_test(NAME ${golang_test_name} COMMAND ${GO_EXECUTABLE} test Main_test.go ${golang_test_file} CONFIGURATIONS Release)
-    set_tests_properties(${golang_test_name} PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+    set_tests_properties(${golang_test_name} PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" DEPENDS test_GoBDKSetup)
     add_test(NAME ${golang_test_name}${_tpost_fix} COMMAND ${GO_EXECUTABLE} test Main_test.go ${golang_test_file} CONFIGURATIONS Debug)
-    set_tests_properties(${golang_test_name}${_tpost_fix} PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+    set_tests_properties(${golang_test_name}${_tpost_fix} PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" DEPENDS test_GoBDKSetup)
   else()
     if(${CMAKE_BUILD_TYPE} STREQUAL "Debug")
       set(_tpost_fix d)
     endif()
 
     add_test(NAME ${golang_test_name}${_tpost_fix} COMMAND ${GO_EXECUTABLE} test Main_test.go ${golang_test_file})
-    set_tests_properties(${golang_test_name}${_tpost_fix} PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+    set_tests_properties(${golang_test_name}${_tpost_fix} PROPERTIES WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" DEPENDS test_GoBDKSetup)
   endif()
 
 endforeach()
