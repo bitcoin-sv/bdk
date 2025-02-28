@@ -502,6 +502,14 @@ ScriptError bsv::verify_extend(std::span<const uint8_t> extendedTX, int32_t bloc
         throw std::runtime_error("error serializing extended tx");
     }
 
+    if (eTX.vutxo.size() != eTX.mtx.vin.size()) {
+        throw std::runtime_error("inconsistent inputs size");
+    }
+
+    if (eTX.vutxo.empty() || eTX.mtx.vin.empty()) {
+        return SCRIPT_ERR_UNKNOWN_ERROR;
+    }
+
     const CTransaction ctx(eTX.mtx);
     for (size_t index = 0; index < eTX.vutxo.size(); ++index) {
         const uint64_t amount = eTX.vutxo[index].nValue.GetSatoshis();
@@ -538,6 +546,13 @@ ScriptError bsv::verify_extend_full(std::span<const uint8_t> extendedTX, std::sp
 
     if (eTX.vutxo.size() != utxoHeights.size()) {
         throw std::runtime_error("inconsistent utxo heights and number of utxo");
+    }
+    if (eTX.vutxo.size() != eTX.mtx.vin.size()) {
+        throw std::runtime_error("inconsistent inputs size");
+    }
+
+    if (eTX.vutxo.empty() || eTX.mtx.vin.empty() || utxoHeights.empty()) {
+        return SCRIPT_ERR_UNKNOWN_ERROR;
     }
 
     const CTransaction ctx(eTX.mtx);
