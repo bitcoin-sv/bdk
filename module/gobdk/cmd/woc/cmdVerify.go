@@ -128,13 +128,10 @@ func execVerify(cmd *cobra.Command, args []string) {
 
 // Test new version of verificator
 func verifyScriptExtendFull(txBin []byte, utxoHeights []uint32, blockHeight uint32) error {
-	utxoUInt32 := make([]uint32, len(utxoHeights))
-	for i, v := range utxoHeights {
-		utxoUInt32[i] = uint32(v) // Explicit conversion
-	}
-	if errV := bdkscript.VerifyExtendFull(txBin, utxoUInt32, blockHeight-1, true); errV != nil {
+	if errV := bdkscript.VerifyExtendFull(txBin, utxoHeights, blockHeight-1, true); errV != nil {
 		return errV
 	}
+
 	return nil
 }
 
