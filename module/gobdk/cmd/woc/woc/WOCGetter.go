@@ -11,7 +11,7 @@ import (
 )
 
 // Define and initialize the map (as a variable, not constant)
-var importantBlocks = map[string][]uint64{
+var importantBlocks = map[string][]uint32{
 	"main": {
 		227930,
 		227931, //main.BIP34Height
@@ -84,7 +84,7 @@ var importantBlocks = map[string][]uint64{
 }
 
 // GetMandatoryBlocks returns all the important blocks as marked in node params
-func GetMandatoryBlocks(network string) []uint64 {
+func GetMandatoryBlocks(network string) []uint32 {
 	if blocks, ok := importantBlocks[network]; ok {
 
 		// Sort before returning the blocks slice
@@ -93,7 +93,7 @@ func GetMandatoryBlocks(network string) []uint64 {
 		})
 		return blocks
 	}
-	return []uint64{}
+	return []uint32{}
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////
@@ -107,7 +107,7 @@ func GetBlockChainInfo(api *APIClient) (string, error) {
 
 // GetBlockByHeight given the block height, return the JSON body of the block detail
 // See : https://docs.taal.com/core-products/whatsonchain/block#get-by-height
-func GetBlockByHeight(api *APIClient, h uint64) (string, error) {
+func GetBlockByHeight(api *APIClient, h uint32) (string, error) {
 	path := fmt.Sprintf("block/height/%v", h)
 	return api.Fetch(path)
 }
@@ -123,7 +123,7 @@ type TxData struct {
 	TxID          string `json:"txid"`
 	Hex           string `json:"hex"`
 	BlockHash     string `json:"blockhash"`
-	BlockHeight   int    `json:"blockheight"`
+	BlockHeight   uint32 `json:"blockheight"`
 	BlockTime     int64  `json:"blocktime"`
 	Confirmations int    `json:"confirmations"`
 }
@@ -160,29 +160,29 @@ func GetBulkTx(api *APIClient, TxIDs []string) ([]TxData, error) {
 // See  tx ExtendedBytes()
 //
 //	https://github.com/ordishs/go-bt/blob/master/tx.go#L342
-func GetTxHexExtended(api *APIClient, txID string) (string, []uint64, error) {
+func GetTxHexExtended(api *APIClient, txID string) (string, []uint32, error) {
 
 	// Get the standard tx from woc
 	txsMain, err := GetBulkTx(api, []string{txID})
 	if err != nil {
-		return "", []uint64{}, fmt.Errorf("failed to get tx hex from with id %v, error %w", txID, err)
+		return "", []uint32{}, fmt.Errorf("failed to get tx hex from with id %v, error %w", txID, err)
 	}
 
 	if len(txsMain) != 1 {
-		return "", []uint64{}, fmt.Errorf("error returned list of transaction len=%v while expect to be 1", len(txsMain))
+		return "", []uint32{}, fmt.Errorf("error returned list of transaction len=%v while expect to be 1", len(txsMain))
 	}
 
 	txHex := txsMain[0].Hex
 
 	tx, err := bt.NewTxFromString(txHex)
 	if err != nil {
-		return "", []uint64{}, fmt.Errorf("failed to parse tx hex %v, error %w", txHex, err)
+		return "", []uint32{}, fmt.Errorf("failed to parse tx hex %v, error %w", txHex, err)
 	}
 
 	// enrich the extended tx by fetching the UTXOs
 	parentTxs := make(map[string]*bt.Tx)
-	parentTxsHeight := make(map[string]uint64)
-	utxoHeights := make([]uint64, len(tx.Inputs))
+	parentTxsHeight := make(map[string]uint32)
+	utxoHeights := make([]uint32, len(tx.Inputs))
 	for i, input := range tx.Inputs {
 		parentTxID := input.PreviousTxIDChainHash().String()
 		parentTx, ok := parentTxs[parentTxID]
@@ -193,28 +193,28 @@ func GetTxHexExtended(api *APIClient, txID string) (string, []uint64, error) {
 			// Get the standard tx from woc
 			txs, err := GetBulkTx(api, []string{parentTxID})
 			if err != nil {
-				return "", []uint64{}, fmt.Errorf("failed to get parent tx with id %v, error %w", parentTxID, err)
+				return "", []uint32{}, fmt.Errorf("failed to get parent tx with id %v, error %w", parentTxID, err)
 			}
 
 			if len(txs) != 1 {
-				return "", []uint64{}, fmt.Errorf("error returned list of transaction len=%v while expect to be 1", len(txs))
+				return "", []uint32{}, fmt.Errorf("error returned list of transaction len=%v while expect to be 1", len(txs))
 			}
 
 			parentTxHex := txs[0].Hex
 
 			parentTx, err = bt.NewTxFromString(parentTxHex)
 			if err != nil {
-				return "", []uint64{}, fmt.Errorf("failed to parse parent tx for input %v, hex %v , error %w", i, parentTxHex, err)
+				return "", []uint32{}, fmt.Errorf("failed to parse parent tx for input %v, hex %v , error %w", i, parentTxHex, err)
 			}
 
 			parentTxs[parentTxID] = parentTx
-			parentTxsHeight[parentTxID] = uint64(txs[0].BlockHeight)
+			parentTxsHeight[parentTxID] = txs[0].BlockHeight
 		}
 
 		// add the parent tx output to the input
 		previousScript, err := hex.DecodeString(parentTx.Outputs[input.PreviousTxOutIndex].LockingScript.String())
 		if err != nil {
-			return "", []uint64{}, fmt.Errorf("failed to the utxo for the input %v, error %w", i, err)
+			return "", []uint32{}, fmt.Errorf("failed to the utxo for the input %v, error %w", i, err)
 		}
 
 		utxoHeights[i] = parentTxsHeight[parentTxID]
@@ -229,19 +229,19 @@ func GetTxHexExtended(api *APIClient, txID string) (string, []uint64, error) {
 /////////////////////////////////////////////////////////////////////////////////////////////////
 
 type partChainInfoBlockHeight struct {
-	Blocks uint64 `json:"blocks"`
+	Blocks uint32 `json:"blocks"`
 }
 
 // GetChainTip return the highest block
 // See : https://docs.taal.com/core-products/whatsonchain/chain-info#get-blockchain-info
 
-func GetChainTip(api *APIClient) (uint64, error) {
+func GetChainTip(api *APIClient) (uint32, error) {
 	if jsonStr, err := GetBlockChainInfo(api); err != nil {
-		return uint64(0), err
+		return uint32(0), err
 	} else {
 		var data partChainInfoBlockHeight
 		if err := json.Unmarshal([]byte(jsonStr), &data); err != nil {
-			return uint64(0), fmt.Errorf("unable to parse the json body, error %w", err)
+			return uint32(0), fmt.Errorf("unable to parse the json body, error %w", err)
 		} else {
 			return data.Blocks, nil
 		}
@@ -262,7 +262,7 @@ type partBlockTXs struct {
 // GetChainTip return the highest block
 // The list of returned txIDs has removed the coinbase tx
 // See : https://docs.taal.com/core-products/whatsonchain/block#get-by-height
-func GetListTxFromBlock(api *APIClient, blockHeight uint64) ([]string, error) {
+func GetListTxFromBlock(api *APIClient, blockHeight uint32) ([]string, error) {
 	if jsonStr, err := GetBlockByHeight(api, blockHeight); err != nil {
 		return []string{}, err
 	} else {

@@ -7,7 +7,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var cmdBlockHeight uint64
+var cmdBlockHeight uint32
 
 // cmdBlock represents the block command
 var cmdBlock = &cobra.Command{
@@ -23,7 +23,7 @@ Example :
 
 func init() {
 	// Define the --height flag for the block command
-	cmdBlock.Flags().Uint64VarP(&cmdBlockHeight, "block-height", "b", 0, "Block height (required)")
+	cmdBlock.Flags().Uint32VarP(&cmdBlockHeight, "block-height", "b", 0, "Block height (required)")
 	cmdBlock.MarkFlagRequired("block-height") // Make the --block-height flag required
 
 	cmdRoot.AddCommand(cmdBlock)

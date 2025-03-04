@@ -15,11 +15,11 @@ const CSVHeaders = "ChainNet,BlockHeight,TXID,TxHexExtended, UTXOHeights"
 // CsvDataRecord hold a data record for csv file
 type CsvDataRecord struct {
 	ChainNet        string
-	BlockHeight     uint64
+	BlockHeight     uint32
 	TXID            string
 	TxHexExtended   string
 	UTXOHeights     string // string joinning utxo heights with separator |
-	DataUTXOHeights []uint64
+	DataUTXOHeights []uint32
 	TxBinExtended   []byte
 }
 
@@ -32,7 +32,7 @@ func (d *CsvDataRecord) CSVLine() string {
 		if len(d.DataUTXOHeights) > 0 {
 			hSlice := make([]string, len(d.DataUTXOHeights))
 			for i, h := range d.DataUTXOHeights {
-				hSlice[i] = strconv.FormatUint(h, 10) // Convert uint64 to string
+				hSlice[i] = strconv.FormatUint(uint64(h), 10)
 			}
 			d.UTXOHeights = strings.Join(hSlice, "|")
 		}
@@ -72,14 +72,14 @@ func ReadCSVFile(filepath string) ([]CsvDataRecord, error) {
 		// Parse utxo heights
 		if len(ret[i].UTXOHeights) > 0 {
 			parts := strings.Split(ret[i].UTXOHeights, "|")
-			ret[i].DataUTXOHeights = make([]uint64, len(parts))
+			ret[i].DataUTXOHeights = make([]uint32, len(parts))
 
 			for k, p := range parts {
-				h, err := strconv.ParseUint(p, 10, 64) // Convert string to uint64
+				h, err := strconv.ParseUint(p, 10, 32)
 				if err != nil {
 					return ret, fmt.Errorf("error parsing utxo height at line %v, error :%v", i, err)
 				}
-				ret[i].DataUTXOHeights[k] = h
+				ret[i].DataUTXOHeights[k] = uint32(h)
 			}
 		}
 	}

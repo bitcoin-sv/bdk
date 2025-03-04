@@ -55,7 +55,7 @@ func execTX(cmd *cobra.Command, args []string) {
 		} else {
 			hSlice := make([]string, len(utxoHeights))
 			for i, h := range utxoHeights {
-				hSlice[i] = strconv.FormatUint(h, 10) // Convert uint64 to string
+				hSlice[i] = strconv.FormatUint(uint64(h), 10) // Convert uint64 to string
 			}
 			utxoHeightsStr := strings.Join(hSlice, "|")
 
