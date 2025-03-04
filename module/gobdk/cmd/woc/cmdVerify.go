@@ -15,7 +15,7 @@ import (
 
 var cmdVerifyFilePath string
 var cmdVerifyCheckHexOnly = false
-var cmdVerifyVerifyExtend = false
+var cmdVerifyVerifyExtend = true
 
 // cmdVerify represents the test command
 var cmdVerify = &cobra.Command{
@@ -31,7 +31,7 @@ func init() {
 	cmdVerify.MarkFlagRequired("file-path")
 
 	cmdVerify.Flags().BoolVarP(&cmdVerifyCheckHexOnly, "check-only", "t", false, "Check parsing the extended hex only")
-	cmdVerify.Flags().BoolVarP(&cmdVerifyVerifyExtend, "verify-extend", "e", false, "Run VerifyExtend instead of verify")
+	cmdVerify.Flags().BoolVarP(&cmdVerifyVerifyExtend, "verify-extend", "e", true, "Run VerifyExtend instead of verify")
 
 	cmdRoot.AddCommand(cmdVerify)
 }
@@ -101,7 +101,7 @@ func execVerify(cmd *cobra.Command, args []string) {
 		}
 
 		if cmdVerifyVerifyExtend {
-			if err := verifyScriptExtend(tx, uint32(record.BlockHeight)); err != nil {
+			if err := verifyScriptExtendFull(record.TxBinExtended, record.DataUTXOHeights, uint32(record.BlockHeight)); err != nil {
 				log.Printf("ERROR verifying record at %v, txID : %v, error \n\n%v\n\n", i, record.TXID, err)
 				nbFailed += 1
 			}
@@ -123,9 +123,12 @@ func execVerify(cmd *cobra.Command, args []string) {
 // //////////////////////////////////////////////////////////////////////////////////////////////
 
 // Test new version of verificator
-func verifyScriptExtend(tx *bt.Tx, blockHeight uint32) error {
-	txBin := tx.ExtendedBytes()
-	if errV := bdkscript.VerifyExtend(txBin, blockHeight-1, true); errV != nil {
+func verifyScriptExtendFull(txBin []byte, utxoHeights []uint64, blockHeight uint32) error {
+	utxoUInt32 := make([]uint32, len(utxoHeights))
+	for i, v := range utxoHeights {
+		utxoUInt32[i] = uint32(v) // Explicit conversion
+	}
+	if errV := bdkscript.VerifyExtendFull(txBin, utxoUInt32, blockHeight-1, true); errV != nil {
 		return errV
 	}
 	return nil

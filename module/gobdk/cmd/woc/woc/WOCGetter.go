@@ -119,62 +119,110 @@ func GetTxDetail(api *APIClient, txID string) (string, error) {
 	return api.Fetch(path)
 }
 
+type TxData struct {
+	TxID          string `json:"txid"`
+	Hex           string `json:"hex"`
+	BlockHash     string `json:"blockhash"`
+	BlockHeight   int    `json:"blockheight"`
+	BlockTime     int64  `json:"blocktime"`
+	Confirmations int    `json:"confirmations"`
+}
+
+type BulkRequest struct {
+	TxIDs []string `json:"txids"`
+}
+
 // GetTxHex given the txID, return the tx hex
-// See : https://docs.taal.com/core-products/whatsonchain/transaction#get-raw-transaction-data
-func GetTxHex(api *APIClient, txID string) (string, error) {
-	path := fmt.Sprintf("tx/%v/hex", txID)
-	return api.Fetch(path)
+// See : https://docs.taal.com/core-products/whatsonchain/transaction#bulk-raw-transaction-data
+func GetBulkTx(api *APIClient, TxIDs []string) ([]TxData, error) {
+	req := BulkRequest{TxIDs: TxIDs}
+	jsonData := ""
+
+	if binData, err := json.Marshal(req); err != nil {
+		return nil, fmt.Errorf("failed to encode transaction list, error %w", err)
+	} else {
+		jsonData = string(binData)
+	}
+
+	var txs []TxData
+	if respStr, err := api.Post("txs/hex", jsonData); err != nil {
+		return nil, err
+	} else {
+		if err := json.Unmarshal([]byte(respStr), &txs); err != nil {
+			return nil, fmt.Errorf("failed to decode transaction list, error %w", err)
+		}
+	}
+	return txs, nil
 }
 
 // GetTxHexExtended given the txID, return the extended tx hex
+// And the list of utxo heights
 // See  tx ExtendedBytes()
 //
 //	https://github.com/ordishs/go-bt/blob/master/tx.go#L342
-func GetTxHexExtended(api *APIClient, txID string) (string, error) {
+func GetTxHexExtended(api *APIClient, txID string) (string, []uint64, error) {
 
 	// Get the standard tx from woc
-	txHex, err := GetTxHex(api, txID)
+	txsMain, err := GetBulkTx(api, []string{txID})
 	if err != nil {
-		return "", fmt.Errorf("failed to get tx hex from with id %v, error %w", txID, err)
+		return "", []uint64{}, fmt.Errorf("failed to get tx hex from with id %v, error %w", txID, err)
 	}
+
+	if len(txsMain) != 1 {
+		return "", []uint64{}, fmt.Errorf("error returned list of transaction len=%v while expect to be 1", len(txsMain))
+	}
+
+	txHex := txsMain[0].Hex
 
 	tx, err := bt.NewTxFromString(txHex)
 	if err != nil {
-		return "", fmt.Errorf("failed to parse tx hex %v, error %w", txHex, err)
+		return "", []uint64{}, fmt.Errorf("failed to parse tx hex %v, error %w", txHex, err)
 	}
 
 	// enrich the extended tx by fetching the UTXOs
 	parentTxs := make(map[string]*bt.Tx)
+	parentTxsHeight := make(map[string]uint64)
+	utxoHeights := make([]uint64, len(tx.Inputs))
 	for i, input := range tx.Inputs {
-		parentTx, ok := parentTxs[input.PreviousTxIDChainHash().String()]
+		parentTxID := input.PreviousTxIDChainHash().String()
+		parentTx, ok := parentTxs[parentTxID]
 		if !ok {
 			// get the parent tx and store in the map
 			parentTxID := input.PreviousTxIDChainHash().String()
 
-			parentTxHex, err := GetTxHex(api, parentTxID)
+			// Get the standard tx from woc
+			txs, err := GetBulkTx(api, []string{parentTxID})
 			if err != nil {
-				return "", fmt.Errorf("failed to fetch the parent tx, input : %v, parentTxID %v, , error %w", i, parentTxID, err)
+				return "", []uint64{}, fmt.Errorf("failed to get parent tx with id %v, error %w", parentTxID, err)
 			}
+
+			if len(txs) != 1 {
+				return "", []uint64{}, fmt.Errorf("error returned list of transaction len=%v while expect to be 1", len(txs))
+			}
+
+			parentTxHex := txs[0].Hex
 
 			parentTx, err = bt.NewTxFromString(parentTxHex)
 			if err != nil {
-				return "", fmt.Errorf("failed to parse parent tx for input %v, hex %v , error %w", i, parentTxHex, err)
+				return "", []uint64{}, fmt.Errorf("failed to parse parent tx for input %v, hex %v , error %w", i, parentTxHex, err)
 			}
 
 			parentTxs[parentTxID] = parentTx
+			parentTxsHeight[parentTxID] = uint64(txs[0].BlockHeight)
 		}
 
 		// add the parent tx output to the input
 		previousScript, err := hex.DecodeString(parentTx.Outputs[input.PreviousTxOutIndex].LockingScript.String())
 		if err != nil {
-			return "", fmt.Errorf("failed to the utxo for the input %v, error %w", i, err)
+			return "", []uint64{}, fmt.Errorf("failed to the utxo for the input %v, error %w", i, err)
 		}
 
+		utxoHeights[i] = parentTxsHeight[parentTxID]
 		tx.Inputs[i].PreviousTxScript = bscript.NewFromBytes(previousScript)
 		tx.Inputs[i].PreviousTxSatoshis = parentTx.Outputs[input.PreviousTxOutIndex].Satoshis
 	}
 
-	return hex.EncodeToString(tx.ExtendedBytes()), nil
+	return hex.EncodeToString(tx.ExtendedBytes()), utxoHeights, nil
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////

@@ -1,6 +1,7 @@
 package woc
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"log"
@@ -60,14 +61,12 @@ func (c *APIClient) baseURL() string {
 	return fmt.Sprintf("https://api.whatsonchain.com/v1/bsv/%v", c.network)
 }
 
-// Fetch hit the url and return the result as json string
-func (c *APIClient) Fetch(path string) (string, error) {
+// waitLimirate make the function call to sleep until the rate limit pass
+func (c *APIClient) waitLimirate() error {
 	c.counter += uint64(1)
-	url := fmt.Sprintf("%v/%v", c.baseURL(), path)
-
 	firstTime, err := c.tQueue.Pop()
 	if err != nil {
-		return "", fmt.Errorf("unable to pop the time tracker queue, error %w", err)
+		return fmt.Errorf("unable to pop the time tracker queue, error %w", err)
 	}
 
 	// Make sleep to pass the 1 second rate limite
@@ -78,12 +77,66 @@ func (c *APIClient) Fetch(path string) (string, error) {
 		time.Sleep(sleepDuration)
 	}
 
+	return nil
+}
+
+// Fetch hit the url and return the result as json string
+func (c *APIClient) Fetch(path string) (string, error) {
+	if err := c.waitLimirate(); err != nil {
+		return "", err
+	}
+
+	url := fmt.Sprintf("%v/%v", c.baseURL(), path)
+
 	// Make the GET request
 	httpClient := &http.Client{}
 	resp, err := httpClient.Get(url)
 	if err != nil {
 		return "", fmt.Errorf("failed to get the query\nURL : %v\nerror\n%w", url, err)
 	}
+	defer resp.Body.Close()
+
+	if err := c.tQueue.Push(time.Now()); err != nil {
+		return "", fmt.Errorf("unable to push the time tracker queue, error %w", err)
+	}
+
+	// Check if the request was successful (status code 200)
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("failed to get the query\nURL : %v\nStatusCode : %v", url, resp.StatusCode)
+	}
+
+	// Read the response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to get response body\nURL : %v\nerror\n%w", url, err)
+	}
+
+	return string(body), nil
+}
+
+func (c *APIClient) Post(path string, jsonData string) (string, error) {
+	if err := c.waitLimirate(); err != nil {
+		return "", err
+	}
+
+	url := fmt.Sprintf("%v/%v", c.baseURL(), path)
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer([]byte(jsonData)))
+	if err != nil {
+		return "", fmt.Errorf("failed to create the post request\nURL : %v\nerror\n%w", url, err)
+	}
+
+	// Set headers
+	req.Header.Set("Content-Type", "application/json")
+
+	// Send the request
+	httpClient := &http.Client{}
+	resp, err := httpClient.Do(req)
+
+	if err != nil {
+		return "", fmt.Errorf("failed to post the query\nURL : %v\nerror\n%w", url, err)
+	}
+
 	defer resp.Body.Close()
 
 	if err := c.tQueue.Push(time.Now()); err != nil {
