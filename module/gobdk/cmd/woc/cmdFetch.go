@@ -189,7 +189,9 @@ func NewCSVDataWriter(api *woc.APIClient, f string) *csvDataWriter {
 
 	iLine, iBlock := uint32(0), uint32(0)
 	if !fileExisted {
-		file.WriteString(fmt.Sprintf("%v\n", CSVHeaders))
+		if _, err := file.WriteString(fmt.Sprintf("%v\n", CSVHeaders)); err != nil {
+			slog.Warn("error writing CSV headers")
+		}
 	} else {
 		// Read the existing csv file
 		file, err := os.Open(f)
@@ -272,7 +274,11 @@ func (d *csvDataWriter) fetchBlock(blockHeight uint32, nbTx int) error {
 		}
 
 		csvLine := fmt.Sprintf("%v\n", record.CSVLine())
-		d.file.WriteString(csvLine)
+
+		if i, err := d.file.WriteString(csvLine); err != nil {
+			slog.Warn("error writing CSV file", "line", i)
+		}
+
 		//fmt.Println(csvLine)
 		d.txCount += 1
 	}

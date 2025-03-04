@@ -113,7 +113,7 @@ type ScriptError interface {
 
 // NewScriptError create a new script error
 func NewScriptError(code ScriptErrorCode) ScriptError {
-	return ScriptErrorImpl{
+	return &ScriptErrorImpl{
 		errCode: code,
 	}
 }
@@ -125,24 +125,29 @@ type ScriptErrorImpl struct {
 }
 
 // Code implement the standard error interface.
-func (se ScriptErrorImpl) Code() ScriptErrorCode {
+func (se *ScriptErrorImpl) Code() ScriptErrorCode {
 	return se.errCode
 }
 
 // Error implement the standard error interface.
-func (se ScriptErrorImpl) Error() string {
+func (se *ScriptErrorImpl) Error() string {
 	if se.internal == nil {
 		return errorCode2String(se.errCode)
 	}
-	return fmt.Sprintf("code=%d, message=%v, internal=%v", se.Code, errorCode2String(se.errCode), se.internal)
+
+	errCode := se.Code()
+	errCodeStr := errorCode2String(se.errCode)
+	errStr := fmt.Sprintf("code=%d, message=%v, internal=%v", errCode, errCodeStr, se.internal.Error())
+
+	return errStr
 }
 
 // Unwrap implement the standard error wrapper interface.
-func (se ScriptErrorImpl) Unwrap() error {
+func (se *ScriptErrorImpl) Unwrap() error {
 	return se.internal
 }
 
 // SetInternal sets error to ScriptErrorImpl.internal, to be unwrapped later
-func (se ScriptErrorImpl) SetInternal(err error) {
+func (se *ScriptErrorImpl) SetInternal(err error) {
 	se.internal = err
 }

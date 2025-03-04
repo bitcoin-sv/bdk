@@ -50,7 +50,9 @@ func NewAPIClient(n string, r RateLimit) *APIClient {
 	client.tQueue = *NewRingQueue[time.Time](client.rateLimit.NbRequestSecond)
 	now := time.Now()
 	for i := 0; i < client.rateLimit.NbRequestSecond; i++ {
-		client.tQueue.Push(now)
+		if err := client.tQueue.Push(now); err != nil {
+			panic(err)
+		}
 	}
 
 	return client

@@ -27,7 +27,11 @@ Example :
 func init() {
 	// Define the --txID flag for the tx command
 	cmdTX.Flags().StringVarP(&cmdTXtxID, "txID", "i", "", "Transaction ID (required)")
-	cmdTX.MarkFlagRequired("txID") // Make the --txID flag required
+
+	// Make the --txID flag required
+	if err := cmdTX.MarkFlagRequired("txID"); err != nil {
+		panic(err)
+	}
 
 	cmdTX.Flags().BoolVarP(&cmdTxuseStandard, "standard", "s", false, "Fetch only the standard transaction hex")
 	cmdRoot.AddCommand(cmdTX)
