@@ -70,7 +70,7 @@ func ExecuteNoVerify(script []byte, consensus bool, flag uint) ScriptError {
 	if errCode == int(SCRIPT_ERR_OK) {
 		return nil
 	}
-	return ScriptErrorImpl{errCode: ScriptErrorCode(errCode)}
+	return NewScriptError(ScriptErrorCode(errCode))
 }
 
 // Execute executes the script with verification
@@ -97,7 +97,7 @@ func Execute(script []byte, consensus bool, flag uint,
 	if errCode == int(SCRIPT_ERR_OK) {
 		return nil
 	}
-	return ScriptErrorImpl{errCode: ScriptErrorCode(errCode)}
+	return NewScriptError(ScriptErrorCode(errCode))
 }
 
 // Verify verify the unlocking and locking script
@@ -134,7 +134,7 @@ func Verify(uScript []byte, lScript []byte,
 	if errCode == int(SCRIPT_ERR_OK) {
 		return nil
 	}
-	return ScriptErrorImpl{errCode: ScriptErrorCode(errCode)}
+	return NewScriptError(ScriptErrorCode(errCode))
 }
 
 // VerifyExtend verify the entire extended transaction
@@ -154,7 +154,7 @@ func VerifyExtend(extendedTX []byte, blockHeight uint32, consensus bool) ScriptE
 	if errCode == int(SCRIPT_ERR_OK) {
 		return nil
 	}
-	return ScriptErrorImpl{errCode: ScriptErrorCode(errCode)}
+	return NewScriptError(ScriptErrorCode(errCode))
 }
 
 // VerifyExtendFull verify the entire extended transaction
@@ -184,5 +184,5 @@ func VerifyExtendFull(extendedTX []byte, utxoHeights []uint32, blockHeight uint3
 	if errCode == int(SCRIPT_ERR_OK) {
 		return nil
 	}
-	return ScriptErrorImpl{errCode: ScriptErrorCode(errCode)}
+	return NewScriptError(ScriptErrorCode(errCode))
 }

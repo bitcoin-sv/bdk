@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"log/slog"
 	"os"
 	"sort"
 
@@ -24,13 +25,22 @@ var cmdMerge = &cobra.Command{
 
 func init() {
 	cmdMerge.Flags().StringVarP(&cmdMergeFileA, "file-a", "a", "", "Path to the first file (required)")
-	cmdMerge.MarkFlagRequired("file-a")
+
+	if err := cmdMerge.MarkFlagRequired("file-a"); err != nil {
+		panic(err)
+	}
 
 	cmdMerge.Flags().StringVarP(&cmdMergeFileB, "file-b", "b", "", "Path to the second file (required)")
-	cmdMerge.MarkFlagRequired("file-b")
+
+	if err := cmdMerge.MarkFlagRequired("file-b"); err != nil {
+		panic(err)
+	}
 
 	cmdMerge.Flags().StringVarP(&cmdMergeFileOut, "file-out", "o", "", "Path to the ouput (merged file)")
-	cmdMerge.MarkFlagRequired("file-out")
+
+	if err := cmdMerge.MarkFlagRequired("file-out"); err != nil {
+		panic(err)
+	}
 
 	cmdRoot.AddCommand(cmdMerge)
 }
@@ -41,7 +51,9 @@ func execMerge(cmd *cobra.Command, args []string) {
 		panic(fmt.Sprintf("Error creating file: %v", err))
 	}
 	defer fileOut.Close()
-	fileOut.WriteString(fmt.Sprintf("%v\n", CSVHeaders))
+	if _, err := fileOut.WriteString(fmt.Sprintf("%v\n", CSVHeaders)); err != nil {
+		panic(fmt.Sprintf("unable to write csv header. error : %v", err))
+	}
 
 	dataA, errA := ReadCSVFile(cmdMergeFileA)
 	if errA != nil {
@@ -61,6 +73,8 @@ func execMerge(cmd *cobra.Command, args []string) {
 	for _, record := range dataOut {
 		csvLine := fmt.Sprintf("%v\n", record.CSVLine())
 		//fmt.Println(csvLine)
-		fileOut.WriteString(csvLine)
+		if i, err := fileOut.WriteString(csvLine); err != nil {
+			slog.Warn("error writting csv file", "line", i)
+		}
 	}
 }

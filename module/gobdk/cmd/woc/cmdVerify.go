@@ -28,7 +28,11 @@ var cmdVerify = &cobra.Command{
 func init() {
 	// Define the --file-path flag for the test command
 	cmdVerify.Flags().StringVarP(&cmdVerifyFilePath, "file-path", "f", "", "Path to the test file (required)")
-	cmdVerify.MarkFlagRequired("file-path")
+
+	// Make the --file-path flag required
+	if err := cmdVerify.MarkFlagRequired("file-path"); err != nil {
+		panic(err)
+	}
 
 	cmdVerify.Flags().BoolVarP(&cmdVerifyCheckHexOnly, "check-only", "t", false, "Check parsing the extended hex only")
 	cmdVerify.Flags().BoolVarP(&cmdVerifyVerifyExtend, "verify-extend", "e", true, "Run VerifyExtend instead of verify")
@@ -53,7 +57,7 @@ func setGlobalScriptConfig(network string) error {
 func execVerify(cmd *cobra.Command, args []string) {
 
 	if err := setGlobalScriptConfig(network); err != nil {
-		log.Fatal(fmt.Sprintf("ERROR while setting global script config with network %v, error \n\n%v\n\n", network, err))
+		log.Fatalf("ERROR while setting global script config with network %v, error \n\n%v\n\n", network, err)
 	}
 
 	csvData, err := ReadCSVFile(cmdVerifyFilePath)
@@ -64,7 +68,7 @@ func execVerify(cmd *cobra.Command, args []string) {
 	// Check the network is consistent
 	for i := 0; i < len(csvData); i++ {
 		if csvData[i].ChainNet != network {
-			log.Fatal(fmt.Sprintf("ERROR record %v, inconsistent network. Data %v, input %v", csvData[i].ChainNet, network))
+			log.Fatalf("ERROR record %v, inconsistent network. Data %v, input %v", i, csvData[i].ChainNet, network)
 		}
 	}
 

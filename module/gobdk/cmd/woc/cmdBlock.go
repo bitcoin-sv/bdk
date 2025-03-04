@@ -24,7 +24,11 @@ Example :
 func init() {
 	// Define the --height flag for the block command
 	cmdBlock.Flags().Uint32VarP(&cmdBlockHeight, "block-height", "b", 0, "Block height (required)")
-	cmdBlock.MarkFlagRequired("block-height") // Make the --block-height flag required
+
+	// Make the --block-height flag required
+	if err := cmdBlock.MarkFlagRequired("block-height"); err != nil {
+		panic(err)
+	}
 
 	cmdRoot.AddCommand(cmdBlock)
 }
