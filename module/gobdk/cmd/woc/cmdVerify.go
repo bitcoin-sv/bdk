@@ -123,7 +123,7 @@ func execVerify(cmd *cobra.Command, args []string) {
 // //////////////////////////////////////////////////////////////////////////////////////////////
 
 // Test new version of verificator
-func verifyScriptExtendFull(txBin []byte, utxoHeights []uint64, blockHeight uint32) error {
+func verifyScriptExtendFull(txBin []byte, utxoHeights []uint32, blockHeight uint32) error {
 	utxoUInt32 := make([]uint32, len(utxoHeights))
 	for i, v := range utxoHeights {
 		utxoUInt32[i] = uint32(v) // Explicit conversion
