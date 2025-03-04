@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/bitcoin-sv/bdk/module/gobdk/cmd/woc/woc"
 	"github.com/spf13/cobra"
@@ -39,16 +41,25 @@ func execTX(cmd *cobra.Command, args []string) {
 	)
 
 	if cmdTxuseStandard {
-		if txHex, err := woc.GetTxHex(api, cmdTXtxID); err != nil {
+		if tx, err := woc.GetBulkTx(api, []string{cmdTXtxID}); err != nil {
 			panic(err)
 		} else {
-			fmt.Println(txHex)
+			if len(tx) != 1 {
+				panic(fmt.Errorf("error returned list of transaction len=%v while expect to be 1", len(tx)))
+			}
+			fmt.Println(tx[0].Hex)
 		}
 	} else {
-		if txHex, err := woc.GetTxHexExtended(api, cmdTXtxID); err != nil {
+		if txHex, utxoHeights, err := woc.GetTxHexExtended(api, cmdTXtxID); err != nil {
 			panic(err)
 		} else {
-			fmt.Printf("\nNetwork : %v, txID : %v,  std : %v , Hex\n\n%v\n", network, cmdTXtxID, cmdTxuseStandard, txHex)
+			hSlice := make([]string, len(utxoHeights))
+			for i, h := range utxoHeights {
+				hSlice[i] = strconv.FormatUint(h, 10) // Convert uint64 to string
+			}
+			utxoHeightsStr := strings.Join(hSlice, "|")
+
+			fmt.Printf("\nNetwork : %v, txID : %v,  std : %v\n\nTxHex\n%v\n\nUTXO Heights\n\"%v\"\n\n", network, cmdTXtxID, cmdTxuseStandard, txHex, utxoHeightsStr)
 		}
 	}
 }

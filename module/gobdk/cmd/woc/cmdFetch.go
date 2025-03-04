@@ -256,16 +256,17 @@ func (d *csvDataWriter) fetchBlock(blockHeight uint64, nbTx int) error {
 
 	aggregatedErrStr := ""
 	for _, txID := range txToFetch {
-		txHexExtended, errTxHexExtended := woc.GetTxHexExtended(d.api, txID)
+		txHexExtended, utxoHeights, errTxHexExtended := woc.GetTxHexExtended(d.api, txID)
 		if errTxHexExtended != nil {
 			aggregatedErrStr += fmt.Sprintf("Failed to fetch Tx : %v, Block : %v, Network %v. Error \n%v\n\n", txID, blockHeight, network, errTxHexExtended)
 		}
 
 		record := CsvDataRecord{
-			ChainNet:      network,
-			BlockHeight:   blockHeight,
-			TXID:          txID,
-			TxHexExtended: txHexExtended,
+			ChainNet:        network,
+			BlockHeight:     blockHeight,
+			TXID:            txID,
+			TxHexExtended:   txHexExtended,
+			DataUTXOHeights: utxoHeights,
 		}
 
 		csvLine := fmt.Sprintf("%v\n", record.CSVLine())
