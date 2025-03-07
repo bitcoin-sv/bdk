@@ -1,49 +1,154 @@
 package main
 
 import (
-	"encoding/hex"
+	"encoding/csv"
 	"fmt"
+	"log/slog"
+	"os"
+	"strconv"
+	"strings"
 
-	"github.com/bitcoin-sv/bdk/module/gobdk"
-	"github.com/bitcoin-sv/bdk/module/gobdk/config"
-	goscript "github.com/bitcoin-sv/bdk/module/gobdk/script"
+	"github.com/bitcoin-sv/bdk/module/gobdk/cmd/woc/woc"
+	"github.com/libsv/go-bt/v2"
 )
+
+func getTxIDFromTXHex() {
+	txHex := "010000000000000000ef0225894047a817115970e49cc0b77dc2e1fd5d185632c244c055512dc490e82a5a000000006a47304402205bccbecf7d1658032759c4d182a8170174ad7dc687d58555707198a1e230f84f02203ae6804eef77319876223db1b354828e1beeccaeafb6d667879436eef7aa5f3141210300e3b001c4addf714e8c4d5ac1427fb19349d3d05e416e47fc6186cd2d95eb0effffffff962fb15b000000001976a9145632e2f253ac71e2dda1a8dcec6eac384a74251b88ac88ad2770b0bc82235a6414c68d4eb8764750c48178ffa01f6a93ba972dc1e418000000006b483045022100c348ff56a2f00b608fadb4583b76a9a91079bf25b507ef44da562e8aa90fbdd202204fc40afdb76409527a05cfb67fbc67d496e6b0bd720121a26779123b5dd30212412102381da97b922c1584ca700f97650f1a2c2dcdba8a480ff998541504263f5ce551ffffffff00e1f505000000001976a914f9878c4ef91c883c451bee25ca6daf17da20a29688ac0116b16d61000000001976a914cc401501b36a914bc31f2322612b673cbb98a2d788ac00000000"
+
+	tx, err := bt.NewTxFromString(txHex)
+	if err != nil {
+		panic(err)
+	}
+
+	txID := tx.TxID()
+
+	fmt.Println(txID)
+}
+
+func getLargeTxData() {
+	txs := map[uint32]string{
+		886761: "62df03d0c21de4479cdd95a7bc04b75f8c22112edd2c9c13325869739c305354",
+	}
+	csvHeader := "ChainNet,BlockHeight,TXID,TxHexExtended, UTXOHeights"
+	csvFile := "./tx_62df03d0.csv"
+
+	network := "main"
+	api := woc.NewAPIClient(
+		network,
+		woc.DefaultRateLimit(),
+	)
+
+	// Open the file with write-only mode, create if not exists, and truncate if it exists
+	file, err := os.OpenFile(csvFile, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0644)
+	if err != nil {
+		fmt.Println("Error opening file:", err)
+		return
+	}
+	defer file.Close()
+
+	if _, err := file.WriteString(csvHeader + "\n"); err != nil {
+		panic(err)
+	}
+
+	for h, txID := range txs {
+		slog.Info("Fetching ...", "Block", h, "TxID", txID)
+		txHex, utxoHeights, err := woc.GetTxHexExtended(api, txID)
+		if err != nil {
+			panic(err)
+		}
+
+		utxoHeightsStr := make([]string, len(utxoHeights))
+		for i, v := range utxoHeights {
+			utxoHeightsStr[i] = strconv.FormatUint(uint64(v), 10)
+		}
+
+		slog.Info("Done", "Block", h, "TxID", txID)
+		utxoStr := strings.Join(utxoHeightsStr, "|")
+		line := fmt.Sprintf("%v,%v,%v,%v,%v\n", network, h, txID, txHex, utxoStr)
+		if _, err := file.WriteString(line); err != nil {
+			panic(err)
+		}
+	}
+
+	fmt.Println("File written successfully", csvFile)
+}
+
+func retrieveTxsAfterGenesis() {
+	file1 := "./mainnet_14207txs_b886413_WUH.csv"
+	file2 := "./mainnet_14207txs_b886413_WUH_after_genesis.csv"
+
+	inputFile, err := os.Open(file1)
+	if err != nil {
+		fmt.Printf("Error opening file1: %v\n", err)
+		return
+	}
+	defer inputFile.Close()
+
+	reader := csv.NewReader(inputFile)
+	records, err := reader.ReadAll()
+	if err != nil {
+		fmt.Printf("Error reading CSV file:%v\n", err)
+		return
+	}
+
+	if len(records) == 0 {
+		fmt.Printf("Empty CSV file\n")
+		return
+	}
+
+	outputFile, err := os.Create(file2)
+	if err != nil {
+		fmt.Printf("Error creating file2 : %v\n", err)
+		return
+	}
+	defer outputFile.Close()
+
+	writer := csv.NewWriter(outputFile)
+	defer writer.Flush()
+
+	// Write the header
+	if err := writer.Write(records[0]); err != nil {
+		fmt.Printf("Error writing header to file2 %v\n", err)
+		return
+	}
+
+	// Write the filtered records
+	afterGenesis := false
+	nbTxAfterGenesis := 0
+	for i, record := range records[1:] {
+		if i%500 == 0 {
+			fmt.Printf("Processed %v lines\n", i)
+		}
+
+		if !afterGenesis {
+			blockheighStr := record[1]
+			h, err := strconv.Atoi(blockheighStr)
+			if err != nil {
+				fmt.Printf("ERROR line %v, unable to read block height, error %v\n", i, err)
+				continue
+			}
+
+			if h > 620538 {
+				afterGenesis = true
+				fmt.Printf("INFO Encouter after genesis at line %v\n", i)
+			}
+		} else {
+			if err := writer.Write(record); err != nil {
+				fmt.Printf("ERROR writing %vth record to file2, error %v\n", i, err)
+				return
+			}
+
+			nbTxAfterGenesis += 1
+		}
+	}
+
+	fmt.Printf("Completed copy after genesis, total %v txs after genesis\n", nbTxAfterGenesis)
+	fmt.Printf("Copied File from %v to %v\n", file1, file2)
+}
 
 // main code
 func main() {
-
-	fmt.Println("BSV version Major   : ", gobdk.BSV_CLIENT_VERSION_MAJOR())
-	fmt.Println("BSV version string  : ", gobdk.BSV_VERSION_STRING())
-	fmt.Println("GoBDK version major : ", gobdk.BDK_GOLANG_VERSION_PATCH())
-	fmt.Println("GoBDK version string : ", gobdk.BDK_GOLANG_VERSION_STRING())
-
-	settings := config.LoadSetting(
-		config.LoadScriptConfig(),
-	)
-	fmt.Println("Setting : ", settings)
-
-	// Test from/to ASM
-	asmStr := "0x47 0x30440220543a3f3651a0409675e35f9e77f5e364214f0c2a22ae5512ec0609bd7a825b4c02206204c137395065e1a53fc0e2d91e121c9210e72a603f53221b531c0816c7f60701 0x41 0x040b4c866585dd868a9d62348a9cd008d6a312937048fff31670e7e920cfc7a7447b5f0bba9e01e6fe4735c8383e6e7a3347a0fd72381b8f797a19f694054e5a69"
-	script := goscript.FromASM(asmStr)
-	asmStrRecover := goscript.ToASM(script)
-	fmt.Println("ASM Str         : ", asmStr)
-	fmt.Println("ASM Str Recover : ", asmStrRecover)
-	eErr := goscript.ExecuteNoVerify(script, true, uint(0))
-	fmt.Println("Result executing script : ", eErr)
-
-	uScriptHex := "483045022100b1d382f8e5a3d125774cde860bf6286c22aaf93351fb78a2ef7262d1632f563902203688f6fecc895cb6e14fea436e34b1615d077da18e14fbdbf11395838b0181a84121034ee1f76a1460923e18bcb273c26a9b317df6644e41e49ba21dbd7c654537bc7f"
-	lScriptHex := "76a914fbb460d3176afe507a83a3b74b167e198f20f44f88ac"
-	txHex := "01000000012341c8f267c6a1a407b1f09d134e42cfbdf2ebc91aff8cd4365d131380fcd580000000006b483045022100b1d382f8e5a3d125774cde860bf6286c22aaf93351fb78a2ef7262d1632f563902203688f6fecc895cb6e14fea436e34b1615d077da18e14fbdbf11395838b0181a84121034ee1f76a1460923e18bcb273c26a9b317df6644e41e49ba21dbd7c654537bc7fffffffff01a0860100000000001976a914fbb460d3176afe507a83a3b74b167e198f20f44f88ac00000000"
-
-	uScript, _ := hex.DecodeString(uScriptHex)
-	lScript, _ := hex.DecodeString(lScriptHex)
-	tx, _ := hex.DecodeString(txHex)
-
-	inIndex := 0
-	satoshis := uint64(100000)
-	//blockHeight := uint64(620538)
-	flags, _ := goscript.ScriptVerificationFlagsV1(lScript, true)
-
-	vErr := goscript.Verify(uScript, lScript, true, uint(flags), tx, inIndex, satoshis)
-	fmt.Println("Result verifying script : ", vErr)
+	// getTxIDFromTXHex()
+	getLargeTxData()
+	// retrieveTxsAfterGenesis()
 }
