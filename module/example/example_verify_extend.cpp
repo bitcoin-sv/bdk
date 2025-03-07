@@ -23,7 +23,7 @@ namespace po = boost::program_options;
 namespace pt = boost::property_tree;
 
 
-void testTxExtended(const int32_t blockHeight, const std::string& txID, const std::string& txHexExtended) {
+void verifyExtendFull(const std::span<const int32_t> utxoHeights, const int32_t blockHeight, const std::string& txID, const std::string& txHexExtended) {
     const std::vector<uint8_t> etxBin = ParseHex(txHexExtended);
     const std::span<const uint8_t> etx(etxBin.data(), etxBin.size());
 
@@ -61,7 +61,7 @@ void testTxExtended(const int32_t blockHeight, const std::string& txID, const st
         genesisHeight
     );
 
-    const ScriptError ret = bsv::verify_extend(etxBin, blockHeight-1, true);
+    const ScriptError ret = bsv::verify_extend_full(etxBin, utxoHeights, blockHeight-1, true);
     if (ret != SCRIPT_ERR_OK) {
         throw std::runtime_error("ERROR verify script for TxID " + txID);
     }
@@ -154,6 +154,22 @@ std::vector<std::vector<std::string>> parseCSV(const std::string& filename) {
     return data;
 }
 
+std::vector<int32_t> parseUTXOStr(const std::string& utxoStr, char delimiter = '|') {
+    std::vector<int32_t> result;
+    std::stringstream ss(utxoStr);
+    std::string token;
+
+    while (std::getline(ss, token, delimiter)) {
+        try {
+            result.push_back(std::stoi(token));
+        }
+        catch (const std::exception& e) {
+            std::cerr << "Error parsing integer: " << e.what() << std::endl;
+        }
+    }
+    return result;
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // This program read the csv file of format
 //     ChainNet, BlockHeight, TXID, TxHexExtended
@@ -191,7 +207,7 @@ int main(int argc, char* argv[])
         //    std::cout << "["<< record << "]" << std::endl;
         //}
         //std::cout << std::endl;
-        if (line.size() != 4) {
+        if (line.size() != 5) {
             throw std::runtime_error("bad line " + std::to_string(i) + " there are only " + ::to_string(line.size()) + " elements");
         }
 
@@ -204,8 +220,12 @@ int main(int argc, char* argv[])
             throw std::runtime_error("failed to convert to uint32 block height");
         }
 
+        const std::string& utxoHeightsStr = line[4];
+        const auto utxoVector = parseUTXOStr(utxoHeightsStr);
+        std::span<const int32_t> utxoHeights(utxoVector);
+
         try {
-            testTxExtended(blockHeight, TxID, TxHexExtended);
+            verifyExtendFull(utxoHeights, blockHeight, TxID, TxHexExtended);
         }
         catch (std::exception e) {
             std::cout << "ERROR test line : " << i + 1 << e.what() << std::endl;
