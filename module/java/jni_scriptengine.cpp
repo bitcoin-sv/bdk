@@ -182,7 +182,8 @@ Java_com_nchain_bdk_ScriptEngine_execute___3BLcom_nchain_bdk_CancellationToken_2
             std::vector<bool>& vfExec = *pvfExec;
             std::vector<bool>& vfElse = *pvfElse;
 
-            EvalScript(config, concensus, source->GetToken(), stack, script, scriptflags, *sig_check.get(), altstack, ipc, vfExec, vfElse, &script_result);
+            const auto res = EvalScript(config, concensus, source->GetToken(), stack, script, scriptflags, *sig_check.get(), altstack, ipc, vfExec, vfElse);
+            script_result = bsv::get_raw_eval_script(res);
         }
     }
     catch(const std::runtime_error& ex)

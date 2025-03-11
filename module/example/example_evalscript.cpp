@@ -4,6 +4,7 @@
 #include "config.h"
 #include "script/interpreter.h"
 #include "taskcancellation.h"
+#include "interpreter_bdk.hpp"
 
 using namespace std;
 
@@ -13,14 +14,15 @@ int main(int argc, char* argv[])
     const Config& config = GlobalConfig::GetConfig();
     auto source = task::CCancellationSource::Make();
     LimitedStack stack(UINT32_MAX);
-    ScriptError err{};
     const auto res = EvalScript(config,
                                 true,
                                 source->GetToken(),
                                 stack,
                                 CScript(direct.data(), direct.data() + direct.size()),
                                 0,
-                                BaseSignatureChecker{},
-                                &err);
-    cout << "Result: " << res.value() << "\nScriptError: " << err << '\n';
+                                BaseSignatureChecker{});
+
+    const auto finalErr = bsv::get_raw_eval_script(res);
+
+    cout << "Result ScriptError: " << finalErr << '\n';
 }
