@@ -9,6 +9,7 @@
 #include <core_io.h>
 #include <script/interpreter.h>
 #include <script/script_flags.h>
+#include <script/malleability_status.h>
 
 #include <stdexcept>
 #include <iostream>
@@ -271,6 +272,62 @@ uint32_t bsv::script_verification_flags_v1(const std::span<const uint8_t> lockin
     return flags;
 }
 
+ScriptError bsv::get_raw_eval_script(const std::optional<std::variant<ScriptError, malleability::status>>& ret){
+    if (ret.has_value()) {
+        const auto vErr{ret.value()};
+        if(std::holds_alternative<ScriptError>(vErr)) {
+            return std::get<ScriptError>(vErr);
+        } else {
+            const auto ms = std::get<malleability::status>(vErr);
+
+            if (ms == malleability::non_malleable) {
+                return SCRIPT_ERR_OK;
+            }
+
+            if (ms & malleability::unclean_stack) {
+                return SCRIPT_ERR_CLEANSTACK;
+            }
+
+            if (ms & malleability::non_minimal_push) {
+                return SCRIPT_ERR_MINIMALDATA;
+            }
+
+            if (ms & malleability::non_minimal_scriptnum) {
+                return SCRIPT_ERR_SCRIPTNUM_MINENCODE;
+            }
+
+            if (ms & malleability::high_s) {
+                return SCRIPT_ERR_SIG_HIGH_S;
+            }
+
+            if (ms & malleability::non_push_data) {
+                return SCRIPT_ERR_SIG_PUSHONLY;
+            }
+
+            if (ms & malleability::disallowed) {
+                return SCRIPT_ERR_UNKNOWN_ERROR;
+            }
+        }
+    }
+
+    return SCRIPT_ERR_UNKNOWN_ERROR;
+}
+
+    // This helper function transforming result of BSV::VerifyScript to a raw ScriptError
+ScriptError bsv::get_raw_verify_script(const std::optional<std::pair<bool, ScriptError>>& ret){
+    // If the returned result is empty, we don't know what kind of error is that
+    if(!ret.has_value()) {
+        return SCRIPT_ERR_UNKNOWN_ERROR;
+    }
+
+    // If the returned result is true and error code is not OK, then we don't know what happened
+    if (ret->first && ret->second != SCRIPT_ERR_OK) {
+        return SCRIPT_ERR_UNKNOWN_ERROR;
+    }
+
+    return ret->second;
+}
+
 namespace
 {
     ScriptError execute_impl(const CScript& script,
@@ -280,16 +337,15 @@ namespace
     {
         auto source = task::CCancellationSource::Make();
         LimitedStack stack(UINT32_MAX);
-        ScriptError err{};
-        EvalScript(GlobalConfig::GetConfig(),
+        const auto res = EvalScript(GlobalConfig::GetConfig(),
                    consensus,
                    source->GetToken(),
                    stack,
                    script,
                    flags,
-                   sig_checker,
-                   &err);
-        return err;
+                   sig_checker);
+
+        return bsv::get_raw_eval_script(res);
     }
 
     ScriptError execute_impl(const CScript& script,
@@ -414,19 +470,20 @@ namespace
                             const CScript& locking_script,
                             const bool consensus,
                             const unsigned int flags,
-                            BaseSignatureChecker& sig_checker)
+                            BaseSignatureChecker& sig_checker,
+                            std::atomic<malleability::status>& malleability)
     {
         auto source = task::CCancellationSource::Make();
-        ScriptError err{};
-        VerifyScript(GlobalConfig::GetConfig(),
+        const auto ret = VerifyScript(GlobalConfig::GetConfig(),
                      consensus,
                      source->GetToken(),
                      unlocking_script,
                      locking_script,
                      flags,
                      sig_checker,
-                     &err);
-        return err;
+                     malleability);
+
+        return bsv::get_raw_verify_script(ret);
     }
 
     ScriptError verify_impl(const CScript& unlocking_script,
@@ -435,7 +492,8 @@ namespace
                             const unsigned int flags,
                             const CTransaction& tx,
                             const int index,
-                            const int64_t amount)
+                            const int64_t amount,
+                            std::atomic<malleability::status>& malleability)
     {
         if(!tx.vin.empty() && !tx.vout.empty())
         {
@@ -445,7 +503,8 @@ namespace
                                locking_script,
                                consensus,
                                flags,
-                               sig_checker);
+                               sig_checker,
+                               malleability);
         }
         else
         {
@@ -454,7 +513,8 @@ namespace
                                locking_script,
                                consensus,
                                flags,
-                               sig_checker);
+                               sig_checker,
+                               malleability);
         }
     }
 }
@@ -480,13 +540,15 @@ ScriptError bsv::verify(const std::span<const uint8_t> unlocking_script,
     }
 
     const CTransaction ctx(mtx);
+    std::atomic<malleability::status> ms {};
     return verify_impl(CScript(unlocking_script.data(), unlocking_script.data() + unlocking_script.size()),
                        CScript(locking_script.data(), locking_script.data() + locking_script.size()),
                        consensus,
                        flags,
                        ctx,
                        index,
-                       amount);
+                       amount,
+                       ms);
 }
 
 ScriptError bsv::verify_extend(std::span<const uint8_t> extendedTX, int32_t blockHeight, bool consensus) {
@@ -511,6 +573,7 @@ ScriptError bsv::verify_extend(std::span<const uint8_t> extendedTX, int32_t bloc
     }
 
     const CTransaction ctx(eTX.mtx);
+    std::atomic<malleability::status> ms {};
     for (size_t index = 0; index < eTX.vutxo.size(); ++index) {
         const uint64_t amount = eTX.vutxo[index].nValue.GetSatoshis();
         const CScript& lscript = eTX.vutxo[index].scriptPubKey; //   locking script
@@ -523,7 +586,8 @@ ScriptError bsv::verify_extend(std::span<const uint8_t> extendedTX, int32_t bloc
             lscript,
             consensus, flagsV2, ctx,
             index,
-            amount);
+            amount,
+            ms);
         if (sERR != SCRIPT_ERR_OK) {
             return sERR;
         }
@@ -556,6 +620,7 @@ ScriptError bsv::verify_extend_full(std::span<const uint8_t> extendedTX, std::sp
     }
 
     const CTransaction ctx(eTX.mtx);
+    std::atomic<malleability::status> ms {};
     for (size_t index = 0; index < eTX.vutxo.size(); ++index) {
         const uint64_t amount = eTX.vutxo[index].nValue.GetSatoshis();
         const CScript& lscript = eTX.vutxo[index].scriptPubKey; //   locking script
@@ -569,7 +634,8 @@ ScriptError bsv::verify_extend_full(std::span<const uint8_t> extendedTX, std::sp
             lscript,
             consensus, flags, ctx,
             index,
-            amount);
+            amount,
+            ms);
         if (sERR != SCRIPT_ERR_OK) {
             return sERR;
         }
