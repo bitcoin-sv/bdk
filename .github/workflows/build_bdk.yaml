@@ -44,7 +44,7 @@ jobs:
             sudo apt-get update
             sudo apt-get install -y build-essential g++ wget unzip
             wget ${{ secrets.BSV_120BETA_URL }}
-            unzip bitcoin-sv-staging.zip && mv bitcoin-sv-staging bitcoin-sv
+            unzip bitcoin-sv-staging.zip -d bitcoin-sv
             echo "BSV_ROOT=${{ github.workspace }}/bitcoin-sv" >> $GITHUB_ENV
             wget https://github.com/bitcoin-sv/bdk/releases/download/depcy/dependancies_linux_x86_64.tar.gz
             tar -xzf dependancies_linux_x86_64.tar.gz
@@ -57,7 +57,7 @@ jobs:
             sudo apt-get update
             sudo apt-get install -y build-essential g++ wget unzip
             wget ${{ secrets.BSV_120BETA_URL }}
-            unzip bitcoin-sv-staging.zip && mv bitcoin-sv-staging bitcoin-sv
+            unzip bitcoin-sv-staging.zip -d bitcoin-sv
             echo "BSV_ROOT=${{ github.workspace }}/bitcoin-sv" >> $GITHUB_ENV
             wget https://github.com/bitcoin-sv/bdk/releases/download/depcy/dependancies_linux_aarch64.tar.gz
             tar -xzf dependancies_linux_aarch64.tar.gz
@@ -69,7 +69,7 @@ jobs:
           if [[ ${{ matrix.os }} == *'macos'* ]]; then
             brew install unzip
             wget ${{ secrets.BSV_120BETA_URL }}
-            unzip bitcoin-sv-staging.zip && mv bitcoin-sv-staging bitcoin-sv
+            unzip bitcoin-sv-staging.zip -d bitcoin-sv
             echo "BSV_ROOT=${{ github.workspace }}/bitcoin-sv" >> $GITHUB_ENV
             wget https://github.com/bitcoin-sv/bdk/releases/download/depcy/dependancies_darwin_arm64.tar.gz
             tar -xzf dependancies_darwin_arm64.tar.gz
@@ -101,8 +101,7 @@ jobs:
         if: runner.os == 'Windows'
         run: |
           Invoke-WebRequest -Uri "${{ secrets.BSV_120BETA_URL }}" -OutFile "bitcoin-sv-staging.zip"
-          Expand-Archive -Path "bitcoin-sv-staging.zip" -DestinationPath "."
-          Rename-Item -Path "bitcoin-sv-staging" -NewName "bitcoin-sv"
+          Expand-Archive -Path "bitcoin-sv-staging.zip" -DestinationPath "bitcoin-sv"
           echo "BSV_ROOT=${{ github.workspace }}\bitcoin-sv" >> $GITHUB_ENV
           Invoke-WebRequest -Uri "https://github.com/bitcoin-sv/bdk/releases/download/depcy/dependancies_windows_x86_64.zip" -OutFile "dependancies_windows_x86_64.zip"
           Expand-Archive -Path "dependancies_windows_x86_64.zip" -DestinationPath "."
