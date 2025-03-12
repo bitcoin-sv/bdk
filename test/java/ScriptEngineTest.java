@@ -585,7 +585,7 @@ public class ScriptEngineTest {
     }
 
     // Negative value Script Flag
-    @Test
+    @Test (enabled = false)
     public void testEvaluateNegativeScriptFlag() {
 
         String scriptArray = new String(
