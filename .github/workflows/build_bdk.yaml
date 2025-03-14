@@ -14,6 +14,8 @@ jobs:
       matrix:
         os: [linux-arm64-8-core, ubuntu-24.04, macos-15, windows-2022]
       fail-fast: false
+    outputs:
+      modified: ${{ steps.gobdk_change.outputs.modified }}
     runs-on: ${{ matrix.os }}
 
     env:
@@ -88,8 +90,22 @@ jobs:
           cmake --build build --parallel 4
           ctest --output-on-failure --test-dir build
 
-      - name: Upload GoBDK static libraries to artifact UNIX
+      - name: Check GoBDK has changed
+        id: gobdk_change
         if: runner.os != 'Windows'
+        run: |
+          changed_files=$(git diff --name-only -- module/gobdk/bdkcgo/libGoBDK_*.a)
+          git status
+          if [[ -n "$changed_files" ]]; then
+            echo "Modified files detected : $changed_files"
+            echo "modified=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No modifications detected"
+            echo "modified=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload GoBDK static libraries to artifact UNIX
+        if: runner.os != 'Windows' && steps.gobdk_change.outputs.modified == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: libGoBDK_${{ env.OS_ARCH }}.a
@@ -123,7 +139,7 @@ jobs:
     needs: build-bdk
     # Commit static libraries gobdk iff all matrix build succeeds and the commit does not contains [GoBDKUpdate]
     # The commit containing [GoBDKUpdate] is submitted by the bot, we should prevent the infinit build loops
-    if: ${{ success() }} && !contains(github.event.head_commit.message, '[GoBDKUpdate]')
+    if: ${{ success() }} && needs.build-bdk.outputs.modified == 'true' && !contains(github.event.head_commit.message, '[GoBDKUpdate]')
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
