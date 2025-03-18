@@ -7,7 +7,7 @@ jobs:
   build-upload-dependencies:
     strategy:
       matrix:
-        os: [linux-arm64-8-core, ubuntu-24.04, macos-15]
+        os: [linux-arm64-8-core, ubuntu-24.04, macos-15, macos-13]
       fail-fast: false
     runs-on: ${{ matrix.os }}
 
@@ -17,7 +17,7 @@ jobs:
 
     steps:
     - name: Check out repository
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
 
     - name: Set up Python 3
       uses: actions/setup-python@v2
