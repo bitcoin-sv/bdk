@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/csv"
+	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"os"
@@ -11,6 +12,23 @@ import (
 	"github.com/bitcoin-sv/bdk/module/gobdk/cmd/woc/woc"
 	"github.com/libsv/go-bt/v2"
 )
+
+func getTxFromBinFile() {
+	var tx bt.Tx
+
+	f, err := os.Open("splittingTx.bin")
+	defer f.Close()
+
+	_, err = tx.ReadFrom(f)
+	if err != nil {
+		panic(err)
+	}
+
+	txID := tx.TxID()
+	txHexExtended := hex.EncodeToString(tx.ExtendedBytes())
+
+	fmt.Printf("TxID : %v\n\nTxHexExtended\n%v\n\n", txID, txHexExtended)
+}
 
 func getTxIDFromTXHex() {
 	txHex := "010000000000000000ef0225894047a817115970e49cc0b77dc2e1fd5d185632c244c055512dc490e82a5a000000006a47304402205bccbecf7d1658032759c4d182a8170174ad7dc687d58555707198a1e230f84f02203ae6804eef77319876223db1b354828e1beeccaeafb6d667879436eef7aa5f3141210300e3b001c4addf714e8c4d5ac1427fb19349d3d05e416e47fc6186cd2d95eb0effffffff962fb15b000000001976a9145632e2f253ac71e2dda1a8dcec6eac384a74251b88ac88ad2770b0bc82235a6414c68d4eb8764750c48178ffa01f6a93ba972dc1e418000000006b483045022100c348ff56a2f00b608fadb4583b76a9a91079bf25b507ef44da562e8aa90fbdd202204fc40afdb76409527a05cfb67fbc67d496e6b0bd720121a26779123b5dd30212412102381da97b922c1584ca700f97650f1a2c2dcdba8a480ff998541504263f5ce551ffffffff00e1f505000000001976a914f9878c4ef91c883c451bee25ca6daf17da20a29688ac0116b16d61000000001976a914cc401501b36a914bc31f2322612b673cbb98a2d788ac00000000"
@@ -148,7 +166,8 @@ func retrieveTxsAfterGenesis() {
 
 // main code
 func main() {
+	getTxFromBinFile()
 	// getTxIDFromTXHex()
-	getLargeTxData()
+	// getLargeTxData()
 	// retrieveTxsAfterGenesis()
 }
