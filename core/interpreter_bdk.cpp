@@ -220,6 +220,14 @@ uint32_t get_block_script_flags(const std::span<const uint8_t> locking_script, i
         flags &= ~SCRIPT_VERIFY_SIGPUSHONLY;
     }
 
+    // Add a missing part that has been set in GetScriptVerifyFlags
+    // Combining with this implementation of GetBlockScriptFlags, we
+    // expect our flags calculator is better.
+    if (!config.GetChainParams().RequireStandard())
+    {
+        flags |= SCRIPT_ENABLE_SIGHASH_FORKID;
+    }
+
     return flags;
 }
 
