@@ -23,7 +23,7 @@ namespace po = boost::program_options;
 namespace pt = boost::property_tree;
 
 
-void verifyExtendFull(const std::span<const int32_t> utxoHeights, const int32_t blockHeight, const std::string& txID, const std::string& txHexExtended) {
+void verifyExtendFull(const std::string& network, const std::span<const int32_t> utxoHeights, const int32_t blockHeight, const std::string& txID, const std::string& txHexExtended) {
     const std::vector<uint8_t> etxBin = ParseHex(txHexExtended);
     const std::span<const uint8_t> etx(etxBin.data(), etxBin.size());
 
@@ -48,10 +48,9 @@ void verifyExtendFull(const std::span<const int32_t> utxoHeights, const int32_t 
     }
 
     // Test verify extend
-    const std::string network = "main";
     const int32_t genesisHeight = 620538;
     const std::string err = bsv::SetGlobalScriptConfig(
-        "main",
+        network,
         int64_t(0),
         int64_t(0),
         int64_t(0),
@@ -211,6 +210,7 @@ int main(int argc, char* argv[])
             throw std::runtime_error("bad line " + std::to_string(i) + " there are only " + ::to_string(line.size()) + " elements");
         }
 
+        const std::string& network = line[0];
         const std::string& TxID = line[2];
         const std::string& TxHexExtended = line[3];
 
@@ -225,7 +225,7 @@ int main(int argc, char* argv[])
         std::span<const int32_t> utxoHeights(utxoVector);
 
         try {
-            verifyExtendFull(utxoHeights, blockHeight, TxID, TxHexExtended);
+            verifyExtendFull(network, utxoHeights, blockHeight, TxID, TxHexExtended);
         }
         catch (std::exception e) {
             std::cout << "ERROR test line : " << i + 1 << e.what() << std::endl;
