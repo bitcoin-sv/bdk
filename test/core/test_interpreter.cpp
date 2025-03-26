@@ -19,6 +19,7 @@
 #include "script/script.h"
 #include "script/script_flags.h"
 #include "utilstrencodings.h"
+#include "tofan.h"
 
 #include "interpreter_bdk.hpp"
 #include "extendedTx.hpp"
@@ -469,6 +470,18 @@ BOOST_AUTO_TEST_CASE(test_verify_extend_full_utxos)
 
     const auto status = bsv::verify_extend_full(emptyUtxoEtx, utxo, blockHeight - 1, true);
     BOOST_CHECK_EQUAL(SCRIPT_ERR_UNKNOWN_ERROR, status);
+}
+
+BOOST_AUTO_TEST_CASE(get_script_verify_flags)
+{
+    const bool require_standard{};
+    const bool is_prom_mempool_flags{};
+    const uint64_t prom_mempool_flags{};
+    const auto flags = GetScriptVerifyFlags(ProtocolEra::PreGenesis,
+                                            require_standard,
+                                            is_prom_mempool_flags,
+                                            prom_mempool_flags);
+    BOOST_CHECK_EQUAL(0x1'47df, flags);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
