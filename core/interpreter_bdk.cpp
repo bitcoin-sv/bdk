@@ -1,5 +1,6 @@
 #include <interpreter_bdk.hpp>
 #include <extendedTx.hpp>
+#include <chainparams_bdk.hpp>
 
 #include <base58.h>
 #include <chainparams.h>
@@ -44,7 +45,7 @@ std::string bsv::SetGlobalScriptConfig(
         // Set the Chain Params and the genesis/chronicle height in config.
         // We have to set these heights because they are used inside the config
         // not inside the ChainParams
-        SelectParams(chainNetwork); // throw exception if wrong network string
+        bsv::select_params(chainNetwork); // throw exception if wrong network string
         const CChainParams& chainparams = gConfig.GetChainParams(); // ChainParams after setting the chain network
         const int32_t gh = (customGenesisHeight > 0) ? customGenesisHeight : chainparams.GetConsensus().genesisHeight;
         if (!gConfig.SetGenesisActivationHeight(gh, &err)) {
@@ -56,7 +57,6 @@ std::string bsv::SetGlobalScriptConfig(
         if (gh > chainparams.GetConsensus().chronicleHeight) {
             throw std::runtime_error("genesis activation height was set higher than chronicle height");
         }
-
 
         bool ok=true;
         if (maxOpsPerScriptPolicyIn > 0)

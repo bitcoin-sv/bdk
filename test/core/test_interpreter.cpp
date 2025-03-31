@@ -30,13 +30,32 @@ using namespace bsv;
 
 BOOST_AUTO_TEST_SUITE(test_interpreter)
 
+BOOST_AUTO_TEST_CASE(custom_chainparams)
+{
+    // Set global config with 'regular' chain should not throw an error
+    BOOST_TEST(SetGlobalScriptConfig("main", 0, 0, 0, 0, 0, 0).empty());
+    BOOST_TEST(SetGlobalScriptConfig("test", 0, 0, 0, 0, 0, 0).empty());
+    BOOST_TEST(SetGlobalScriptConfig("regtest", 0, 0, 0, 0, 0, 0).empty());
+    BOOST_TEST(SetGlobalScriptConfig("stn", 0, 0, 0, 0, 0, 0).empty());
+
+    // Set global config with custom chain should not throw an error
+    BOOST_TEST(SetGlobalScriptConfig("teratestnet", 0, 0, 0, 0, 0, 0).empty());
+    BOOST_TEST(SetGlobalScriptConfig("tstn", 0, 0, 0, 0, 0, 0).empty());
+
+    // Set global config with unknown chain should throw an exeption
+    BOOST_TEST(SetGlobalScriptConfig("foo", 0, 0, 0, 0, 0, 0).find("CGO EXCEPTION") != std::string::npos);
+
+    // Reset to main chain params for other tests (just in case)
+    BOOST_TEST(SetGlobalScriptConfig("main", 0, 0, 0, 0, 0, 0).empty());
+}
+
 BOOST_AUTO_TEST_CASE(custom_genesis_height)
 {
     const int32_t customGH = 123;
-    SetGlobalScriptConfig("main", 1, 2, 3, 4, 5, 6); // Set genesis height to default
+    SetGlobalScriptConfig("main", 0, 0, 0, 0, 0, 0); // Set genesis height to default
     const auto defaultGH = bsv::GetGenesisActivationHeight();
     BOOST_CHECK(defaultGH != customGH);
-    SetGlobalScriptConfig("main", 1, 2, 3, 4, 5, 6, customGH);
+    SetGlobalScriptConfig("main", 0, 0, 0, 0, 0, 0, customGH);
     const auto setGH = bsv::GetGenesisActivationHeight();
     BOOST_CHECK_EQUAL(customGH, setGH);
 }
