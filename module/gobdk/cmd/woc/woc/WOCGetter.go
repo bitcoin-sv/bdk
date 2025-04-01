@@ -105,6 +105,13 @@ func GetBlockChainInfo(api *APIClient) (string, error) {
 	return api.Fetch(path)
 }
 
+// GetBlockHeader given the block height (string) or block hash, return the JSON body of the block header
+// See : https://docs.taal.com/core-products/whatsonchain/block#get-header-by-hash-or-height
+func GetBlockHeader(api *APIClient, hashOrHeightStr string) (string, error) {
+	path := fmt.Sprintf("block/%v/header", hashOrHeightStr)
+	return api.Fetch(path)
+}
+
 // GetBlockByHeight given the block height, return the JSON body of the block detail
 // See : https://docs.taal.com/core-products/whatsonchain/block#get-by-height
 func GetBlockByHeight(api *APIClient, h uint32) (string, error) {
