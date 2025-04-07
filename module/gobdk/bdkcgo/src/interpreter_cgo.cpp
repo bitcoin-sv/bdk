@@ -35,14 +35,9 @@ uint32_t cgo_script_verification_flags_v2(const char* lScriptPtr, int lScriptLen
     }
 }
 
-uint32_t cgo_script_verification_flags(const char* lScriptPtr, int lScriptLen, int32_t utxoHeight, int32_t blockHeight) {
+uint32_t cgo_script_verification_flags(int32_t utxoHeight, int32_t blockHeight, bool consensus) {
     try {
-        std::span<const uint8_t> lScript ;
-        if (lScriptPtr != nullptr && lScriptLen > 0) {
-            const uint8_t* pL = static_cast<const uint8_t*>(reinterpret_cast<const void*>(lScriptPtr));
-            lScript = std::span<const uint8_t>(pL, lScriptLen);
-        }
-        return bsv::script_verification_flags(lScript, utxoHeight, blockHeight);
+        return bsv::script_verification_flags(utxoHeight, blockHeight, consensus);
     }
     catch (const std::exception& e) {
         std::cout << "CGO EXCEPTION : " << __FILE__ << ":" << __LINE__ << "    at " << __func__ << std::endl << e.what() << std::endl;
