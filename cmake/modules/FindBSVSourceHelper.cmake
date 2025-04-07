@@ -192,6 +192,7 @@ function(cryptGetMinimumListBSVSource)##########################################
       "src/time_locked_mempool.h"  ##  Used by [config.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [scriptcache.cpp]
       "src/timedata.h"  ##  Used by [config.cpp], [dstencode.cpp], [interpreter.cpp]
       "src/tinyformat.h"  ##  Used by [amount.cpp], [block.cpp], [chainparams.cpp], [chainparamsbase.cpp], [config.cpp], [core_read.cpp], [core_write.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [logging.cpp], [random.cpp], [script.cpp], [scriptcache.cpp], [sigcache.cpp], [standard.cpp], [transaction.cpp], [util.cpp], [utilmoneystr.cpp], [utilstrencodings.cpp]
+      "src/verify_script_flags.h"  ## Manual add
       "src/tx_mempool_info.h"  ##  Used by [config.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [scriptcache.cpp]
       "src/txmempool.h"  ##  Used by [config.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [scriptcache.cpp]
       "src/txn_double_spend_detector.h"  ##  Used by [config.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [scriptcache.cpp]
@@ -259,6 +260,7 @@ function(cryptGetMinimumListBSVSource)##########################################
       "src/support/cleanse.cpp"
       "src/support/lockedpool.cpp"
       "src/taskcancellation.cpp"
+      "src/verify_script_flags.cpp"  ## Manual add
       "src/util.cpp"
       "src/utilmoneystr.cpp"
       "src/utilstrencodings.cpp"
