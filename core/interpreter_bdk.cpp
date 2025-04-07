@@ -99,49 +99,39 @@ int32_t bsv::GetGenesisActivationHeight() {
 //
 // As we don't have the block time in our calculations, we use the precise block heigh
 // to detect the P2SH_ACTIVATION_TIME
-bool is_p2sh_activated(const Config& config, int32_t blockHeight) {
-    // We detect the chain using the genesis height on the consensus of the chain params
-    const Consensus::Params& consensusparams = config.GetChainParams().GetConsensus();
-    const int32_t genesisHeight = consensusparams.genesisHeight;
-    const bool isMainNet = (genesisHeight == GENESIS_ACTIVATION_MAIN);
-    const bool isTestNet = (genesisHeight == GENESIS_ACTIVATION_TESTNET);
-    const bool isSTNNet = (genesisHeight == GENESIS_ACTIVATION_STN);
-    const bool isRegTest = (genesisHeight == GENESIS_ACTIVATION_REGTEST);
-
-    // If non of the network was detected, that mean something is wrong
-    if (!(isMainNet || isTestNet || isSTNNet || isRegTest)) {
-        std::stringstream ss;
-        ss <<  "EXCEPTION unable to detect chain : " <<__FILE__ <<":"<<__LINE__ <<"    at " <<__func__ <<std::endl;
-        throw std::runtime_error(ss.str());
+//
+//     https://github.com/bitcoin-sv/teranode/issues/2466
+bool is_p2sh_activated(const Consensus::Params& params, int32_t blockHeight) {
+    // For mainnet block activating p2sh is 173805
+    if (params.hashGenesisBlock == uint256S("000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f") && blockHeight > 173804) {
+        return true;
     }
 
-    // P2SH_ACTIVATION_TIME = 1333234914; // 31 March 2012 23:01:54
-    // Our onchain analysis provide
-    //     Mainnet block 173799  2012-03-31 23:01:54
-    //     Mainnet block 173800  2012-03-31 23:24:39
-    //     Testnet block    513  2011-02-03 15:52:39
-    //     Testnet block    514  2012-05-24 14:54:10
-    // There are only two cases where P2SH is not activated
-    if (isMainNet && blockHeight<173800)
-        return false;
-    if (isTestNet && blockHeight<514)
-        return false;
+    // For testnet block activating p2sh is 519
+    if (params.hashGenesisBlock == uint256S("000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943") && blockHeight > 518) {
+        return true;
+    }
 
-    // For STN or regtest, P2SH is always activated as they all started after P2SH_ACTIVATION_TIME
+    // For any other network, it's probably created long time after P2SH_ACTIVATION_TIME, so p2sh is always activated
     return true;
 }
 
-// clone of GetScriptVerifyFlags
+// clone and modified of GetScriptVerifyFlags
 //
 // get_script_verify_flags is a clone of GetScriptVerifyFlags in chronicle version
 // In chronical version, GetScriptVerifyFlags is defined in $BSV/src/validation.cpp, if we include this file
 // into our compilation, what'll include a lot of other files that make the whole dependencies explode.
 // This is why we'd rather clone this function here and use it.
-uint32_t get_script_verify_flags(const Config &config, ProtocolEra era)
+//
+// The original version used ProtocolEra as input, we used blockHeight as input, to make it similar to the
+// call of get_block_script_flags
+uint32_t get_script_verify_flags(const Config& config, int32_t blockHeight)
 {
+    const ProtocolEra era{ GetProtocolEra(config, blockHeight) };
+
     // Get verification flags for overall script - individual UTXOs may need
     // to add/remove flags (done by CheckInputScripts).
-    uint32_t scriptVerifyFlags { StandardScriptVerifyFlags(era) };
+    uint32_t scriptVerifyFlags{ StandardScriptVerifyFlags(era) };
     if (!config.GetChainParams().RequireStandard())
     {
         if (config.IsSetPromiscuousMempoolFlags())
@@ -154,7 +144,7 @@ uint32_t get_script_verify_flags(const Config &config, ProtocolEra era)
     return scriptVerifyFlags;
 }
 
-// clone eand modified of GetBlockScriptFlags
+// clone and modified of GetBlockScriptFlags
 //
 // get_block_script_flags is a clone and slight modified version of GetBlockScriptFlags.
 // Same reason as GetScriptVerifyFlags, we don't want to include $BSV/src/validation.cpp that will explode
@@ -164,15 +154,14 @@ uint32_t get_script_verify_flags(const Config &config, ProtocolEra era)
 // This slight modification skip the handling of grace period using GetMedianTimePast
 // See
 //    https://github.com/bitcoin-sv/bitcoin-sv/blob/master/src/validation.cpp#L2882
-uint32_t get_block_script_flags(const std::span<const uint8_t> locking_script, int32_t blockHeight) {
-    const Config& config = GlobalConfig::GetConfig();
+uint32_t get_block_script_flags(const Config& config, int32_t blockHeight) {
     const Consensus::Params& consensusparams = config.GetChainParams().GetConsensus();
     uint32_t flags = SCRIPT_VERIFY_NONE;
 
     // We check if the utxo is P2SH by the content of the locking script, rather
     // than by the block height of the utxo
     try {
-        if (is_p2sh_activated(config, blockHeight) && IsP2SH(locking_script)) {
+        if (is_p2sh_activated(consensusparams, blockHeight)) {
             flags |= SCRIPT_VERIFY_P2SH;
         }
     }
@@ -216,34 +205,25 @@ uint32_t get_block_script_flags(const std::span<const uint8_t> locking_script, i
 
     if (IsProtocolActive(GetProtocolEra(config, blockHeight + 1), ProtocolName::Chronicle)) {
         flags |= SCRIPT_CHRONICLE;
-        flags &= ~SCRIPT_VERIFY_LOW_S;
-        flags &= ~SCRIPT_VERIFY_SIGPUSHONLY;
-    }
-
-    // Add a missing part that has been set in GetScriptVerifyFlags
-    // Combining with this implementation of GetBlockScriptFlags, we
-    // expect our flags calculator is better.
-    if (!config.GetChainParams().RequireStandard())
-    {
-        flags |= SCRIPT_ENABLE_SIGHASH_FORKID;
     }
 
     return flags;
 }
 
 // Use of
-//   GetBlockScriptFlags                          // Might consider to use GetScriptVerifyFlags(config, protocolEra)
-//   InputScriptVerifyFlags(protocolEra, utxoEra)
-// For now this method doesn't use lscript, we keep it as input here just in case we need it later
-uint32_t bsv::script_verification_flags(const std::span<const uint8_t> lscript, int32_t utxoHeight, int32_t blockHeight) {
+//   GetBlockScriptFlags     // Tx coming from a block
+//   InputScriptVerifyFlags  // Tx coming from a  peer
+uint32_t bsv::script_verification_flags(int32_t utxoHeight, int32_t blockHeight, bool consensus) {
 
     const Config& config = GlobalConfig::GetConfig();
     const ProtocolEra activeEra{ GetProtocolEra(config, blockHeight) };
     const ProtocolEra utxoEra{ GetProtocolEra(config, utxoHeight) };
 
-    // const uint32_t scriptVerifyFlags = get_script_verify_flags(config, activeEra);
-    const uint32_t scriptVerifyFlags = get_block_script_flags(lscript, blockHeight);
-    const uint32_t perInputScriptFlags { InputScriptVerifyFlags(activeEra, utxoEra) };
+    // If consensus = true , it is a tx coming from a block, we use GetBlockScriptFlags
+    // If consensus = false, it is a tx coming from a peer , we use GetScriptVerifyFlags
+    const uint32_t scriptVerifyFlags = consensus ? get_block_script_flags(config, blockHeight) : get_script_verify_flags(config, blockHeight) ;
+
+    const uint32_t perInputScriptFlags{ InputScriptVerifyFlags(activeEra, utxoEra) };
     return scriptVerifyFlags | perInputScriptFlags;
 }
 
@@ -252,13 +232,13 @@ uint32_t bsv::script_verification_flags(const std::span<const uint8_t> lscript, 
 uint32_t bsv::script_verification_flags_v2(const std::span<const uint8_t> locking_script, int32_t blockHeight) {
     const Config& config = GlobalConfig::GetConfig();
 
-    const uint32_t blockVerifyFlabgs = get_block_script_flags(locking_script, blockHeight);
+    const uint32_t blockVerifyFlabgs = get_block_script_flags(config, blockHeight);
 
     // Trying to get the utxoEra using a combination of methods in $BSV/src/bitcoin-tx.cpp
     // To get the InputScriptVerifyFlags from the utxo
     const ProtocolEra activeEra{ GetProtocolEra(config, blockHeight) };
     const ProtocolEra utxoEra{ IsP2SH(locking_script) ? ProtocolEra::PreGenesis : activeEra };
-    const uint32_t perInputScriptFlags { InputScriptVerifyFlags(activeEra, utxoEra) };
+    const uint32_t perInputScriptFlags{ InputScriptVerifyFlags(activeEra, utxoEra) };
     return blockVerifyFlabgs | perInputScriptFlags;
 }
 
@@ -628,14 +608,14 @@ ScriptError bsv::verify_extend_full(std::span<const uint8_t> extendedTX, std::sp
     }
 
     const CTransaction ctx(eTX.mtx);
-    std::atomic<malleability::status> ms {};
+    std::atomic<malleability::status> ms{};
     for (size_t index = 0; index < eTX.vutxo.size(); ++index) {
         const uint64_t amount = eTX.vutxo[index].nValue.GetSatoshis();
         const CScript& lscript = eTX.vutxo[index].scriptPubKey; //   locking script
         const CScript& uscript = eTX.mtx.vin[index].scriptSig;  // unlocking script
 
-        const int32_t utxoHeight { utxoHeights[index] };
-        const uint32_t flags = bsv::script_verification_flags(lscript, utxoHeight, blockHeight);
+        const int32_t utxoHeight{ utxoHeights[index] };
+        const uint32_t flags = bsv::script_verification_flags(utxoHeight, blockHeight, consensus);
 
         ScriptError sERR = verify_impl(
             uscript,

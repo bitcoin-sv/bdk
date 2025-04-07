@@ -36,7 +36,7 @@ uint32_t cgo_script_verification_flags_v2(const char* lScriptPtr, int lScriptLen
  * cgo_script_verification_flags calculates the flags to be used when verifying script
  * This method calculates precisely flags for each utxo using the utxo heights
  */
-uint32_t cgo_script_verification_flags(const char* lScriptPtr, int lScriptLen, int32_t utxoHeight, int32_t blockHeight);
+uint32_t cgo_script_verification_flags(int32_t utxoHeight, int32_t blockHeight, bool consensus);
 
 /**
  *  cgo_execute executes the script without verifying. Useful for simple script playing
