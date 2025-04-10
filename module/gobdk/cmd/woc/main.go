@@ -14,8 +14,8 @@ var (
 
 // checkNetworkValid check if the network input from args is valid
 func checkNetworkValid(cmd *cobra.Command, args []string) error {
-	if network != woc.Mainnet && network != woc.Testnet && network != woc.STNnet {
-		return fmt.Errorf("invalid network %v. Network should be either %v, %v, %v", network, woc.Mainnet, woc.Testnet, woc.STNnet)
+	if network != woc.Mainnet && network != woc.Testnet && network != woc.STNnet && network != woc.TeraTestnet && network != woc.TeraScalingTestnet {
+		return fmt.Errorf("invalid network %v. Network should be either %v, %v, %v, %v, %v", network, woc.Mainnet, woc.Testnet, woc.STNnet, woc.TeraTestnet, woc.TeraScalingTestnet)
 	}
 	return nil
 }

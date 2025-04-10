@@ -11,9 +11,11 @@ import (
 )
 
 const (
-	Mainnet = "main"
-	Testnet = "test"
-	STNnet  = "stn"
+	Mainnet            = "main"
+	Testnet            = "test"
+	STNnet             = "stn"
+	TeraTestnet        = "teratestnet"
+	TeraScalingTestnet = "tstn"
 )
 
 // RateLimit hold the definition of rate limite for whatsonchain
