@@ -22,8 +22,11 @@
 #include "verify_script_flags.h"
 #include "consensus/params.h"
 #include "protocol_era.h"
+#include "chainparams.h"
+#include "chainparamsbase.h"
 
 #include "interpreter_bdk.hpp"
+#include "chainparams_bdk.hpp"
 #include "extendedTx.hpp"
 
 namespace ba = boost::algorithm;
@@ -33,7 +36,33 @@ using namespace bsv;
 
 BOOST_AUTO_TEST_SUITE(test_interpreter)
 
+// A custom chain params
+class MyParams : public CChainParams {
+public:
+    static const std::string CustomName;
+
+    MyParams() {
+    }
+};
+const std::string MyParams::CustomName = "MyParams";
+
+// Registration custom chain params
+static bsv::RegisterCustomChainParams<MyParams> myParamsReg(MyParams::CustomName);
+
 BOOST_AUTO_TEST_CASE(custom_chainparams)
+{
+    BOOST_TEST(bsv::CreateCustomChainParams(CBaseChainParams::MAIN) != nullptr);
+    BOOST_TEST(bsv::CreateCustomChainParams(CBaseChainParams::TESTNET) != nullptr);
+    BOOST_TEST(bsv::CreateCustomChainParams(CBaseChainParams::REGTEST) != nullptr);
+    BOOST_TEST(bsv::CreateCustomChainParams(CBaseChainParams::STN) != nullptr);
+
+    BOOST_TEST(bsv::CreateCustomChainParams(CustomChainParams::TERATESTNET) != nullptr);
+    BOOST_TEST(bsv::CreateCustomChainParams(CustomChainParams::TERASCALINGTESTNET) != nullptr);
+
+    BOOST_TEST(bsv::CreateCustomChainParams(MyParams::CustomName) != nullptr);
+}
+
+BOOST_AUTO_TEST_CASE(custom_chainparams_setting_old)
 {
     // Set global config with 'regular' chain should not throw an error
     BOOST_TEST(SetGlobalScriptConfig("main", 0, 0, 0, 0, 0, 0).empty());
