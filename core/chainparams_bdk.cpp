@@ -1,7 +1,52 @@
 #include <chainparams_bdk.hpp>
 #include <chainparams.h>
-
 #include <policy/policy.h>
+
+#include <unordered_map>
+#include <stdexcept>
+
+
+namespace bsv
+{
+    using RegistryMap = std::unordered_map<std::string, ChainParamsCreator>;
+
+    ChainParamsRegistry& ChainParamsRegistry::Instance() {
+        static ChainParamsRegistry instance;
+        return instance;
+    }
+
+    // Creator registration
+    void ChainParamsRegistry::Register(const std::string& name, ChainParamsCreator creator) {
+        registry_[name] = std::move(creator);
+    }
+
+    std::unique_ptr<CChainParams> ChainParamsRegistry::Create(const std::string& chainName) const {
+        // If standard chain, use the bitcoin-sv creator
+        if (chainName == CBaseChainParams::MAIN
+            || chainName == CBaseChainParams::TESTNET
+            || chainName == CBaseChainParams::REGTEST
+            || chainName == CBaseChainParams::STN
+            ) {
+            return CreateChainParams(chainName);
+        }
+
+        // Else, custom chain, lookup the registry
+        auto it = registry_.find(chainName);
+        if (it != registry_.end()) {
+            return (it->second)();
+        }
+
+        // If finally not found in registry, throw runtime error
+        throw std::runtime_error("Unknown chain name: " + chainName);
+    }
+
+    std::unique_ptr<CChainParams> CreateCustomChainParams(const std::string& name) {
+        return ChainParamsRegistry::Instance().Create(name);
+    }
+}
+
+//////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////
 
 const std::string CustomChainParams::TERATESTNET = "teratestnet";
 const std::string CustomChainParams::TERASCALINGTESTNET = "tstn";
@@ -72,7 +117,6 @@ class TeraScalingTestNetParams : public CChainParams {
         }
 };
 
-
 /**
  * select_params is the bdk specific of bsv SelectParam
  * It is a wrapper or 'override' version of SelectParam
@@ -100,3 +144,7 @@ void bsv::select_params(const std::string &chain)
         SelectParams(chain);        
     }
 }
+
+// Registration TeraTestNetParams and TeraScalingTestNetParams to the factory
+static bsv::RegisterCustomChainParams<TeraTestNetParams> teraTestNetReg(CustomChainParams::TERATESTNET);
+static bsv::RegisterCustomChainParams<TeraScalingTestNetParams> teraScalingTestNetReg( CustomChainParams::TERASCALINGTESTNET);
