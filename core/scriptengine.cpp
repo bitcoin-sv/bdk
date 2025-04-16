@@ -98,7 +98,7 @@ int32_t bsv::CScriptEngine::GetChronicleActivationHeight() const
     return bsvConfig.GetChronicleActivationHeight();
 }
 
-uint32_t bsv::CScriptEngine::CalculateFlags(int32_t utxoHeight, int32_t blockHeight, bool consensus)
+uint32_t bsv::CScriptEngine::CalculateFlags(int32_t utxoHeight, int32_t blockHeight, bool consensus) const
 {
     ProtocolEra era;
     uint32_t protocolFlags;
@@ -118,7 +118,7 @@ uint32_t bsv::CScriptEngine::CalculateFlags(int32_t utxoHeight, int32_t blockHei
     return (protocolFlags | utxoFlags);
 }
 
-ScriptError bsv::CScriptEngine::VerifyScript(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool consensus)
+ScriptError bsv::CScriptEngine::VerifyScript(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool consensus) const
 {
     const char* begin{ reinterpret_cast<const char*>(extendedTX.data()) };
     const char* end{ reinterpret_cast<const char*>(extendedTX.data() + extendedTX.size()) };
@@ -190,7 +190,7 @@ ScriptError bsv::CScriptEngine::verifyImpl(
     const unsigned int flags,
     BaseSignatureChecker& sig_checker,
     std::atomic<malleability::status>& malleability
-)
+) const
 {
     // Call of the bsv VerifyScript
     const auto ret = ::VerifyScript(bsvConfig,
@@ -204,7 +204,7 @@ ScriptError bsv::CScriptEngine::verifyImpl(
     return helperOptional2ScriptError(ret);
 }
 
-ScriptError bsv::CScriptEngine::helperOptional2ScriptError(const std::optional<std::pair<bool, ScriptError>>& ret){
+ScriptError bsv::CScriptEngine::helperOptional2ScriptError(const std::optional<std::pair<bool, ScriptError>>& ret)  const {
     // If the returned result is empty, we don't know what kind of error is that
     if (!ret.has_value()) {
         return SCRIPT_ERR_UNKNOWN_ERROR;

@@ -10,7 +10,8 @@ type ScriptConfig struct {
 	MaxPubKeysPerMultiSig        uint64 `mapstructure:"maxPubKeysPerMultiSig" json:"maxPubKeysPerMultiSig" validate:"required"`
 	MaxStackMemoryUsageConsensus uint64 `mapstructure:"maxStackMemoryUsageConsensus" json:"maxStackMemoryUsageConsensus" validate:"required"`
 	MaxStackMemoryUsagePolicy    uint64 `mapstructure:"maxStackMemoryUsagePolicy" json:"maxStackMemoryUsagePolicy" validate:"required"`
-	GenesisActivationHeight      uint32 `mapstructure:"genesisActivationHeight" json:"genesisActivationHeight" validate:"required"`
+	GenesisActivationHeight      int32  `mapstructure:"genesisActivationHeight" json:"genesisActivationHeight" validate:"required"`
+	ChronicleActivationHeight    int32  `mapstructure:"chronicleActivationHeight" json:"chronicleActivationHeight" validate:"required"`
 }
 
 // LoadScriptConfig return the functional loader to load parameters from environment variable
@@ -30,7 +31,8 @@ func LoadScriptConfig() SettingLoader {
 		s.scriptConfig.MaxPubKeysPerMultiSig = s.env.GetUint64(keyMaxPubKeysPerMultiSig)
 		s.scriptConfig.MaxStackMemoryUsageConsensus = s.env.GetUint64(keyMaxStackMemoryUsageConsensus)
 		s.scriptConfig.MaxStackMemoryUsagePolicy = s.env.GetUint64(keyMaxStackMemoryUsagePolicy)
-		s.scriptConfig.GenesisActivationHeight = s.env.GetUint32(keyGenesisActivationHeight)
+		s.scriptConfig.GenesisActivationHeight = s.env.GetInt32(keyGenesisActivationHeight)
+		s.scriptConfig.ChronicleActivationHeight = s.env.GetInt32(keyGenesisActivationHeight)
 
 		return nil
 	}

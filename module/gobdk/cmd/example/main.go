@@ -44,7 +44,7 @@ func getTxIDFromTXHex() {
 }
 
 func getLargeTxData() {
-	txs := map[uint32]string{
+	txs := map[int32]string{
 		886761: "62df03d0c21de4479cdd95a7bc04b75f8c22112edd2c9c13325869739c305354",
 	}
 	csvHeader := "ChainNet,BlockHeight,TXID,TxHexExtended, UTXOHeights"
