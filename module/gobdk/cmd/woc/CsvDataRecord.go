@@ -15,11 +15,11 @@ const CSVHeaders = "ChainNet,BlockHeight,TXID,TxHexExtended, UTXOHeights"
 // CsvDataRecord hold a data record for csv file
 type CsvDataRecord struct {
 	ChainNet        string
-	BlockHeight     uint32
+	BlockHeight     int32
 	TXID            string
 	TxHexExtended   string
 	UTXOHeights     string // string joinning utxo heights with separator |
-	DataUTXOHeights []uint32
+	DataUTXOHeights []int32
 	TxBinExtended   []byte
 }
 
@@ -72,14 +72,14 @@ func ReadCSVFile(filepath string) ([]CsvDataRecord, error) {
 		// Parse utxo heights
 		if len(ret[i].UTXOHeights) > 0 {
 			parts := strings.Split(ret[i].UTXOHeights, "|")
-			ret[i].DataUTXOHeights = make([]uint32, len(parts))
+			ret[i].DataUTXOHeights = make([]int32, len(parts))
 
 			for k, p := range parts {
 				h, err := strconv.ParseUint(p, 10, 32)
 				if err != nil {
 					return ret, fmt.Errorf("error parsing utxo height at line %v, error :%v", i, err)
 				}
-				ret[i].DataUTXOHeights[k] = uint32(h)
+				ret[i].DataUTXOHeights[k] = int32(h)
 			}
 		}
 	}

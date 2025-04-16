@@ -26,9 +26,7 @@ configure_file(${BDK_VERSION_GOLANG_CPP_IN} ${BDK_VERSION_GOLANG_CPP})
 set(_GO_MODULE_NAME GoBDK)
 set(_GO_MODULE_HEADER_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/asm_cgo.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/interpreter_cgo.h
     ${CMAKE_CURRENT_SOURCE_DIR}/gobdk.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/global_scriptconfig.h
     ${CMAKE_CURRENT_SOURCE_DIR}/script_error_cgo.h
     ${CMAKE_CURRENT_SOURCE_DIR}/scriptengine_cgo.h
     ${CMAKE_CURRENT_SOURCE_DIR}/version_cgo.h
@@ -37,8 +35,6 @@ set(_GO_MODULE_HEADER_FILES
 
 set(_GO_MODULE_SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/asm_cgo.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/interpreter_cgo.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/global_scriptconfig.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/script_error_cgo.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/scriptengine_cgo.cpp
 )

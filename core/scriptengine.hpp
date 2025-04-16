@@ -57,10 +57,10 @@ class CScriptEngine {
         // consensus define what flags set are being used
         //   - consensus=true  --> flags to check a tx coming from a peer  (enforce policies check)
         //   - consensus=false --> flags to check a tx coming from a block (   skip policies check)
-        uint32_t CalculateFlags(int32_t utxoHeight, int32_t blockHeight, bool consensus);
+        uint32_t CalculateFlags(int32_t utxoHeight, int32_t blockHeight, bool consensus) const;
 
         // VerifyScript extract the extended transaction, then forward to bsv call
-        ScriptError VerifyScript(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool consensus);
+        ScriptError VerifyScript(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool consensus) const;
 
     private :
         GlobalConfig bsvConfig;
@@ -74,10 +74,10 @@ class CScriptEngine {
             const unsigned int flags,
             BaseSignatureChecker& sig_checker,
             std::atomic<malleability::status>& malleability
-        );
+        ) const;
 
         // helper to convert the optional (returned by ScriptVerify) to raw ScriptError
-        ScriptError helperOptional2ScriptError(const std::optional<std::pair<bool, ScriptError>>& ret);
+        ScriptError helperOptional2ScriptError(const std::optional<std::pair<bool, ScriptError>>& ret) const;
 };
 
 // export the value of SCRIPT_ERR_ERROR_COUNT

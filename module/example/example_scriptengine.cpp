@@ -17,13 +17,13 @@
 #include "extendedTx.hpp"
 #include "assembler.h"
 #include "utilstrencodings.h"
-#include "interpreter_bdk.hpp"
+#include "scriptengine.hpp"
 
 namespace po = boost::program_options;
 namespace pt = boost::property_tree;
 
 
-void verifyExtendFull(const std::string& network, const std::span<const int32_t> utxoHeights, const int32_t blockHeight, const std::string& txID, const std::string& txHexExtended) {
+void doVerifyScript(const bsv::CScriptEngine& se, const std::span<const int32_t> utxoHeights, const int32_t blockHeight, const std::string& txID, const std::string& txHexExtended) {
     const std::vector<uint8_t> etxBin = ParseHex(txHexExtended);
     const std::span<const uint8_t> etx(etxBin.data(), etxBin.size());
 
@@ -47,20 +47,7 @@ void verifyExtendFull(const std::string& network, const std::span<const int32_t>
         throw std::runtime_error("ERROR recover txID for TxID " + txID);
     }
 
-    // Test verify extend
-    const int32_t genesisHeight = 620538;
-    const std::string err = bsv::SetGlobalScriptConfig(
-        network,
-        int64_t(0),
-        int64_t(0),
-        int64_t(0),
-        int64_t(0),
-        int64_t(0),
-        int64_t(0),
-        genesisHeight
-    );
-
-    const ScriptError ret = bsv::verify_extend_full(etxBin, utxoHeights, blockHeight-1, true);
+    const ScriptError ret = se.VerifyScript(etxBin, utxoHeights, blockHeight-1, true);
     if (ret != SCRIPT_ERR_OK) {
         throw std::runtime_error("ERROR verify script for TxID " + txID);
     }
@@ -176,12 +163,14 @@ std::vector<int32_t> parseUTXOStr(const std::string& utxoStr, char delimiter = '
 int main(int argc, char* argv[])
 {
     std::string csvFilePath;
+    std::string network;
 
     // Define and parse the command line options
     po::options_description desc("Allowed options");
     desc.add_options()
         ("help,h", "produce help message")
-        ("csv-file,f", po::value<std::string>(&csvFilePath)->required(), "path to the csv file");
+        ("csv-file,f", po::value<std::string>(&csvFilePath)->required(), "path to the csv file")
+        ("network,n", po::value<std::string>(&network)->default_value("main"), "the name of the network type");
 
     po::variables_map vm;
     try {
@@ -199,6 +188,7 @@ int main(int argc, char* argv[])
     }
 
     const auto csvData = parseCSV(csvFilePath);
+    const bsv::CScriptEngine se(network);
     for (size_t i = 0; i < csvData.size();++i) {
         auto line = csvData[i];
         //std::cout << std::endl;
@@ -210,7 +200,11 @@ int main(int argc, char* argv[])
             throw std::runtime_error("bad line " + std::to_string(i) + " there are only " + ::to_string(line.size()) + " elements");
         }
 
-        const std::string& network = line[0];
+        const std::string& networkInFile = line[0];
+        if (networkInFile != network) {
+            throw std::runtime_error("bad network" + networkInFile + " at line " + std::to_string(i) + ". Inconsistent with the global network setting : " + network);
+        }
+
         const std::string& TxID = line[2];
         const std::string& TxHexExtended = line[3];
 
@@ -225,7 +219,7 @@ int main(int argc, char* argv[])
         std::span<const int32_t> utxoHeights(utxoVector);
 
         try {
-            verifyExtendFull(network, utxoHeights, blockHeight, TxID, TxHexExtended);
+            doVerifyScript(se, utxoHeights, blockHeight, TxID, TxHexExtended);
         }
         catch (std::exception e) {
             std::cout << "ERROR test line : " << i + 1 << e.what() << std::endl;
