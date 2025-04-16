@@ -41,13 +41,6 @@ func TestSignMessage(t *testing.T) {
 	assert.True(t, res, "Error verifying signature")
 }
 
-// Run this test continuously to see of there is a memory leak
-//func TestSignMessageMemory(t *testing.T) {
-//	for {
-//		TestSignMessage(t)
-//	}
-//}
-
 func BenchmarkVerifySignature(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		gosecp256k1.VerifySignature(msg, sig, pubkey)

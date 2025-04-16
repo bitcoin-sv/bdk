@@ -11,5 +11,6 @@
 #include <bdkcgo/interpreter_cgo.h>
 #include <bdkcgo/script_error_cgo.h>
 #include <bdkcgo/version_cgo.h>
+#include <bdkcgo/scriptengine_cgo.h>
 
 #endif /* __GO_BDK_H__ */

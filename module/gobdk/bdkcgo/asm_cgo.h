@@ -19,7 +19,7 @@ const char* cgo_from_asm(const char* asmPtr, int asmLen, int* scriptLen);
  * 
  * The return string is a C-String null terminated
  * 
-* Client code must delete the returned array
+ * Client code must delete the returned array
  */
 const char* cgo_to_asm(const char* scriptPtr, int scriptLen);
 

@@ -96,6 +96,10 @@ const (
 	SCRIPT_ERR_CGO_EXCEPTION
 )
 
+func CPP_SCRIPT_ERR_ERROR_COUNT() int {
+	return int(C.ScriptEngine_CPP_SCRIPT_ERR_ERROR_COUNT())
+}
+
 // errorCode2String conversion of ScriptErrorCode to string, using C++ code
 func errorCode2String(e ScriptErrorCode) string {
 	if e > SCRIPT_ERR_ERROR_COUNT {

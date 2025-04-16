@@ -1,12 +1,8 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"testing"
-
-	bdkconfig "github.com/bitcoin-sv/bdk/module/gobdk/config"
-	bdkscript "github.com/bitcoin-sv/bdk/module/gobdk/script"
 )
 
 func TestMain(m *testing.M) {
@@ -24,15 +20,11 @@ func TestMain(m *testing.M) {
 }
 
 func setup() {
-	bdkScriptConfig := bdkconfig.ScriptConfig{
-		ChainNetwork: "main",
-	}
-
-	err := bdkscript.SetGlobalScriptConfig(bdkScriptConfig)
-	if err != nil {
-		panic(fmt.Errorf("unable to setup test, error : %w", err))
-	}
+	// TODO
+	// Add test setup here
 }
 
 func teardown() {
+	// TODO
+	// Add test tears down here
 }
