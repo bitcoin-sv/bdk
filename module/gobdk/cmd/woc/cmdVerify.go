@@ -2,12 +2,9 @@ package main
 
 import (
 	"encoding/hex"
-	"encoding/json"
-	"fmt"
 	"log"
 	"time"
 
-	bdkconfig "github.com/bitcoin-sv/bdk/module/gobdk/config"
 	bdkscript "github.com/bitcoin-sv/bdk/module/gobdk/script"
 	"github.com/libsv/go-bt/v2"
 	"github.com/spf13/cobra"
@@ -15,7 +12,6 @@ import (
 
 var cmdVerifyFilePath string
 var cmdVerifyCheckHexOnly = false
-var cmdVerifyVerifyExtend = true
 
 // cmdVerify represents the test command
 var cmdVerify = &cobra.Command{
@@ -35,29 +31,15 @@ func init() {
 	}
 
 	cmdVerify.Flags().BoolVarP(&cmdVerifyCheckHexOnly, "check-only", "t", false, "Check parsing the extended hex only")
-	cmdVerify.Flags().BoolVarP(&cmdVerifyVerifyExtend, "verify-extend", "e", true, "Run VerifyExtend instead of verify")
 
 	cmdRoot.AddCommand(cmdVerify)
 }
 
-func setGlobalScriptConfig(network string) error {
-	bdkScriptConfig := bdkconfig.ScriptConfig{
-		ChainNetwork: network,
-		// MaxOpsPerScriptPolicy:        uint64(po.MaxOpsPerScriptPolicy),
-		// MaxScriptNumLengthPolicy:     uint64(po.MaxScriptNumLengthPolicy),
-		// MaxScriptSizePolicy:          uint64(po.MaxScriptSizePolicy),
-		// MaxPubKeysPerMultiSig:        uint64(po.MaxPubKeysPerMultisigPolicy),
-		// MaxStackMemoryUsageConsensus: uint64(po.MaxStackMemoryUsageConsensus),
-		// MaxStackMemoryUsagePolicy:    uint64(po.MaxStackMemoryUsagePolicy),
-	}
-
-	return bdkscript.SetGlobalScriptConfig(bdkScriptConfig)
-}
-
 func execVerify(cmd *cobra.Command, args []string) {
 
-	if err := setGlobalScriptConfig(network); err != nil {
-		log.Fatalf("ERROR while setting global script config with network %v, error \n\n%v\n\n", network, err)
+	se := bdkscript.NewScriptEngine("main")
+	if se == nil {
+		log.Fatalf("ERROR unable to create script engine")
 	}
 
 	csvData, err := ReadCSVFile(cmdVerifyFilePath)
@@ -104,17 +86,9 @@ func execVerify(cmd *cobra.Command, args []string) {
 			continue
 		}
 
-		if cmdVerifyVerifyExtend {
-			if err := verifyScriptExtendFull(record.TxBinExtended, record.DataUTXOHeights, uint32(record.BlockHeight)); err != nil {
-				log.Printf("ERROR verifying record at %v, txID : %v, error \n\n%v\n\n", i, record.TXID, err)
-				nbFailed += 1
-			}
-		} else {
-			//Test the script veriry
-			if err := verifyScript(tx, uint32(record.BlockHeight)); err != nil {
-				log.Printf("ERROR verifying record at %v, txID : %v, error \n\n%v\n\n", i, record.TXID, err)
-				nbFailed += 1
-			}
+		if err := se.VerifyScript(record.TxBinExtended, record.DataUTXOHeights, record.BlockHeight-1, true); err != nil {
+			log.Printf("ERROR verifying record at %v, txID : %v, error \n\n%v\n\n", i, record.TXID, err)
+			nbFailed += 1
 		}
 	}
 
@@ -126,69 +100,14 @@ func execVerify(cmd *cobra.Command, args []string) {
 // //////////////////////////////////////////////////////////////////////////////////////////////
 // //////////////////////////////////////////////////////////////////////////////////////////////
 
-// Test new version of verificator
-func verifyScriptExtendFull(txBin []byte, utxoHeights []uint32, blockHeight uint32) error {
-	if errV := bdkscript.VerifyExtendFull(txBin, utxoHeights, blockHeight-1, true); errV != nil {
-		return errV
-	}
-
-	return nil
-}
-
-// Copied exactly the verify in ubsv
-func verifyScript(tx *bt.Tx, blockHeight uint32) error {
-
-	for i, in := range tx.Inputs {
-		if in.PreviousTxScript == nil || in.UnlockingScript == nil {
-			continue
-		}
-
-		// TODO : For now, as there are only one way to pass go []byte to C++ array and assume
-		// the array is not empty, we actually cannot pass empty []byte to C++ array
-		// In future, we must handle this case where empty array is still valid and need to verify
-		// See https://github.com/bitcoin-sv/ubsv/issues/1270
-		if len(*in.PreviousTxScript) < 1 || len(*in.UnlockingScript) < 1 {
-			continue
-		}
-
-		// isPostChronicle now is unknow, in future, it need to be calculate based on block height
-		//flags, errF := bdkscript.ScriptVerificationFlagsV1(*in.PreviousTxScript, false)
-		flags, errF := bdkscript.ScriptVerificationFlagsV2(*in.PreviousTxScript, blockHeight-1)
-		if errF != nil {
-			return fmt.Errorf("failed to calculate flags from prev locking script, flags : %v, error: %v", flags, errF)
-		}
-
-		if errV := bdkscript.Verify(*in.UnlockingScript, *in.PreviousTxScript, true, uint(flags), tx.Bytes(), i, in.PreviousTxSatoshis); errV != nil {
-			// Helpful logging to get full information to debug separately in GoBDK
-
-			errLog := bdkDebugVerification{
-				UScript:     hex.EncodeToString(*in.UnlockingScript),
-				LScript:     hex.EncodeToString(*in.PreviousTxScript),
-				TxBytes:     tx.String(),
-				Flags:       flags,
-				Input:       i,
-				Satoshis:    in.PreviousTxSatoshis,
-				BlockHeight: blockHeight,
-				Err:         errV.Error(),
-			}
-
-			errLogData, _ := json.MarshalIndent(errLog, "", "    ")
-
-			errorLogMsg := fmt.Sprintf("Failed to verify script in go-bdk, error : \n\n%v\n\n", string(errLogData))
-			return fmt.Errorf("Failed to verify script: %w\n\nerror detail\n\n%v", errV, errorLogMsg)
-		}
-	}
-
-	return nil
-}
-
 type bdkDebugVerification struct {
-	UScript     string `mapstructure:"uScript" json:"uScript" validate:"required"`
-	LScript     string `mapstructure:"lScript" json:"lScript" validate:"required"`
-	TxBytes     string `mapstructure:"txBytes" json:"txBytes" validate:"required"`
-	Flags       uint32 `mapstructure:"flags" json:"flags" validate:"required"`
-	Input       int    `mapstructure:"input" json:"input" validate:"required"`
-	Satoshis    uint64 `mapstructure:"satoshis" json:"satoshis" validate:"required"`
-	BlockHeight uint32 `mapstructure:"blockHeight" json:"blockHeight" validate:"required"`
-	Err         string `mapstructure:"err" json:"err" validate:"required"`
+	UScript     string  `mapstructure:"uScript" json:"uScript" validate:"required"`
+	LScript     string  `mapstructure:"lScript" json:"lScript" validate:"required"`
+	TxBytes     string  `mapstructure:"txBytes" json:"txBytes" validate:"required"`
+	Flags       uint32  `mapstructure:"flags" json:"flags" validate:"required"`
+	Input       int     `mapstructure:"input" json:"input" validate:"required"`
+	Satoshis    uint64  `mapstructure:"satoshis" json:"satoshis" validate:"required"`
+	BlockHeight int32   `mapstructure:"blockHeight" json:"blockHeight" validate:"required"`
+	UTXOHeights []int32 `mapstructure:"utxoHeights" json:"utxoHeights" validate:"required"`
+	Err         string  `mapstructure:"err" json:"err" validate:"required"`
 }

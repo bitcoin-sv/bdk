@@ -18,12 +18,12 @@ import (
 var defaultCmdFetchFilePath = "./data/test.csv"
 var cmdFetchFilePath = defaultCmdFetchFilePath
 
-const defaultMinBlock = uint32(107000) // This is the first block that have more than 1 tx
-const maxNbTx = uint32(10000)
+const defaultMinBlock = int32(107000) // This is the first block that have more than 1 tx
+const maxNbTx = int32(10000)
 
 var nbTx = maxNbTx
 var minBlock = defaultMinBlock
-var maxBlock = uint32(0)
+var maxBlock = int32(0)
 var skipMandatoryBlock = false
 
 // fileExists checks if the file exist
@@ -65,9 +65,9 @@ func init() {
 
 	cmdFetch.Flags().StringVarP(&cmdFetchFilePath, "file-path", "f", defaultCmdFetchFilePath, fmt.Sprintf("Path to the test file (required), default %v", defaultCmdFetchFilePath))
 
-	cmdFetch.Flags().Uint32VarP(&nbTx, "nb-tx", "n", maxNbTx, fmt.Sprintf("number of tx to fetch, default %v", maxNbTx))
-	cmdFetch.Flags().Uint32VarP(&minBlock, "block-min", "l", defaultMinBlock, fmt.Sprintf("min block to fetch, defaulted to %v as it is the first block having more than 1 tx", defaultMinBlock))
-	cmdFetch.Flags().Uint32VarP(&maxBlock, "block-max", "u", 0, fmt.Sprintf("max block to fetch. Default %v", maxBlock))
+	cmdFetch.Flags().Int32VarP(&nbTx, "nb-tx", "n", maxNbTx, fmt.Sprintf("number of tx to fetch, default %v", maxNbTx))
+	cmdFetch.Flags().Int32VarP(&minBlock, "block-min", "l", defaultMinBlock, fmt.Sprintf("min block to fetch, defaulted to %v as it is the first block having more than 1 tx", defaultMinBlock))
+	cmdFetch.Flags().Int32VarP(&maxBlock, "block-max", "u", 0, fmt.Sprintf("max block to fetch. Default %v", maxBlock))
 	cmdFetch.Flags().BoolVarP(&skipMandatoryBlock, "skip-mandatory", "s", false, fmt.Sprintf("Skip fetching mandatory blocks. It means all blocks will be fully fetched. This options is useful when fetching a few full blocks. Default %v", false))
 
 	cmdRoot.AddCommand(cmdFetch)
@@ -98,7 +98,7 @@ func execFetch(cmd *cobra.Command, args []string) {
 		minBlock = max(data.lastBlock, minBlock)
 	}
 
-	mandatoryBlocks := []uint32{}
+	mandatoryBlocks := []int32{}
 	if !skipMandatoryBlock {
 		mandatoryBlocks = woc.GetMandatoryBlocks(network)
 	} else {
@@ -157,14 +157,14 @@ func execFetch(cmd *cobra.Command, args []string) {
 // emptyBlockError is thrown in case a block does not have any tx,
 // or equivalently the block have only a coinbase transaction
 type emptyBlockError struct {
-	blockHeight uint32
+	blockHeight int32
 }
 
 func (e *emptyBlockError) Error() string {
 	return fmt.Sprintf("empty block %v", e.blockHeight)
 }
 
-func NewEmptyBlockErrorError(h uint32) *emptyBlockError {
+func NewEmptyBlockErrorError(h int32) *emptyBlockError {
 	return &emptyBlockError{
 		blockHeight: h,
 	}
@@ -175,8 +175,8 @@ type csvDataWriter struct {
 	api       *woc.APIClient
 	file      *os.File
 	filepath  string
-	txCount   uint32
-	lastBlock uint32
+	txCount   int32
+	lastBlock int32
 }
 
 func NewCSVDataWriter(api *woc.APIClient, f string) *csvDataWriter {
@@ -187,7 +187,7 @@ func NewCSVDataWriter(api *woc.APIClient, f string) *csvDataWriter {
 		panic(fmt.Sprintf("Error opening file: %v", err))
 	}
 
-	iLine, iBlock := uint32(0), uint32(0)
+	iLine, iBlock := int32(0), int32(0)
 	if !fileExisted {
 		if _, err := file.WriteString(fmt.Sprintf("%v\n", CSVHeaders)); err != nil {
 			slog.Warn("error writing CSV headers")
@@ -219,7 +219,7 @@ func NewCSVDataWriter(api *woc.APIClient, f string) *csvDataWriter {
 					log.Fatalf("Error parsing block height  %v:%v, error %s", f, iLine, err)
 				}
 
-				blockHeight := uint32(blockHeight64)
+				blockHeight := int32(blockHeight64)
 				if blockHeight > iBlock {
 					iBlock = blockHeight
 				}
@@ -240,7 +240,7 @@ func NewCSVDataWriter(api *woc.APIClient, f string) *csvDataWriter {
 
 // fetchBlock fetch the full extended txs from the provided block height
 // if nbTx < 1, then fetch the full block
-func (d *csvDataWriter) fetchBlock(blockHeight uint32, nbTx int) error {
+func (d *csvDataWriter) fetchBlock(blockHeight int32, nbTx int) error {
 	listTxID, errListTxID := woc.GetListTxFromBlock(d.api, blockHeight)
 	if errListTxID != nil {
 		return fmt.Errorf("network : %v, block %v, failed to get list of txIDs\n\nerror\n%w", network, blockHeight, errListTxID)
