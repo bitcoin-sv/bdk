@@ -3,34 +3,19 @@ package main
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	goscript "github.com/bitcoin-sv/bdk/module/gobdk/script"
+	"github.com/stretchr/testify/assert"
 )
 
-func TestExceptionFlagsCalculation(t *testing.T) {
-	t.Run("Out-of-bound exception", func(t *testing.T) {
-		lScript := make([]byte, 22)
-		_, err := goscript.ScriptVerificationFlagsV1(lScript, true)
-		assert.NotNil(t, err, "Expect exception error")
-	})
-
-	t.Run("Correct size locking script", func(t *testing.T) {
-		lScript := make([]byte, 23)
-		_, err := goscript.ScriptVerificationFlagsV1(lScript, true)
-		assert.Nil(t, err, "No exception for correct size of locking script")
-	})
-
-	t.Run("Correct size locking script ++", func(t *testing.T) {
-		lScript := make([]byte, 24)
-		_, err := goscript.ScriptVerificationFlagsV1(lScript, true)
-		assert.Nil(t, err, "No exception for correct size of locking script")
-	})
-}
-
 func TestExceptionBadTransaction(t *testing.T) {
+	t.Run("handle wrong network exception", func(t *testing.T) {
+		se := goscript.NewScriptEngine("foo")
+		assert.Nil(t, se, "Expect nil script engine")
+	})
+
 	t.Run("Bad tx serialization", func(t *testing.T) {
-		err := goscript.Verify([]byte{0}, []byte{0}, true, 0, []byte{0}, 0, 0)
+		se := goscript.NewScriptEngine("main")
+		err := se.VerifyScript([]byte{0}, []int32{0}, int32(0), true)
 		assert.NotNil(t, err, "Expect error")
 		assert.Equal(t, err.Code(), goscript.SCRIPT_ERR_CGO_EXCEPTION, "Expect exception error")
 	})
