@@ -22,11 +22,11 @@ var cmdVerify = &cobra.Command{
 }
 
 func init() {
-	// Define the --file-path flag for the test command
-	cmdVerify.Flags().StringVarP(&cmdVerifyFilePath, "file-path", "f", "", "Path to the test file (required)")
+	// Define the --csv-file flag for the test command
+	cmdVerify.Flags().StringVarP(&cmdVerifyFilePath, "csv-file", "f", "", "Path to the test csv file (required)")
 
-	// Make the --file-path flag required
-	if err := cmdVerify.MarkFlagRequired("file-path"); err != nil {
+	// Make the --csv-file flag required
+	if err := cmdVerify.MarkFlagRequired("csv-file"); err != nil {
 		panic(err)
 	}
 
@@ -37,7 +37,7 @@ func init() {
 
 func execVerify(cmd *cobra.Command, args []string) {
 
-	se := bdkscript.NewScriptEngine("main")
+	se := bdkscript.NewScriptEngine(network)
 	if se == nil {
 		log.Fatalf("ERROR unable to create script engine")
 	}
@@ -86,7 +86,7 @@ func execVerify(cmd *cobra.Command, args []string) {
 			continue
 		}
 
-		if err := se.VerifyScript(record.TxBinExtended, record.DataUTXOHeights, record.BlockHeight-1, true); err != nil {
+		if err := se.VerifyScript(record.TxBinExtended, record.DataUTXOHeights, record.BlockHeight, true); err != nil {
 			log.Printf("ERROR verifying record at %v, txID : %v, error \n\n%v\n\n", i, record.TXID, err)
 			nbFailed += 1
 		}

@@ -124,7 +124,7 @@ func TestScriptEngineScriptVerify(t *testing.T) {
 		eTx, _ := hex.DecodeString(eTxHEX)
 
 		se := goscript.NewScriptEngine("main")
-		err := se.VerifyScript(eTx, utxo, blockHeight-1, true)
+		err := se.VerifyScript(eTx, utxo, blockHeight, true)
 		assert.Nil(t, err, "VerifyExtend should return no error")
 	})
 
@@ -144,7 +144,7 @@ func TestScriptEngineScriptVerify(t *testing.T) {
 
 		// VerifyExtendFull the transaction with empty inputs, expect error
 		se := goscript.NewScriptEngine("main")
-		err := se.VerifyScript(eTx, utxo, blockHeight-1, true)
+		err := se.VerifyScript(eTx, utxo, blockHeight, true)
 		assert.NotNil(t, err, "VerifyScript should return error for zero utxo")
 	})
 }

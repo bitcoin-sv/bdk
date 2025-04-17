@@ -103,13 +103,18 @@ uint32_t bsv::CScriptEngine::CalculateFlags(int32_t utxoHeight, int32_t blockHei
     ProtocolEra era;
     uint32_t protocolFlags;
     if (consensus) {
-        era = GetProtocolEra(bsvConfig, blockHeight);
+        // For tx coming from a block.
+        // blockHeight is the block the tx belong to
+        // In that case, the chainTip is blockHeight-1
+        era = GetProtocolEra(bsvConfig, blockHeight );
+        const Consensus::Params& consensusparams = chainParams->GetConsensus();
+        protocolFlags = GetBlockScriptFlags(consensusparams, blockHeight - 1 , era);
+    } else {
+        // For tx coming from a peer
+        // blockHeight is the chain tip (highest current block)
+        era = GetProtocolEra(bsvConfig, blockHeight + 1);
         const bool requireStandard = chainParams->RequireStandard();
         protocolFlags = GetScriptVerifyFlags(era, requireStandard);
-    } else {
-        era = GetProtocolEra(bsvConfig, blockHeight + 1);
-        const Consensus::Params& consensusparams = chainParams->GetConsensus();
-        protocolFlags = GetBlockScriptFlags(consensusparams, blockHeight, era);
     }
 
     ProtocolEra utxoEra{ GetProtocolEra(bsvConfig, utxoHeight) };
