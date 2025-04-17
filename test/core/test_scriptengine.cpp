@@ -162,7 +162,7 @@ BOOST_AUTO_TEST_CASE(test_verify_extend_full)
     const std::span<const uint8_t> etx(etxBin.data(), etxBin.size());
     std::span<const int32_t> utxo(utxoArray);
     bsv::CScriptEngine se("main");
-    const auto status = se.VerifyScript(etx, utxo, blockHeight - 1, true);
+    const auto status = se.VerifyScript(etx, utxo, blockHeight, true);
     BOOST_CHECK_EQUAL(SCRIPT_ERR_OK, status);
 }
 
@@ -197,7 +197,7 @@ BOOST_AUTO_TEST_CASE(test_verify_extend_full_utxos)
     const std::span<const uint8_t> emptyUtxoEtx(emptyUtxoEtxBin.data(), emptyUtxoEtxBin.size());
 
     bsv::CScriptEngine se("main");
-    const auto status = se.VerifyScript(emptyUtxoEtx, utxo, blockHeight - 1, true);
+    const auto status = se.VerifyScript(emptyUtxoEtx, utxo, blockHeight, true);
     BOOST_CHECK_EQUAL(SCRIPT_ERR_UNKNOWN_ERROR, status);
 }
 

@@ -47,7 +47,7 @@ void doVerifyScript(const bsv::CScriptEngine& se, const std::span<const int32_t>
         throw std::runtime_error("ERROR recover txID for TxID " + txID);
     }
 
-    const ScriptError ret = se.VerifyScript(etxBin, utxoHeights, blockHeight-1, true);
+    const ScriptError ret = se.VerifyScript(etxBin, utxoHeights, blockHeight, true);
     if (ret != SCRIPT_ERR_OK) {
         throw std::runtime_error("ERROR verify script for TxID " + txID);
     }
