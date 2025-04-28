@@ -6,12 +6,13 @@
 #include <script/script_error.h>
 #include <script/malleability_status.h>
 
+#include <cstdint>
 #include <span>
 #include <string>
 #include <vector>
-#include <cstdint>
 #include <optional>
 #include <variant>
+#include <atomic>
 
 namespace bsv
 {
@@ -52,5 +53,45 @@ namespace bsv
                        int index,
                        int64_t amount);
 };
+
+///////////////////////////////////////////////////////////////
+// Backward compatibility with the old EvalScript signature  //
+///////////////////////////////////////////////////////////////
+class Config;
+class LimitedStack;
+class CScript;
+class BaseSignatureChecker;
+namespace task { class CCancellationToken; }
+std::optional<std::variant<ScriptError, malleability::status>> EvalScript(
+    const Config& config,
+    const bool consensus,
+    const task::CCancellationToken& token,
+    LimitedStack& stack,
+    const CScript& script,
+    const uint32_t flags,
+    const BaseSignatureChecker& checker);
+
+std::optional<std::variant<ScriptError, malleability::status>> EvalScript(
+    const Config& config,
+    const bool consensus,
+    const task::CCancellationToken& token,
+    LimitedStack& stack,
+    const CScript& script,
+    const uint32_t flags,
+    const BaseSignatureChecker& checker,
+    LimitedStack& altstack,
+    long& ipc,
+    std::vector<bool>& vfExec,
+    std::vector<bool>& vfElse);
+
+std::optional<std::pair<bool, ScriptError>> VerifyScript(
+    const Config& config,
+    const bool consensus,
+    const task::CCancellationToken& token,
+    const CScript& scriptSig,
+    const CScript& scriptPubKey,
+    const uint32_t flags,       
+    const BaseSignatureChecker& checker, 
+    std::atomic<malleability::status>& malleability);
 
 #endif /* __INTERPRETER_BDK_HPP__ */
