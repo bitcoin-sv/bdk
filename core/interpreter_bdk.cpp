@@ -11,12 +11,77 @@
 #include <script/interpreter.h>
 #include <script/script_flags.h>
 #include <script/malleability_status.h>
+#include <taskcancellation.h>
 
 #include <stdexcept>
 #include <iostream>
 #include <chrono>
 
 using namespace std;
+
+std::optional<std::variant<ScriptError, malleability::status>> EvalScript(
+    const Config& config,
+    const bool consensus,
+    const task::CCancellationToken& token,
+    LimitedStack& stack,
+    const CScript& script,
+    const uint32_t flags,
+    const BaseSignatureChecker& checker)
+{
+    const eval_script_params params{make_eval_script_params(config, flags, consensus)};
+    return EvalScript(params,
+                        token,
+                        stack,
+                        script,
+                        flags,
+                        checker);
+}
+
+std::optional<std::variant<ScriptError, malleability::status>> EvalScript(
+    const Config& config,
+    const bool consensus,
+    const task::CCancellationToken& token,
+    LimitedStack& stack,
+    const CScript& script,
+    const uint32_t flags,
+    const BaseSignatureChecker& checker,
+    LimitedStack& altstack,
+    long& ipc,
+    std::vector<bool>& vfExec,
+    std::vector<bool>& vfElse)
+{
+    const eval_script_params params{make_eval_script_params(config, flags, consensus)};
+    return EvalScript(params,
+                      token,
+                      stack,
+                      script,
+                      flags,
+                      checker,
+                      altstack,
+                      ipc,
+                      vfExec,
+                      vfElse);
+}
+
+std::optional<std::pair<bool, ScriptError>> VerifyScript(
+    const Config& config,
+    const bool consensus,
+    const task::CCancellationToken& token,
+    const CScript& scriptSig,
+    const CScript& scriptPubKey,
+    const uint32_t flags,       
+    const BaseSignatureChecker& checker, 
+    std::atomic<malleability::status>& malleability)
+{
+    const verify_script_params params{make_verify_script_params(config, flags, consensus)};
+    return VerifyScript(params,
+                        token,
+                        scriptSig,
+                        scriptPubKey,
+                        flags,
+                        checker,
+                        malleability);
+}
 
 ScriptError bsv::get_raw_eval_script(const std::optional<std::variant<ScriptError, malleability::status>>& ret){
     if (ret.has_value()) {
@@ -220,8 +285,9 @@ namespace
                             std::atomic<malleability::status>& malleability)
     {
         auto source = task::CCancellationSource::Make();
-        const auto ret = VerifyScript(GlobalConfig::GetConfig(),
-                     consensus,
+
+        const verify_script_params veriParams{make_verify_script_params(GlobalConfig::GetConfig(), flags, consensus)};
+        const auto ret = VerifyScript(veriParams,
                      source->GetToken(),
                      unlocking_script,
                      locking_script,

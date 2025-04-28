@@ -198,8 +198,8 @@ ScriptError bsv::CScriptEngine::verifyImpl(
 ) const
 {
     // Call of the bsv VerifyScript
-    const auto ret = ::VerifyScript(bsvConfig,
-        consensus,
+    const verify_script_params veriParams{make_verify_script_params(bsvConfig, flags, consensus)};
+    const auto ret = ::VerifyScript(veriParams,
         source->GetToken(),
         unlocking_script,
         locking_script,
