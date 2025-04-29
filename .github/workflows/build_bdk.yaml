@@ -7,6 +7,14 @@ on:
     branches:
       - master
   workflow_dispatch:
+    inputs:
+      bitcoin-sv-input:
+        description: 'Optionally build bdk with custom bitcoin-sv commit'
+        required: false
+        default: 394645fcba643e5f7090ff1beb246a2b72b3b172
+
+env:
+  DEFAULT_BITCOIN_SV_COMMIT: 394645fcba643e5f7090ff1beb246a2b72b3b172
 
 jobs:
   build-bdk:
@@ -34,20 +42,39 @@ jobs:
         with:
           python-version: '3.x'
 
+      - name: Define dependant bitcoin-sv commit
+        id: define-bitcoin-sv-commit
+        shell: bash
+        run: |
+          # Use dispatch input if present, otherwise default from env
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            bsvcommit="${{ github.event.inputs.bitcoin-sv-input }}"
+          else
+            bsvcommit="${{ env.DEFAULT_BITCOIN_SV_COMMIT }}"
+          fi
+          echo "Build using bsvcommit=$bsvcommit ..."
+          echo "bsvcommit=$bsvcommit" >> "$GITHUB_OUTPUT"
+
+      - name: Check out bitcoin-sv
+        shell: bash
+        run: |
+          echo "Checking out bitcoin-sv at commit ${{ steps.define-bitcoin-sv-commit.outputs.bsvcommit }} ..."
+          git clone https://x-access-token:${{ secrets.BITCOIN_SV_PAT }}@github.com/nchain-research/bitcoin-sv-staging.git bitcoin-sv
+          cd bitcoin-sv && git checkout ${{ steps.define-bitcoin-sv-commit.outputs.bsvcommit }} && git log -3 && pwd && cd ..
+          echo "Successfully checked out bitcoin-sv commit ${{ steps.define-bitcoin-sv-commit.outputs.bsvcommit }} to bitcoin-sv"
+
         ## Download and setup environment varialbe
         ## BSV_ROOT, BOOST_ROOT, OPENSSL_ROOT_DIR, JAVA_HOME
       - name: Prepare Environment and Dependencies Unix
         if: runner.os != 'Windows'
         run: |
+          echo "BSV_ROOT=${{ github.workspace }}/bitcoin-sv" >> $GITHUB_ENV
           python -m pip install --upgrade pip --break-system-packages
           python -m pip install -U pytest junitparser mkdocs pymdown-extensions plantuml_markdown --break-system-packages
           echo "OS_ARCH=$(uname -s | tr 'A-Z' 'a-z')_$(uname -m)" >> $GITHUB_ENV
           if [[ ${{ matrix.os }} == *'ubuntu'* ]]; then
             sudo apt-get update
-            sudo apt-get install -y build-essential g++ wget unzip
-            wget ${{ secrets.BSV_120BETA_URL }}
-            unzip bitcoin-sv-staging.zip && mv bitcoin-sv-staging bitcoin-sv
-            echo "BSV_ROOT=${{ github.workspace }}/bitcoin-sv" >> $GITHUB_ENV
+            sudo apt-get install -y build-essential g++ wget
             wget https://github.com/bitcoin-sv/bdk/releases/download/depcy/dependancies_linux_x86_64.tar.gz
             tar -xzf dependancies_linux_x86_64.tar.gz
             echo "DEPENDENCIES_DIR=${{ github.workspace }}/dependancies_linux_x86_64" >> $GITHUB_ENV
@@ -57,10 +84,7 @@ jobs:
           fi
           if [[ ${{ matrix.os }} == *'linux'* ]]; then
             sudo apt-get update
-            sudo apt-get install -y build-essential g++ wget unzip
-            wget ${{ secrets.BSV_120BETA_URL }}
-            unzip bitcoin-sv-staging.zip && mv bitcoin-sv-staging bitcoin-sv
-            echo "BSV_ROOT=${{ github.workspace }}/bitcoin-sv" >> $GITHUB_ENV
+            sudo apt-get install -y build-essential g++ wget
             wget https://github.com/bitcoin-sv/bdk/releases/download/depcy/dependancies_linux_aarch64.tar.gz
             tar -xzf dependancies_linux_aarch64.tar.gz
             echo "DEPENDENCIES_DIR=${{ github.workspace }}/dependancies_linux_aarch64" >> $GITHUB_ENV
@@ -69,10 +93,6 @@ jobs:
             echo "JAVA_HOME=/usr/lib/jvm/temurin-17-jdk-arm64" >> $GITHUB_ENV
           fi
           if [[ ${{ matrix.os }} == *'macos-15'* ]]; then
-            brew install unzip
-            wget ${{ secrets.BSV_120BETA_URL }}
-            unzip bitcoin-sv-staging.zip && mv bitcoin-sv-staging bitcoin-sv
-            echo "BSV_ROOT=${{ github.workspace }}/bitcoin-sv" >> $GITHUB_ENV
             wget https://github.com/bitcoin-sv/bdk/releases/download/depcy/dependancies_darwin_arm64.tar.gz
             tar -xzf dependancies_darwin_arm64.tar.gz
             echo "DEPENDENCIES_DIR=${{ github.workspace }}/dependancies_darwin_arm64" >> $GITHUB_ENV
@@ -81,10 +101,6 @@ jobs:
             echo "JAVA_HOME=$JAVA_HOME_17_arm64" >> $GITHUB_ENV
           fi
           if [[ ${{ matrix.os }} == *'macos-13'* ]]; then
-            brew install unzip
-            wget ${{ secrets.BSV_120BETA_URL }}
-            unzip bitcoin-sv-staging.zip && mv bitcoin-sv-staging bitcoin-sv
-            echo "BSV_ROOT=${{ github.workspace }}/bitcoin-sv" >> $GITHUB_ENV
             wget https://github.com/bitcoin-sv/bdk/releases/download/depcy/dependancies_darwin_x86_64.tar.gz
             tar -xzf dependancies_darwin_x86_64.tar.gz
             echo "DEPENDENCIES_DIR=${{ github.workspace }}/dependancies_darwin_x86_64" >> $GITHUB_ENV
@@ -119,7 +135,7 @@ jobs:
 
       - name: Check GoBDK has changed
         id: gobdk_change
-        if: runner.os != 'Windows'
+        if: runner.os != 'Windows' && github.event_name != 'workflow_dispatch'
         run: |
           changed_files=$(git diff --name-only -- module/gobdk/bdkcgo/libGoBDK_*.a)
           git status
@@ -132,7 +148,7 @@ jobs:
           fi
 
       - name: Upload GoBDK static libraries to artifact UNIX
-        if: runner.os != 'Windows' && steps.gobdk_change.outputs.modified == 'true'
+        if: runner.os != 'Windows' && github.event_name != 'workflow_dispatch' && steps.gobdk_change.outputs.modified == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: libGoBDK_${{ env.OS_ARCH }}.a
@@ -143,9 +159,6 @@ jobs:
       - name: Prepare Environment and Dependencies for Windows
         if: runner.os == 'Windows'
         run: |
-          Invoke-WebRequest -Uri "${{ secrets.BSV_120BETA_URL }}" -OutFile "bitcoin-sv-staging.zip"
-          Expand-Archive -Path "bitcoin-sv-staging.zip" -DestinationPath "."
-          Rename-Item -Path "bitcoin-sv-staging" -NewName "bitcoin-sv"
           echo "BSV_ROOT=${{ github.workspace }}\bitcoin-sv" >> $GITHUB_ENV
           Invoke-WebRequest -Uri "https://github.com/bitcoin-sv/bdk/releases/download/depcy/dependancies_windows_x86_64.zip" -OutFile "dependancies_windows_x86_64.zip"
           Expand-Archive -Path "dependancies_windows_x86_64.zip" -DestinationPath "."
@@ -166,7 +179,7 @@ jobs:
     needs: build-bdk
     # Commit static libraries gobdk iff all matrix build succeeds and the commit does not contains [GoBDKUpdate]
     # The commit containing [GoBDKUpdate] is submitted by the bot, we should prevent the infinit build loops
-    if: ${{ success() }} && needs.build-bdk.outputs.modified == 'true' && !contains(github.event.head_commit.message, '[GoBDKUpdate]')
+    if: github.event_name != 'workflow_dispatch' && ${{ success() }} && needs.build-bdk.outputs.modified == 'true' && !contains(github.event.head_commit.message, '[GoBDKUpdate]')
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
