@@ -48,6 +48,33 @@ func NewScriptEngine(netName string) *ScriptEngine {
 }
 
 // CalculateFlags calculates the flags to be used to verify the script
+func (se *ScriptEngine) GetSigOpCount(extendedTX []byte, utxoHeights []int32, blockHeight int32) (uint64, error) {
+	lenTx := len(extendedTX)
+	var txPtr *C.char
+
+	if lenTx > 0 {
+		txPtr = (*C.char)(unsafe.Pointer(&extendedTX[0]))
+	}
+
+	lenUtxo := len(utxoHeights)
+
+	var utxoPtr *C.int32_t
+	if lenUtxo > 0 {
+		utxoPtr = (*C.int32_t)(unsafe.Pointer(&utxoHeights[0]))
+	}
+
+	var errMsg *C.char
+	sigOpCount := C.ScriptEngine_GetSigOpCount(se.cSEPtr, txPtr, C.int(lenTx), utxoPtr, C.int(lenUtxo), C.int32_t(blockHeight), &errMsg)
+
+	if errMsg != nil {
+		defer C.free(unsafe.Pointer(errMsg))
+		return uint64(sigOpCount), errors.New(C.GoString(errMsg))
+	}
+
+	return uint64(sigOpCount), nil
+}
+
+// CalculateFlags calculates the flags to be used to verify the script
 func (se *ScriptEngine) CalculateFlags(utxoHeight int32, blockHeight int32, consensus bool) uint32 {
 	return uint32(C.ScriptEngine_CalculateFlags(se.cSEPtr, C.int32_t(utxoHeight), C.int32_t(blockHeight), C.bool(consensus)))
 }

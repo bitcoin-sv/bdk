@@ -1,6 +1,8 @@
 module github.com/bitcoin-sv/bdk/test/golang
 
-go 1.22.6
+go 1.23.0
+
+toolchain go1.24.1
 
 require (
 	github.com/bitcoin-sv/bdk/module/gobdk v0.0.0-20240904084246-cb0e25691dc9
@@ -12,7 +14,7 @@ require (
 	github.com/libsv/go-bk v0.1.6 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/rogpeppe/go-internal v1.9.0 // indirect
-	golang.org/x/crypto v0.31.0 // indirect
+	golang.org/x/crypto v0.35.0 // indirect
 )
 
 require (
