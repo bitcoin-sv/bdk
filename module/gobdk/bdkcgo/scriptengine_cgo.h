@@ -51,6 +51,23 @@ int32_t ScriptEngine_GetGenesisActivationHeight(ScriptEngineCGO cgoEngine);
 int32_t ScriptEngine_GetChronicleActivationHeight(ScriptEngineCGO cgoEngine);
 
 /*
+ * ScriptEngine_GetSigOpCount calculate the number of sigops in a transaction
+ *
+ * Inputs C-Style
+ *   - Extended Transaction binary
+ *   - Array of utxo heights
+ *   - Block Height
+ * 
+ * Caller must free errStr
+ */
+uint64_t ScriptEngine_GetSigOpCount(ScriptEngineCGO cgoEngine,
+	const char* extendedTxPtr, int extendedTxLen,
+	const int32_t* hUTXOsPtr, int hUTXOsLen,
+	int32_t blockHeight,
+	char** errStr
+);
+
+/*
  * CalculateFlags helper to calculate the flags manually
  * Use for test and debug purpose
  */

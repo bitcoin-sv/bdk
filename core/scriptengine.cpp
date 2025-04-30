@@ -123,6 +123,81 @@ uint32_t bsv::CScriptEngine::CalculateFlags(int32_t utxoHeight, int32_t blockHei
     return (protocolFlags | utxoFlags);
 }
 
+// The implementation of this method replicate the bsv method ::GetTransactionSigOpCount
+// where inside it has GetSigOpCountWithoutP2SH and GetP2SHSigOpCount
+// These methods are all implemented in src/validation.cpp that we can not have it because
+// of the huge dependencies
+//
+// So we replicate them here
+uint64_t bsv::CScriptEngine::GetSigOpCount(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight) const {
+    const char* begin{ reinterpret_cast<const char*>(extendedTX.data()) };
+    const char* end{ reinterpret_cast<const char*>(extendedTX.data() + extendedTX.size()) };
+    CDataStream tx_stream(begin, end, SER_NETWORK, PROTOCOL_VERSION);
+    bsv::CMutableTransactionExtended eTX;
+    tx_stream >> eTX;
+
+    if (!tx_stream.empty()) {
+        throw std::runtime_error("error serializing extended tx");
+    }
+
+    const CTransaction ctx(eTX.mtx);
+
+    // SigOpCount is use only in case the tx come from a peer
+    // Where the protocol era is calculated based on blockHeight + 1
+    const auto era = GetProtocolEra(bsvConfig, blockHeight + 1);
+
+
+    // The part GetSigOpCountWithoutP2SH //////////////////////////////////////////////////
+    bool sigOpCountError = false;
+    uint64_t nSigOpsWithoutP2SH {0};
+    for (const auto& txin : ctx.vin)
+    {
+        // After Genesis, this should return 0, since only push data is allowed in input scripts:
+        nSigOpsWithoutP2SH += txin.scriptSig.GetSigOpCount(false, era, sigOpCountError);
+        if (sigOpCountError) {
+            throw std::runtime_error("error calculating sigop count without P2SH for scriptSigs");
+        }
+    }
+    for (const auto& txout : ctx.vout)
+    {
+        nSigOpsWithoutP2SH += txout.scriptPubKey.GetSigOpCount(false, era, sigOpCountError);
+        if (sigOpCountError) {
+            throw std::runtime_error("error calculating sigop count without P2SH for scriptPubKeys");
+        }
+    }
+
+    if (ctx.IsCoinBase()) {
+        return nSigOpsWithoutP2SH;
+    }
+
+    // The part GetP2SHSigOpCount //////////////////////////////////////////////////
+    if (eTX.vutxo.size() != ctx.vin.size()) {
+        throw std::runtime_error("inconsistent inputs size");
+    }
+    if (eTX.vutxo.size() != utxoHeights.size()) {
+        throw std::runtime_error("inconsistent utxo heights and number of utxo");
+    }
+
+    uint64_t nSigOpsP2SH{0};
+    for (size_t index = 0; index < eTX.vutxo.size(); ++index) {
+        const ProtocolEra utxoEra = GetProtocolEra(bsvConfig, utxoHeights[index]);
+        if (IsProtocolActive(utxoEra, ProtocolName::Genesis)) {
+            continue;
+        }
+
+        const CTxOut& prevout = eTX.vutxo[index];
+        const CTxIn& input = ctx.vin[index];
+        if (IsP2SH(prevout.scriptPubKey)) {
+            nSigOpsP2SH += prevout.scriptPubKey.GetSigOpCount(input.scriptSig, utxoEra, sigOpCountError);
+            if (sigOpCountError) {
+                throw std::runtime_error("error calculating P2SH sigop count");
+            }
+        }
+    }
+
+    return (nSigOpsWithoutP2SH + nSigOpsP2SH);
+}
+
 ScriptError bsv::CScriptEngine::VerifyScript(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool consensus) const
 {
     const char* begin{ reinterpret_cast<const char*>(extendedTX.data()) };

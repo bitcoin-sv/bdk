@@ -17,7 +17,7 @@
 
 namespace bsv
 {
-    /**
+/**
  *
  * CScriptEngine hold its own GlobalConfig, ChainParams and CCancellationSource
  * objects in order to execute the script fully
@@ -52,6 +52,10 @@ class CScriptEngine {
         uint64_t GetMaxStackMemoryUsage(bool isGenesisEnabled, bool isConsensus) const;
         int32_t GetGenesisActivationHeight() const;
         int32_t GetChronicleActivationHeight() const;
+
+        // GetSigOpCount returns the number of sig ops in a extended transactions
+        // It might throw an exception if any issue to calculate the number of sigops
+        uint64_t GetSigOpCount(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight) const;
 
         // CalculateFlags forward to bitcoin-sv call
         // consensus define what flags set are being used

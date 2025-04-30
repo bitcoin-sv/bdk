@@ -119,6 +119,24 @@ int32_t ScriptEngine_GetChronicleActivationHeight(ScriptEngineCGO cgoEngine)
     return static_cast<bsv::CScriptEngine*>(cgoEngine)->GetChronicleActivationHeight();
 }
 
+uint64_t ScriptEngine_GetSigOpCount(ScriptEngineCGO cgoEngine, const char* extendedTxPtr, int extendedTxLen, const int32_t* hUTXOsPtr, int hUTXOsLen, int32_t blockHeight, char** errStr) {
+    try {
+        std::span<const uint8_t> extendedTx;
+        if (extendedTxPtr != nullptr && extendedTxLen > 0) {
+            const uint8_t* pTX = static_cast<const uint8_t*>(reinterpret_cast<const void*>(extendedTxPtr));
+            extendedTx = std::span<const uint8_t>(pTX, extendedTxLen);
+        }
+
+        std::span<const int32_t> hUTXOs{ hUTXOsPtr, (size_t)hUTXOsLen };
+
+        return static_cast<bsv::CScriptEngine*>(cgoEngine)->GetSigOpCount(extendedTx, hUTXOs, blockHeight);
+    }
+    catch (const std::exception& e) {
+        *errStr = strdup(e.what());
+        return uint64_t{0};
+    }
+}
+
 uint32_t ScriptEngine_CalculateFlags(ScriptEngineCGO cgoEngine, int32_t utxoHeight, int32_t blockHeight, bool consensus)
 {
     return static_cast<bsv::CScriptEngine*>(cgoEngine)->CalculateFlags(utxoHeight, blockHeight, consensus);
