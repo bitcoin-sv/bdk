@@ -24,7 +24,7 @@ ScriptEngineCGO ScriptEngine_Create(const char* networkNamePtr, int networkNameL
         return new bsv::CScriptEngine(networkName);
     }
     catch (const std::exception& e) {
-        std::cout << "CGO EXCEPTION : " << __FILE__ << ":" << __LINE__ << "    at " << __func__ << std::endl;
+        std::cout << "CGO EXCEPTION : " << __FILE__ << ":" << __LINE__ << "    at " << __func__ << e.what() << std::endl;
         return nullptr;
     }
 }
@@ -155,7 +155,7 @@ int ScriptEngine_VerifyScript(ScriptEngineCGO cgoEngine, const char* extendedTxP
         return static_cast<bsv::CScriptEngine*>(cgoEngine)->VerifyScript(extendedTx, hUTXOs, blockHeight, consensus);
     }
     catch (const std::exception& e) {
-        std::cout << "CGO EXCEPTION : " << __FILE__ << ":" << __LINE__ << "    at " << __func__ << std::endl;
+        std::cout << "CGO EXCEPTION : " << __FILE__ << ":" << __LINE__ << "    at " << __func__  << e.what() << std::endl;
         return SCRIPT_ERR_ERROR_COUNT + 1;
     }
 }
