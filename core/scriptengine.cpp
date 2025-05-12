@@ -13,6 +13,16 @@ bsv::CScriptEngine::CScriptEngine(const std::string chainName)
     : chainParams{ std::move(bsv::CreateCustomChainParams(chainName)) }
     , source{ task::CCancellationSource::Make() }
 {
+    std::string errStr;
+    bool ok {true};
+
+    int32_t genesisHeight;
+    int32_t chronicleHeight;
+    ok = ok && this->SetGenesisActivationHeight(chainParams->GetConsensus().genesisHeight, &errStr);
+    ok = ok && this->SetChronicleActivationHeight(chainParams->GetConsensus().chronicleHeight, &errStr);
+    if (!(ok || errStr.empty())){
+        throw std::runtime_error("error setting genesis and chronicle heights " + errStr);
+    }
 }
 
 bool bsv::CScriptEngine::SetMaxOpsPerScriptPolicy(int64_t maxOpsPerScriptPolicyIn, std::string* err)
@@ -42,12 +52,30 @@ bool bsv::CScriptEngine::SetMaxStackMemoryUsage(int64_t maxStackMemoryUsageConse
 
 bool bsv::CScriptEngine::SetGenesisActivationHeight(int32_t genesisActivationHeightIn, std::string* err)
 {
-    return bsvConfig.SetGenesisActivationHeight(genesisActivationHeightIn, err);
+    bool ok{true};
+    ok = ok && bsvConfig.SetGenesisActivationHeight(genesisActivationHeightIn, err);
+
+    // Chronicle height should be always at least genesis height
+    auto chronicleHeight = bsvConfig.GetChronicleActivationHeight();
+    if ( chronicleHeight < bsvConfig.GetGenesisActivationHeight() ) {
+        ok = ok && bsvConfig.SetChronicleActivationHeight(genesisActivationHeightIn, err);
+    }
+
+    return ok;
 }
 
 bool bsv::CScriptEngine::SetChronicleActivationHeight(int32_t chronicleActivationHeightIn, std::string* err)
 {
-    return bsvConfig.SetChronicleActivationHeight(chronicleActivationHeightIn, err);
+    bool ok{true};
+    ok = ok && bsvConfig.SetChronicleActivationHeight(chronicleActivationHeightIn, err);
+
+    // Chronicle height should be always at least genesis height
+    auto genesisHeight = bsvConfig.GetGenesisActivationHeight();
+    if ( bsvConfig.GetChronicleActivationHeight() < genesisHeight ) {
+        ok = ok && bsvConfig.SetGenesisActivationHeight(chronicleActivationHeightIn, err);
+    }
+
+    return ok;
 }
 
 uint64_t bsv::CScriptEngine::GetMaxOpsPerScript(bool isGenesisEnabled, bool consensus) const

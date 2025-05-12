@@ -13,31 +13,43 @@ func TestNewScriptEngine(t *testing.T) {
 	t.Run("mainnet", func(t *testing.T) {
 		se := goscript.NewScriptEngine("main")
 		assert.NotNil(t, se, "Expect non nil script engine")
+		assert.Equal(t, se.GetGenesisActivationHeight(), int32(620538))
+		assert.Equal(t, se.GetChronicleActivationHeight(), int32(882687))
 	})
 
 	t.Run("testnet", func(t *testing.T) {
 		se := goscript.NewScriptEngine("test")
 		assert.NotNil(t, se, "Expect non nil script engine")
+		assert.Equal(t, se.GetGenesisActivationHeight(), int32(1344302))
+		assert.Equal(t, se.GetChronicleActivationHeight(), int32(1621670))
 	})
 
 	t.Run("regtest", func(t *testing.T) {
 		se := goscript.NewScriptEngine("regtest")
 		assert.NotNil(t, se, "Expect non nil script engine")
+		assert.Equal(t, se.GetGenesisActivationHeight(), int32(10000))
+		assert.Equal(t, se.GetChronicleActivationHeight(), int32(15000))
 	})
 
 	t.Run("stn", func(t *testing.T) {
 		se := goscript.NewScriptEngine("stn")
 		assert.NotNil(t, se, "Expect non nil script engine")
+		assert.Equal(t, se.GetGenesisActivationHeight(), int32(100))
+		assert.Equal(t, se.GetChronicleActivationHeight(), int32(250))
 	})
 
 	t.Run("teratestnet", func(t *testing.T) {
 		se := goscript.NewScriptEngine("teratestnet")
 		assert.NotNil(t, se, "Expect non nil script engine")
+		assert.Equal(t, se.GetGenesisActivationHeight(), int32(1))
+		assert.Equal(t, se.GetChronicleActivationHeight(), int32(1))
 	})
 
 	t.Run("tera scaling testnet", func(t *testing.T) {
 		se := goscript.NewScriptEngine("tstn")
 		assert.NotNil(t, se, "Expect non nil script engine")
+		assert.Equal(t, se.GetGenesisActivationHeight(), int32(1))
+		assert.Equal(t, se.GetChronicleActivationHeight(), int32(1))
 	})
 
 	t.Run("wrong network", func(t *testing.T) {
