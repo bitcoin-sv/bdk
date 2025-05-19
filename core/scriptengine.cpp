@@ -25,6 +25,11 @@ bsv::CScriptEngine::CScriptEngine(const std::string chainName)
     }
 }
 
+
+const GlobalConfig& bsv::CScriptEngine::GetGlobalConfig() {
+    return bsvConfig;
+}
+
 bool bsv::CScriptEngine::SetMaxOpsPerScriptPolicy(int64_t maxOpsPerScriptPolicyIn, std::string* err)
 {
     return bsvConfig.SetMaxOpsPerScriptPolicy(maxOpsPerScriptPolicyIn, err);

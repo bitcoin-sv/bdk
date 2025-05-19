@@ -12,7 +12,15 @@
 #include "script/script_num.h"
 #include "univalue/include/univalue.h"
 
+#include "keystore.h"
+#include "script/script_num.h"
+#include "script/sign.h"
+
 #include "interpreter_bdk.hpp"
+#include "extendedTx.hpp"
+#include "assembler.h"
+#include "utilstrencodings.h"
+#include "scriptengine.hpp"
 
 const std::string strSecret1 = "5HxWvvfubhXpYYpS3tJkw6fq9jE9j18THftkZjHHfmFiWtmAbrj";
 
@@ -123,77 +131,60 @@ std::vector<uint8_t> MakeSig(CScript& script,
 
 int main(int argc, char* argv[])
 {
-    // Set up for Bitcoin libs
-    SelectParams(CBaseChainParams::TESTNET);
+    bsv::CScriptEngine se("main");
+    //std::string errStr;
+    //bool ok = se.SetMaxStackMemoryUsage(272, 4, &errStr);
+    //if (!(ok && errStr.empty())) {
+    //    throw std::runtime_error("unable to set SetMaxStackMemoryUsage. Error : " + errStr);
+    //}
 
-    CBitcoinSecret bsecret1;
-    bsecret1.SetString(strSecret1);
+    CBasicKeyStore keystore;
+    std::vector<CKey> keys;
+    std::vector<CPubKey> pubkeys;
+    for (int i = 0; i < 1; i++) {
+        CKey key;
+        key.MakeNewKey(i % 2 == 1);
+        keys.push_back(key);
+        pubkeys.push_back(key.GetPubKey());
+        keystore.AddKey(key);
+    }
 
-    CKey key1 = bsecret1.GetKey();
-    CPubKey pubkey1 = key1.GetPubKey();
-
+    auto key1 = keys[0];
+    auto pubkey1 = pubkeys[0];
     if(key1.VerifyPubKey(pubkey1))
         std::cout << "PubKey verified" << std::endl;
 
-    std::string strMsg = strprintf("Very secret message %i: 11", 0);
-    uint256 hashMsg = Hash(strMsg.begin(), strMsg.end());
-    std::vector<uint8_t> sign1;
-    key1.Sign(hashMsg, sign1);
-
-    if(pubkey1.Verify(hashMsg, sign1))
-        std::cout << "Hashed message verified" << std::endl;
-
     // Construct a tx
-    CScript scriptSig;
-    scriptSig << OP_DUP << OP_HASH160 << ToByteVector(pubkey1.GetID()) << OP_EQUALVERIFY << OP_CHECKSIGVERIFY;
+    const Amount amount{1000000};
+    CMutableTransaction txFrom = BuildCreditingTransaction(GetScriptForDestination(keys[0].GetPubKey().GetID()), amount);
+    CMutableTransaction txTo = BuildSpendingTransaction(CScript(), txFrom);
 
-    CScript Pubkey;
-    Pubkey << ToByteVector(pubkey1);
+    // Append the part to create a non-standard utxo
+    // CScript& scriptPubKey = txFrom.vout[0].scriptPubKey;
+    //std::vector<uint8_t> arg0(MAX_SCRIPT_NUM_LENGTH_AFTER_GENESIS, 42);
+    //CScript extendScript = CScript() << arg0 << OP_DUP << OP_NUMEQUALVERIFY;
+    //scriptPubKey << ToByteVector(extendScript);
 
-    const Amount amount{10};
-    CMutableTransaction creditTx = BuildCreditingTransaction(scriptSig, amount);
-    CMutableTransaction spendTx = BuildSpendingTransaction(CScript(), creditTx);
+    // Single signature case:
+    const bool ok = SignSignature(se.GetGlobalConfig(), keystore, ProtocolEra::PostGenesis, ProtocolEra::PostGenesis, CTransaction(txFrom), txTo, 0,
+        SigHashType().withForkId()); // changes scriptSig
 
-    CTransaction ctx(creditTx);
-    CTransaction stx(spendTx);
-    std::cout << "Credit TX " << ctx.ToString() << std::endl;
-    std::cout << "Spending TX " << stx.ToString() << std::endl;
+    bsv::CMutableTransactionExtended eTX;
+    eTX.vutxo = txFrom.vout;
+    eTX.mtx = txTo;
 
-    std::vector<uint8_t> sig = MakeSig(scriptSig, key1, spendTx);
+    CDataStream out_stream(SER_NETWORK, PROTOCOL_VERSION);
+    out_stream << eTX;
+    const std::vector<uint8_t> etxBin(out_stream.begin(), out_stream.end());
+    std::array<int32_t, 1> utxoArray = { 820539 };
+    const int32_t blockHeight = 820540;
 
-    std::cout << EncodeHexTx(stx) << std::endl;
-    const std::string& hextx = EncodeHexTx(stx, 0);
+    const ScriptError ret = se.VerifyScript(etxBin, std::span<const int32_t>(utxoArray) , blockHeight, true);
 
-    CMutableTransaction rebuilttx;
-
-    if(DecodeHexTx(rebuilttx, hextx))
-    {
-
-        CTransaction t(rebuilttx);
-
-        uint256 hash = SignatureHash(scriptSig, stx, 0, SigHashType(), Amount(10), nullptr,
-                                     SCRIPT_ENABLE_SIGHASH_FORKID);
-
-        if(pubkey1.Verify(hash, sig))
-            std::cout << "Sig hash verified - value of hash is " << hash.ToString() << std::endl;
+    const std::string etxHex = bsv::Bin2Hex(etxBin);
+    if (ret != SCRIPT_ERR_OK) {
+        throw std::runtime_error("ERROR verify script for tx " + etxHex);
     }
 
-    CScript finalScript;
-    finalScript << sig << ToByteVector(pubkey1);
-
-    finalScript += scriptSig;
-
-    int64_t amt = amount.GetSatoshis();
-    std::cout << "Amount is: " << amt << std::endl;
-    const std::string& scriptStr = FormatScript(finalScript);
-
-    std::string scr = FormatScript(finalScript);
-    std::cout << scr << std::endl;
-    if(bsv::execute(scr, true, 0, hextx, 0, amt))
-    {
-        std::cout << "Successfully executed script with a checksig" << std::endl;
-    }
-
-    std::cout << "Finishing" << std::endl;
     return 0;
 }
