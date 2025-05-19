@@ -14,6 +14,10 @@ add_executable(example_bdk "${CMAKE_CURRENT_SOURCE_DIR}/example_bdk.cpp")
 target_link_libraries(example_bdk ${CMAKE_DL_LIBS} bdk_core OpenSSL::Crypto OpenSSL::SSL)
 set_target_properties(example_bdk PROPERTIES  FOLDER "module/example" DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})
 
+add_executable(example_tx_create_verify "${CMAKE_CURRENT_SOURCE_DIR}/example_tx_create_verify.cpp")
+target_link_libraries(example_tx_create_verify ${CMAKE_DL_LIBS} bdk_core OpenSSL::Crypto OpenSSL::SSL)
+set_target_properties(example_tx_create_verify PROPERTIES  FOLDER "module/example" DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})
+
 add_executable(example_tx_keys "${CMAKE_CURRENT_SOURCE_DIR}/example_tx_keys.cpp")
 target_link_libraries(example_tx_keys ${CMAKE_DL_LIBS} bdk_core OpenSSL::Crypto OpenSSL::SSL)
 set_target_properties(example_tx_keys PROPERTIES  FOLDER "module/example" DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})

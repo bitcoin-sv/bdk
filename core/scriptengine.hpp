@@ -66,6 +66,8 @@ class CScriptEngine {
         // VerifyScript extract the extended transaction, then forward to bsv call
         ScriptError VerifyScript(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool consensus) const;
 
+        const GlobalConfig& GetGlobalConfig();
+
     private :
         GlobalConfig bsvConfig;
         std::unique_ptr<CChainParams> chainParams;
