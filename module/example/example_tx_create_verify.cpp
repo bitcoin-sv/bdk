@@ -24,50 +24,6 @@
 
 const std::string strSecret1 = "5HxWvvfubhXpYYpS3tJkw6fq9jE9j18THftkZjHHfmFiWtmAbrj";
 
-void NegateSignatureS(std::vector<uint8_t>& vchSig)
-{
-    // Parse the signature.
-    std::vector<uint8_t> r(vchSig.begin() + 4, vchSig.begin() + 4 + vchSig[3]);
-    std::vector<uint8_t> s(vchSig.begin() + 6 + vchSig[3],
-                           vchSig.begin() + 6 + vchSig[3] +
-                               vchSig[5 + vchSig[3]]);
-
-    // Really ugly to implement mod-n negation here, but it would be feature
-    // creep to expose such functionality from libsecp256k1.
-    static const uint8_t order[33] = {0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-                                      0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFE, 0xBA, 0xAE, 0xDC, 0xE6, 0xAF,
-                                      0x48, 0xA0, 0x3B, 0xBF, 0xD2, 0x5E, 0x8C, 0xD0, 0x36, 0x41, 0x41};
-    while(s.size() < 33)
-    {
-        s.insert(s.begin(), 0x00);
-    }
-
-    int carry = 0;
-    for(int p = 32; p >= 1; p--)
-    {
-        int n = (int)order[p] - s[p] - carry;
-        s[p] = (n + 256) & 0xFF;
-        carry = (n < 0);
-    }
-
-    assert(carry == 0);
-    if(s.size() > 1 && s[0] == 0 && s[1] < 0x80)
-    {
-        s.erase(s.begin());
-    }
-
-    // Reconstruct the signature.
-    vchSig.clear();
-    vchSig.push_back(0x30);
-    vchSig.push_back(4 + r.size() + s.size());
-    vchSig.push_back(0x02);
-    vchSig.push_back(r.size());
-    vchSig.insert(vchSig.end(), r.begin(), r.end());
-    vchSig.push_back(0x02);
-    vchSig.push_back(s.size());
-    vchSig.insert(vchSig.end(), s.begin(), s.end());
-}
-
 CMutableTransaction BuildCreditingTransaction(const CScript& scriptPubKey, const Amount nValue)
 {
     CMutableTransaction txCredit;
@@ -100,74 +56,79 @@ CMutableTransaction BuildSpendingTransaction(const CScript& scriptSig, const CMu
     return txSpend;
 }
 
-std::vector<uint8_t> MakeSig(CScript& script,
+std::vector<uint8_t> MakeSig(CScript& scriptPubkey,
                              const CKey& key,
                              CMutableTransaction& spendTx,
-                             SigHashType sigHashType = SigHashType().withForkId(),
-                             unsigned int lenR = 32,
-                             unsigned int lenS = 32,
-                             Amount amount = Amount(0),
-                             uint32_t flags = SCRIPT_ENABLE_SIGHASH_FORKID)
+                             Amount amount,
+                             SigHashType sigHashType = SigHashType().withForkId())
 {
-    uint256 hash = SignatureHash(script, CTransaction(spendTx), 0, sigHashType, amount, nullptr, flags);
-    std::vector<uint8_t> vchSig, r, s;
-    uint32_t iter = 0;
-    do
-    {
-        key.Sign(hash, vchSig, iter++);
-        if((lenS == 33) != (vchSig[5 + vchSig[3]] == 33))
-        {
-            NegateSignatureS(vchSig);
-        }
-
-        r = std::vector<uint8_t>(vchSig.begin() + 4, vchSig.begin() + 4 + vchSig[3]);
-        s = std::vector<uint8_t>(vchSig.begin() + 6 + vchSig[3],
-                                 vchSig.begin() + 6 + vchSig[3] + vchSig[5 + vchSig[3]]);
-    } while(lenR != r.size() || lenS != s.size());
+    uint256 hash = SignatureHash(scriptPubkey, CTransaction(spendTx), 0, sigHashType, amount);
+    std::vector<uint8_t> vchSig;
+    if (!key.Sign(hash, vchSig)) {
+        throw std::runtime_error("ERROR signing");
+    }
 
     vchSig.push_back(static_cast<uint8_t>(sigHashType.getRawSigHashType()));
     return vchSig;
 }
 
-int main(int argc, char* argv[])
-{
-    bsv::CScriptEngine se("main");
-    //std::string errStr;
-    //bool ok = se.SetMaxStackMemoryUsage(272, 4, &errStr);
-    //if (!(ok && errStr.empty())) {
-    //    throw std::runtime_error("unable to set SetMaxStackMemoryUsage. Error : " + errStr);
-    //}
-
-    CBasicKeyStore keystore;
-    std::vector<CKey> keys;
-    std::vector<CPubKey> pubkeys;
-    for (int i = 0; i < 1; i++) {
-        CKey key;
-        key.MakeNewKey(i % 2 == 1);
-        keys.push_back(key);
-        pubkeys.push_back(key.GetPubKey());
-        keystore.AddKey(key);
+CScript PushAll(const std::vector<valtype>& values) {
+    CScript result;
+    for (const valtype& v : values) {
+        if (v.size() == 0) {
+            result << OP_0;
+        }
+        else if (v.size() == 1 && v[0] >= 1 && v[0] <= 16) {
+            result << CScript::EncodeOP_N(v[0]);
+        }
+        else {
+            result << v;
+        }
     }
 
-    auto key1 = keys[0];
-    auto pubkey1 = pubkeys[0];
+    return result;
+}
+
+// This helper is to play and modify script pubkey (append op_code to that)
+// Here is the example of using OP_RETURN, but we can do other things
+bool ModifyScriptPubKey(CScript& script) {
+    std::vector<uint8_t> data(1000, 1);
+    script << OP_FALSE << OP_RETURN << data;
+    return true;
+}
+
+int main(int argc, char* argv[])
+{
+    const auto network = CBaseChainParams::MAIN;
+    bsv::CScriptEngine se(network);
+
+    SelectParams(network); // must select params to set secret string
+    const std::string strSecret1 = "5HxWvvfubhXpYYpS3tJkw6fq9jE9j18THftkZjHHfmFiWtmAbrj";
+    CBitcoinSecret bsecret1;
+    bsecret1.SetString(strSecret1);
+
+    CKey key1 = bsecret1.GetKey();
+    CPubKey pubkey1 = key1.GetPubKey();
+
+    CBasicKeyStore keystore;// Might not need the keystore as we use the private key we created
+    keystore.AddKey(key1);
+
     if(key1.VerifyPubKey(pubkey1))
         std::cout << "PubKey verified" << std::endl;
 
     // Construct a tx
     const Amount amount{1000000};
-    CMutableTransaction txFrom = BuildCreditingTransaction(GetScriptForDestination(keys[0].GetPubKey().GetID()), amount);
+    CMutableTransaction txFrom = BuildCreditingTransaction(GetScriptForDestination(key1.GetPubKey().GetID()), amount);
     CMutableTransaction txTo = BuildSpendingTransaction(CScript(), txFrom);
 
-    // Append the part to create a non-standard utxo
-    // CScript& scriptPubKey = txFrom.vout[0].scriptPubKey;
-    //std::vector<uint8_t> arg0(MAX_SCRIPT_NUM_LENGTH_AFTER_GENESIS, 42);
-    //CScript extendScript = CScript() << arg0 << OP_DUP << OP_NUMEQUALVERIFY;
-    //scriptPubKey << ToByteVector(extendScript);
+    CScript& scriptPubKey = txFrom.vout[0].scriptPubKey;
+    ModifyScriptPubKey(scriptPubKey);
 
-    // Single signature case:
-    const bool ok = SignSignature(se.GetGlobalConfig(), keystore, ProtocolEra::PostGenesis, ProtocolEra::PostGenesis, CTransaction(txFrom), txTo, 0,
-        SigHashType().withForkId()); // changes scriptSig
+    std::vector<uint8_t> vchSig = MakeSig(scriptPubKey, key1, txTo, amount);
+    std::vector<valtype> sigResult;
+    sigResult.push_back(vchSig);
+    sigResult.push_back(ToByteVector(pubkey1));
+    txTo.vin[0].scriptSig = PushAll(sigResult);
 
     bsv::CMutableTransactionExtended eTX;
     eTX.vutxo = txFrom.vout;
@@ -179,9 +140,10 @@ int main(int argc, char* argv[])
     std::array<int32_t, 1> utxoArray = { 820539 };
     const int32_t blockHeight = 820540;
 
-    const ScriptError ret = se.VerifyScript(etxBin, std::span<const int32_t>(utxoArray) , blockHeight, true);
+    const ScriptError ret = se.VerifyScript(etxBin, std::span<const int32_t>(utxoArray) , blockHeight, false);
 
     const std::string etxHex = bsv::Bin2Hex(etxBin);
+    std::cout << std::endl << std::endl << "ExtendedTX Hex" << std::endl << std::endl << etxHex << std::endl << std::endl;
     if (ret != SCRIPT_ERR_OK) {
         throw std::runtime_error("ERROR verify script for tx " + etxHex);
     }
