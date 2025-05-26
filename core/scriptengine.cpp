@@ -231,6 +231,64 @@ uint64_t bsv::CScriptEngine::GetSigOpCount(std::span<const uint8_t> extendedTX, 
     return (nSigOpsWithoutP2SH + nSigOpsP2SH);
 }
 
+bitcoinconsensus_error bsv::CScriptEngine::CheckConsensus(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight) const {
+    const char* begin{ reinterpret_cast<const char*>(extendedTX.data()) };
+    const char* end{ reinterpret_cast<const char*>(extendedTX.data() + extendedTX.size()) };
+    CDataStream in_stream(begin, end, SER_NETWORK, PROTOCOL_VERSION);
+    const auto in_size = in_stream.size();
+    bsv::CMutableTransactionExtended eTX;
+
+    try {
+        in_stream >> eTX;
+    }
+    catch (...) {
+        return bitcoinconsensus_ERR_TX_DESERIALIZE;
+    }
+
+
+
+    if (!in_stream.empty()) {
+        return bitcoinconsensus_ERR_TX_DESERIALIZE;
+    }
+
+    if (eTX.vutxo.size() != utxoHeights.size()) {
+        return bitcoinconsensus_ERR_TX_INDEX;
+    }
+    if (eTX.vutxo.size() != eTX.mtx.vin.size()) {
+        throw bitcoinconsensus_ERR_TX_INDEX;
+    }
+
+    if (eTX.vutxo.empty() || eTX.mtx.vin.empty() || utxoHeights.empty()) {
+        return bitcoinconsensus_ERR_TX_DESERIALIZE;
+    }
+
+    const CTransaction ctx(eTX.mtx); // costly conversion due to hash calculation
+    std::atomic<malleability::status> ms{};
+    for (size_t index = 0; index < eTX.vutxo.size(); ++index) {
+        const uint64_t amount = eTX.vutxo[index].nValue.GetSatoshis();
+        const CScript& lscript = eTX.vutxo[index].scriptPubKey; //   locking script
+        const CScript& uscript = eTX.mtx.vin[index].scriptSig;  // unlocking script
+
+        const int32_t utxoHeight{ utxoHeights[index] };
+        const bool consensus = true;
+        const uint32_t scriptEngineFlags = CalculateFlags(utxoHeight, blockHeight, consensus);
+        const uint32_t flags = scriptEngineFlags & SCRIPT_VERIFY_NULLDUMMY; // SCRIPT_VERIFY_NULLDUMMY was missing in GetBlockScriptFlags
+        if (!(flags & ~(bitcoinconsensus_SCRIPT_FLAGS_VERIFY_ALL)) == 0) {
+            // verify_flags
+            return bitcoinconsensus_ERR_INVALID_FLAGS;
+        }
+    }
+
+    // Re serialize transaction and make sure the recovered stream match the input stream size
+    CDataStream out_stream(SER_NETWORK, PROTOCOL_VERSION);
+    out_stream << eTX;
+    if (in_size != out_stream.size()) {
+        return bitcoinconsensus_ERR_TX_SIZE_MISMATCH;
+    }
+
+    return bitcoinconsensus_ERR_OK;
+}
+
 ScriptError bsv::CScriptEngine::VerifyScript(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool consensus) const
 {
     const char* begin{ reinterpret_cast<const char*>(extendedTX.data()) };

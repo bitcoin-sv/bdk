@@ -23,7 +23,7 @@ namespace po = boost::program_options;
 namespace pt = boost::property_tree;
 
 
-void doVerifyScript(const bsv::CScriptEngine& se, const std::span<const int32_t> utxoHeights, const int32_t blockHeight, const std::string& txID, const std::string& txHexExtended) {
+void doVerifyScript(const bsv::CScriptEngine& se, const std::span<const int32_t> utxoHeights, const int32_t blockHeight, const std::string& txID, const std::string& txHexExtended, const bool consensus) {
     const std::vector<uint8_t> etxBin = ParseHex(txHexExtended);
     const std::span<const uint8_t> etx(etxBin.data(), etxBin.size());
 
@@ -47,7 +47,14 @@ void doVerifyScript(const bsv::CScriptEngine& se, const std::span<const int32_t>
         throw std::runtime_error("ERROR recover txID for TxID " + txID);
     }
 
-    const ScriptError ret = se.VerifyScript(etxBin, utxoHeights, blockHeight, true);
+    if (consensus) {
+        const bitcoinconsensus_error cret = se.CheckConsensus(etxBin, utxoHeights, blockHeight);
+        if (cret != bitcoinconsensus_ERR_OK) {
+            throw std::runtime_error("ERROR check consensus for TxID " + txID);
+        }
+    }
+
+    const ScriptError ret = se.VerifyScript(etxBin, utxoHeights, blockHeight, consensus);
     if (ret != SCRIPT_ERR_OK) {
         throw std::runtime_error("ERROR verify script for TxID " + txID);
     }
@@ -164,13 +171,15 @@ int main(int argc, char* argv[])
 {
     std::string csvFilePath;
     std::string network;
+    bool disableConsensus;
 
     // Define and parse the command line options
     po::options_description desc("Allowed options");
     desc.add_options()
         ("help,h", "produce help message")
         ("csv-file,f", po::value<std::string>(&csvFilePath)->required(), "path to the csv file")
-        ("network,n", po::value<std::string>(&network)->default_value("main"), "the name of the network type");
+        ("network,n", po::value<std::string>(&network)->default_value("main"), "the name of the network type")
+        ("disable-consensus,c", po::bool_switch(&disableConsensus)->default_value(false), "disable the consensus");
 
     po::variables_map vm;
     try {
@@ -189,6 +198,8 @@ int main(int argc, char* argv[])
 
     const auto csvData = parseCSV(csvFilePath);
     const bsv::CScriptEngine se(network);
+    std::chrono::duration<double> elapsed;
+    size_t nbTx{ 0 };
     for (size_t i = 0; i < csvData.size();++i) {
         auto line = csvData[i];
         //std::cout << std::endl;
@@ -218,14 +229,21 @@ int main(int argc, char* argv[])
         const auto utxoVector = parseUTXOStr(utxoHeightsStr);
         std::span<const int32_t> utxoHeights(utxoVector);
 
+        const bool consensus = !disableConsensus;
         try {
-            doVerifyScript(se, utxoHeights, blockHeight, TxID, TxHexExtended);
+            auto start = std::chrono::high_resolution_clock::now();
+            doVerifyScript(se, utxoHeights, blockHeight, TxID, TxHexExtended, consensus);
+            auto end = std::chrono::high_resolution_clock::now();
+            elapsed += (end - start);
+            nbTx += 1;
         }
         catch (std::exception e) {
             std::cout << "ERROR test line : " << i + 1 << e.what() << std::endl;
         }
     }
 
-    std::cout << "End Of Program, total tested " << csvData.size() << " lines" << std::endl;
+    std::cout << "End Of Program, total csv " << csvData.size() << " lines" << std::endl;
+    std::cout << "Nb Txs " << nbTx << std::endl;
+    std::cout << "Processed Time " << elapsed.count() << std::endl;
     return 0;
 }
