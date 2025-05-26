@@ -231,7 +231,7 @@ uint64_t bsv::CScriptEngine::GetSigOpCount(std::span<const uint8_t> extendedTX, 
     return (nSigOpsWithoutP2SH + nSigOpsP2SH);
 }
 
-bitcoinconsensus_error bsv::CScriptEngine::CheckConsensus(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight) const {
+bitcoinconsensus_error bsv::CScriptEngine::CheckConsensus(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, std::span<const uint32_t> customFlags) const {
     const char* begin{ reinterpret_cast<const char*>(extendedTX.data()) };
     const char* end{ reinterpret_cast<const char*>(extendedTX.data() + extendedTX.size()) };
     CDataStream in_stream(begin, end, SER_NETWORK, PROTOCOL_VERSION);
@@ -262,8 +262,13 @@ bitcoinconsensus_error bsv::CScriptEngine::CheckConsensus(std::span<const uint8_
         return bitcoinconsensus_ERR_TX_DESERIALIZE;
     }
 
+    if (!customFlags.empty() && customFlags.size() != eTX.vutxo.size()) {
+        return bitcoinconsensus_ERR_TX_INDEX;
+    }
+
     const CTransaction ctx(eTX.mtx); // costly conversion due to hash calculation
     std::atomic<malleability::status> ms{};
+    const bool useCustomFlags = !customFlags.empty();
     for (size_t index = 0; index < eTX.vutxo.size(); ++index) {
         const uint64_t amount = eTX.vutxo[index].nValue.GetSatoshis();
         const CScript& lscript = eTX.vutxo[index].scriptPubKey; //   locking script
@@ -271,8 +276,16 @@ bitcoinconsensus_error bsv::CScriptEngine::CheckConsensus(std::span<const uint8_
 
         const int32_t utxoHeight{ utxoHeights[index] };
         const bool consensus = true;
-        const uint32_t scriptEngineFlags = CalculateFlags(utxoHeight, blockHeight, consensus);
-        const uint32_t flags = scriptEngineFlags & SCRIPT_VERIFY_NULLDUMMY; // SCRIPT_VERIFY_NULLDUMMY was missing in GetBlockScriptFlags
+
+        uint32_t flags;
+        if (!useCustomFlags) {
+            flags == CalculateFlags(utxoHeight, blockHeight, consensus);
+            flags &= SCRIPT_VERIFY_NULLDUMMY; // SCRIPT_VERIFY_NULLDUMMY was missing in GetBlockScriptFlags
+        }
+        else {
+            flags = customFlags[index];
+        }
+
         if (!(flags & ~(bitcoinconsensus_SCRIPT_FLAGS_VERIFY_ALL)) == 0) {
             // verify_flags
             return bitcoinconsensus_ERR_INVALID_FLAGS;
@@ -289,7 +302,7 @@ bitcoinconsensus_error bsv::CScriptEngine::CheckConsensus(std::span<const uint8_
     return bitcoinconsensus_ERR_OK;
 }
 
-ScriptError bsv::CScriptEngine::VerifyScript(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool consensus) const
+ScriptError bsv::CScriptEngine::VerifyScript(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool consensus, std::span<const uint32_t> customFlags) const
 {
     const char* begin{ reinterpret_cast<const char*>(extendedTX.data()) };
     const char* end{ reinterpret_cast<const char*>(extendedTX.data() + extendedTX.size()) };
@@ -312,15 +325,20 @@ ScriptError bsv::CScriptEngine::VerifyScript(std::span<const uint8_t> extendedTX
         return SCRIPT_ERR_UNKNOWN_ERROR;
     }
 
+    if (!customFlags.empty() && customFlags.size() != eTX.vutxo.size()) {
+        throw std::runtime_error("inconsistent utxo heights and number of custom flags");
+    }
+
     const CTransaction ctx(eTX.mtx); // costly conversion due to hash calculation
     std::atomic<malleability::status> ms{};
+    const bool useCustomFlags = !customFlags.empty();
     for (size_t index = 0; index < eTX.vutxo.size(); ++index) {
         const uint64_t amount = eTX.vutxo[index].nValue.GetSatoshis();
         const CScript& lscript = eTX.vutxo[index].scriptPubKey; //   locking script
         const CScript& uscript = eTX.mtx.vin[index].scriptSig;  // unlocking script
 
         const int32_t utxoHeight{ utxoHeights[index] };
-        const uint32_t flags = CalculateFlags(utxoHeight, blockHeight, consensus);
+        const uint32_t flags = !useCustomFlags ? CalculateFlags(utxoHeight, blockHeight, consensus) : customFlags[index];
 
         ScriptError verifyError { SCRIPT_ERR_UNKNOWN_ERROR };
         if (!ctx.vin.empty() && !ctx.vout.empty())
