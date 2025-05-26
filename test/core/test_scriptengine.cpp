@@ -182,6 +182,24 @@ BOOST_AUTO_TEST_CASE(test_verify_script)
     BOOST_CHECK_EQUAL(SCRIPT_ERR_OK, status);
 }
 
+BOOST_AUTO_TEST_CASE(test_verify_script_custom_flags)
+{
+    // This is on mainnet TxID = "7be4fa421844154ec4105894def768a8bcd80da25792947d585274ce38c07105";
+    // This tx was whitelisted prior to the beta-8
+    const std::string TxHexExtended = "020000000000000000ef023f6c667203b47ce2fed8c8bcc78d764c39da9c0094f1a49074e05f66910e9c44000000006b4c69522102401d5481712745cf7ada12b7251c85ca5f1b8b6c859c7e81b8002a85b0f36d3c21039d8b1e461715ddd4d10806125be8592e6f48fb69e4c31699ce6750da1c9eaeb32103af3b35d4ad547fd1ce102bbd5cce36de2277723796f1b4001ec0ea6a1db6474053aeffffffffa73018250000000017a91413402e079464ec2a85e5a613732c78b0613fcc65873f6c667203b47ce2fed8c8bcc78d764c39da9c0094f1a49074e05f66910e9c44010000006b4c69522102401d5481712745cf7ada12b7251c85ca5f1b8b6c859c7e81b8002a85b0f36d3c21039d8b1e461715ddd4d10806125be8592e6f48fb69e4c31699ce6750da1c9eaeb32103af3b35d4ad547fd1ce102bbd5cce36de2277723796f1b4001ec0ea6a1db6474053aeffffffff34b82f000000000017a91413402e079464ec2a85e5a613732c78b0613fcc65870187e74725000000001976a9141be3d23725148a90807ee6df191bcdfcf083a3b288ac00000000";
+    std::array<int32_t, 2> utxoArray = { 631924, 631924 };
+    std::array<uint32_t, 2> customFlagsArray = { 869935, 869935 };
+    const int32_t blockHeight = 632099;
+
+    const std::vector<uint8_t> etxBin = ParseHex(TxHexExtended);
+    const std::span<const uint8_t> etx(etxBin.data(), etxBin.size());
+    std::span<const int32_t> utxo(utxoArray);
+    std::span<const uint32_t> customFlags(customFlagsArray);
+    bsv::CScriptEngine se("main");
+    const auto status = se.VerifyScript(etx, utxo, blockHeight, true, customFlags);
+    BOOST_CHECK_EQUAL(SCRIPT_ERR_OK, status);
+}
+
 BOOST_AUTO_TEST_CASE(test_verify_empty_utxos)
 {
     // A extended transaction with zero input is expected to failed

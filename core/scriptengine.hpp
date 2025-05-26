@@ -66,10 +66,16 @@ class CScriptEngine {
 
         // CheckConsensus is to call only in the context consensus = true.
         // It deserialize the transaction and process some prechecks if all the data is conformed.
-        bitcoinconsensus_error CheckConsensus(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight) const;
+        // 
+        // If client uses a custom flags different than zero, then this will be used
+        // instead of the implicitly calculated flags
+        bitcoinconsensus_error CheckConsensus(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, std::span<const uint32_t> customFlags = std::span<const uint32_t>()) const;
 
         // VerifyScript extract the extended transaction, then forward to bsv call
-        ScriptError VerifyScript(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool consensus) const;
+        // 
+        // If client uses a custom flags different than zero, then this will be used
+        // instead of the implicitly calculated flags
+        ScriptError VerifyScript(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool consensus, std::span<const uint32_t> customFlags = std::span<const uint32_t>()) const;
 
         const GlobalConfig& GetGlobalConfig();
 
