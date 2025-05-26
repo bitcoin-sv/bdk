@@ -157,6 +157,7 @@ function(cryptGetMinimumListBSVSource)##########################################
       "src/rpc/protocol.h"  ##  Used by [core_write.cpp]
       "src/rpc/server.h"  ##  Used by [core_write.cpp]
       "src/rpc/text_writer.h"  ##  Used by [block.cpp], [chainparams.cpp], [merkle.cpp], [random.cpp], [script.cpp], [standard.cpp], [transaction.cpp], [arith_uint256.cpp], [util.cpp], [utilmoneystr.cpp], [utilstrencodings.cpp]
+      "src/script/bitcoinconsensus.h"   ##  Manually added
       "src/script/int_serialization.h"  ##  Used by [interpreter.cpp], [limitedstack.cpp]
       "src/script/interpreter.h"  ##  Used by [base58.cpp], [chainparams.cpp], [config.cpp], [core_write.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [scriptcache.cpp], [sigcache.cpp], [standard.cpp]
       "src/script/limitedstack.h"  ##  Used by [limitedstack.cpp]

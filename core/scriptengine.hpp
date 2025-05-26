@@ -14,6 +14,7 @@
 #include <script/script.h>
 #include <script/malleability_status.h>
 #include <script/interpreter.h>
+#include <script/bitcoinconsensus.h>
 
 namespace bsv
 {
@@ -62,6 +63,10 @@ class CScriptEngine {
         //   - consensus=true  --> flags to check a tx coming from a peer  (enforce policies check)
         //   - consensus=false --> flags to check a tx coming from a block (   skip policies check)
         uint32_t CalculateFlags(int32_t utxoHeight, int32_t blockHeight, bool consensus) const;
+
+        // CheckConsensus is to call only in the context consensus = true.
+        // It deserialize the transaction and process some prechecks if all the data is conformed.
+        bitcoinconsensus_error CheckConsensus(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight) const;
 
         // VerifyScript extract the extended transaction, then forward to bsv call
         ScriptError VerifyScript(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool consensus) const;
