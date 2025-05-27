@@ -107,7 +107,73 @@ func (se *ScriptEngine) VerifyScript(extendedTX []byte, utxoHeights []int32, blo
 	}
 
 	return NewScriptError(ScriptErrorCode(errCode))
+}
 
+// CheckConsensus deserialize, serialize and perform some light check of the transaction
+// The arguments are similar to VerifyScript, except the consensus argument is not required
+// as the function is to be call in the context consensus = true
+//   - The extended transaction
+//   - The array of the utxo heights ( required to calculate the flags )
+//   - The current block height
+func (se *ScriptEngine) CheckConsensus(extendedTX []byte, utxoHeights []int32, blockHeight int32) ConsensusError {
+
+	lenTx := len(extendedTX)
+	var txPtr *C.char
+
+	if lenTx > 0 {
+		txPtr = (*C.char)(unsafe.Pointer(&extendedTX[0]))
+	}
+
+	lenUtxo := len(utxoHeights)
+
+	var utxoPtr *C.int32_t
+	if lenUtxo > 0 {
+		utxoPtr = (*C.int32_t)(unsafe.Pointer(&utxoHeights[0]))
+	}
+
+	errCode := int(C.ScriptEngine_CheckConsensus(se.cSEPtr, txPtr, C.int(lenTx), utxoPtr, C.int(lenUtxo), C.int32_t(blockHeight)))
+
+	if errCode == int(BITCOINCONSENSUS_ERR_OK) {
+		return nil
+	}
+
+	return NewConsensusError(ConsensusErrorCode(errCode))
+}
+
+// VerifyScriptWithCustomFlags call VerifyScript with addtional arguments
+//   - The custom flags
+//
+// This is usually to be used in test or play with the different flags
+// than the implicitly provided
+func (se *ScriptEngine) VerifyScriptWithCustomFlags(extendedTX []byte, utxoHeights []int32, blockHeight int32, consensus bool, customFlags []uint32) ScriptError {
+
+	lenTx := len(extendedTX)
+	var txPtr *C.char
+
+	if lenTx > 0 {
+		txPtr = (*C.char)(unsafe.Pointer(&extendedTX[0]))
+	}
+
+	lenUtxo := len(utxoHeights)
+
+	var utxoPtr *C.int32_t
+	if lenUtxo > 0 {
+		utxoPtr = (*C.int32_t)(unsafe.Pointer(&utxoHeights[0]))
+	}
+
+	lenFlags := len(customFlags)
+	var flagsPtr *C.uint32_t
+	if lenFlags > 0 {
+		flagsPtr = (*C.uint32_t)(unsafe.Pointer(&customFlags[0]))
+	}
+
+	errCode := int(C.ScriptEngine_VerifyScriptWithCustomFlags(se.cSEPtr, txPtr, C.int(lenTx), utxoPtr, C.int(lenUtxo), C.int32_t(blockHeight), C.bool(consensus), flagsPtr, C.int(lenFlags)))
+
+	if errCode == int(SCRIPT_ERR_OK) {
+		return nil
+	}
+
+	return NewScriptError(ScriptErrorCode(errCode))
 }
 
 // SetMaxOpsPerScriptPolicy set the MaxOpsPerScriptPolicy in the C++ ScriptEngine
