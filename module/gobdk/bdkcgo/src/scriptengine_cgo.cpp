@@ -159,3 +159,40 @@ int ScriptEngine_VerifyScript(ScriptEngineCGO cgoEngine, const char* extendedTxP
         return SCRIPT_ERR_ERROR_COUNT + 1;
     }
 }
+
+int ScriptEngine_CheckConsensus(ScriptEngineCGO cgoEngine, const char* extendedTxPtr, int extendedTxLen, const int32_t* hUTXOsPtr, int hUTXOsLen, int32_t blockHeight){
+    try {
+        std::span<const uint8_t> extendedTx;
+        if (extendedTxPtr != nullptr && extendedTxLen > 0) {
+            const uint8_t* pTX = static_cast<const uint8_t*>(reinterpret_cast<const void*>(extendedTxPtr));
+            extendedTx = std::span<const uint8_t>(pTX, extendedTxLen);
+        }
+
+        std::span<const int32_t> hUTXOs{ hUTXOsPtr, (size_t)hUTXOsLen };
+
+        return static_cast<bsv::CScriptEngine*>(cgoEngine)->CheckConsensus(extendedTx, hUTXOs, blockHeight);
+    }
+    catch (const std::exception& e) {
+        std::cout << "CGO EXCEPTION : " << __FILE__ << ":" << __LINE__ << "    at " << __func__  << e.what() << std::endl;
+        return SCRIPT_ERR_ERROR_COUNT + 1;
+    }
+}
+
+int ScriptEngine_VerifyScriptWithCustomFlags(ScriptEngineCGO cgoEngine, const char* extendedTxPtr, int extendedTxLen, const int32_t* hUTXOsPtr, int hUTXOsLen, int32_t blockHeight, bool consensus, const uint32_t* cFlagsPtr, int cFlagsLen){
+    try {
+        std::span<const uint8_t> extendedTx;
+        if (extendedTxPtr != nullptr && extendedTxLen > 0) {
+            const uint8_t* pTX = static_cast<const uint8_t*>(reinterpret_cast<const void*>(extendedTxPtr));
+            extendedTx = std::span<const uint8_t>(pTX, extendedTxLen);
+        }
+
+        std::span<const int32_t> hUTXOs{ hUTXOsPtr, (size_t)hUTXOsLen };
+        std::span<const uint32_t> cFlags{ cFlagsPtr, (size_t)cFlagsLen };
+
+        return static_cast<bsv::CScriptEngine*>(cgoEngine)->VerifyScript(extendedTx, hUTXOs, blockHeight, consensus, cFlags);
+    }
+    catch (const std::exception& e) {
+        std::cout << "CGO EXCEPTION : " << __FILE__ << ":" << __LINE__ << "    at " << __func__  << e.what() << std::endl;
+        return SCRIPT_ERR_ERROR_COUNT + 1;
+    }
+}
