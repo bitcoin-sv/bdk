@@ -11,10 +11,10 @@ on:
       bitcoin-sv-input:
         description: 'Optionally build bdk with custom bitcoin-sv commit'
         required: false
-        default: 394645fcba643e5f7090ff1beb246a2b72b3b172
+        default: f4921fa4409e36ff2e62893efb82f8d64199a33f
 
 env:
-  DEFAULT_BITCOIN_SV_COMMIT: 394645fcba643e5f7090ff1beb246a2b72b3b172
+  DEFAULT_BITCOIN_SV_COMMIT: f4921fa4409e36ff2e62893efb82f8d64199a33f
 
 jobs:
   build-bdk:

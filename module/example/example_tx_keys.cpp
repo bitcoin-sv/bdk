@@ -98,10 +98,9 @@ std::vector<uint8_t> MakeSig(CScript& script,
                              SigHashType sigHashType = SigHashType().withForkId(),
                              unsigned int lenR = 32,
                              unsigned int lenS = 32,
-                             Amount amount = Amount(0),
-                             uint32_t flags = SCRIPT_ENABLE_SIGHASH_FORKID)
+                             Amount amount = Amount(0))
 {
-    uint256 hash = SignatureHash(script, CTransaction(spendTx), 0, sigHashType, amount, nullptr, flags);
+    uint256 hash = SignatureHash(script, CTransaction(spendTx), 0, sigHashType, amount, nullptr);
     std::vector<uint8_t> vchSig, r, s;
     uint32_t iter = 0;
     do
@@ -171,8 +170,7 @@ int main(int argc, char* argv[])
 
         CTransaction t(rebuilttx);
 
-        uint256 hash = SignatureHash(scriptSig, stx, 0, SigHashType(), Amount(10), nullptr,
-                                     SCRIPT_ENABLE_SIGHASH_FORKID);
+        uint256 hash = SignatureHash(scriptSig, stx, 0, SigHashType(), Amount(10), nullptr);
 
         if(pubkey1.Verify(hash, sig))
             std::cout << "Sig hash verified - value of hash is " << hash.ToString() << std::endl;

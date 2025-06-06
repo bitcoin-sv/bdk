@@ -22,9 +22,9 @@
 
 #include "config.h"
 #include "core_io.h"
-#include "interpreter_adapter.h"
 #include "key.h"
 #include "keystore.h"
+#include "overload.h"
 #include "protocol_era.h"
 #include "rpc/server.h"
 #include "script/malleability_status.h"
@@ -41,13 +41,13 @@
 #include "test/scriptflags.h"
 #include "test/sigutil.h"
 #include "utilstrencodings.h"
+#include <script/interpreter.h>
 
 // SCRIPT_ENGINE_BUILD_TEST ----------------------------------------------------
 #include "script/scriptcache.h"
 //#include "test/test_bitcoin.h"
 #include "utilstrencodings.h"
 #include "config.h"
-
 
 #if defined(HAVE_CONSENSUS_LIB)
 #include "script/bitcoinconsensus.h"
@@ -164,7 +164,7 @@ static constexpr std::array<ScriptErrorDesc, 44> script_errors = {
      {SCRIPT_ERR_NONCOMPRESSED_PUBKEY, "NONCOMPRESSED_PUBKEY"},
      {SCRIPT_ERR_ILLEGAL_FORKID, "ILLEGAL_FORKID"},
      {SCRIPT_ERR_MUST_USE_FORKID, "MISSING_FORKID"},
-     {SCRIPT_ERR_ILLEGAL_RELAX, "ILLEGAL_RELAX"},
+     {SCRIPT_ERR_ILLEGAL_CHRONICLE, "ILLEGAL_CHRONICLE"},
      {SCRIPT_ERR_DIV_BY_ZERO, "DIV_BY_ZERO"},
      {SCRIPT_ERR_MOD_BY_ZERO, "MOD_BY_ZERO"}}};
 
@@ -217,71 +217,79 @@ static const std::vector<uint8_t>& high_s_min()
     return v;
 }
 
-std::vector<uint8_t> make_op_checksig_script(const int sighash,
-                                             const std::vector<uint8_t>& s)
+static std::vector<uint8_t> make_signature(const std::span<const uint8_t> s,
+                                           const uint8_t sighash)
 {
-    const auto rs_len{32};
-    const auto sig_len{2 * (2 + rs_len)};
-    const auto der_len{sig_len + 2};
-    const auto type_code{2};
+    assert(s.size() < OP_PUSHDATA1);
+
+    constexpr auto rs_len{32};
+    constexpr auto sig_len{2 * (2 + rs_len)};
+    constexpr auto der_len{sig_len + 2};
+    constexpr auto type_code{2};
+    static_assert(der_len == 70);
 
     // signature
-    std::vector<uint8_t> script{der_len + 1,
-                                0x30,
-                                sig_len,
-                                type_code,
-                                rs_len};
-    script.insert(script.end(), rs_len, 42);  // r
-    script.push_back(type_code);
-    script.push_back(s.size());
-    script.insert(script.end(), s.begin(), s.end());
-    script.push_back(static_cast<uint8_t>(sighash));
+    std::vector<uint8_t> sig{0x30,
+                             sig_len,
+                             type_code,
+                             rs_len};
+    sig.insert(sig.end(), rs_len, 42);
+    sig.push_back(type_code);
+    sig.push_back(s.size());
+    sig.insert(sig.end(), s.begin(), s.end());
+    sig.push_back(static_cast<uint8_t>(sighash));
 
-    // pub key
+    return sig;
+}
+
+static std::vector<uint8_t> make_pub_key()
+{
     const auto pk_len{33};
-    script.push_back(pk_len);
-    script.push_back(2);
-    script.insert(script.end(), pk_len - 1, 101);
-    
+    std::vector<uint8_t> v(pk_len, 2);
+    return v;
+}
+
+static std::vector<uint8_t> make_op_checksig_script(const std::span<const uint8_t> sig,
+                                                    const std::span<const uint8_t> pub_key)
+{
+    assert(sig.size() < OP_PUSHDATA1);
+    assert(pub_key.size() < OP_PUSHDATA1);
+
+    std::vector<uint8_t> script;
+    script.push_back(sig.size());
+    script.insert(script.end(), sig.begin(), sig.end());
+
+    script.push_back(pub_key.size());
+    script.insert(script.end(), pub_key.begin(), pub_key.end());
+
     script.push_back(OP_CHECKSIG);
 
     return script;
 }
 
-std::vector<uint8_t> make_op_check_multi_sig_script(const int sighash,
-                                                    const std::vector<uint8_t>& s)
+static std::vector<uint8_t> make_op_check_multi_sig_script(const std::vector<std::vector<uint8_t>>& sigs,
+                                                           const std::vector<std::vector<uint8_t>>& pks,
+                                                           const uint8_t dummy=OP_0)
 {
-    const auto rs_len{32};
-    const auto sig_len{2 * (2 + rs_len)};
-    const auto der_len{sig_len + 2};
-    const auto type_code{2};
+    std::vector<uint8_t> script{dummy}; // historic bug, start with vestigial unchecked value
 
-    // signature
-    std::vector<uint8_t> script{OP_0,   // historic bug start with OP_0 
-                                der_len + 1,
-                                0x30,
-                                sig_len,
-                                type_code,
-                                rs_len};
-    script.insert(script.end(), rs_len, 42);  // r
-    script.push_back(type_code);
-    script.push_back(s.size());
-    script.insert(script.end(), s.begin(), s.end());
-    script.push_back(static_cast<uint8_t>(sighash));
-    
-    script.push_back(1);
-    const auto n_sigs{1};
-    script.push_back(n_sigs);
+    // Signatures
+    for(const auto& sig : sigs)
+    {
+        assert(sig.size() < OP_PUSHDATA1);
+        script.push_back(sig.size());
+        script.insert(script.end(), sig.begin(), sig.end());
+    }
+    script.push_back(EncodeOP_N(sigs.size())); // number of signatures
 
-    // pub key
-    const auto pk_len{33};
-    script.push_back(pk_len);
-    script.push_back(2);
-    script.insert(script.end(), pk_len - 1, 101);
-    
-    script.push_back(1);
-    const auto n_pub_keys{1};
-    script.push_back(n_pub_keys);
+    // Public keys
+    for(const auto& pk : pks)
+    {
+        assert(pk.size() < OP_PUSHDATA1);
+        script.push_back(pk.size());
+        script.insert(script.end(), pk.begin(), pk.end());
+    }
+    script.push_back(EncodeOP_N(pks.size())); // number of pub keys
     
     script.push_back(OP_CHECKMULTISIG);
 
@@ -333,9 +341,11 @@ static void DoTest(const CScript& scriptPubKey,
                    const Amount& nValue)
 {
     const Config& config = GlobalConfig::GetConfig();
-    if (flags & SCRIPT_VERIFY_CLEANSTACK) {
+
+    if(flags & SCRIPT_VERIFY_CLEANSTACK)
         flags |= SCRIPT_VERIFY_P2SH;
-    }
+
+    const auto params{make_verify_script_params(config, flags, true)};
 
     CMutableTransaction txCredit =
         BuildCreditingTransaction(scriptPubKey, nValue);
@@ -343,8 +353,9 @@ static void DoTest(const CScript& scriptPubKey,
     const CMutableTransaction& tx2 = tx; 
     std::ignore = tx2; // suppress unused variable warning
     std::atomic<malleability::status> ms {};
-    const auto res = VerifyScript(config,
-                                  true,
+
+
+    const auto res = VerifyScript(params,
                                   task::CCancellationSource::Make()->GetToken(),
                                   scriptSig,
                                   scriptPubKey,
@@ -371,12 +382,12 @@ static void DoTest(const CScript& scriptPubKey,
 
     if(expected_malleability)
     {
-        if((expected_malleability.value() != ms) && (expected_malleability.value() & ms) == 0)
+        if(expected_malleability.value() != ms)
         {
-            std::bitset<8> mask { expected_malleability.value() };
+            std::bitset<8> expected { expected_malleability.value() };
             std::bitset<8> malleability_result { ms };
             std::stringstream ss {};
-            ss << "Expected malleability mask " << mask << " failed against malleability result "
+            ss << "Expected malleability " << expected << " failed against malleability result "
                << malleability_result << " for " << message;
             BOOST_ERROR(ss.str());
         }
@@ -486,14 +497,13 @@ private:
     std::vector<uint8_t> MakeSig(
         CScript& script,
         const CKey& key,
-        SigHashType sigHashType = SigHashType(),
+        SigHashType sigHashType = SigHashType().withForkId(),
         unsigned int lenR = 32,
         unsigned int lenS = 32,
-        const Amount& amount = Amount(0),
-        uint32_t flags = SCRIPT_ENABLE_SIGHASH_FORKID)
+        const Amount& amount = Amount(0))
     {
         uint256 hash = SignatureHash(script, CTransaction(spendTx), 0,
-                                     sigHashType, amount, nullptr, flags & SCRIPT_ENABLE_SIGHASH_FORKID);
+                                     sigHashType, amount, nullptr);
         std::vector<uint8_t> vchSig, r, s;
         uint32_t iter = 0;
         do {
@@ -569,14 +579,13 @@ public:
 
     TestBuilder& PushSig(
         const CKey& key,
-        SigHashType sigHashType = SigHashType(),
+        SigHashType sigHashType = SigHashType().withForkId(),
         unsigned int lenR = 32,
         unsigned int lenS = 32,
-        const Amount& amount = Amount(0),
-        uint32_t flags = SCRIPT_ENABLE_SIGHASH_FORKID)
+        const Amount& amount = Amount(0))
     {
 
-        DoPush(MakeSig(script, key, sigHashType, lenR, lenS, amount, flags));
+        DoPush(MakeSig(script, key, sigHashType, lenR, lenS, amount));
         return *this;
     }
 
@@ -585,11 +594,10 @@ public:
     // Using vector of keys:  keyN ... key2, key1
     TestBuilder& PushSeparatorSigs(
         std::vector<const CKey*> keys,
-        SigHashType sigHashType = SigHashType(),
+        SigHashType sigHashType = SigHashType().withForkId(),
         unsigned int lenR = 32,
         unsigned int lenS = 32,
-        const Amount& amount = Amount(0),
-        uint32_t flags = SCRIPT_ENABLE_SIGHASH_FORKID)
+        const Amount& amount = Amount(0))
     {
 
         // splitting script of the form: 
@@ -632,7 +640,7 @@ public:
         for(auto& s : separatedScripts)
         {
             if(*keysIterator != nullptr){
-                auto sig = MakeSig(s, **keysIterator, sigHashType, lenR, lenS, amount, flags);
+                auto sig = MakeSig(s, **keysIterator, sigHashType, lenR, lenS, amount);
                 DoPush(sig);
             }
             keysIterator++;
@@ -727,11 +735,11 @@ BOOST_AUTO_TEST_CASE(script_build) {
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
                     "P2PK", 0)
-            .PushSig(keys.key0));
+            .PushSig(keys.key0, SigHashType()));
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
                     "P2PK, bad sig", 0)
-            .PushSig(keys.key0)
+            .PushSig(keys.key0, SigHashType())
             .DamagePush(10)
             .ScriptError(SCRIPT_ERR_EVAL_FALSE));
 
@@ -739,13 +747,13 @@ BOOST_AUTO_TEST_CASE(script_build) {
                                           << ToByteVector(keys.pubkey1C.GetID())
                                           << OP_EQUALVERIFY << OP_CHECKSIG,
                                 "P2PKH", 0)
-                        .PushSig(keys.key1)
+                        .PushSig(keys.key1, SigHashType())
                         .Push(keys.pubkey1C));
     tests.push_back(TestBuilder(CScript() << OP_DUP << OP_HASH160
                                           << ToByteVector(keys.pubkey2C.GetID())
                                           << OP_EQUALVERIFY << OP_CHECKSIG,
                                 "P2PKH, bad pubkey", 0)
-                        .PushSig(keys.key2)
+                        .PushSig(keys.key2, SigHashType())
                         .Push(keys.pubkey2C)
                         .DamagePush(5)
                         .ScriptError(SCRIPT_ERR_EQUALVERIFY));
@@ -764,12 +772,12 @@ BOOST_AUTO_TEST_CASE(script_build) {
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0C) << OP_CHECKSIG,
                     "P2SH(P2PK)", SCRIPT_VERIFY_P2SH, true)
-            .PushSig(keys.key0)
+            .PushSig(keys.key0, SigHashType())
             .PushRedeem());
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0C) << OP_CHECKSIG,
                     "P2SH(P2PK), bad redeemscript", SCRIPT_VERIFY_P2SH, true)
-            .PushSig(keys.key0)
+            .PushSig(keys.key0, SigHashType())
             .PushRedeem()
             .DamagePush(10)
             .ScriptError(SCRIPT_ERR_EVAL_FALSE));
@@ -778,7 +786,7 @@ BOOST_AUTO_TEST_CASE(script_build) {
                                           << ToByteVector(keys.pubkey0.GetID())
                                           << OP_EQUALVERIFY << OP_CHECKSIG,
                                 "P2SH(P2PKH)", SCRIPT_VERIFY_P2SH, true)
-                        .PushSig(keys.key0)
+                        .PushSig(keys.key0, SigHashType())
                         .Push(keys.pubkey0)
                         .PushRedeem());
     tests.push_back(TestBuilder(CScript() << OP_DUP << OP_HASH160
@@ -786,7 +794,7 @@ BOOST_AUTO_TEST_CASE(script_build) {
                                           << OP_EQUALVERIFY << OP_CHECKSIG,
                                 "P2SH(P2PKH), bad sig but no VERIFY_P2SH", 0,
                                 true)
-                        .PushSig(keys.key0)
+                        .PushSig(keys.key0, SigHashType())
                         .DamagePush(10)
                         .PushRedeem());
     tests.push_back(TestBuilder(CScript() << OP_DUP << OP_HASH160
@@ -794,7 +802,7 @@ BOOST_AUTO_TEST_CASE(script_build) {
                                           << OP_EQUALVERIFY << OP_CHECKSIG,
                                 "P2SH(P2PKH), bad sig", SCRIPT_VERIFY_P2SH,
                                 true)
-                        .PushSig(keys.key0)
+                        .PushSig(keys.key0, SigHashType())
                         .DamagePush(10)
                         .PushRedeem()
                         .ScriptError(SCRIPT_ERR_EQUALVERIFY));
@@ -805,17 +813,17 @@ BOOST_AUTO_TEST_CASE(script_build) {
                                           << OP_CHECKMULTISIG,
                                 "3-of-3", 0)
                         .Num(0)
-                        .PushSig(keys.key0)
-                        .PushSig(keys.key1)
-                        .PushSig(keys.key2));
+                        .PushSig(keys.key0, SigHashType())
+                        .PushSig(keys.key1, SigHashType())
+                        .PushSig(keys.key2, SigHashType()));
     tests.push_back(TestBuilder(CScript() << OP_3 << ToByteVector(keys.pubkey0C)
                                           << ToByteVector(keys.pubkey1C)
                                           << ToByteVector(keys.pubkey2C) << OP_3
                                           << OP_CHECKMULTISIG,
                                 "3-of-3, 2 sigs", 0)
                         .Num(0)
-                        .PushSig(keys.key0)
-                        .PushSig(keys.key1)
+                        .PushSig(keys.key0, SigHashType())
+                        .PushSig(keys.key1, SigHashType())
                         .Num(0)
                         .ScriptError(SCRIPT_ERR_EVAL_FALSE));
 
@@ -825,8 +833,8 @@ BOOST_AUTO_TEST_CASE(script_build) {
                                           << OP_CHECKMULTISIG,
                                 "P2SH(2-of-3)", SCRIPT_VERIFY_P2SH, true)
                         .Num(0)
-                        .PushSig(keys.key1)
-                        .PushSig(keys.key2)
+                        .PushSig(keys.key1, SigHashType())
+                        .PushSig(keys.key2, SigHashType())
                         .PushRedeem());
     tests.push_back(TestBuilder(CScript() << OP_2 << ToByteVector(keys.pubkey0C)
                                           << ToByteVector(keys.pubkey1C)
@@ -834,7 +842,7 @@ BOOST_AUTO_TEST_CASE(script_build) {
                                           << OP_CHECKMULTISIG,
                                 "P2SH(2-of-3), 1 sig", SCRIPT_VERIFY_P2SH, true)
                         .Num(0)
-                        .PushSig(keys.key1)
+                        .PushSig(keys.key1, SigHashType())
                         .Num(0)
                         .PushRedeem()
                         .ScriptError(SCRIPT_ERR_EVAL_FALSE));
@@ -853,13 +861,13 @@ BOOST_AUTO_TEST_CASE(script_build) {
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey1C) << OP_CHECKSIG,
                     "P2PK with too much S padding but no DERSIG", 0)
-            .PushSig(keys.key1)
+            .PushSig(keys.key1, SigHashType())
             .EditPush(1, "44", "45")
             .EditPush(37, "20", "2100"));
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey1C) << OP_CHECKSIG,
                     "P2PK with too much S padding", SCRIPT_VERIFY_DERSIG)
-            .PushSig(keys.key1)
+            .PushSig(keys.key1, SigHashType())
             .EditPush(1, "44", "45")
             .EditPush(37, "20", "2100")
             .ScriptError(SCRIPT_ERR_SIG_DER));
@@ -992,7 +1000,7 @@ BOOST_AUTO_TEST_CASE(script_build) {
                         .Num(0)
                         .PushSig(keys.key1, SigHashType(), 33, 32)
                         .EditPush(1, "45022100", "440220")
-                        .PushSig(keys.key2));
+                        .PushSig(keys.key2, SigHashType()));
     tests.push_back(TestBuilder(CScript() << OP_2 << ToByteVector(keys.pubkey1C)
                                           << ToByteVector(keys.pubkey2C) << OP_2
                                           << OP_CHECKMULTISIG,
@@ -1001,7 +1009,7 @@ BOOST_AUTO_TEST_CASE(script_build) {
                         .Num(0)
                         .PushSig(keys.key1, SigHashType(), 33, 32)
                         .EditPush(1, "45022100", "440220")
-                        .PushSig(keys.key2)
+                        .PushSig(keys.key2, SigHashType())
                         .ScriptError(SCRIPT_ERR_SIG_DER));
     tests.push_back(TestBuilder(CScript() << OP_2 << ToByteVector(keys.pubkey1C)
                                           << ToByteVector(keys.pubkey2C) << OP_2
@@ -1010,7 +1018,7 @@ BOOST_AUTO_TEST_CASE(script_build) {
                         .Num(0)
                         .PushSig(keys.key1, SigHashType(), 33, 32)
                         .EditPush(1, "45022100", "440220")
-                        .PushSig(keys.key2)
+                        .PushSig(keys.key2, SigHashType())
                         .ScriptError(SCRIPT_ERR_EVAL_FALSE));
     tests.push_back(TestBuilder(CScript() << OP_2 << ToByteVector(keys.pubkey1C)
                                           << ToByteVector(keys.pubkey2C) << OP_2
@@ -1020,7 +1028,7 @@ BOOST_AUTO_TEST_CASE(script_build) {
                         .Num(0)
                         .PushSig(keys.key1, SigHashType(), 33, 32)
                         .EditPush(1, "45022100", "440220")
-                        .PushSig(keys.key2)
+                        .PushSig(keys.key2, SigHashType())
                         .ScriptError(SCRIPT_ERR_SIG_DER));
     tests.push_back(TestBuilder(CScript() << OP_2 << ToByteVector(keys.pubkey1C)
                                           << ToByteVector(keys.pubkey2C) << OP_2
@@ -1098,13 +1106,13 @@ BOOST_AUTO_TEST_CASE(script_build) {
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey2C) << OP_CHECKSIG,
                     "P2PK with multi-byte hashtype, without DERSIG", 0)
-            .PushSig(keys.key2)
+            .PushSig(keys.key2, SigHashType())
             .EditPush(70, "01", "0101"));
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey2C) << OP_CHECKSIG,
                     "P2PK with multi-byte hashtype, with DERSIG",
                     SCRIPT_VERIFY_DERSIG)
-            .PushSig(keys.key2)
+            .PushSig(keys.key2, SigHashType())
             .EditPush(70, "01", "0101")
             .ScriptError(SCRIPT_ERR_SIG_DER));
 
@@ -1121,7 +1129,7 @@ BOOST_AUTO_TEST_CASE(script_build) {
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0H) << OP_CHECKSIG,
                     "P2PK with hybrid pubkey but no STRICTENC", 0)
-            .PushSig(keys.key0));
+            .PushSig(keys.key0, SigHashType()));
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0H) << OP_CHECKSIG,
                     "P2PK with hybrid pubkey", SCRIPT_VERIFY_STRICTENC)
@@ -1131,25 +1139,25 @@ BOOST_AUTO_TEST_CASE(script_build) {
                                           << OP_CHECKSIG << OP_NOT,
                                 "P2PK NOT with hybrid pubkey but no STRICTENC",
                                 0)
-                        .PushSig(keys.key0)
+                        .PushSig(keys.key0, SigHashType())
                         .ScriptError(SCRIPT_ERR_EVAL_FALSE));
     tests.push_back(TestBuilder(CScript() << ToByteVector(keys.pubkey0H)
                                           << OP_CHECKSIG << OP_NOT,
                                 "P2PK NOT with hybrid pubkey",
                                 SCRIPT_VERIFY_STRICTENC)
-                        .PushSig(keys.key0)
+                        .PushSig(keys.key0, SigHashType())
                         .ScriptError(SCRIPT_ERR_PUBKEYTYPE));
     tests.push_back(
         TestBuilder(CScript()
                         << ToByteVector(keys.pubkey0H) << OP_CHECKSIG << OP_NOT,
                     "P2PK NOT with invalid hybrid pubkey but no STRICTENC", 0)
-            .PushSig(keys.key0)
+            .PushSig(keys.key0, SigHashType())
             .DamagePush(10));
     tests.push_back(TestBuilder(CScript() << ToByteVector(keys.pubkey0H)
                                           << OP_CHECKSIG << OP_NOT,
                                 "P2PK NOT with invalid hybrid pubkey",
                                 SCRIPT_VERIFY_STRICTENC)
-                        .PushSig(keys.key0)
+                        .PushSig(keys.key0, SigHashType())
                         .DamagePush(10)
                         .ScriptError(SCRIPT_ERR_PUBKEYTYPE));
     tests.push_back(
@@ -1159,21 +1167,21 @@ BOOST_AUTO_TEST_CASE(script_build) {
                     "1-of-2 with the second 1 hybrid pubkey and no STRICTENC",
                     0)
             .Num(0)
-            .PushSig(keys.key1));
+            .PushSig(keys.key1, SigHashType()));
     tests.push_back(TestBuilder(CScript() << OP_1 << ToByteVector(keys.pubkey0H)
                                           << ToByteVector(keys.pubkey1C) << OP_2
                                           << OP_CHECKMULTISIG,
                                 "1-of-2 with the second 1 hybrid pubkey",
                                 SCRIPT_VERIFY_STRICTENC)
                         .Num(0)
-                        .PushSig(keys.key1));
+                        .PushSig(keys.key1, SigHashType()));
     tests.push_back(TestBuilder(CScript() << OP_1 << ToByteVector(keys.pubkey1C)
                                           << ToByteVector(keys.pubkey0H) << OP_2
                                           << OP_CHECKMULTISIG,
                                 "1-of-2 with the first 1 hybrid pubkey",
                                 SCRIPT_VERIFY_STRICTENC)
                         .Num(0)
-                        .PushSig(keys.key1)
+                        .PushSig(keys.key1, SigHashType())
                         .ScriptError(SCRIPT_ERR_PUBKEYTYPE));
 
     tests.push_back(
@@ -1192,7 +1200,7 @@ BOOST_AUTO_TEST_CASE(script_build) {
                               << ToByteVector(keys.pubkey0.GetID())
                               << OP_EQUALVERIFY << OP_CHECKSIG,
                     "P2PKH with invalid sighashtype", 0)
-            .PushSig(keys.key0, SigHashType(0x11), 32, 32, Amount(0), 0)
+            .PushSig(keys.key0, SigHashType(0x11), 32, 32, Amount(0))
             .Push(keys.pubkey0));
     tests.push_back(TestBuilder(CScript() << OP_DUP << OP_HASH160
                                           << ToByteVector(keys.pubkey0.GetID())
@@ -1200,7 +1208,7 @@ BOOST_AUTO_TEST_CASE(script_build) {
                                 "P2PKH with invalid sighashtype and STRICTENC",
                                 SCRIPT_VERIFY_STRICTENC)
                         .PushSig(keys.key0, SigHashType(0x11), 32, 32,
-                                 Amount(0), SCRIPT_VERIFY_STRICTENC)
+                                 Amount(0))
                         .Push(keys.pubkey0)
                         // Should fail for STRICTENC
                         .ScriptError(SCRIPT_ERR_SIG_HASHTYPE));
@@ -1243,9 +1251,9 @@ BOOST_AUTO_TEST_CASE(script_build) {
                                           << OP_CHECKMULTISIG,
                                 "3-of-3 with nonzero dummy but no NULLDUMMY", 0)
                         .Num(1)
-                        .PushSig(keys.key0)
-                        .PushSig(keys.key1)
-                        .PushSig(keys.key2));
+                        .PushSig(keys.key0, SigHashType())
+                        .PushSig(keys.key1, SigHashType())
+                        .PushSig(keys.key2, SigHashType()));
     tests.push_back(TestBuilder(CScript() << OP_3 << ToByteVector(keys.pubkey0C)
                                           << ToByteVector(keys.pubkey1C)
                                           << ToByteVector(keys.pubkey2C) << OP_3
@@ -1253,9 +1261,9 @@ BOOST_AUTO_TEST_CASE(script_build) {
                                 "3-of-3 with nonzero dummy",
                                 SCRIPT_VERIFY_NULLDUMMY)
                         .Num(1)
-                        .PushSig(keys.key0)
-                        .PushSig(keys.key1)
-                        .PushSig(keys.key2)
+                        .PushSig(keys.key0, SigHashType())
+                        .PushSig(keys.key1, SigHashType())
+                        .PushSig(keys.key2, SigHashType())
                         .ScriptError(SCRIPT_ERR_SIG_NULLDUMMY));
     tests.push_back(
         TestBuilder(
@@ -1265,9 +1273,9 @@ BOOST_AUTO_TEST_CASE(script_build) {
                       << OP_NOT,
             "3-of-3 NOT with invalid sig and nonzero dummy but no NULLDUMMY", 0)
             .Num(1)
-            .PushSig(keys.key0)
-            .PushSig(keys.key1)
-            .PushSig(keys.key2)
+            .PushSig(keys.key0, SigHashType())
+            .PushSig(keys.key1, SigHashType())
+            .PushSig(keys.key2, SigHashType())
             .DamagePush(10));
     tests.push_back(
         TestBuilder(CScript() << OP_3 << ToByteVector(keys.pubkey0C)
@@ -1277,9 +1285,9 @@ BOOST_AUTO_TEST_CASE(script_build) {
                     "3-of-3 NOT with invalid sig with nonzero dummy",
                     SCRIPT_VERIFY_NULLDUMMY)
             .Num(1)
-            .PushSig(keys.key0)
-            .PushSig(keys.key1)
-            .PushSig(keys.key2)
+            .PushSig(keys.key0, SigHashType())
+            .PushSig(keys.key1, SigHashType())
+            .PushSig(keys.key2, SigHashType())
             .DamagePush(10)
             .ScriptError(SCRIPT_ERR_SIG_NULLDUMMY));
 
@@ -1290,7 +1298,7 @@ BOOST_AUTO_TEST_CASE(script_build) {
                                 "pushed using OP_DUP but no SIGPUSHONLY",
                                 0)
                         .Num(0)
-                        .PushSig(keys.key1)
+                        .PushSig(keys.key1, SigHashType())
                         .Add(CScript() << OP_DUP));
     tests.push_back(
         TestBuilder(
@@ -1300,7 +1308,7 @@ BOOST_AUTO_TEST_CASE(script_build) {
             "2-of-2 with two identical keys and sigs pushed using OP_DUP",
             SCRIPT_VERIFY_SIGPUSHONLY | SCRIPT_GENESIS)
             .Num(0)
-            .PushSig(keys.key1)
+            .PushSig(keys.key1, SigHashType())
             .Add(CScript() << OP_DUP)
             .ScriptError(SCRIPT_ERR_SIG_PUSHONLY));
     tests.push_back(
@@ -1308,19 +1316,19 @@ BOOST_AUTO_TEST_CASE(script_build) {
             CScript() << ToByteVector(keys.pubkey2C) << OP_CHECKSIG,
             "P2SH(P2PK) with non-push scriptSig but no P2SH or SIGPUSHONLY", 0,
             true)
-            .PushSig(keys.key2)
+            .PushSig(keys.key2, SigHashType())
             .Add(CScript() << OP_NOP8)
             .PushRedeem());
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey2C) << OP_CHECKSIG,
                     "P2PK with non-push scriptSig but with P2SH validation", 0)
-            .PushSig(keys.key2)
+            .PushSig(keys.key2, SigHashType())
             .Add(CScript() << OP_NOP8));
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey2C) << OP_CHECKSIG,
                     "P2SH(P2PK) with non-push scriptSig but no SIGPUSHONLY",
                     SCRIPT_VERIFY_P2SH, true)
-            .PushSig(keys.key2)
+            .PushSig(keys.key2, SigHashType())
             .Add(CScript() << OP_NOP8)
             .PushRedeem()
             .ScriptError(SCRIPT_ERR_SIG_PUSHONLY));
@@ -1328,7 +1336,7 @@ BOOST_AUTO_TEST_CASE(script_build) {
         TestBuilder(CScript() << ToByteVector(keys.pubkey2C) << OP_CHECKSIG,
                     "P2SH(P2PK) with non-push scriptSig but not P2SH",
                     SCRIPT_VERIFY_SIGPUSHONLY | SCRIPT_GENESIS, true)
-            .PushSig(keys.key2)
+            .PushSig(keys.key2, SigHashType())
             .Add(CScript() << OP_NOP8)
             .PushRedeem()
             .ScriptError(SCRIPT_ERR_SIG_PUSHONLY));
@@ -1350,41 +1358,41 @@ BOOST_AUTO_TEST_CASE(script_build) {
                     "2-of-2 with two identical keys and sigs pushed",
                     SCRIPT_VERIFY_SIGPUSHONLY)
             .Num(0)
-            .PushSig(keys.key1)
-            .PushSig(keys.key1));
+            .PushSig(keys.key1, SigHashType())
+            .PushSig(keys.key1, SigHashType()));
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
                     "P2PK with unnecessary input but no CLEANSTACK",
                     SCRIPT_VERIFY_P2SH)
             .Num(11)
-            .PushSig(keys.key0));
+            .PushSig(keys.key0, SigHashType()));
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
                     "P2PK with unnecessary input",
                     SCRIPT_VERIFY_CLEANSTACK | SCRIPT_VERIFY_P2SH)
             .Num(11)
-            .PushSig(keys.key0)
+            .PushSig(keys.key0, SigHashType())
             .ScriptError(SCRIPT_ERR_CLEANSTACK));
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
                     "P2SH with unnecessary input but no CLEANSTACK",
                     SCRIPT_VERIFY_P2SH, true)
             .Num(11)
-            .PushSig(keys.key0)
+            .PushSig(keys.key0, SigHashType())
             .PushRedeem());
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
                     "P2SH with unnecessary input",
                     SCRIPT_VERIFY_CLEANSTACK | SCRIPT_VERIFY_P2SH, true)
             .Num(11)
-            .PushSig(keys.key0)
+            .PushSig(keys.key0, SigHashType())
             .PushRedeem()
             .ScriptError(SCRIPT_ERR_CLEANSTACK));
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
                     "P2SH with CLEANSTACK",
                     SCRIPT_VERIFY_CLEANSTACK | SCRIPT_VERIFY_P2SH, true)
-            .PushSig(keys.key0)
+            .PushSig(keys.key0, SigHashType())
             .PushRedeem());
 
     static const Amount TEST_AMOUNT(12345000000000);
@@ -1413,41 +1421,41 @@ BOOST_AUTO_TEST_CASE(script_build) {
                               << ToByteVector(keys.pubkey1) << OP_CHECKSIGVERIFY << OP_CODESEPARATOR
                               << ToByteVector(keys.pubkey2) << OP_CHECKSIG,
                     "OP_CODESEPARATOR tests, three separate p2pk scripts", 0)
-        .PushSeparatorSigs({&keys.key2, &keys.key1, &keys.key0}));
+        .PushSeparatorSigs({&keys.key2, &keys.key1, &keys.key0}, SigHashType()));
     tests.push_back(
         TestBuilder(CScript() << OP_TRUE << OP_VERIFY << OP_CODESEPARATOR
                               << ToByteVector(keys.pubkey0) << OP_CHECKSIGVERIFY << OP_CODESEPARATOR
                               << ToByteVector(keys.pubkey1) << OP_CHECKSIGVERIFY << OP_CODESEPARATOR
                               << ToByteVector(keys.pubkey2) << OP_CHECKSIG,
                     "OP_CODESEPARATOR tests, three separate p2pk scripts, first part is not involved in signing", 0)
-        .PushSeparatorSigs({&keys.key2, &keys.key1, &keys.key0, nullptr}));
+        .PushSeparatorSigs({&keys.key2, &keys.key1, &keys.key0, nullptr}, SigHashType()));
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIGVERIFY << OP_CODESEPARATOR
                               << OP_TRUE << OP_VERIFY << OP_CODESEPARATOR
                               << ToByteVector(keys.pubkey1) << OP_CHECKSIGVERIFY << OP_CODESEPARATOR
                               << ToByteVector(keys.pubkey2) << OP_CHECKSIG,
                     "OP_CODESEPARATOR tests, three separate p2pk scripts, second part is signed only by last sign", 0)
-        .PushSeparatorSigs({&keys.key2, &keys.key1, nullptr, &keys.key0}));
+        .PushSeparatorSigs({&keys.key2, &keys.key1, nullptr, &keys.key0}, SigHashType()));
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIGVERIFY << OP_CODESEPARATOR
                               << ToByteVector(keys.pubkey1) << OP_CHECKSIGVERIFY << OP_CODESEPARATOR
                               << ToByteVector(keys.pubkey2) << OP_CHECKSIG,
                     "OP_CODESEPARATOR tests, three separate p2pk scripts, first sign wrong", 0)
-        .PushSeparatorSigs({&keys.key1, &keys.key1, &keys.key0})
+        .PushSeparatorSigs({&keys.key1, &keys.key1, &keys.key0}, SigHashType())
         .ScriptError(SCRIPT_ERR_EVAL_FALSE));
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIGVERIFY << OP_CODESEPARATOR
                               << ToByteVector(keys.pubkey1) << OP_CHECKSIGVERIFY << OP_CODESEPARATOR
                               << ToByteVector(keys.pubkey2) << OP_CHECKSIG,
                     "OP_CODESEPARATOR tests, three separate p2pk scripts, second sign wrong", 0)
-        .PushSeparatorSigs({&keys.key2, &keys.key0, &keys.key0})
+        .PushSeparatorSigs({&keys.key2, &keys.key0, &keys.key0}, SigHashType())
         .ScriptError(SCRIPT_ERR_CHECKSIGVERIFY));
    tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIGVERIFY << OP_CODESEPARATOR
                               << ToByteVector(keys.pubkey1) << OP_CHECKSIGVERIFY << OP_CODESEPARATOR
                               << ToByteVector(keys.pubkey2) << OP_CHECKSIG,
                     "OP_CODESEPARATOR tests, three separate p2pk scripts, third sign wrong", 0)
-        .PushSeparatorSigs({&keys.key2, &keys.key1, &keys.key1})
+        .PushSeparatorSigs({&keys.key2, &keys.key1, &keys.key1}, SigHashType())
         .ScriptError(SCRIPT_ERR_CHECKSIGVERIFY));
 
     std::set<std::string> tests_set;
@@ -1557,22 +1565,15 @@ BOOST_AUTO_TEST_CASE(chronicle_pushdata_only)
     // Post-Chronicle, scriptSig only pushes, malleability disallowed
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
-                    "PostChronicle, scriptSig only pushes, malleability DISALLOWED",
-                    postChronicleFlags,
-                    false)
-            .PushSig(keys.key0,
-                     SigHashType().withForkId(),
-                     32,
-                     32,
-                     Amount{0},
-                     postChronicleFlags)
+                    "PostChronicle, scriptSig only pushes, malleability DISALLOWED", postChronicleFlags, false)
+            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0})
             .Malleability(malleability::non_malleable | malleability::disallowed)
             .ScriptError(SCRIPT_ERR_OK));
     // Post-Chronicle, scriptSig only pushes, malleability allowed
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
                 "PostChronicle, scriptSig only pushes, malleability ALLOWED", postChronicleFlags, false)
-            .PushSig(keys.key0, SigHashType().withForkId().withRelax(), 32, 32, Amount{0}, postChronicleFlags)
+            .PushSig(keys.key0, SigHashType().withForkId().withChronicle(), 32, 32, Amount{0})
             .Malleability(malleability::non_malleable)
             .ScriptError(SCRIPT_ERR_OK));
     // Post Chronicle, scriptSig only pushes, mixed-sig malleability disallowed
@@ -1583,9 +1584,9 @@ BOOST_AUTO_TEST_CASE(chronicle_pushdata_only)
                                       << OP_CHECKMULTISIG,
                 "PostChronicle, scriptSig only pushes, mixed-sig malleability DISALLOWED", postChronicleFlags, false)
             .Num(0)
-            .PushSig(keys.key0, SigHashType(), 32, 32, Amount{0}, postChronicleFlags)
-            .PushSig(keys.key1, SigHashType().withForkId().withRelax(), 32, 32, Amount{0}, postChronicleFlags)
-            .PushSig(keys.key2, SigHashType().withForkId(), 32, 32, Amount{0}, postChronicleFlags)
+            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0})
+            .PushSig(keys.key1, SigHashType().withForkId().withChronicle(), 32, 32, Amount{0})
+            .PushSig(keys.key2, SigHashType().withForkId(), 32, 32, Amount{0})
             .Malleability(malleability::non_malleable | malleability::disallowed)
             .ScriptError(SCRIPT_ERR_OK));
 
@@ -1594,7 +1595,7 @@ BOOST_AUTO_TEST_CASE(chronicle_pushdata_only)
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
                 "PostChronicle, scriptSig contains opcodes with no effect, malleability DISALLOWED", postChronicleFlags, false)
             .PushScript(CScript() << OP_FALSE << OP_IF << OP_ENDIF)
-            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0}, postChronicleFlags)
+            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0})
             .Malleability(malleability::disallowed | malleability::non_push_data)
             .ScriptError(SCRIPT_ERR_SIG_PUSHONLY));
     // Post-Chronicle, scriptSig contains opcodes with no effect, malleability allowed
@@ -1602,7 +1603,7 @@ BOOST_AUTO_TEST_CASE(chronicle_pushdata_only)
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
                 "PostChronicle, scriptSig contains opcodes with no effect, malleability ALLOWED", postChronicleFlags, false)
             .PushScript(CScript() << OP_FALSE << OP_IF << OP_ENDIF)
-            .PushSig(keys.key0, SigHashType().withForkId().withRelax(), 32, 32, Amount{0}, postChronicleFlags)
+            .PushSig(keys.key0, SigHashType().withForkId().withChronicle(), 32, 32, Amount{0})
             .Malleability(malleability::non_push_data)
             .ScriptError(SCRIPT_ERR_OK));
     // Post Chronicle, scriptSig scriptSig contains opcodes with no effect, mixed-sig malleability disallowed
@@ -1614,9 +1615,9 @@ BOOST_AUTO_TEST_CASE(chronicle_pushdata_only)
                 "PostChronicle, scriptSig scriptSig contains opcodes with no effect, mixed-sig malleability DISALLOWED", postChronicleFlags, false)
             .PushScript(CScript() << OP_FALSE << OP_IF << OP_ENDIF)
             .Num(0)
-            .PushSig(keys.key0, SigHashType(), 32, 32, Amount{0}, postChronicleFlags)
-            .PushSig(keys.key1, SigHashType().withForkId().withRelax(), 32, 32, Amount{0}, postChronicleFlags)
-            .PushSig(keys.key2, SigHashType().withForkId(), 32, 32, Amount{0}, postChronicleFlags)
+            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0})
+            .PushSig(keys.key1, SigHashType().withForkId().withChronicle(), 32, 32, Amount{0})
+            .PushSig(keys.key2, SigHashType().withForkId(), 32, 32, Amount{0})
             .Malleability(malleability::disallowed | malleability::non_push_data)
             .ScriptError(SCRIPT_ERR_SIG_PUSHONLY));
 
@@ -1625,7 +1626,7 @@ BOOST_AUTO_TEST_CASE(chronicle_pushdata_only)
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG << OP_DROP,
                 "PostChronicle, scriptSig contains opcodes that result TRUE, malleability DISALLOWED", postChronicleFlags, false)
             .PushScript(CScript() << OP_1 << OP_1 << OP_ADD)
-            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0}, postChronicleFlags)
+            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0})
             .Malleability(malleability::disallowed | malleability::non_push_data)
             .ScriptError(SCRIPT_ERR_SIG_PUSHONLY));
     // Post-Chronicle, scriptSig contains opcodes that result TRUE, malleability allowed
@@ -1633,7 +1634,7 @@ BOOST_AUTO_TEST_CASE(chronicle_pushdata_only)
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG << OP_DROP,
                 "PostChronicle, scriptSig contains opcodes that result TRUE, malleability ALLOWED", postChronicleFlags, false)
             .PushScript(CScript() << OP_1 << OP_1 << OP_ADD)
-            .PushSig(keys.key0, SigHashType().withForkId().withRelax(), 32, 32, Amount{0}, postChronicleFlags)
+            .PushSig(keys.key0, SigHashType().withForkId().withChronicle(), 32, 32, Amount{0})
             .Malleability(malleability::non_push_data)
             .ScriptError(SCRIPT_ERR_OK));
     // Post Chronicle, scriptSig scriptSig contains opcodes that result TRUE, mixed-sig malleability disallowed
@@ -1645,9 +1646,9 @@ BOOST_AUTO_TEST_CASE(chronicle_pushdata_only)
                 "PostChronicle, scriptSig scriptSig contains opcodes that result TRUE, mixed-sig malleability DISALLOWED", postChronicleFlags, false)
             .PushScript(CScript() << OP_1 << OP_1 << OP_ADD)
             .Num(0)
-            .PushSig(keys.key0, SigHashType(), 32, 32, Amount{0}, postChronicleFlags)
-            .PushSig(keys.key1, SigHashType().withForkId().withRelax(), 32, 32, Amount{0}, postChronicleFlags)
-            .PushSig(keys.key2, SigHashType().withForkId(), 32, 32, Amount{0}, postChronicleFlags)
+            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0})
+            .PushSig(keys.key1, SigHashType().withForkId().withChronicle(), 32, 32, Amount{0})
+            .PushSig(keys.key2, SigHashType().withForkId(), 32, 32, Amount{0})
             .Malleability(malleability::disallowed | malleability::non_push_data)
             .ScriptError(SCRIPT_ERR_SIG_PUSHONLY));
 
@@ -1656,16 +1657,16 @@ BOOST_AUTO_TEST_CASE(chronicle_pushdata_only)
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG << OP_DROP,
                 "PostChronicle, scriptSig contains opcodes that result FALSE, malleability DISALLOWED", postChronicleFlags, false)
             .PushScript(CScript() << OP_1 << OP_1 << OP_SUB)
-            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0}, postChronicleFlags)
-            .Malleability(malleability::non_malleable) // FALSE evaluation bails out before we even hit malleability checks
+            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0})
+            .Malleability(malleability::disallowed | malleability::non_push_data)
             .ScriptError(SCRIPT_ERR_EVAL_FALSE));
     // Post-Chronicle, scriptSig contains opcodes that result FALSE, malleability allowed
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG << OP_DROP,
                 "PostChronicle, scriptSig contains opcodes that result FALSE, malleability ALLOWED", postChronicleFlags, false)
             .PushScript(CScript() << OP_1 << OP_1 << OP_SUB)
-            .PushSig(keys.key0, SigHashType().withForkId().withRelax(), 32, 32, Amount{0}, postChronicleFlags)
-            .Malleability(malleability::non_malleable) // FALSE evaluation bails out before we even hit malleability checks
+            .PushSig(keys.key0, SigHashType().withForkId().withChronicle(), 32, 32, Amount{0})
+            .Malleability(malleability::non_push_data)
             .ScriptError(SCRIPT_ERR_EVAL_FALSE));
     // Post Chronicle, scriptSig scriptSig contains opcodes that result FALSE, mixed-sig malleability disallowed
     tests.push_back(
@@ -1676,10 +1677,10 @@ BOOST_AUTO_TEST_CASE(chronicle_pushdata_only)
                 "PostChronicle, scriptSig scriptSig contains opcodes that result FALSE, mixed-sig malleability DISALLOWED", postChronicleFlags, false)
             .PushScript(CScript() << OP_1 << OP_1 << OP_SUB)
             .Num(0)
-            .PushSig(keys.key0, SigHashType(), 32, 32, Amount{0}, postChronicleFlags)
-            .PushSig(keys.key1, SigHashType().withForkId().withRelax(), 32, 32, Amount{0}, postChronicleFlags)
-            .PushSig(keys.key2, SigHashType().withForkId(), 32, 32, Amount{0}, postChronicleFlags)
-            .Malleability(malleability::non_malleable) // FALSE evaluation bails out before we even hit malleability checks
+            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0})
+            .PushSig(keys.key1, SigHashType().withForkId().withChronicle(), 32, 32, Amount{0})
+            .PushSig(keys.key2, SigHashType().withForkId(), 32, 32, Amount{0})
+            .Malleability(malleability::disallowed | malleability::non_push_data)
             .ScriptError(SCRIPT_ERR_EVAL_FALSE));
 
     // Post-Chronicle, scriptSig contains unbalanced conditional, malleability disallowed
@@ -1687,7 +1688,7 @@ BOOST_AUTO_TEST_CASE(chronicle_pushdata_only)
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
                 "PostChronicle, scriptSig contains unbalanced conditional, malleability DISALLOWED", postChronicleFlags, false)
             .PushScript(CScript() << OP_TRUE << OP_FALSE << OP_IF)
-            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0}, postChronicleFlags)
+            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0})
             .Malleability(malleability::non_malleable) // Unbalanced IF/ELSE bails out before we even hit malleability checks
             .ScriptError(SCRIPT_ERR_UNBALANCED_CONDITIONAL));
     // Post-Chronicle, scriptSig contains unbalanced conditional, malleability allowed
@@ -1695,7 +1696,7 @@ BOOST_AUTO_TEST_CASE(chronicle_pushdata_only)
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
                 "PostChronicle, scriptSig contains unbalanced conditional, malleability ALLOWED", postChronicleFlags, false)
             .PushScript(CScript() << OP_TRUE << OP_FALSE << OP_IF)
-            .PushSig(keys.key0, SigHashType().withForkId().withRelax(), 32, 32, Amount{0}, postChronicleFlags)
+            .PushSig(keys.key0, SigHashType().withForkId().withChronicle(), 32, 32, Amount{0})
             .Malleability(malleability::non_malleable) // Unbalanced IF/ELSE bails out before we even hit malleability checks
             .ScriptError(SCRIPT_ERR_UNBALANCED_CONDITIONAL));
     // Post Chronicle, scriptSig scriptSig contains unbalanced conditional, mixed-sig malleability disallowed
@@ -1707,9 +1708,9 @@ BOOST_AUTO_TEST_CASE(chronicle_pushdata_only)
                 "PostChronicle, scriptSig scriptSig contains unbalanced conditional, mixed-sig malleability DISALLOWED", postChronicleFlags, false)
             .PushScript(CScript() << OP_TRUE << OP_FALSE << OP_IF)
             .Num(0)
-            .PushSig(keys.key0, SigHashType(), 32, 32, Amount{0}, postChronicleFlags)
-            .PushSig(keys.key1, SigHashType().withForkId().withRelax(), 32, 32, Amount{0}, postChronicleFlags)
-            .PushSig(keys.key2, SigHashType().withForkId(), 32, 32, Amount{0}, postChronicleFlags)
+            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0})
+            .PushSig(keys.key1, SigHashType().withForkId().withChronicle(), 32, 32, Amount{0})
+            .PushSig(keys.key2, SigHashType().withForkId(), 32, 32, Amount{0})
             .Malleability(malleability::non_malleable) // Unbalanced IF/ELSE bails out before we even hit malleability checks
             .ScriptError(SCRIPT_ERR_UNBALANCED_CONDITIONAL));
 
@@ -1730,21 +1731,21 @@ BOOST_AUTO_TEST_CASE(chronicle_pushdata_only)
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
                 "PreChronicle, old pushonly rules apply 1", preChronicleFlags, false)
             .PushScript(CScript() << OP_FALSE << OP_IF << OP_ENDIF)
-            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0}, preChronicleFlags)
+            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0})
             .Malleability(malleability::disallowed | malleability::non_push_data)
             .ScriptError(SCRIPT_ERR_SIG_PUSHONLY));
    tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
                 "PreChronicle, old pushonly rules apply 2", preChronicleFlags, false)
             .PushScript(CScript() << OP_RETURN)
-            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0}, preChronicleFlags)
+            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0})
             .Malleability(malleability::non_malleable) // RETURN leaves invalid stack before we even hit malleability checks
             .ScriptError(SCRIPT_ERR_INVALID_STACK_OPERATION));
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
                 "PreChronicle, old pushonly rules apply 3", preChronicleFlags, false)
             .PushScript(CScript() << OP_NOP)
-            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0}, preChronicleFlags)
+            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0})
             .Malleability(malleability::disallowed | malleability::non_push_data)
             .ScriptError(SCRIPT_ERR_SIG_PUSHONLY));
 
@@ -1756,7 +1757,7 @@ BOOST_AUTO_TEST_CASE(chronicle_pushdata_only)
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
                 "PreGenesis, scriptSig only pushes", preGenesisFlags, false)
-            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0}, preGenesisFlags)
+            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0})
             .Malleability(malleability::non_malleable | malleability::disallowed)
             .ScriptError(SCRIPT_ERR_OK));
     // Pre-Genesis, scriptSig non-push only
@@ -1764,7 +1765,7 @@ BOOST_AUTO_TEST_CASE(chronicle_pushdata_only)
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
                 "PreGenesis, scriptSig non-push only", preGenesisFlags, false)
             .PushScript(CScript() << OP_NOP)
-            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0}, preGenesisFlags)
+            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0})
             .Malleability(malleability::non_push_data | malleability::disallowed)
             .ScriptError(SCRIPT_ERR_OK));   // Pre-Genesis, non-push data was allowed in unlocking script
 
@@ -1776,7 +1777,7 @@ BOOST_AUTO_TEST_CASE(chronicle_pushdata_only)
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
                 "PreForkID, scriptSig only pushes", preForkIDFlags, false)
-            .PushSig(keys.key0, SigHashType(), 32, 32, Amount{0}, preForkIDFlags)
+            .PushSig(keys.key0, SigHashType(), 32, 32, Amount{0})
             .Malleability(malleability::non_malleable)
             .ScriptError(SCRIPT_ERR_OK));
     // Pre-ForkID, scriptSig non-push only
@@ -1784,7 +1785,7 @@ BOOST_AUTO_TEST_CASE(chronicle_pushdata_only)
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
                 "PreForkID, scriptSig non-push only", preForkIDFlags, false)
             .PushScript(CScript() << OP_NOP)
-            .PushSig(keys.key0, SigHashType(), 32, 32, Amount{0}, preForkIDFlags)
+            .PushSig(keys.key0, SigHashType(), 32, 32, Amount{0})
             .Malleability(malleability::non_push_data)
             .ScriptError(SCRIPT_ERR_OK));
 
@@ -1811,14 +1812,14 @@ BOOST_AUTO_TEST_CASE(chronicle_clean_stack)
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
                 "PostChronicle, stack is clean, malleability DISALLOWED", postChronicleFlags, false)
-            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0}, postChronicleFlags)
+            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0})
             .Malleability(malleability::disallowed | malleability::non_malleable)
             .ScriptError(SCRIPT_ERR_OK));
     // Post-Chronicle, stack is clean, malleability allowed
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
                 "PostChronicle, stack is clean, malleability ALLOWED", postChronicleFlags, false)
-            .PushSig(keys.key0, SigHashType().withForkId().withRelax(), 32, 32, Amount{0}, postChronicleFlags)
+            .PushSig(keys.key0, SigHashType().withForkId().withChronicle(), 32, 32, Amount{0})
             .Malleability(malleability::non_malleable)
             .ScriptError(SCRIPT_ERR_OK));
     // Post-Chronicle, stack is clean, mixed-sig malleability disallowed
@@ -1829,9 +1830,9 @@ BOOST_AUTO_TEST_CASE(chronicle_clean_stack)
                                       << OP_CHECKMULTISIG,
                 "PostChronicle, stack is clean, mixed-sig malleability DISALLOWED", postChronicleFlags, false)
             .Num(0)
-            .PushSig(keys.key0, SigHashType(), 32, 32, Amount{0}, postChronicleFlags)
-            .PushSig(keys.key1, SigHashType(), 32, 32, Amount{0}, postChronicleFlags)
-            .PushSig(keys.key2, SigHashType().withForkId(), 32, 32, Amount{0}, postChronicleFlags)
+            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0})
+            .PushSig(keys.key1, SigHashType().withForkId(), 32, 32, Amount{0})
+            .PushSig(keys.key2, SigHashType().withForkId().withChronicle(), 32, 32, Amount{0})
             .Malleability(malleability::disallowed | malleability::non_malleable)
             .ScriptError(SCRIPT_ERR_OK));
 
@@ -1839,14 +1840,14 @@ BOOST_AUTO_TEST_CASE(chronicle_clean_stack)
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG << OP_TRUE,
                 "PostChronicle, stack is unclean (top item true), malleability DISALLOWED", postChronicleFlags, false)
-            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0}, postChronicleFlags)
+            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0})
             .Malleability(malleability::disallowed | malleability::unclean_stack)
             .ScriptError(SCRIPT_ERR_CLEANSTACK));
     // Post-Chronicle, stack is unclean (top item true), malleability allowed
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG << OP_TRUE,
                 "PostChronicle, stack is unclean (top item true), malleability ALLOWED", postChronicleFlags, false)
-            .PushSig(keys.key0, SigHashType().withForkId().withRelax(), 32, 32, Amount{0}, postChronicleFlags)
+            .PushSig(keys.key0, SigHashType().withForkId().withChronicle(), 32, 32, Amount{0})
             .Malleability(malleability::unclean_stack)
             .ScriptError(SCRIPT_ERR_OK));
     // Post-Chronicle, stack is unclean (top item true), mixed-sig malleability disallowed
@@ -1857,9 +1858,9 @@ BOOST_AUTO_TEST_CASE(chronicle_clean_stack)
                                       << OP_CHECKMULTISIG << OP_TRUE,
                 "PostChronicle, stack is unclean (top item true), mixed-sig malleability DISALLOWED", postChronicleFlags, false)
             .Num(0)
-            .PushSig(keys.key0, SigHashType(), 32, 32, Amount{0}, postChronicleFlags)
-            .PushSig(keys.key1, SigHashType().withForkId().withRelax(), 32, 32, Amount{0}, postChronicleFlags)
-            .PushSig(keys.key2, SigHashType().withForkId(), 32, 32, Amount{0}, postChronicleFlags)
+            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0})
+            .PushSig(keys.key1, SigHashType().withForkId().withChronicle(), 32, 32, Amount{0})
+            .PushSig(keys.key2, SigHashType().withForkId(), 32, 32, Amount{0})
             .Malleability(malleability::disallowed | malleability::unclean_stack)
             .ScriptError(SCRIPT_ERR_CLEANSTACK));
 
@@ -1867,14 +1868,14 @@ BOOST_AUTO_TEST_CASE(chronicle_clean_stack)
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG << OP_FALSE,
                 "PostChronicle, stack is unclean (top item false), malleability DISALLOWED", postChronicleFlags, false)
-            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0}, postChronicleFlags)
-            .Malleability(malleability::non_malleable) // FALSE check occurs before we even hit malleability checks
+            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0})
+            .Malleability(malleability::disallowed) // FALSE check occurs before we even hit malleability checks
             .ScriptError(SCRIPT_ERR_EVAL_FALSE));
     // Post-Chronicle, stack is unclean (top item false), malleability allowed
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG << OP_FALSE,
                 "PostChronicle, stack is unclean (top item false), malleability ALLOWED", postChronicleFlags, false)
-            .PushSig(keys.key0, SigHashType().withForkId().withRelax(), 32, 32, Amount{0}, postChronicleFlags)
+            .PushSig(keys.key0, SigHashType().withForkId().withChronicle(), 32, 32, Amount{0})
             .Malleability(malleability::non_malleable) // FALSE check occurs before we even hit malleability checks
             .ScriptError(SCRIPT_ERR_EVAL_FALSE));
     // Post-Chronicle, stack is unclean (top item false), mixed-sig malleability disallowed
@@ -1885,24 +1886,24 @@ BOOST_AUTO_TEST_CASE(chronicle_clean_stack)
                                       << OP_CHECKMULTISIG << OP_FALSE,
                 "PostChronicle, stack is unclean (top item false), mixed-sig malleability DISALLOWED", postChronicleFlags, false)
             .Num(0)
-            .PushSig(keys.key0, SigHashType(), 32, 32, Amount{0}, postChronicleFlags)
-            .PushSig(keys.key1, SigHashType().withForkId().withRelax(), 32, 32, Amount{0}, postChronicleFlags)
-            .PushSig(keys.key2, SigHashType().withForkId(), 32, 32, Amount{0}, postChronicleFlags)
-            .Malleability(malleability::non_malleable) // FALSE check occurs before we even hit malleability checks
+            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0})
+            .PushSig(keys.key1, SigHashType().withForkId().withChronicle(), 32, 32, Amount{0})
+            .PushSig(keys.key2, SigHashType().withForkId(), 32, 32, Amount{0})
+            .Malleability(malleability::disallowed) // FALSE check occurs before we even hit malleability checks
             .ScriptError(SCRIPT_ERR_EVAL_FALSE));
 
     // Post-Chronicle, stack is unclean (multiple items, top item true), malleability disallowed
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG << OP_TRUE << OP_TRUE,
                 "PostChronicle, stack is unclean (multiple items, top item true), malleability DISALLOWED", postChronicleFlags, false)
-            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0}, postChronicleFlags)
+            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0})
             .Malleability(malleability::disallowed | malleability::unclean_stack)
             .ScriptError(SCRIPT_ERR_CLEANSTACK));
     // Post-Chronicle, stack is unclean (multiple items, top item true), malleability allowed
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG << OP_TRUE << OP_TRUE,
                 "PostChronicle, stack is unclean (multiple items, top item true), malleability ALLOWED", postChronicleFlags, false)
-            .PushSig(keys.key0, SigHashType().withForkId().withRelax(), 32, 32, Amount{0}, postChronicleFlags)
+            .PushSig(keys.key0, SigHashType().withForkId().withChronicle(), 32, 32, Amount{0})
             .Malleability(malleability::unclean_stack)
             .ScriptError(SCRIPT_ERR_OK));
     // Post-Chronicle, stack is unclean (multiple items, top item true), mixed-sig malleability disallowed
@@ -1913,9 +1914,9 @@ BOOST_AUTO_TEST_CASE(chronicle_clean_stack)
                                       << OP_CHECKMULTISIG << OP_TRUE << OP_TRUE,
                 "PostChronicle, stack is unclean (multiple items, top item true), mixed-sig malleability DISALLOWED", postChronicleFlags, false)
             .Num(0)
-            .PushSig(keys.key0, SigHashType(), 32, 32, Amount{0}, postChronicleFlags)
-            .PushSig(keys.key1, SigHashType().withForkId().withRelax(), 32, 32, Amount{0}, postChronicleFlags)
-            .PushSig(keys.key2, SigHashType().withForkId(), 32, 32, Amount{0}, postChronicleFlags)
+            .PushSig(keys.key0, SigHashType().withForkId().withChronicle(), 32, 32, Amount{0})
+            .PushSig(keys.key1, SigHashType().withForkId(), 32, 32, Amount{0})
+            .PushSig(keys.key2, SigHashType().withForkId(), 32, 32, Amount{0})
             .Malleability(malleability::disallowed | malleability::unclean_stack)
             .ScriptError(SCRIPT_ERR_CLEANSTACK));
 
@@ -1923,14 +1924,14 @@ BOOST_AUTO_TEST_CASE(chronicle_clean_stack)
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG << OP_TRUE << OP_FALSE,
                 "PostChronicle, stack is unclean (multiple items, top item false), malleability DISALLOWED", postChronicleFlags, false)
-            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0}, postChronicleFlags)
-            .Malleability(malleability::non_malleable) // FALSE check occurs before we even hit malleability checks
+            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0})
+            .Malleability(malleability::disallowed) // FALSE check occurs before we even hit malleability checks
             .ScriptError(SCRIPT_ERR_EVAL_FALSE));
     // Post-Chronicle, stack is unclean (multiple items, top item false), malleability allowed
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG << OP_TRUE << OP_FALSE,
                 "PostChronicle, stack is unclean (multiple items, top item false), malleability ALLOWED", postChronicleFlags, false)
-            .PushSig(keys.key0, SigHashType().withForkId().withRelax(), 32, 32, Amount{0}, postChronicleFlags)
+            .PushSig(keys.key0, SigHashType().withForkId().withChronicle(), 32, 32, Amount{0})
             .Malleability(malleability::non_malleable) // FALSE check occurs before we even hit malleability checks
             .ScriptError(SCRIPT_ERR_EVAL_FALSE));
     // Post-Chronicle, stack is unclean (multiple items, top item false), mixed-sig malleability disallowed
@@ -1941,24 +1942,24 @@ BOOST_AUTO_TEST_CASE(chronicle_clean_stack)
                                       << OP_CHECKMULTISIG << OP_TRUE << OP_FALSE,
                 "PostChronicle, stack is unclean (multiple items, top item false), mixed-sig malleability DISALLOWED", postChronicleFlags, false)
             .Num(0)
-            .PushSig(keys.key0, SigHashType(), 32, 32, Amount{0}, postChronicleFlags)
-            .PushSig(keys.key1, SigHashType().withForkId().withRelax(), 32, 32, Amount{0}, postChronicleFlags)
-            .PushSig(keys.key2, SigHashType().withForkId(), 32, 32, Amount{0}, postChronicleFlags)
-            .Malleability(malleability::non_malleable) // FALSE check occurs before we even hit malleability checks
+            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0})
+            .PushSig(keys.key1, SigHashType().withForkId().withChronicle(), 32, 32, Amount{0})
+            .PushSig(keys.key2, SigHashType().withForkId(), 32, 32, Amount{0})
+            .Malleability(malleability::disallowed) // FALSE check occurs before we even hit malleability checks
             .ScriptError(SCRIPT_ERR_EVAL_FALSE));
 
     // Post-Chronicle, stack is unclean (multiple items, top item castable true), malleability disallowed
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG << OP_TRUE << OP_9,
                 "PostChronicle, stack is unclean (multiple items, top item castable true), malleability DISALLOWED", postChronicleFlags, false)
-            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0}, postChronicleFlags)
+            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0})
             .Malleability(malleability::disallowed | malleability::unclean_stack)
             .ScriptError(SCRIPT_ERR_CLEANSTACK));
     // Post-Chronicle, stack is unclean (multiple items, top item castable true), malleability allowed
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG << OP_TRUE << OP_9,
                 "PostChronicle, stack is unclean (multiple items, top item castable true), malleability ALLOWED", postChronicleFlags, false)
-            .PushSig(keys.key0, SigHashType().withForkId().withRelax(), 32, 32, Amount{0}, postChronicleFlags)
+            .PushSig(keys.key0, SigHashType().withForkId().withChronicle(), 32, 32, Amount{0})
             .Malleability(malleability::unclean_stack)
             .ScriptError(SCRIPT_ERR_OK));
     // Post-Chronicle, stack is unclean (multiple items, top item castable true), mixed-sig malleability disallowed
@@ -1969,9 +1970,9 @@ BOOST_AUTO_TEST_CASE(chronicle_clean_stack)
                                       << OP_CHECKMULTISIG << OP_TRUE << OP_9,
                 "PostChronicle, stack is unclean (multiple items, top item castable true), mixed-sig malleability DISALLOWED", postChronicleFlags, false)
             .Num(0)
-            .PushSig(keys.key0, SigHashType(), 32, 32, Amount{0}, postChronicleFlags)
-            .PushSig(keys.key1, SigHashType().withForkId().withRelax(), 32, 32, Amount{0}, postChronicleFlags)
-            .PushSig(keys.key2, SigHashType().withForkId(), 32, 32, Amount{0}, postChronicleFlags)
+            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0})
+            .PushSig(keys.key1, SigHashType().withForkId().withChronicle(), 32, 32, Amount{0})
+            .PushSig(keys.key2, SigHashType().withForkId(), 32, 32, Amount{0})
             .Malleability(malleability::disallowed | malleability::unclean_stack)
             .ScriptError(SCRIPT_ERR_CLEANSTACK));
 
@@ -1983,16 +1984,391 @@ BOOST_AUTO_TEST_CASE(chronicle_clean_stack)
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
                 "PreChronicle, stack is clean", preChronicleFlags, false)
-            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0}, preChronicleFlags)
+            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0})
             .Malleability(malleability::disallowed | malleability::non_malleable)
             .ScriptError(SCRIPT_ERR_OK));
     // Pre-Chronicle, stack is unclean
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG << OP_TRUE,
                 "PreChronicle, stack is unclean", preChronicleFlags, false)
-            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0}, preChronicleFlags)
+            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0})
             .Malleability(malleability::disallowed | malleability::unclean_stack)
             .ScriptError(SCRIPT_ERR_CLEANSTACK));
+
+    for (TestBuilder& test : tests)
+    {
+        test.Test();
+    }
+}
+
+BOOST_AUTO_TEST_CASE(chronicle_nullfail)
+{
+    const KeyData keys;
+
+    std::vector<TestBuilder> tests;
+
+    auto preChronicleFlags { StandardScriptVerifyFlags(ProtocolEra::PostGenesis) | InputScriptVerifyFlags(ProtocolEra::PostGenesis, ProtocolEra::PostGenesis) };
+    auto postChronicleFlags { StandardScriptVerifyFlags(ProtocolEra::PostChronicle) | InputScriptVerifyFlags(ProtocolEra::PostChronicle, ProtocolEra::PostChronicle) };
+
+    /************************/
+    /* Post Chronicle Tests */
+    /************************/
+
+    // Post-Chronicle, single signature, good signature, malleability disallowed
+    tests.push_back(
+        TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
+                "Post-Chronicle, NULLFAIL, single signature, good signature, malleability disallowed", postChronicleFlags, false)
+            .PushSig(keys.key0, SigHashType().withForkId())
+            .Malleability(malleability::disallowed | malleability::non_malleable)
+            .ScriptError(SCRIPT_ERR_OK));
+    // Post-Chronicle, single signature, good signature, malleability allowed
+    tests.push_back(
+        TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
+                "Post-Chronicle, NULLFAIL, single signature, good signature, malleability allowed", postChronicleFlags, false)
+            .PushSig(keys.key0, SigHashType().withForkId().withChronicle())
+            .Malleability(malleability::non_malleable)
+            .ScriptError(SCRIPT_ERR_OK));
+
+    // Post-Chronicle, single signature, bad signature (non-null), script returns false, malleability disallowed
+    tests.push_back(
+        TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
+                "Post-Chronicle, NULLFAIL, single signature, bad signature (non-null), script returns false, malleability disallowed", postChronicleFlags, false)
+            .PushSig(keys.key1, SigHashType().withForkId())
+            .Malleability(malleability::non_malleable)  // Bad signature skips malleability checks
+            .ScriptError(SCRIPT_ERR_SIG_NULLFAIL));
+    // Post-Chronicle, single signature, bad signature (null), script returns false, malleability unspecified
+    tests.push_back(
+        TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
+                "Post-Chronicle, NULLFAIL, single signature, bad signature (null), script returns false, malleability unspecified", postChronicleFlags, false)
+            .Num(0)
+            .Malleability(malleability::non_malleable)
+            .ScriptError(SCRIPT_ERR_EVAL_FALSE));
+    // Post-Chronicle, single signature, bad signature (non-null), script returns false, malleability allowed
+    tests.push_back(
+        TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
+                "Post-Chronicle, NULLFAIL, single signature, bad signature (non-null), script returns false, malleability allowed", postChronicleFlags, false)
+            .PushSig(keys.key1, SigHashType().withForkId().withChronicle())
+            .Malleability(malleability::null_fail)
+            .ScriptError(SCRIPT_ERR_EVAL_FALSE));
+
+    // Post-Chronicle, single signature, bad signature (non-null), script returns true, malleability disallowed
+    tests.push_back(
+        TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG << OP_NOT,
+                "Post-Chronicle, NULLFAIL, single signature, bad signature (non-null), script returns true, malleability disallowed", postChronicleFlags, false)
+            .PushSig(keys.key1, SigHashType().withForkId())
+            .Malleability(malleability::non_malleable)  // Bad signature skips malleability checks
+            .ScriptError(SCRIPT_ERR_SIG_NULLFAIL));
+    // Post-Chronicle, single signature, bad signature (null), script returns true, malleability unspecified
+    tests.push_back(
+        TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG << OP_NOT,
+                "Post-Chronicle, NULLFAIL, single signature, bad signature (null), script returns true, malleability unspecified", postChronicleFlags, false)
+            .Num(0)
+            .Malleability(malleability::non_malleable)
+            .ScriptError(SCRIPT_ERR_OK));
+    // Post-Chronicle, single signature, bad signature (non-null), script returns true, malleability allowed
+    tests.push_back(
+        TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG << OP_NOT,
+                "Post-Chronicle, NULLFAIL, single signature, bad signature (non-null), script returns true, malleability allowed", postChronicleFlags, false)
+            .PushSig(keys.key1, SigHashType().withForkId().withChronicle())
+            .Malleability(malleability::null_fail)
+            .ScriptError(SCRIPT_ERR_OK));
+
+    // Post-Chronicle, multiple signatures, good signatures, malleability disallowed (only on 1 sig)
+    tests.push_back(
+        TestBuilder(CScript() << OP_3 << ToByteVector(keys.pubkey0C)
+                                      << ToByteVector(keys.pubkey1C)
+                                      << ToByteVector(keys.pubkey2C) << OP_3
+                                      << OP_CHECKMULTISIG,
+                "Post-Chronicle, NULLFAIL, multiple signatures, good signatures, malleability disallowed (only on 1 sig)", postChronicleFlags, false)
+            .Num(0)
+            .PushSig(keys.key0, SigHashType().withForkId())
+            .PushSig(keys.key1, SigHashType().withForkId().withChronicle())
+            .PushSig(keys.key2, SigHashType().withForkId().withChronicle())
+            .Malleability(malleability::disallowed | malleability::non_malleable)
+            .ScriptError(SCRIPT_ERR_OK));
+    // Post-Chronicle, multiple signatures, good signatures, malleability allowed (only on 1 sig)
+    tests.push_back(
+        TestBuilder(CScript() << OP_3 << ToByteVector(keys.pubkey0C)
+                                      << ToByteVector(keys.pubkey1C)
+                                      << ToByteVector(keys.pubkey2C) << OP_3
+                                      << OP_CHECKMULTISIG,
+                "Post-Chronicle, NULLFAIL, multiple signatures, good signatures, malleability allowed (only on 1 sig)", postChronicleFlags, false)
+            .Num(0)
+            .PushSig(keys.key0, SigHashType().withForkId())
+            .PushSig(keys.key1, SigHashType().withForkId().withChronicle())
+            .PushSig(keys.key2, SigHashType().withForkId())
+            .Malleability(malleability::disallowed | malleability::non_malleable)
+            .ScriptError(SCRIPT_ERR_OK));
+
+    // Post-Chronicle, multiple signatures, good signatures, malleability disallowed (on all sigs)
+    tests.push_back(
+        TestBuilder(CScript() << OP_3 << ToByteVector(keys.pubkey0C)
+                                      << ToByteVector(keys.pubkey1C)
+                                      << ToByteVector(keys.pubkey2C) << OP_3
+                                      << OP_CHECKMULTISIG,
+                "Post-Chronicle, NULLFAIL, multiple signatures, good signatures, malleability disallowed (on all sigs)", postChronicleFlags, false)
+            .Num(0)
+            .PushSig(keys.key0, SigHashType().withForkId())
+            .PushSig(keys.key1, SigHashType().withForkId())
+            .PushSig(keys.key2, SigHashType().withForkId())
+            .Malleability(malleability::disallowed | malleability::non_malleable)
+            .ScriptError(SCRIPT_ERR_OK));
+    // Post-Chronicle, multiple signatures, good signatures, malleability allowed (on all sigs)
+    tests.push_back(
+        TestBuilder(CScript() << OP_3 << ToByteVector(keys.pubkey0C)
+                                      << ToByteVector(keys.pubkey1C)
+                                      << ToByteVector(keys.pubkey2C) << OP_3
+                                      << OP_CHECKMULTISIG,
+                "Post-Chronicle, NULLFAIL, multiple signatures, good signatures, malleability allowed (on all sigs)", postChronicleFlags, false)
+            .Num(0)
+            .PushSig(keys.key0, SigHashType().withForkId().withChronicle())
+            .PushSig(keys.key1, SigHashType().withForkId().withChronicle())
+            .PushSig(keys.key2, SigHashType().withForkId().withChronicle())
+            .Malleability(malleability::non_malleable)
+            .ScriptError(SCRIPT_ERR_OK));
+
+    // Post-Chronicle, multiple signatures, bad signature (non-null), script returns false, malleability disallowed on bad sig, allowed on others
+    tests.push_back(
+        TestBuilder(CScript() << OP_3 << ToByteVector(keys.pubkey0C)
+                                      << ToByteVector(keys.pubkey1C)
+                                      << ToByteVector(keys.pubkey2C) << OP_3
+                                      << OP_CHECKMULTISIG,
+                "Post-Chronicle, NULLFAIL, multiple signatures, bad signature (non-null), script returns false, malleability disallowed on bad sig, allowed on others", postChronicleFlags, false)
+            .Num(0)
+            .PushSig(keys.key0, SigHashType().withForkId().withChronicle())
+            .PushSig(keys.key0, SigHashType().withForkId())
+            .PushSig(keys.key2, SigHashType().withForkId().withChronicle())
+            .Malleability(malleability::non_malleable)  // Bad signature skips malleability checks
+            .ScriptError(SCRIPT_ERR_SIG_NULLFAIL));
+    // Post-Chronicle, multiple signatures, bad signature (non-null), script returns false, malleability allowed on bad sig, disallowed on others
+    tests.push_back(
+        TestBuilder(CScript() << OP_3 << ToByteVector(keys.pubkey0C)
+                                      << ToByteVector(keys.pubkey1C)
+                                      << ToByteVector(keys.pubkey2C) << OP_3
+                                      << OP_CHECKMULTISIG,
+                "Post-Chronicle, NULLFAIL, multiple signatures, bad signature (non-null), script returns false, malleability allowed on bad sig, disallowed on others", postChronicleFlags, false)
+            .Num(0)
+            .PushSig(keys.key0, SigHashType().withForkId())
+            .PushSig(keys.key0, SigHashType().withForkId().withChronicle())
+            .PushSig(keys.key2, SigHashType().withForkId())
+            .Malleability(malleability::non_malleable)  // Bad signature skips malleability checks
+            .ScriptError(SCRIPT_ERR_SIG_NULLFAIL));
+    // Post-Chronicle, multiple signatures, bad signature (non-null), script returns false, malleability allowed on all sigs
+    tests.push_back(
+        TestBuilder(CScript() << OP_3 << ToByteVector(keys.pubkey0C)
+                                      << ToByteVector(keys.pubkey1C)
+                                      << ToByteVector(keys.pubkey2C) << OP_3
+                                      << OP_CHECKMULTISIG,
+                "Post-Chronicle, NULLFAIL, multiple signatures, bad signature (non-null), script returns false, malleability allowed on all sigs", postChronicleFlags, false)
+            .Num(0)
+            .PushSig(keys.key0, SigHashType().withForkId().withChronicle())
+            .PushSig(keys.key0, SigHashType().withForkId().withChronicle())
+            .PushSig(keys.key2, SigHashType().withForkId().withChronicle())
+            .Malleability(malleability::null_fail)
+            .ScriptError(SCRIPT_ERR_EVAL_FALSE));
+    // Post-Chronicle, multiple signatures, bad signature (null), script returns false, malleability unspecified on bad sig, allowed on others
+    tests.push_back(
+        TestBuilder(CScript() << OP_3 << ToByteVector(keys.pubkey0C)
+                                      << ToByteVector(keys.pubkey1C)
+                                      << ToByteVector(keys.pubkey2C) << OP_3
+                                      << OP_CHECKMULTISIG,
+                "Post-Chronicle, NULLFAIL, multiple signatures, bad signature (null), script returns false, malleability unspecified on bad sig, allowed on others", postChronicleFlags, false)
+            .Num(0)
+            .PushSig(keys.key0, SigHashType().withForkId().withChronicle())
+            .Num(0)
+            .PushSig(keys.key2, SigHashType().withForkId().withChronicle())
+            .Malleability(malleability::null_fail)
+            .ScriptError(SCRIPT_ERR_EVAL_FALSE));
+    // Post-Chronicle, multiple signatures, bad signature (null), script returns false, malleability unspecified on bad sig, disallowed on others
+    tests.push_back(
+        TestBuilder(CScript() << OP_3 << ToByteVector(keys.pubkey0C)
+                                      << ToByteVector(keys.pubkey1C)
+                                      << ToByteVector(keys.pubkey2C) << OP_3
+                                      << OP_CHECKMULTISIG,
+                "Post-Chronicle, NULLFAIL, multiple signatures, bad signature (null), script returns false, malleability unspecified on bad sig, disallowed on others", postChronicleFlags, false)
+            .Num(0)
+            .PushSig(keys.key0, SigHashType().withForkId())
+            .Num(0)
+            .PushSig(keys.key2, SigHashType().withForkId())
+            .Malleability(malleability::non_malleable)  // Bad signature skips malleability checks
+            .ScriptError(SCRIPT_ERR_SIG_NULLFAIL));
+
+    // Post-Chronicle, multiple signatures, bad signature (non-null), script returns true, malleability disallowed on bad sig, allowed on others
+    tests.push_back(
+        TestBuilder(CScript() << OP_3 << ToByteVector(keys.pubkey0C)
+                                      << ToByteVector(keys.pubkey1C)
+                                      << ToByteVector(keys.pubkey2C) << OP_3
+                                      << OP_CHECKMULTISIG << OP_NOT,
+                "Post-Chronicle, NULLFAIL, multiple signatures, bad signature (non-null), script returns true, malleability disallowed on bad sig, allowed on others", postChronicleFlags, false)
+            .Num(0)
+            .PushSig(keys.key0, SigHashType().withForkId().withChronicle())
+            .PushSig(keys.key0, SigHashType().withForkId())
+            .PushSig(keys.key2, SigHashType().withForkId().withChronicle())
+            .Malleability(malleability::non_malleable)  // Bad signature skips malleability checks
+            .ScriptError(SCRIPT_ERR_SIG_NULLFAIL));
+    // Post-Chronicle, multiple signatures, bad signature (non-null), script returns true, malleability allowed on bad sig, disallowed on others
+    tests.push_back(
+        TestBuilder(CScript() << OP_3 << ToByteVector(keys.pubkey0C)
+                                      << ToByteVector(keys.pubkey1C)
+                                      << ToByteVector(keys.pubkey2C) << OP_3
+                                      << OP_CHECKMULTISIG << OP_NOT,
+                "Post-Chronicle, NULLFAIL, multiple signatures, bad signature (non-null), script returns true, malleability allowed on bad sig, disallowed on others", postChronicleFlags, false)
+            .Num(0)
+            .PushSig(keys.key0, SigHashType().withForkId())
+            .PushSig(keys.key0, SigHashType().withForkId().withChronicle())
+            .PushSig(keys.key2, SigHashType().withForkId())
+            .Malleability(malleability::non_malleable)  // Bad signature skips malleability checks
+            .ScriptError(SCRIPT_ERR_SIG_NULLFAIL));
+    // Post-Chronicle, multiple signatures, bad signature (non-null), script returns true, malleability allowed on all sigs
+    tests.push_back(
+        TestBuilder(CScript() << OP_3 << ToByteVector(keys.pubkey0C)
+                                      << ToByteVector(keys.pubkey1C)
+                                      << ToByteVector(keys.pubkey2C) << OP_3
+                                      << OP_CHECKMULTISIG << OP_NOT,
+                "Post-Chronicle, NULLFAIL, multiple signatures, bad signature (non-null), script returns true, malleability allowed on all sigs", postChronicleFlags, false)
+            .Num(0)
+            .PushSig(keys.key0, SigHashType().withForkId().withChronicle())
+            .PushSig(keys.key0, SigHashType().withForkId().withChronicle())
+            .PushSig(keys.key2, SigHashType().withForkId().withChronicle())
+            .Malleability(malleability::null_fail)
+            .ScriptError(SCRIPT_ERR_OK));
+    // Post-Chronicle, multiple signatures, bad signature (null), script returns true, malleability unspecified on bad sig, allowed on others
+    tests.push_back(
+        TestBuilder(CScript() << OP_3 << ToByteVector(keys.pubkey0C)
+                                      << ToByteVector(keys.pubkey1C)
+                                      << ToByteVector(keys.pubkey2C) << OP_3
+                                      << OP_CHECKMULTISIG << OP_NOT,
+                "Post-Chronicle, NULLFAIL, multiple signatures, bad signature (null), script returns true, malleability unspecified on bad sig, allowed on others", postChronicleFlags, false)
+            .Num(0)
+            .PushSig(keys.key0, SigHashType().withForkId().withChronicle())
+            .Num(0)
+            .PushSig(keys.key2, SigHashType().withForkId().withChronicle())
+            .Malleability(malleability::null_fail)
+            .ScriptError(SCRIPT_ERR_OK));
+    // Post-Chronicle, multiple signatures, bad signature (null), script returns true, malleability unspecified on bad sig, disallowed on others
+    tests.push_back(
+        TestBuilder(CScript() << OP_3 << ToByteVector(keys.pubkey0C)
+                                      << ToByteVector(keys.pubkey1C)
+                                      << ToByteVector(keys.pubkey2C) << OP_3
+                                      << OP_CHECKMULTISIG << OP_NOT,
+                "Post-Chronicle, NULLFAIL, multiple signatures, bad signature (null), script returns true, malleability unspecified on bad sig, disallowed on others", postChronicleFlags, false)
+            .Num(0)
+            .PushSig(keys.key0, SigHashType().withForkId())
+            .Num(0)
+            .PushSig(keys.key2, SigHashType().withForkId())
+            .Malleability(malleability::non_malleable)  // Bad signature skips malleability checks
+            .ScriptError(SCRIPT_ERR_SIG_NULLFAIL));
+
+
+    /***********************/
+    /* Pre Chronicle Tests */
+    /***********************/
+
+    // Pre-Chronicle, single signature, good signature
+    tests.push_back(
+        TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
+                "Pre-Chronicle, NULLFAIL, single signature, good signature", preChronicleFlags, false)
+            .PushSig(keys.key0, SigHashType().withForkId())
+            .Malleability(malleability::disallowed | malleability::non_malleable)
+            .ScriptError(SCRIPT_ERR_OK));
+
+    // Pre-Chronicle, single signature, bad signature (non-null), script returns false
+    tests.push_back(
+        TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
+                "Pre-Chronicle, NULLFAIL, single signature, bad signature (non-null), script returns false", preChronicleFlags, false)
+            .PushSig(keys.key1, SigHashType().withForkId())
+            .Malleability(malleability::non_malleable)  // Bad signature skips malleability checks
+            .ScriptError(SCRIPT_ERR_SIG_NULLFAIL));
+    // Pre-Chronicle, single signature, bad signature (null), script returns false
+    tests.push_back(
+        TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
+                "Pre-Chronicle, NULLFAIL, single signature, bad signature (null), script returns false", preChronicleFlags, false)
+            .Num(0)
+            .Malleability(malleability::non_malleable)  // Null signature skips malleability checks
+            .ScriptError(SCRIPT_ERR_EVAL_FALSE));
+
+    // Pre-Chronicle, single signature, bad signature (non-null), script returns true
+    tests.push_back(
+        TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG << OP_NOT,
+                "Pre-Chronicle, NULLFAIL, single signature, bad signature (non-null), script returns true", preChronicleFlags, false)
+            .PushSig(keys.key1, SigHashType().withForkId())
+            .Malleability(malleability::non_malleable)  // Bad signature skips malleability checks
+            .ScriptError(SCRIPT_ERR_SIG_NULLFAIL));
+    // Pre-Chronicle, single signature, bad signature (null), script returns true
+    tests.push_back(
+        TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG << OP_NOT,
+                "Pre-Chronicle, NULLFAIL, single signature, bad signature (null), script returns true", preChronicleFlags, false)
+            .Num(0)
+            .Malleability(malleability::non_malleable)  // Null signature skips malleability checks
+            .ScriptError(SCRIPT_ERR_OK));
+
+    // Pre-Chronicle, multiple signatures, good signatures
+    tests.push_back(
+        TestBuilder(CScript() << OP_3 << ToByteVector(keys.pubkey0C)
+                                      << ToByteVector(keys.pubkey1C)
+                                      << ToByteVector(keys.pubkey2C) << OP_3
+                                      << OP_CHECKMULTISIG,
+                "Pre-Chronicle, NULLFAIL, multiple signatures, good signatures", preChronicleFlags, false)
+            .Num(0)
+            .PushSig(keys.key0, SigHashType().withForkId())
+            .PushSig(keys.key1, SigHashType().withForkId())
+            .PushSig(keys.key2, SigHashType().withForkId())
+            .Malleability(malleability::disallowed | malleability::non_malleable)
+            .ScriptError(SCRIPT_ERR_OK));
+
+    // Pre-Chronicle, multiple signatures, bad signatures (non-null), script returns false
+    tests.push_back(
+        TestBuilder(CScript() << OP_3 << ToByteVector(keys.pubkey0C)
+                                      << ToByteVector(keys.pubkey1C)
+                                      << ToByteVector(keys.pubkey2C) << OP_3
+                                      << OP_CHECKMULTISIG,
+                "Pre-Chronicle, NULLFAIL, multiple signatures, bad signatures (non-null), script returns false", preChronicleFlags, false)
+            .Num(0)
+            .PushSig(keys.key0, SigHashType().withForkId())
+            .PushSig(keys.key2, SigHashType().withForkId())
+            .PushSig(keys.key2, SigHashType().withForkId())
+            .Malleability(malleability::non_malleable)   // Bad signature skips malleability checks
+            .ScriptError(SCRIPT_ERR_SIG_NULLFAIL));
+    // Pre-Chronicle, multiple signatures, bad signatures (null), script returns false
+    tests.push_back(
+        TestBuilder(CScript() << OP_3 << ToByteVector(keys.pubkey0C)
+                                      << ToByteVector(keys.pubkey1C)
+                                      << ToByteVector(keys.pubkey2C) << OP_3
+                                      << OP_CHECKMULTISIG,
+                "Pre-Chronicle, NULLFAIL, multiple signatures, bad signatures (null), script returns false", preChronicleFlags, false)
+            .Num(0)
+            .Num(0)
+            .Num(0)
+            .Num(0)
+            .Malleability(malleability::non_malleable)   // Null signature skips malleability checks
+            .ScriptError(SCRIPT_ERR_EVAL_FALSE));
+
+    // Pre-Chronicle, multiple signatures, bad signatures (non-null), script returns true
+    tests.push_back(
+        TestBuilder(CScript() << OP_3 << ToByteVector(keys.pubkey0C)
+                                      << ToByteVector(keys.pubkey1C)
+                                      << ToByteVector(keys.pubkey2C) << OP_3
+                                      << OP_CHECKMULTISIG << OP_NOT,
+                "Pre-Chronicle, NULLFAIL, multiple signatures, bad signatures (non-null), script returns true", preChronicleFlags, false)
+            .Num(0)
+            .PushSig(keys.key0, SigHashType().withForkId())
+            .PushSig(keys.key2, SigHashType().withForkId())
+            .PushSig(keys.key2, SigHashType().withForkId())
+            .Malleability(malleability::non_malleable)   // Bad signature skips malleability checks
+            .ScriptError(SCRIPT_ERR_SIG_NULLFAIL));
+    // Pre-Chronicle, multiple signatures, bad signatures (null), script returns true
+    tests.push_back(
+        TestBuilder(CScript() << OP_3 << ToByteVector(keys.pubkey0C)
+                                      << ToByteVector(keys.pubkey1C)
+                                      << ToByteVector(keys.pubkey2C) << OP_3
+                                      << OP_CHECKMULTISIG << OP_NOT,
+                "Pre-Chronicle, NULLFAIL, multiple signatures, bad signatures (null), script returns true", preChronicleFlags, false)
+            .Num(0)
+            .Num(0)
+            .Num(0)
+            .Num(0)
+            .Malleability(malleability::non_malleable)   // Null signature skips malleability checks
+            .ScriptError(SCRIPT_ERR_OK));
 
     for (TestBuilder& test : tests)
     {
@@ -2008,49 +2384,47 @@ BOOST_AUTO_TEST_CASE(script_PushData) {
     static const std::array<uint8_t, 4> pushdata2 = {OP_PUSHDATA2, 1, 0, 0x5a};
     static const std::array<uint8_t, 6> pushdata4 = {OP_PUSHDATA4, 1, 0, 0, 0, 0x5a};
 
-    LimitedStack directStack(UINT32_MAX);
+    const uint32_t flags{SCRIPT_VERIFY_P2SH};
+    const auto params{make_eval_script_params(testConfig, flags, true)};
     auto source = task::CCancellationSource::Make();
-    auto res = EvalScript(testConfig,
-                          true,
+    LimitedStack directStack(UINT32_MAX);
+    auto res = EvalScript(params,
                           source->GetToken(),
                           directStack,
-                          CScript(direct.data(), direct.data()+ direct.size()), // SCRIPT_ENGINE_BUILD_TEST -------
-                          SCRIPT_VERIFY_P2SH,
+                          CScript(direct.data(), direct.data() + direct.size()), // SCRIPT_ENGINE_BUILD_TEST -------
+                          flags,
                           BaseSignatureChecker());
     assert(res);
     BOOST_CHECK(std::holds_alternative<malleability::status>(*res));
 
     LimitedStack pushdata1Stack(UINT32_MAX);
-    res = EvalScript(testConfig,
-                     true,
+    res = EvalScript(params,
                      source->GetToken(),
                      pushdata1Stack,
-                     CScript(pushdata1.data(), pushdata1.data()+ pushdata1.size()), // SCRIPT_ENGINE_BUILD_TEST -------
-                     SCRIPT_VERIFY_P2SH,
+                     CScript(pushdata1.data(), pushdata1.data() + pushdata1.size()), // SCRIPT_ENGINE_BUILD_TEST -------
+                     flags,
                      BaseSignatureChecker());
     assert(res);
     BOOST_CHECK(std::holds_alternative<malleability::status>(*res));
     BOOST_CHECK(pushdata1Stack == directStack);
 
     LimitedStack pushdata2Stack(UINT32_MAX);
-    res = EvalScript(testConfig,
-                     true,
+    res = EvalScript(params,
                      source->GetToken(),
                      pushdata2Stack,
                      CScript(pushdata2.data(), pushdata2.data() + pushdata2.size()), // SCRIPT_ENGINE_BUILD_TEST -------
-                     SCRIPT_VERIFY_P2SH,
+                     flags,
                      BaseSignatureChecker());
     assert(res);
     BOOST_CHECK(std::holds_alternative<malleability::status>(*res));
     BOOST_CHECK(pushdata2Stack == directStack);
 
     LimitedStack pushdata4Stack(UINT32_MAX);
-    res = EvalScript(testConfig,
-                     true,
+    res = EvalScript(params,
                      source->GetToken(),
                      pushdata4Stack,
                      CScript(pushdata4.data(), pushdata4.data() + pushdata4.size()),  // SCRIPT_ENGINE_BUILD_TEST -------
-                     SCRIPT_VERIFY_P2SH,
+                     flags,
                      BaseSignatureChecker());
     assert(res);
     BOOST_CHECK(std::holds_alternative<malleability::status>(*res));
@@ -2074,10 +2448,10 @@ BOOST_AUTO_TEST_CASE(op_pushdata1_op_size)
 
     CScript script(args.begin(), args.end());
     const auto flags{SCRIPT_UTXO_AFTER_GENESIS};
+    const auto params{make_eval_script_params(config, flags, false)};
     auto source = task::CCancellationSource::Make();
     LimitedStack stack(UINT32_MAX);
-    const auto status = EvalScript(config,
-                                   false,
+    const auto status = EvalScript(params,
                                    source->GetToken(),
                                    stack,
                                    script,
@@ -2105,10 +2479,10 @@ BOOST_AUTO_TEST_CASE(op_pushdata2_op_size)
 
     CScript script(args.begin(), args.end());
     const auto flags{SCRIPT_UTXO_AFTER_GENESIS};
+    const auto params{make_eval_script_params(config, flags, false)};
     auto source = task::CCancellationSource::Make();
     LimitedStack stack(UINT32_MAX);
-    const auto status = EvalScript(config,
-                                   false,
+    const auto status = EvalScript(params,
                                    source->GetToken(),
                                    stack,
                                    script,
@@ -2140,10 +2514,10 @@ BOOST_AUTO_TEST_CASE(op_pushdata4_op_size)
 
     CScript script(args.begin(), args.end());
     const auto flags{SCRIPT_UTXO_AFTER_GENESIS};
+    const auto params{make_eval_script_params(config, flags, false)};
     auto source = task::CCancellationSource::Make();
     LimitedStack stack(UINT32_MAX);
-    const auto status = EvalScript(config,
-                                   false,
+    const auto status = EvalScript(params,
                                    source->GetToken(),
                                    stack,
                                    script,
@@ -2208,28 +2582,27 @@ BOOST_AUTO_TEST_CASE(script_CHECKMULTISIG12) {
 
     CScript goodsig1 =
         sign_multisig(scriptPubKey12, key1, CTransaction(txTo12));
+    const auto params{make_verify_script_params(testConfig, flags, true)};
     auto source = task::CCancellationSource::Make();
     auto res =
-        VerifyScript(
-            testConfig, true,
-            source->GetToken(),
-            goodsig1,
-            scriptPubKey12,
-            flags,
-            MutableTransactionSignatureChecker(&txTo12, 0, txFrom12.vout[0].nValue),
-            ms);
+        VerifyScript(params,
+                     source->GetToken(),
+                     goodsig1,
+                     scriptPubKey12,
+                     flags,
+                     MutableTransactionSignatureChecker(&txTo12, 0, txFrom12.vout[0].nValue),
+                     ms);
     assert(res);
     BOOST_CHECK(res->first);
     txTo12.vout[0].nValue = Amount(2);
     res =
-        VerifyScript(
-            testConfig, true,
-            source->GetToken(),
-            goodsig1,
-            scriptPubKey12,
-            flags,
-            MutableTransactionSignatureChecker(&txTo12, 0, txFrom12.vout[0].nValue),
-            ms);
+        VerifyScript(params,
+                     source->GetToken(),
+                     goodsig1,
+                     scriptPubKey12,
+                     flags,
+                     MutableTransactionSignatureChecker(&txTo12, 0, txFrom12.vout[0].nValue),
+                     ms);
     assert(res);
     BOOST_CHECK(!res->first);
     err = res->second;
@@ -2238,27 +2611,25 @@ BOOST_AUTO_TEST_CASE(script_CHECKMULTISIG12) {
     CScript goodsig2 =
         sign_multisig(scriptPubKey12, key2, CTransaction(txTo12));
     res =
-        VerifyScript(
-            testConfig, true,
-            source->GetToken(),
-            goodsig2,
-            scriptPubKey12,
-            flags,
-            MutableTransactionSignatureChecker(&txTo12, 0, txFrom12.vout[0].nValue),
-            ms);
+        VerifyScript(params,
+                     source->GetToken(),
+                     goodsig2,
+                     scriptPubKey12,
+                     flags,
+                     MutableTransactionSignatureChecker(&txTo12, 0, txFrom12.vout[0].nValue),
+                     ms);
     assert(res);
     BOOST_CHECK(res->first);
 
     CScript badsig1 = sign_multisig(scriptPubKey12, key3, CTransaction(txTo12));
     res =
-        VerifyScript(
-            testConfig, true,
-            source->GetToken(),
-            badsig1,
-            scriptPubKey12,
-            flags,
-            MutableTransactionSignatureChecker(&txTo12, 0, txFrom12.vout[0].nValue),
-            ms);
+        VerifyScript(params,
+                     source->GetToken(),
+                     badsig1,
+                     scriptPubKey12,
+                     flags,
+                     MutableTransactionSignatureChecker(&txTo12, 0, txFrom12.vout[0].nValue),
+                     ms);
     assert(res);
     BOOST_CHECK(!res->first);
     err = res->second;
@@ -2297,16 +2668,16 @@ BOOST_AUTO_TEST_CASE(script_CHECKMULTISIG23)
     keys.push_back(key1);
     keys.push_back(key2);
     CScript goodsig1 = sign_multisig(scriptPubKey23, keys, txTo23);
+    const auto params{make_verify_script_params(testConfig, flags, true)};
     auto source = task::CCancellationSource::Make();
     auto res =
-        VerifyScript(
-            testConfig, true,
-            source->GetToken(),
-            goodsig1,
-            scriptPubKey23,
-            flags,
-            TransactionSignatureChecker(&txTo23, 0, txFrom23.vout[0].nValue),
-            ms);
+        VerifyScript(params,
+                     source->GetToken(),
+                     goodsig1,
+                     scriptPubKey23,
+                     flags,
+                     TransactionSignatureChecker(&txTo23, 0, txFrom23.vout[0].nValue),
+                     ms);
     assert(res);
     BOOST_CHECK(res->first);
 
@@ -2315,14 +2686,13 @@ BOOST_AUTO_TEST_CASE(script_CHECKMULTISIG23)
     keys.push_back(key3);
     CScript goodsig2 = sign_multisig(scriptPubKey23, keys, txTo23);
     res =
-        VerifyScript(
-            testConfig, true,
-            source->GetToken(),
-            goodsig2,
-            scriptPubKey23,
-            flags,
-            TransactionSignatureChecker(&txTo23, 0, txFrom23.vout[0].nValue),
-            ms);
+        VerifyScript(params,
+                     source->GetToken(),
+                     goodsig2,
+                     scriptPubKey23,
+                     flags,
+                     TransactionSignatureChecker(&txTo23, 0, txFrom23.vout[0].nValue),
+                     ms);
     assert(res);
     BOOST_CHECK(res->first);
 
@@ -2331,14 +2701,13 @@ BOOST_AUTO_TEST_CASE(script_CHECKMULTISIG23)
     keys.push_back(key3);
     CScript goodsig3 = sign_multisig(scriptPubKey23, keys, txTo23);
     res =
-        VerifyScript(
-            testConfig, true,
-            source->GetToken(),
-            goodsig3,
-            scriptPubKey23,
-            flags,
-            TransactionSignatureChecker(&txTo23, 0, txFrom23.vout[0].nValue),
-            ms);
+        VerifyScript(params,
+                     source->GetToken(),
+                     goodsig3,
+                     scriptPubKey23,
+                     flags,
+                     TransactionSignatureChecker(&txTo23, 0, txFrom23.vout[0].nValue),
+                     ms);
     assert(res);
     BOOST_CHECK(res->first);
 
@@ -2347,14 +2716,13 @@ BOOST_AUTO_TEST_CASE(script_CHECKMULTISIG23)
     keys.push_back(key2); // Can't re-use sig
     CScript badsig1 = sign_multisig(scriptPubKey23, keys, txTo23);
     res =
-        VerifyScript(
-            testConfig, true,
-            source->GetToken(),
-            badsig1,
-            scriptPubKey23,
-            flags,
-            TransactionSignatureChecker(&txTo23, 0, txFrom23.vout[0].nValue),
-            ms);
+        VerifyScript(params,
+                     source->GetToken(),
+                     badsig1,
+                     scriptPubKey23,
+                     flags,
+                     TransactionSignatureChecker(&txTo23, 0, txFrom23.vout[0].nValue),
+                     ms);
     assert(res);
     BOOST_CHECK(!res->first);
     BOOST_CHECK_EQUAL(SCRIPT_ERR_EVAL_FALSE, res->second);
@@ -2364,14 +2732,13 @@ BOOST_AUTO_TEST_CASE(script_CHECKMULTISIG23)
     keys.push_back(key1); // sigs must be in correct order
     CScript badsig2 = sign_multisig(scriptPubKey23, keys, txTo23);
     res =
-        VerifyScript(
-            testConfig, true,
-            source->GetToken(),
-            badsig2,
-            scriptPubKey23,
-            flags,
-            TransactionSignatureChecker(&txTo23, 0, txFrom23.vout[0].nValue),
-            ms);
+        VerifyScript(params,
+                     source->GetToken(),
+                     badsig2,
+                     scriptPubKey23,
+                     flags,
+                     TransactionSignatureChecker(&txTo23, 0, txFrom23.vout[0].nValue),
+                     ms);
     assert(res);
     BOOST_CHECK(!res->first);
     BOOST_CHECK_EQUAL(SCRIPT_ERR_EVAL_FALSE, res->second);
@@ -2381,14 +2748,13 @@ BOOST_AUTO_TEST_CASE(script_CHECKMULTISIG23)
     keys.push_back(key2); // sigs must be in correct order
     CScript badsig3 = sign_multisig(scriptPubKey23, keys, txTo23);
     res =
-        VerifyScript(
-            testConfig, true,
-            source->GetToken(),
-            badsig3,
-            scriptPubKey23,
-            flags,
-            TransactionSignatureChecker(&txTo23, 0, txFrom23.vout[0].nValue),
-            ms);
+        VerifyScript(params,
+                     source->GetToken(),
+                     badsig3,
+                     scriptPubKey23,
+                     flags,
+                     TransactionSignatureChecker(&txTo23, 0, txFrom23.vout[0].nValue),
+                     ms);
     assert(res);
     BOOST_CHECK(!res->first);
     BOOST_CHECK_EQUAL(SCRIPT_ERR_EVAL_FALSE, res->second);
@@ -2398,14 +2764,13 @@ BOOST_AUTO_TEST_CASE(script_CHECKMULTISIG23)
     keys.push_back(key2); // sigs must match pubkeys
     CScript badsig4 = sign_multisig(scriptPubKey23, keys, txTo23);
     res =
-        VerifyScript(
-            testConfig, true,
-            source->GetToken(),
-            badsig4,
-            scriptPubKey23,
-            flags,
-            TransactionSignatureChecker(&txTo23, 0, txFrom23.vout[0].nValue),
-            ms);
+        VerifyScript(params,
+                     source->GetToken(),
+                     badsig4,
+                     scriptPubKey23,
+                     flags,
+                     TransactionSignatureChecker(&txTo23, 0, txFrom23.vout[0].nValue),
+                     ms);
     assert(res);
     BOOST_CHECK(!res->first);
     BOOST_CHECK_EQUAL(SCRIPT_ERR_EVAL_FALSE, res->second);
@@ -2415,14 +2780,13 @@ BOOST_AUTO_TEST_CASE(script_CHECKMULTISIG23)
     keys.push_back(key4); // sigs must match pubkeys
     CScript badsig5 = sign_multisig(scriptPubKey23, keys, txTo23);
     res =
-        VerifyScript(
-            testConfig, true,
-            source->GetToken(),
-            badsig5,
-            scriptPubKey23,
-            flags,
-            TransactionSignatureChecker(&txTo23, 0, txFrom23.vout[0].nValue),
-            ms);
+        VerifyScript(params,
+                     source->GetToken(),
+                     badsig5,
+                     scriptPubKey23,
+                     flags,
+                     TransactionSignatureChecker(&txTo23, 0, txFrom23.vout[0].nValue),
+                     ms);
     assert(res);
     BOOST_CHECK(!res->first);
     BOOST_CHECK_EQUAL(SCRIPT_ERR_EVAL_FALSE, res->second);
@@ -2430,14 +2794,13 @@ BOOST_AUTO_TEST_CASE(script_CHECKMULTISIG23)
     keys.clear(); // Must have signatures
     CScript badsig6 = sign_multisig(scriptPubKey23, keys, txTo23);
     res =
-        VerifyScript(
-            testConfig, true,
-            source->GetToken(),
-            badsig6,
-            scriptPubKey23,
-            flags,
-            TransactionSignatureChecker(&txTo23, 0, txFrom23.vout[0].nValue),
-            ms);
+        VerifyScript(params,
+                     source->GetToken(),
+                     badsig6,
+                     scriptPubKey23,
+                     flags,
+                     TransactionSignatureChecker(&txTo23, 0, txFrom23.vout[0].nValue),
+                     ms);
     assert(res);
     BOOST_CHECK(!res->first);
     BOOST_CHECK_EQUAL(SCRIPT_ERR_INVALID_STACK_OPERATION, res->second);
@@ -2758,22 +3121,23 @@ BOOST_AUTO_TEST_CASE(script_combineSigs) {
 
 BOOST_AUTO_TEST_CASE(script_standard_push)
 {
+    constexpr uint32_t flags{SCRIPT_VERIFY_MINIMALDATA};
+    const auto params{make_verify_script_params(testConfig, flags, true)};
     auto source = task::CCancellationSource::Make();
-    for (int i = 0; i < 67000; i++) {
+    for (int i = 0; i < 67'000; i++) {
         CScript script;
         script << i;
         BOOST_CHECK_MESSAGE(script.IsPushOnly(),
                             "Number " << i << " is not pure push.");
         std::atomic<malleability::status> ms {};
         const auto res =
-            VerifyScript(
-                testConfig, true,
-                source->GetToken(),
-                script,
-                CScript() << OP_1,
-                SCRIPT_VERIFY_MINIMALDATA,
-                BaseSignatureChecker(),
-                ms);
+            VerifyScript(params,
+                         source->GetToken(),
+                         script,
+                         CScript() << OP_1,
+                         flags,
+                         BaseSignatureChecker(),
+                         ms);
         assert(res);
         BOOST_CHECK_MESSAGE(res->first,
                             "Number " << i << " push is not minimal data.");
@@ -2787,14 +3151,13 @@ BOOST_AUTO_TEST_CASE(script_standard_push)
                             "Length " << i << " is not pure push.");
         std::atomic<malleability::status> ms {};
         const auto res =
-            VerifyScript(
-                testConfig, true,
-                source->GetToken(),
-                script,
-                CScript() << OP_1,
-                SCRIPT_VERIFY_MINIMALDATA,
-                BaseSignatureChecker(),
-                ms);
+            VerifyScript(params,
+                         source->GetToken(),
+                         script,
+                         CScript() << OP_1,
+                         flags,
+                         BaseSignatureChecker(),
+                         ms);
         assert(res);
         BOOST_CHECK_MESSAGE(res->first,
                             "Length " << i << " push is not minimal data.");
@@ -3355,13 +3718,11 @@ namespace {
         bool CheckSig(
             const std::vector<uint8_t>& scriptSig,
             const std::vector<uint8_t>& vchPubKey,
-            const CScript& scriptCode,
-            bool enabledSighashForkid) const override
+            const CScript& scriptCode) const override
         {
             auto start = std::chrono::steady_clock::now();
             bool res =
-                CachingTransactionSignatureChecker::CheckSig(
-                    scriptSig, vchPubKey, scriptCode, enabledSighashForkid);
+                CachingTransactionSignatureChecker::CheckSig(scriptSig, vchPubKey, scriptCode);
             mDuration.check +=
                 std::chrono::duration_cast<std::chrono::microseconds>(
                     std::chrono::steady_clock::now() - start);
@@ -3377,6 +3738,8 @@ namespace {
 BOOST_AUTO_TEST_CASE(caching_invalid_signatures)
 {
     auto source = task::CCancellationSource::Make();
+    const uint32_t flags_genesis{flags | SCRIPT_UTXO_AFTER_GENESIS | SCRIPT_GENESIS};
+    const auto params{make_verify_script_params(testConfig, flags_genesis, true)};
   
     int iterations = 30;
     std::size_t pubkeys_per_multisig = 200;
@@ -3421,15 +3784,13 @@ BOOST_AUTO_TEST_CASE(caching_invalid_signatures)
         auto start_noncached = std::chrono::steady_clock::now();
         std::atomic<malleability::status> ms1 {};
         const auto res =
-          VerifyScript(
-              testConfig,
-              true,
-              source->GetToken(),
-              scriptSig,
-              scriptPubKey,
-              flags | SCRIPT_UTXO_AFTER_GENESIS | SCRIPT_GENESIS,
-              InstrumentedChecker(durations, nmSpendingTx, nmCreditingTx.vout[0].nValue, txdata),
-              ms1);
+          VerifyScript(params,
+                       source->GetToken(),
+                       scriptSig,
+                       scriptPubKey,
+                       flags_genesis,
+                       InstrumentedChecker(durations, nmSpendingTx, nmCreditingTx.vout[0].nValue, txdata),
+                       ms1);
         auto stop_noncached = std::chrono::steady_clock::now();
 
         // check if script successfully verified
@@ -3439,15 +3800,13 @@ BOOST_AUTO_TEST_CASE(caching_invalid_signatures)
         auto start_cached = std::chrono::steady_clock::now();
         std::atomic<malleability::status> ms2 {};
         const auto res2 =
-          VerifyScript(
-              testConfig,
-              true,
-              source->GetToken(),
-              scriptSig,
-              scriptPubKey,
-              flags | SCRIPT_UTXO_AFTER_GENESIS | SCRIPT_GENESIS,
-              InstrumentedChecker(durationsCached, nmSpendingTx, nmCreditingTx.vout[0].nValue, txdata),
-              ms2);
+          VerifyScript(params,
+                       source->GetToken(),
+                       scriptSig,
+                       scriptPubKey,
+                       flags_genesis,
+                       InstrumentedChecker(durationsCached, nmSpendingTx, nmCreditingTx.vout[0].nValue, txdata),
+                       ms2);
          auto stop_cached = std::chrono::steady_clock::now();
 
          // check if script successfully verified
@@ -3488,10 +3847,10 @@ BOOST_AUTO_TEST_CASE(mt_2_plus_2)
         CScript script(args.begin(), args.end());
 
         const auto flags{SCRIPT_UTXO_AFTER_GENESIS};
+        const auto params{make_eval_script_params(config, flags, false)};
         auto source = task::CCancellationSource::Make();
         LimitedStack stack(UINT32_MAX);
-        const auto status = EvalScript(config,
-                                       false,
+        const auto status = EvalScript(params,
                                        source->GetToken(),
                                        stack,
                                        script,
@@ -3604,6 +3963,7 @@ BOOST_AUTO_TEST_CASE(mt_p2pkh)
         CScript script(args.begin(), args.end());
 
         const auto flags{SCRIPT_UTXO_AFTER_GENESIS};
+        const auto params{make_eval_script_params(config, flags, false)};
         auto source = task::CCancellationSource::Make();
         LimitedStack stack(UINT32_MAX);
         const string serialized_tx{
@@ -3614,8 +3974,7 @@ BOOST_AUTO_TEST_CASE(mt_p2pkh)
         CTransaction tx{mtx};
         Amount amount{10};
         const TransactionSignatureChecker sig_checker{&tx, 0, amount};
-        const auto status = EvalScript(config,
-                                       false,
+        const auto status = EvalScript(params,
                                        source->GetToken(),
                                        stack,
                                        script,
@@ -3720,7 +4079,7 @@ BOOST_AUTO_TEST_CASE(get_script_verify_flags)
     BOOST_CHECK(flags & SCRIPT_UTXO_AFTER_CHRONICLE);
 }
 
-BOOST_AUTO_TEST_CASE(chronicle_forkid_relax_script_validation)
+BOOST_AUTO_TEST_CASE(chronicle_forkid_chronicle_script_validation)
 {
     const KeyData keys {};
     const Amount TEST_AMOUNT {12345};
@@ -3731,110 +4090,110 @@ BOOST_AUTO_TEST_CASE(chronicle_forkid_relax_script_validation)
     auto postChronicleFlags { StandardScriptVerifyFlags(ProtocolEra::PostChronicle) | InputScriptVerifyFlags(ProtocolEra::PostChronicle, ProtocolEra::PostChronicle) };
     auto forkidNotEnabledFlags { preGenesisFlags & ~SCRIPT_ENABLE_SIGHASH_FORKID };
 
-    // Pre-ForkID, signed without forkid, without relax
+    // Pre-ForkID, signed without forkid, without chronicle
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
-                    "P2PK PreForkID not FORKID not RELAX", forkidNotEnabledFlags, false, TEST_AMOUNT)
+                    "P2PK PreForkID not FORKID not CHRONICLE", forkidNotEnabledFlags, false, TEST_AMOUNT)
             .PushSig(keys.key0, SigHashType(), 32, 32, TEST_AMOUNT)
             .Malleability(malleability::non_malleable)
             .ScriptError(SCRIPT_ERR_OK));
-    // Pre-ForkID, signed without forkid, with relax
+    // Pre-ForkID, signed without forkid, with chronicle
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
-                    "P2PK PreForkID not FORKID RELAX", forkidNotEnabledFlags, false, TEST_AMOUNT)
-            .PushSig(keys.key0, SigHashType().withRelax(), 32, 32, TEST_AMOUNT)
-            .ScriptError(SCRIPT_ERR_ILLEGAL_RELAX));
-    // Pre-ForkID, signed with forkid, without relax
+                    "P2PK PreForkID not FORKID CHRONICLE", forkidNotEnabledFlags, false, TEST_AMOUNT)
+            .PushSig(keys.key0, SigHashType().withChronicle(), 32, 32, TEST_AMOUNT)
+            .ScriptError(SCRIPT_ERR_ILLEGAL_CHRONICLE));
+    // Pre-ForkID, signed with forkid, without chronicle
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
-                    "P2PK PreForkID FORKID not RELAX", forkidNotEnabledFlags, false, TEST_AMOUNT)
+                    "P2PK PreForkID FORKID not CHRONICLE", forkidNotEnabledFlags, false, TEST_AMOUNT)
             .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, TEST_AMOUNT)
             .ScriptError(SCRIPT_ERR_ILLEGAL_FORKID));
-    // Pre-ForkID, signed with forkid, with relax
+    // Pre-ForkID, signed with forkid, with chronicle
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
-                    "P2PK PreForkID FORKID RELAX", forkidNotEnabledFlags, false, TEST_AMOUNT)
-            .PushSig(keys.key0, SigHashType().withForkId().withRelax(), 32, 32, TEST_AMOUNT)
+                    "P2PK PreForkID FORKID CHRONICLE", forkidNotEnabledFlags, false, TEST_AMOUNT)
+            .PushSig(keys.key0, SigHashType().withForkId().withChronicle(), 32, 32, TEST_AMOUNT)
             .ScriptError(SCRIPT_ERR_ILLEGAL_FORKID));
 
-    // Pre-Genesis, signed without forkid, without relax
+    // Pre-Genesis, signed without forkid, without chronicle
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
-                    "P2PK PreGenesis not FORKID not RELAX", preGenesisFlags, false, TEST_AMOUNT)
-            .PushSig(keys.key0, SigHashType(), 32, 32, TEST_AMOUNT, preGenesisFlags)
+                    "P2PK PreGenesis not FORKID not CHRONICLE", preGenesisFlags, false, TEST_AMOUNT)
+            .PushSig(keys.key0, SigHashType(), 32, 32, TEST_AMOUNT)
             .ScriptError(SCRIPT_ERR_MUST_USE_FORKID));
-    // Pre-Genesis, signed without forkid, with relax
+    // Pre-Genesis, signed without forkid, with chronicle
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
-                    "P2PK PreGenesis not FORKID RELAX", preGenesisFlags, false, TEST_AMOUNT)
-            .PushSig(keys.key0, SigHashType().withRelax(), 32, 32, TEST_AMOUNT, preGenesisFlags)
-            .ScriptError(SCRIPT_ERR_ILLEGAL_RELAX));
-    // Pre-Genesis, signed with forkid, without relax
+                    "P2PK PreGenesis not FORKID CHRONICLE", preGenesisFlags, false, TEST_AMOUNT)
+            .PushSig(keys.key0, SigHashType().withChronicle(), 32, 32, TEST_AMOUNT)
+            .ScriptError(SCRIPT_ERR_ILLEGAL_CHRONICLE));
+    // Pre-Genesis, signed with forkid, without chronicle
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
-                    "P2PK PreGenesis FORKID not RELAX", preGenesisFlags, false, TEST_AMOUNT)
-            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, TEST_AMOUNT, preGenesisFlags)
+                    "P2PK PreGenesis FORKID not CHRONICLE", preGenesisFlags, false, TEST_AMOUNT)
+            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, TEST_AMOUNT)
             .Malleability(malleability::non_malleable | malleability::disallowed)
             .ScriptError(SCRIPT_ERR_OK));
-    // Pre-Genesis, signed with forkid, with relax
+    // Pre-Genesis, signed with forkid, with chronicle
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
-                    "P2PK PreGenesis FORKID RELAX", preGenesisFlags, false, TEST_AMOUNT)
-            .PushSig(keys.key0, SigHashType().withForkId().withRelax(), 32, 32, TEST_AMOUNT, preGenesisFlags)
-            .ScriptError(SCRIPT_ERR_ILLEGAL_RELAX));
+                    "P2PK PreGenesis FORKID CHRONICLE", preGenesisFlags, false, TEST_AMOUNT)
+            .PushSig(keys.key0, SigHashType().withForkId().withChronicle(), 32, 32, TEST_AMOUNT)
+            .ScriptError(SCRIPT_ERR_ILLEGAL_CHRONICLE));
 
-    // Pre-Chronicle, signed without forkid, without relax
+    // Pre-Chronicle, signed without forkid, without chronicle
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
-                    "P2PK PreChronicle not FORKID not RELAX", preChronicleFlags, false, TEST_AMOUNT)
-            .PushSig(keys.key0, SigHashType(), 32, 32, TEST_AMOUNT, preChronicleFlags)
+                    "P2PK PreChronicle not FORKID not CHRONICLE", preChronicleFlags, false, TEST_AMOUNT)
+            .PushSig(keys.key0, SigHashType(), 32, 32, TEST_AMOUNT)
             .ScriptError(SCRIPT_ERR_MUST_USE_FORKID));
-    // Pre-Chronicle, signed without forkid, with relax
+    // Pre-Chronicle, signed without forkid, with chronicle
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
-                    "P2PK PreChronicle not FORKID RELAX", preChronicleFlags, false, TEST_AMOUNT)
-            .PushSig(keys.key0, SigHashType().withRelax(), 32, 32, TEST_AMOUNT, preChronicleFlags)
-            .ScriptError(SCRIPT_ERR_ILLEGAL_RELAX));
-    // Pre-Chronicle, signed with forkid, without relax
+                    "P2PK PreChronicle not FORKID CHRONICLE", preChronicleFlags, false, TEST_AMOUNT)
+            .PushSig(keys.key0, SigHashType().withChronicle(), 32, 32, TEST_AMOUNT)
+            .ScriptError(SCRIPT_ERR_ILLEGAL_CHRONICLE));
+    // Pre-Chronicle, signed with forkid, without chronicle
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
-                    "P2PK PreChronicle FORKID not RELAX", preChronicleFlags, false, TEST_AMOUNT)
-            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, TEST_AMOUNT, preChronicleFlags)
+                    "P2PK PreChronicle FORKID not CHRONICLE", preChronicleFlags, false, TEST_AMOUNT)
+            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, TEST_AMOUNT)
             .Malleability(malleability::non_malleable | malleability::disallowed)
             .ScriptError(SCRIPT_ERR_OK));
-    // Pre-Chronicle, signed with forkid, with relax
+    // Pre-Chronicle, signed with forkid, with chronicle
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
-                    "P2PK PreChronicle FORKID RELAX", preChronicleFlags, false, TEST_AMOUNT)
-            .PushSig(keys.key0, SigHashType().withForkId().withRelax(), 32, 32, TEST_AMOUNT, preChronicleFlags)
-            .ScriptError(SCRIPT_ERR_ILLEGAL_RELAX));
+                    "P2PK PreChronicle FORKID CHRONICLE", preChronicleFlags, false, TEST_AMOUNT)
+            .PushSig(keys.key0, SigHashType().withForkId().withChronicle(), 32, 32, TEST_AMOUNT)
+            .ScriptError(SCRIPT_ERR_ILLEGAL_CHRONICLE));
 
-    // Post-Chronicle, signed without forkid, without relax
+    // Post-Chronicle, signed without forkid, without chronicle
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
-                    "P2PK PostChronicle not FORKID not RELAX", postChronicleFlags, false, TEST_AMOUNT)
-            .PushSig(keys.key0, SigHashType(), 32, 32, TEST_AMOUNT, postChronicleFlags)
+                    "P2PK PostChronicle not FORKID not CHRONICLE", postChronicleFlags, false, TEST_AMOUNT)
+            .PushSig(keys.key0, SigHashType(), 32, 32, TEST_AMOUNT)
             .Malleability(malleability::non_malleable)
-            .ScriptError(SCRIPT_ERR_OK));
-    // Post-Chronicle, signed without forkid, with relax
+            .ScriptError(SCRIPT_ERR_MUST_USE_FORKID));
+    // Post-Chronicle, signed without forkid, with chronicle
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
-                    "P2PK PostChronicle not FORKID RELAX", postChronicleFlags, false, TEST_AMOUNT)
-            .PushSig(keys.key0, SigHashType().withRelax(), 32, 32, TEST_AMOUNT, postChronicleFlags)
+                    "P2PK PostChronicle not FORKID CHRONICLE", postChronicleFlags, false, TEST_AMOUNT)
+            .PushSig(keys.key0, SigHashType().withChronicle(), 32, 32, TEST_AMOUNT)
             .Malleability(malleability::non_malleable)
-            .ScriptError(SCRIPT_ERR_OK));
-    // Post-Chronicle, signed with forkid, without relax
+            .ScriptError(SCRIPT_ERR_MUST_USE_FORKID));
+    // Post-Chronicle, signed with forkid, without chronicle
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
-                    "P2PK PostChronicle FORKID not RELAX", postChronicleFlags, false, TEST_AMOUNT)
-            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, TEST_AMOUNT, postChronicleFlags)
+                    "P2PK PostChronicle FORKID not CHRONICLE", postChronicleFlags, false, TEST_AMOUNT)
+            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, TEST_AMOUNT)
             .Malleability(malleability::non_malleable | malleability::disallowed)
             .ScriptError(SCRIPT_ERR_OK));
-    // Post-Chronicle, signed with forkid, with relax
+    // Post-Chronicle, signed with forkid, with chronicle
     tests.push_back(
         TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
-                    "P2PK PostChronicle FORKID RELAX", postChronicleFlags, false, TEST_AMOUNT)
-            .PushSig(keys.key0, SigHashType().withForkId().withRelax(), 32, 32, TEST_AMOUNT, postChronicleFlags)
+                    "P2PK PostChronicle FORKID CHRONICLE", postChronicleFlags, false, TEST_AMOUNT)
+            .PushSig(keys.key0, SigHashType().withForkId().withChronicle(), 32, 32, TEST_AMOUNT)
             .Malleability(malleability::non_malleable)
             .ScriptError(SCRIPT_ERR_OK));
 
@@ -3871,18 +4230,22 @@ BOOST_AUTO_TEST_CASE(EvalScript_lows)
          | SCRIPT_VERIFY_STRICTENC
          | SCRIPT_ENABLE_SIGHASH_FORKID,
          high_s_min(),
-         {}, 
-         make_optional<malleability::status>(malleability::high_s)},
+         {},
+         malleability::high_s},
     };
     for(const auto& [flags, s, exp_error, exp_mall] : test_data)
     {
         const Config& config = GlobalConfig::GetConfig();
+        const auto params{make_eval_script_params(config, flags, false)};
         auto source = task::CCancellationSource::Make();
         LimitedStack stack(UINT32_MAX);
-        
-        const auto script{make_op_checksig_script(SIGHASH_ALL, s)};
-        const auto status = EvalScript(config,
-                                       false,
+
+        const auto script{make_op_checksig_script(make_signature(s,
+                                                                 SIGHASH_ALL
+                                                                 | SIGHASH_FORKID
+                                                                 | SIGHASH_CHRONICLE),
+                                                  make_pub_key())};
+        const auto status = EvalScript(params,
                                        source->GetToken(),
                                        stack,
                                        CScript{script.begin(), script.end()},
@@ -3913,8 +4276,7 @@ BOOST_AUTO_TEST_CASE(VerifyScript_lows)
     {
         bool CheckSig(const std::vector<uint8_t> &,
                       const std::vector<uint8_t> &,
-                      const CScript&,
-                      bool) const override
+                      const CScript&) const override
         {
             return true;
         }
@@ -3922,7 +4284,7 @@ BOOST_AUTO_TEST_CASE(VerifyScript_lows)
 
     using test_args = tuple<uint32_t,               // flags
                             vector<uint8_t>,        // unlocking script
-                            int,                    // sighash
+                            uint8_t,                // sighash
                             ScriptError,            // expect error
                             malleability::status>;  // expected malleability_status
     const vector<test_args> test_data
@@ -3948,8 +4310,9 @@ BOOST_AUTO_TEST_CASE(VerifyScript_lows)
          | SCRIPT_ENABLE_SIGHASH_FORKID
          | SCRIPT_CHRONICLE,
          high_s_min(),
-         SIGHASH_ALL,
-         SCRIPT_ERR_OK, malleability::high_s},
+         SIGHASH_ALL | SIGHASH_FORKID | SIGHASH_CHRONICLE,
+         {},
+         malleability::high_s},
 
         {SCRIPT_VERIFY_LOW_S
          | SCRIPT_ENABLE_SIGHASH_FORKID
@@ -3962,13 +4325,14 @@ BOOST_AUTO_TEST_CASE(VerifyScript_lows)
     for(const auto& [flags, s, sig_hash, exp_error, exp_mall] : test_data)
     {
         const Config& config = GlobalConfig::GetConfig();
+        const auto params{make_verify_script_params(config, flags, false)};
         auto source = task::CCancellationSource::Make();
 
         const vector<uint8_t> scriptSig;
-        const auto scriptPubKey{make_op_checksig_script(sig_hash, s)};
+        const auto scriptPubKey{make_op_checksig_script(make_signature(s, sig_hash),
+                                                        make_pub_key())};
         std::atomic<malleability::status> ms;
-        const auto status = VerifyScript(config,
-                                         false,
+        const auto status = VerifyScript(params,
                                          source->GetToken(),
                                          CScript{scriptSig.begin(), scriptSig.end()},
                                          CScript{scriptPubKey.begin(), scriptPubKey.end()},
@@ -3982,12 +4346,12 @@ BOOST_AUTO_TEST_CASE(VerifyScript_lows)
     }
 }
 
-BOOST_AUTO_TEST_CASE(EvalScript_op_checksig_forkid_relax)
+BOOST_AUTO_TEST_CASE(EvalScript_op_checksig_forkid_chronicle)
 {
     using namespace std;
 
     using test_args = tuple<uint32_t,   // flags
-                            int,        // sighash 
+                            uint8_t,    // sighash 
                             std::optional<ScriptError>,
                             std::optional<malleability::status>>;
     const vector<test_args> test_data 
@@ -3995,15 +4359,15 @@ BOOST_AUTO_TEST_CASE(EvalScript_op_checksig_forkid_relax)
         {0,
          0,
          {},
-         std::make_optional<malleability::status>()},
+         malleability::non_malleable},
         {0,
          SIGHASH_ALL | SIGHASH_FORKID,
          {},
-         std::make_optional<malleability::status>()},
+         malleability::non_malleable},
         {0,
          SIGHASH_ALL | SIGHASH_FORKID,
          {},
-         std::make_optional<malleability::status>()},
+         malleability::non_malleable},
 
         {SCRIPT_VERIFY_STRICTENC,
          0,
@@ -4016,11 +4380,11 @@ BOOST_AUTO_TEST_CASE(EvalScript_op_checksig_forkid_relax)
         {SCRIPT_VERIFY_STRICTENC,
          SIGHASH_ALL,
          {},
-         std::make_optional<malleability::status>()},
+         malleability::non_malleable},
         {SCRIPT_VERIFY_STRICTENC | SCRIPT_CHRONICLE,
          SIGHASH_ALL,
          {},
-         std::make_optional<malleability::status>()},
+         malleability::non_malleable},
         {SCRIPT_VERIFY_STRICTENC,
          SIGHASH_ALL | SIGHASH_FORKID,
          SCRIPT_ERR_ILLEGAL_FORKID,
@@ -4033,27 +4397,27 @@ BOOST_AUTO_TEST_CASE(EvalScript_op_checksig_forkid_relax)
         {SCRIPT_ENABLE_SIGHASH_FORKID,
          0,
          {},
-         std::make_optional<malleability::status>()},
+         malleability::non_malleable},
         {SCRIPT_ENABLE_SIGHASH_FORKID | SCRIPT_CHRONICLE,
          0,
          {},
-         std::make_optional<malleability::status>()},
+         malleability::non_malleable},
         {SCRIPT_ENABLE_SIGHASH_FORKID,
          SIGHASH_ALL,
          {},
-         std::make_optional<malleability::status>()},
+         malleability::non_malleable},
         {SCRIPT_ENABLE_SIGHASH_FORKID | SCRIPT_CHRONICLE,
          SIGHASH_ALL,
          {},
-         std::make_optional<malleability::status>()},
+         malleability::non_malleable},
         {SCRIPT_ENABLE_SIGHASH_FORKID,
          SIGHASH_ALL | SIGHASH_FORKID,
          {},
-         std::make_optional<malleability::status>()},
+         malleability::non_malleable},
         {SCRIPT_ENABLE_SIGHASH_FORKID | SCRIPT_CHRONICLE,
          SIGHASH_ALL | SIGHASH_FORKID,
          {},
-         std::make_optional<malleability::status>()},
+         malleability::non_malleable},
 
         {SCRIPT_VERIFY_STRICTENC | SCRIPT_ENABLE_SIGHASH_FORKID,
          SIGHASH_FORKID,
@@ -4065,41 +4429,44 @@ BOOST_AUTO_TEST_CASE(EvalScript_op_checksig_forkid_relax)
          {}},
         {SCRIPT_VERIFY_STRICTENC | SCRIPT_ENABLE_SIGHASH_FORKID,
          SIGHASH_ALL,
-         {SCRIPT_ERR_MUST_USE_FORKID},
+         SCRIPT_ERR_MUST_USE_FORKID,
          {}},
-        {SCRIPT_VERIFY_STRICTENC | SCRIPT_ENABLE_SIGHASH_FORKID | SCRIPT_CHRONICLE,
-         SIGHASH_ALL,
-         {},
-         std::make_optional<malleability::status>()},
-        {SCRIPT_VERIFY_STRICTENC | SCRIPT_ENABLE_SIGHASH_FORKID,
-         SIGHASH_ALL | SIGHASH_FORKID,
-         {},
-         std::make_optional<malleability::status>(malleability::disallowed)},
-        {SCRIPT_VERIFY_STRICTENC | SCRIPT_ENABLE_SIGHASH_FORKID | SCRIPT_CHRONICLE,
-         SIGHASH_ALL | SIGHASH_FORKID,
-         {},
-         std::make_optional<malleability::status>(malleability::disallowed)},
+        {SCRIPT_VERIFY_STRICTENC
+         | SCRIPT_ENABLE_SIGHASH_FORKID
+         | SCRIPT_CHRONICLE,
+          SIGHASH_ALL | SIGHASH_FORKID,
+          {},
+          malleability::disallowed },
+         {SCRIPT_VERIFY_STRICTENC
+          | SCRIPT_ENABLE_SIGHASH_FORKID,
+          SIGHASH_ALL | SIGHASH_FORKID,
+          {},
+          malleability::disallowed},
+       {SCRIPT_VERIFY_STRICTENC | SCRIPT_ENABLE_SIGHASH_FORKID | SCRIPT_CHRONICLE,
+        SIGHASH_ALL | SIGHASH_FORKID,
+        {},
+        malleability::disallowed},
        
-        // relax flag
         // Pre-Chronicle
-        {SCRIPT_VERIFY_STRICTENC | SCRIPT_ENABLE_SIGHASH_FORKID,
-         SIGHASH_ALL | SIGHASH_FORKID | SIGHASH_RELAX,
-         { SCRIPT_ERR_ILLEGAL_RELAX },
-         {}},
-        // Post-Chronicle
-        {SCRIPT_VERIFY_STRICTENC | SCRIPT_ENABLE_SIGHASH_FORKID | SCRIPT_CHRONICLE,
-         SIGHASH_ALL | SIGHASH_FORKID | SIGHASH_RELAX,
-         {},
-         std::make_optional<malleability::status>()},
+       {SCRIPT_VERIFY_STRICTENC | SCRIPT_ENABLE_SIGHASH_FORKID,
+        SIGHASH_ALL | SIGHASH_FORKID | SIGHASH_CHRONICLE,
+        SCRIPT_ERR_ILLEGAL_CHRONICLE,
+        {}},
+       // Post-Chronicle
+       {SCRIPT_VERIFY_STRICTENC | SCRIPT_ENABLE_SIGHASH_FORKID | SCRIPT_CHRONICLE,
+        SIGHASH_ALL | SIGHASH_FORKID | SIGHASH_CHRONICLE,
+        {},
+        malleability::non_malleable},
     };
     for(const auto& [flags, sighash, exp_error, exp_mall] : test_data)
     {
         const Config& config = GlobalConfig::GetConfig();
+        const auto params{make_eval_script_params(config, flags, false)};
         auto source = task::CCancellationSource::Make();
         LimitedStack stack(UINT32_MAX);
-        const auto script{make_op_checksig_script(sighash, low_s_max())};
-        const auto status = EvalScript(config,
-                                       false,
+        const auto script{make_op_checksig_script(make_signature(low_s_max(), sighash),
+                                                  make_pub_key())};
+        const auto status = EvalScript(params,
                                        source->GetToken(),
                                        stack,
                                        CScript{script.begin(), script.end()},
@@ -4125,12 +4492,12 @@ BOOST_AUTO_TEST_CASE(EvalScript_op_checksig_forkid_relax)
     }
 }
 
-BOOST_AUTO_TEST_CASE(EvalScript_op_checkmultisig_forkid_relax)
+BOOST_AUTO_TEST_CASE(EvalScript_op_checkmultisig_forkid_chronicle)
 {
     using namespace std;
 
     using test_args = tuple<uint32_t,   // flags
-                            int,        // sighash 
+                            uint8_t,    // sighash 
                             std::optional<ScriptError>,
                             std::optional<malleability::status>>;
     const vector<test_args> test_data 
@@ -4138,15 +4505,15 @@ BOOST_AUTO_TEST_CASE(EvalScript_op_checkmultisig_forkid_relax)
         {0,
          0,
          {},
-         std::make_optional<malleability::status>()},
+         malleability::non_malleable},
         {0,
          SIGHASH_ALL | SIGHASH_FORKID,
          {},
-         std::make_optional<malleability::status>()},
+         malleability::non_malleable},
         {0,
          SIGHASH_ALL | SIGHASH_FORKID,
          {},
-         std::make_optional<malleability::status>()},
+         malleability::non_malleable},
 
         {SCRIPT_VERIFY_STRICTENC,
          0,
@@ -4159,11 +4526,11 @@ BOOST_AUTO_TEST_CASE(EvalScript_op_checkmultisig_forkid_relax)
         {SCRIPT_VERIFY_STRICTENC,
          SIGHASH_ALL,
          {},
-         std::make_optional<malleability::status>()},
+         malleability::non_malleable},
         {SCRIPT_VERIFY_STRICTENC | SCRIPT_CHRONICLE,
          SIGHASH_ALL,
          {},
-         std::make_optional<malleability::status>()},
+         malleability::non_malleable},
         {SCRIPT_VERIFY_STRICTENC,
          SIGHASH_ALL | SIGHASH_FORKID,
          SCRIPT_ERR_ILLEGAL_FORKID,
@@ -4176,27 +4543,27 @@ BOOST_AUTO_TEST_CASE(EvalScript_op_checkmultisig_forkid_relax)
         {SCRIPT_ENABLE_SIGHASH_FORKID,
          0,
          {},
-         std::make_optional<malleability::status>()},
+         malleability::non_malleable},
         {SCRIPT_ENABLE_SIGHASH_FORKID | SCRIPT_CHRONICLE,
          0,
          {},
-         std::make_optional<malleability::status>()},
+         malleability::non_malleable},
         {SCRIPT_ENABLE_SIGHASH_FORKID,
          SIGHASH_ALL,
          {},
-         std::make_optional<malleability::status>()},
+         malleability::non_malleable},
         {SCRIPT_ENABLE_SIGHASH_FORKID | SCRIPT_CHRONICLE,
          SIGHASH_ALL,
          {},
-         std::make_optional<malleability::status>()},
+         malleability::non_malleable},
         {SCRIPT_ENABLE_SIGHASH_FORKID,
          SIGHASH_ALL | SIGHASH_FORKID,
          {},
-         std::make_optional<malleability::status>()},
+         malleability::non_malleable},
         {SCRIPT_ENABLE_SIGHASH_FORKID | SCRIPT_CHRONICLE,
          SIGHASH_ALL | SIGHASH_FORKID,
          {},
-         std::make_optional<malleability::status>()},
+         malleability::non_malleable},
 
         {SCRIPT_VERIFY_STRICTENC | SCRIPT_ENABLE_SIGHASH_FORKID,
          SIGHASH_FORKID,
@@ -4208,41 +4575,42 @@ BOOST_AUTO_TEST_CASE(EvalScript_op_checkmultisig_forkid_relax)
          {}},
         {SCRIPT_VERIFY_STRICTENC | SCRIPT_ENABLE_SIGHASH_FORKID,
          SIGHASH_ALL,
-         {SCRIPT_ERR_MUST_USE_FORKID},
+         SCRIPT_ERR_MUST_USE_FORKID,
          {}},
         {SCRIPT_VERIFY_STRICTENC | SCRIPT_ENABLE_SIGHASH_FORKID | SCRIPT_CHRONICLE,
          SIGHASH_ALL,
-         {},
-         std::make_optional<malleability::status>()},
+         SCRIPT_ERR_MUST_USE_FORKID,
+         {}},
         {SCRIPT_VERIFY_STRICTENC | SCRIPT_ENABLE_SIGHASH_FORKID,
          SIGHASH_ALL | SIGHASH_FORKID,
          {},
-         std::make_optional<malleability::status>(malleability::disallowed)},
+         malleability::disallowed},
         {SCRIPT_VERIFY_STRICTENC | SCRIPT_ENABLE_SIGHASH_FORKID | SCRIPT_CHRONICLE,
          SIGHASH_ALL | SIGHASH_FORKID,
          {},
-         std::make_optional<malleability::status>(malleability::disallowed)},
+         malleability::disallowed},
         
-        // relax flag
+        // chronicle flag
         // Pre-Chronicle
         {SCRIPT_VERIFY_STRICTENC | SCRIPT_ENABLE_SIGHASH_FORKID,
-         SIGHASH_ALL | SIGHASH_FORKID | SIGHASH_RELAX,
-         { SCRIPT_ERR_ILLEGAL_RELAX },
+         SIGHASH_ALL | SIGHASH_FORKID | SIGHASH_CHRONICLE,
+         SCRIPT_ERR_ILLEGAL_CHRONICLE,
          {}},
         // Post-Chronicle
         {SCRIPT_VERIFY_STRICTENC | SCRIPT_ENABLE_SIGHASH_FORKID | SCRIPT_CHRONICLE,
-         SIGHASH_ALL | SIGHASH_FORKID | SIGHASH_RELAX,
+         SIGHASH_ALL | SIGHASH_FORKID | SIGHASH_CHRONICLE,
          {},
-         std::make_optional<malleability::status>()},
+         malleability::non_malleable},
     };
     for(const auto& [flags, sighash, exp_error, exp_mall] : test_data)
     {
         const Config& config = GlobalConfig::GetConfig();
+        const auto params{make_eval_script_params(config, flags, false)};
         auto source = task::CCancellationSource::Make();
         LimitedStack stack(UINT32_MAX);
-        const auto script{make_op_check_multi_sig_script(sighash, low_s_max())};
-        const auto status = EvalScript(config,
-                                       false,
+        const auto script{make_op_check_multi_sig_script({make_signature(low_s_max(), sighash)},
+                                                         {make_pub_key()})};
+        const auto status = EvalScript(params,
                                        source->GetToken(),
                                        stack,
                                        CScript{script.begin(), script.end()},
@@ -4268,28 +4636,26 @@ BOOST_AUTO_TEST_CASE(EvalScript_op_checkmultisig_forkid_relax)
     }
 }
 
-BOOST_AUTO_TEST_CASE(EvalScript_multiple_op_checksig_forkid_relax)
+BOOST_AUTO_TEST_CASE(EvalScript_multiple_op_checksig_forkid_chronicle)
 {
     using namespace std;
         
     const Config& config = GlobalConfig::GetConfig();
+    const auto params{make_eval_script_params(config, flags, false)};
     auto source = task::CCancellationSource::Make();
     
-    using test_args = tuple<vector<int>,   // sighashes
+    using test_args = tuple<vector<uint8_t>,   // sighashes
                             malleability::status>;
     const vector<test_args> test_data
     {
-        {{SIGHASH_ALL,
-          SIGHASH_ALL | SIGHASH_FORKID},
-          malleability::disallowed},
         {{SIGHASH_ALL | SIGHASH_FORKID,
           SIGHASH_ALL | SIGHASH_FORKID},
           malleability::disallowed},
-        {{SIGHASH_ALL | SIGHASH_FORKID | SIGHASH_RELAX,
+        {{SIGHASH_ALL | SIGHASH_FORKID | SIGHASH_CHRONICLE,
           SIGHASH_ALL | SIGHASH_FORKID},
           malleability::disallowed},
-        {{SIGHASH_ALL | SIGHASH_FORKID | SIGHASH_RELAX,
-          SIGHASH_ALL | SIGHASH_FORKID | SIGHASH_RELAX},
+        {{SIGHASH_ALL | SIGHASH_FORKID | SIGHASH_CHRONICLE,
+          SIGHASH_ALL | SIGHASH_FORKID | SIGHASH_CHRONICLE},
          {}}
     };
     for(const auto& [sighashes, exp_mall] : test_data)
@@ -4300,8 +4666,9 @@ BOOST_AUTO_TEST_CASE(EvalScript_multiple_op_checksig_forkid_relax)
                                 vector<uint8_t>{}, 
                                 [](auto acc, const auto sighash)
                                 {
-                                    const auto s{make_op_checksig_script(sighash,
-                                                                         low_s_max())};
+                                    const auto s{make_op_checksig_script(make_signature(low_s_max(),
+                                                                                        sighash),
+                                                                         make_pub_key())};
                                     acc.insert(acc.end(), s.begin(), s.end());
                                     return acc;
                                 })};
@@ -4309,13 +4676,12 @@ BOOST_AUTO_TEST_CASE(EvalScript_multiple_op_checksig_forkid_relax)
                             | SCRIPT_VERIFY_STRICTENC
                             | SCRIPT_CHRONICLE
                             };
-        const auto status = EvalScript(config,
-                                        false,
-                                        source->GetToken(),
-                                        stack,
-                                        CScript{s.begin(), s.end()},
-                                        flags,
-                                        BaseSignatureChecker{});
+        const auto status = EvalScript(params,
+                                       source->GetToken(),
+                                       stack,
+                                       CScript{s.begin(), s.end()},
+                                       flags,
+                                       BaseSignatureChecker{});
         assert(status);
         BOOST_CHECK(std::holds_alternative<malleability::status>(*status));
         BOOST_CHECK_EQUAL(exp_mall, std::get<malleability::status>(*status));
@@ -4327,23 +4693,21 @@ BOOST_AUTO_TEST_CASE(EvalScript_multiple_op_checkmultisig_forkid_relax)
     using namespace std;
 
     const Config& config = GlobalConfig::GetConfig();
+    const auto params{make_eval_script_params(config, flags, false)};
     auto source = task::CCancellationSource::Make();
     
-    using test_args = tuple<vector<int>,   // sighashes
+    using test_args = tuple<vector<uint8_t>,   // sighashes
                             malleability::status>;
     const vector<test_args> test_data
     {
-        {{SIGHASH_ALL,
-          SIGHASH_ALL | SIGHASH_FORKID},
-          malleability::disallowed},
         {{SIGHASH_ALL | SIGHASH_FORKID,
           SIGHASH_ALL | SIGHASH_FORKID},
           malleability::disallowed},
-        {{SIGHASH_ALL | SIGHASH_FORKID | SIGHASH_RELAX,
+        {{SIGHASH_ALL | SIGHASH_FORKID | SIGHASH_CHRONICLE,
           SIGHASH_ALL | SIGHASH_FORKID},
           malleability::disallowed},
-        {{SIGHASH_ALL | SIGHASH_FORKID | SIGHASH_RELAX,
-          SIGHASH_ALL | SIGHASH_FORKID | SIGHASH_RELAX},
+        {{SIGHASH_ALL | SIGHASH_FORKID | SIGHASH_CHRONICLE,
+          SIGHASH_ALL | SIGHASH_FORKID | SIGHASH_CHRONICLE},
          {}}
     };
     for(const auto& [sighashes, exp_mall] : test_data)
@@ -4354,8 +4718,9 @@ BOOST_AUTO_TEST_CASE(EvalScript_multiple_op_checkmultisig_forkid_relax)
                                 vector<uint8_t>{}, 
                                 [](auto acc, const auto sighash)
                                 {
-                                    const auto s{make_op_check_multi_sig_script(sighash,
-                                                                                low_s_max())};
+                                    const auto s{make_op_check_multi_sig_script({make_signature(low_s_max(),
+                                                                                                sighash)},
+                                                                                {make_pub_key()})};
                                     acc.insert(acc.end(), s.begin(), s.end());
                                     return acc;
                                 })};
@@ -4364,13 +4729,12 @@ BOOST_AUTO_TEST_CASE(EvalScript_multiple_op_checkmultisig_forkid_relax)
                             | SCRIPT_VERIFY_STRICTENC
                             | SCRIPT_CHRONICLE
                             };
-        const auto status = EvalScript(config,
-                                        false,
-                                        source->GetToken(),
-                                        stack,
-                                        CScript{s.begin(), s.end()},
-                                        flags,
-                                        BaseSignatureChecker{});
+        const auto status = EvalScript(params,
+                                       source->GetToken(),
+                                       stack,
+                                       CScript{s.begin(), s.end()},
+                                       flags,
+                                       BaseSignatureChecker{});
         assert(status);
         BOOST_CHECK(std::holds_alternative<malleability::status>(*status));
         BOOST_CHECK_EQUAL(exp_mall, std::get<malleability::status>(*status));
@@ -4383,96 +4747,100 @@ BOOST_AUTO_TEST_CASE(EvalScript_minimal_encoding)
 
     using test_args = tuple<uint32_t,           // flags
                             vector<uint8_t>,    // pushdata script
-                            int,                // sighash
+                            uint8_t,             // sighash
                             std::optional<ScriptError>,
                             std::optional<malleability::status>>;
     const vector<test_args> test_data
     {
         // Pre-Chronicle
-        {SCRIPT_VERIFY_STRICTENC | SCRIPT_ENABLE_SIGHASH_FORKID,
+        {SCRIPT_VERIFY_STRICTENC
+         | SCRIPT_ENABLE_SIGHASH_FORKID,
          {OP_PUSHDATA1, 0}, // Non-minimal encoding - could have used OP_0
          SIGHASH_ALL | SIGHASH_FORKID,
-         {}, {malleability::disallowed}},
+         {}, malleability::disallowed},
 
-        {SCRIPT_VERIFY_MINIMALDATA
-         | SCRIPT_VERIFY_STRICTENC
-         | SCRIPT_ENABLE_SIGHASH_FORKID,
+        {SCRIPT_VERIFY_STRICTENC
+         | SCRIPT_ENABLE_SIGHASH_FORKID
+         | SCRIPT_VERIFY_MINIMALDATA, // added
          {OP_PUSHDATA1, 0},
          SIGHASH_ALL,
-         {SCRIPT_ERR_MINIMALDATA}, {}},
+         SCRIPT_ERR_MINIMALDATA, {}},
 
-        {SCRIPT_VERIFY_MINIMALDATA
-         | SCRIPT_VERIFY_STRICTENC
-         | SCRIPT_ENABLE_SIGHASH_FORKID,
+        {SCRIPT_VERIFY_STRICTENC
+         | SCRIPT_ENABLE_SIGHASH_FORKID
+         | SCRIPT_VERIFY_MINIMALDATA,
          {OP_PUSHDATA1, 0},
          SIGHASH_ALL | SIGHASH_FORKID,
-         {SCRIPT_ERR_MINIMALDATA}, {}},
+         SCRIPT_ERR_MINIMALDATA, {}},
 
-        {SCRIPT_VERIFY_MINIMALDATA
-         | SCRIPT_VERIFY_STRICTENC
-         | SCRIPT_ENABLE_SIGHASH_FORKID,
-         {OP_PUSHDATA1, 0}, // Non-minimal encoding (use OP_0)
+        {SCRIPT_VERIFY_STRICTENC
+         | SCRIPT_ENABLE_SIGHASH_FORKID
+         | SCRIPT_VERIFY_MINIMALDATA,
+         {2, 0, 0 }, // Non-minimal encoded (2 bytes of raw data)
          SIGHASH_ALL | SIGHASH_FORKID,
-         {SCRIPT_ERR_MINIMALDATA}, {}},
+         {}, malleability::disallowed},
         
-        {SCRIPT_VERIFY_MINIMALDATA
-         | SCRIPT_VERIFY_STRICTENC
-         | SCRIPT_ENABLE_SIGHASH_FORKID,
-         {2, 0, 0 }, // Minimal encoded (2 bytes of raw data)
-         SIGHASH_ALL | SIGHASH_FORKID,
-         {}, {malleability::disallowed}},
-        
-        {SCRIPT_VERIFY_MINIMALDATA
-         | SCRIPT_VERIFY_STRICTENC
-         | SCRIPT_ENABLE_SIGHASH_FORKID,
+        {SCRIPT_VERIFY_STRICTENC
+         | SCRIPT_ENABLE_SIGHASH_FORKID
+         | SCRIPT_VERIFY_MINIMALDATA,
          {2, 0, 0, OP_1ADD}, // OP_1ADD ensures CScriptNum can be created from the stack
          SIGHASH_ALL | SIGHASH_FORKID,
-         {SCRIPT_ERR_SCRIPTNUM_MINENCODE}, {}},
+         SCRIPT_ERR_SCRIPTNUM_MINENCODE, {}},
 
         // Post Chronicle
-        {SCRIPT_VERIFY_MINIMALDATA
-         | SCRIPT_VERIFY_STRICTENC
+        {SCRIPT_VERIFY_STRICTENC
          | SCRIPT_ENABLE_SIGHASH_FORKID
+         | SCRIPT_VERIFY_MINIMALDATA
          | SCRIPT_CHRONICLE,
          {OP_PUSHDATA1, 0, OP_1ADD}, // Non-minimal encoding (use OP_0)
-         SIGHASH_ALL,
-         {}, {malleability::non_minimal_push}},
+         SIGHASH_ALL, // no SIGHASH_FORKID
+         SCRIPT_ERR_MUST_USE_FORKID, {}},
 
-        {SCRIPT_VERIFY_MINIMALDATA
-         | SCRIPT_VERIFY_STRICTENC
+        {SCRIPT_VERIFY_STRICTENC
          | SCRIPT_ENABLE_SIGHASH_FORKID
+         | SCRIPT_VERIFY_MINIMALDATA
          | SCRIPT_CHRONICLE,
          {OP_PUSHDATA1, 0, OP_1ADD},
          SIGHASH_ALL | SIGHASH_FORKID,
-         {}, {malleability::non_minimal_push | malleability::disallowed}},
+         {}, malleability::non_minimal_push | malleability::disallowed},
 
-        {SCRIPT_VERIFY_MINIMALDATA
-         | SCRIPT_VERIFY_STRICTENC
+        {SCRIPT_VERIFY_STRICTENC
          | SCRIPT_ENABLE_SIGHASH_FORKID
+         | SCRIPT_VERIFY_MINIMALDATA
+         | SCRIPT_CHRONICLE,
+         {OP_PUSHDATA1, 0, OP_1ADD},
+         SIGHASH_ALL | SIGHASH_FORKID | SIGHASH_CHRONICLE, // added
+         {}, malleability::non_minimal_push},
+
+        {SCRIPT_VERIFY_STRICTENC
+         | SCRIPT_ENABLE_SIGHASH_FORKID
+         | SCRIPT_VERIFY_MINIMALDATA
          | SCRIPT_CHRONICLE,
          {2, 0, 0, OP_1ADD}, // Minimal encoded (2 bytes of raw data)
          SIGHASH_ALL,
-         {}, {malleability::non_minimal_scriptnum}},
+         SCRIPT_ERR_MUST_USE_FORKID, {}},
         
-        {SCRIPT_VERIFY_MINIMALDATA
-         | SCRIPT_VERIFY_STRICTENC
+        {SCRIPT_VERIFY_STRICTENC
          | SCRIPT_ENABLE_SIGHASH_FORKID
+         | SCRIPT_VERIFY_MINIMALDATA
          | SCRIPT_CHRONICLE,
          {2, 0, 0, OP_1ADD},
          SIGHASH_ALL | SIGHASH_FORKID,
-         {}, {malleability::disallowed | malleability::non_minimal_scriptnum}},
+         {}, malleability::disallowed | malleability::non_minimal_scriptnum},
     };
     for(const auto& [flags, s, sig_hash, exp_error, exp_mall] : test_data)
     {
         const Config& config = GlobalConfig::GetConfig();
+        const auto params{make_eval_script_params(config, flags, false)};
         auto source = task::CCancellationSource::Make();
         LimitedStack stack(UINT32_MAX);
       
         vector<uint8_t> script{s};
-        const auto op_checksig_script{make_op_checksig_script(sig_hash, low_s_max())};
+        const auto op_checksig_script{make_op_checksig_script(make_signature(low_s_max(),
+                                                                             sig_hash),
+                                                              make_pub_key())};
         script.insert(script.end(), op_checksig_script.begin(), op_checksig_script.end());
-        const auto status = EvalScript(config,
-                                       false,
+        const auto status = EvalScript(params,
                                        source->GetToken(),
                                        stack,
                                        CScript{script.begin(), script.end()},
@@ -4501,7 +4869,7 @@ BOOST_AUTO_TEST_CASE(VerifyScript_minimal_encoding)
 
     using test_args = tuple<uint32_t,               // flags
                             vector<uint8_t>,        // unlocking script
-                            int,                    // sighash
+                            uint8_t,                // sighash
                             ScriptError,            // expect error
                             malleability::status>;  // expected malleability_status
     const vector<test_args> test_data
@@ -4512,28 +4880,28 @@ BOOST_AUTO_TEST_CASE(VerifyScript_minimal_encoding)
          SIGHASH_ALL | SIGHASH_FORKID,
          SCRIPT_ERR_OK, malleability::disallowed},
 
-        {SCRIPT_VERIFY_MINIMALDATA
-         | SCRIPT_ENABLE_SIGHASH_FORKID,
+        {SCRIPT_ENABLE_SIGHASH_FORKID
+         | SCRIPT_VERIFY_MINIMALDATA,
          {OP_PUSHDATA1, 1, 1},
          SIGHASH_ALL,
          SCRIPT_ERR_MINIMALDATA, malleability::non_malleable},
 
-        {SCRIPT_VERIFY_MINIMALDATA
-         | SCRIPT_ENABLE_SIGHASH_FORKID,
+        {SCRIPT_ENABLE_SIGHASH_FORKID
+         | SCRIPT_VERIFY_MINIMALDATA,
          {OP_PUSHDATA1, 1, 1},
          SIGHASH_ALL | SIGHASH_FORKID,
          SCRIPT_ERR_MINIMALDATA, malleability::non_malleable},
 
         // Post Chronicle
-        {SCRIPT_VERIFY_MINIMALDATA
-         | SCRIPT_ENABLE_SIGHASH_FORKID
+        {SCRIPT_ENABLE_SIGHASH_FORKID
+         | SCRIPT_VERIFY_MINIMALDATA
          | SCRIPT_CHRONICLE,
          {OP_PUSHDATA1, 1, 1},
          SIGHASH_ALL,
-         SCRIPT_ERR_OK, malleability::non_minimal_push},
+         SCRIPT_ERR_MUST_USE_FORKID, {}},
 
-        {SCRIPT_VERIFY_MINIMALDATA
-         | SCRIPT_ENABLE_SIGHASH_FORKID
+        {SCRIPT_ENABLE_SIGHASH_FORKID
+         | SCRIPT_VERIFY_MINIMALDATA
          | SCRIPT_CHRONICLE,
          {OP_PUSHDATA1, 1, 1},
          SIGHASH_ALL | SIGHASH_FORKID,
@@ -4543,17 +4911,19 @@ BOOST_AUTO_TEST_CASE(VerifyScript_minimal_encoding)
     for(const auto& [flags, scriptSig, sig_hash, exp_error, exp_mall] : test_data)
     {
         const Config& config = GlobalConfig::GetConfig();
+        const auto params{make_verify_script_params(config, flags, false)};
         auto source = task::CCancellationSource::Make();
       
         const auto scriptPubKey{[&sig_hash]{
-            vector<uint8_t> v{make_op_checksig_script(sig_hash, low_s_max())};
+            vector<uint8_t> v{make_op_checksig_script(make_signature(low_s_max(),
+                                                                     sig_hash),
+                                                      make_pub_key())};
             v.push_back(OP_DROP); // ignore result of OP_CHECKSIG (always false)
             return v;
         }()};
 
         std::atomic<malleability::status> ms;
-        const auto status = VerifyScript(config,
-                                         false,
+        const auto status = VerifyScript(params,
                                          source->GetToken(),
                                          CScript{scriptSig.begin(), scriptSig.end()},
                                          CScript{scriptPubKey.begin(), scriptPubKey.end()},
@@ -4567,4 +4937,900 @@ BOOST_AUTO_TEST_CASE(VerifyScript_minimal_encoding)
     }
 }
 
+BOOST_AUTO_TEST_CASE(eval_script_op_checksig_nullfail)
+{
+    using namespace std;
+
+    const vector<uint8_t> empty_sig{};
+    constexpr uint8_t non_chronicle_sighash{SIGHASH_ALL | SIGHASH_FORKID};
+    const auto non_chronicle_sig{make_signature(low_s_max(), non_chronicle_sighash)};
+    constexpr uint8_t chronicle_sighash{non_chronicle_sighash | SIGHASH_CHRONICLE};
+    const auto chronicle_sig{make_signature(low_s_max(), chronicle_sighash)};
+
+    using test_args = tuple<uint32_t,              // flags
+                            vector<uint8_t>,       // empty signature
+                            std::variant<ScriptError, malleability::status>>;
+    const vector<test_args> test_data
+    {
+        // Pre-Chronicle
+        {{},
+         non_chronicle_sig,
+         malleability::non_malleable},
+        
+        {{},
+         chronicle_sig,
+         malleability::non_malleable},
+        
+        {{},
+         empty_sig,
+         malleability::non_malleable},
+
+        {SCRIPT_VERIFY_NULLFAIL,
+         non_chronicle_sig,
+         SCRIPT_ERR_SIG_NULLFAIL},
+        
+        {SCRIPT_VERIFY_NULLFAIL,
+         chronicle_sig,
+         SCRIPT_ERR_SIG_NULLFAIL},
+
+        {SCRIPT_VERIFY_NULLFAIL,
+         empty_sig,
+         malleability::non_malleable},
+        
+        // Post-Chronicle
+        {SCRIPT_CHRONICLE,
+         non_chronicle_sig,
+         malleability::non_malleable},
+        
+        {SCRIPT_CHRONICLE,
+         chronicle_sig,
+         malleability::non_malleable},
+        
+        {SCRIPT_CHRONICLE,
+         empty_sig,
+         malleability::non_malleable},
+
+        {SCRIPT_VERIFY_NULLFAIL | SCRIPT_CHRONICLE,
+         non_chronicle_sig,
+         SCRIPT_ERR_SIG_NULLFAIL},
+
+        {SCRIPT_VERIFY_NULLFAIL | SCRIPT_CHRONICLE,
+         chronicle_sig,
+         malleability::null_fail},
+        
+        {SCRIPT_VERIFY_NULLFAIL | SCRIPT_CHRONICLE,
+         empty_sig,
+         malleability::non_malleable},
+    };
+    for(const auto& [flags, sig, expected] : test_data)
+    {
+        const auto params{make_eval_script_params(GlobalConfig::GetConfig(), flags, false)};
+        auto source = task::CCancellationSource::Make();
+        LimitedStack stack(UINT32_MAX);
+        const auto op_checksig_script{make_op_checksig_script(sig,
+                                                              make_pub_key())};
+        const auto status = EvalScript(params,
+                                       source->GetToken(),
+                                       stack,
+                                       CScript{op_checksig_script.begin(),
+                                               op_checksig_script.end()},
+                                       flags,
+                                       BaseSignatureChecker{});
+        assert(status);
+        std::visit(overload([&expected, &stack](const malleability::status ms)
+                            {
+                                BOOST_CHECK_EQUAL(std::get<malleability::status>(expected),
+                                                  ms);
+                                BOOST_CHECK_EQUAL(1, stack.size());
+                                BOOST_CHECK_EQUAL(0, stack.at(0).size());
+                            },
+                            [&expected, &stack](const ScriptError se)
+                            {
+                                BOOST_CHECK_EQUAL(std::get<ScriptError>(expected), se); 
+                                BOOST_CHECK_EQUAL(2, stack.size());
+                                BOOST_CHECK_EQUAL(71, stack.at(0).size());
+                                BOOST_CHECK_EQUAL(33, stack.at(1).size());
+                            }),
+                   *status);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(verify_script_op_checksig_nullfail)
+{
+    using namespace std;
+
+    const vector<uint8_t> empty_sig{};
+    constexpr uint8_t non_chronicle_sighash{SIGHASH_ALL | SIGHASH_FORKID};
+    constexpr uint8_t chronicle_sighash{non_chronicle_sighash | SIGHASH_CHRONICLE};
+    const auto chronicle_sig{make_signature(low_s_max(), chronicle_sighash)};
+
+    using test_args = tuple<uint32_t,              // flags
+                            malleability::status,
+                            ScriptError,           // expected error
+                            malleability::status>; // expected malleability_status
+    const vector<test_args> test_data
+    {
+        // Pre-Chronicle
+        {{},
+         {},
+         SCRIPT_ERR_OK, {}},
+
+        {SCRIPT_VERIFY_NULLFAIL,
+         {},
+         SCRIPT_ERR_SIG_NULLFAIL, {}},
+        
+        {{},
+         malleability::disallowed,
+         SCRIPT_ERR_OK, malleability::disallowed},
+
+        {SCRIPT_VERIFY_NULLFAIL,
+         malleability::disallowed,
+         SCRIPT_ERR_SIG_NULLFAIL, malleability::disallowed},
+       
+        // Post-Chronicle
+        {SCRIPT_CHRONICLE,
+         {},
+         SCRIPT_ERR_OK, {}},
+
+        {SCRIPT_CHRONICLE | SCRIPT_VERIFY_NULLFAIL,
+         {},
+         SCRIPT_ERR_OK, malleability::null_fail},
+
+        {SCRIPT_CHRONICLE,
+         malleability::disallowed,
+         SCRIPT_ERR_OK, malleability::disallowed},
+
+        {SCRIPT_CHRONICLE | SCRIPT_VERIFY_NULLFAIL,
+         malleability::disallowed,
+         SCRIPT_ERR_SIG_NULLFAIL, malleability::disallowed | malleability::null_fail},
+    };
+    for(const auto& [flags, ms, exp_error, exp_mall] : test_data)
+    {
+        const auto params{make_verify_script_params(GlobalConfig::GetConfig(), flags, false)};
+        auto source = task::CCancellationSource::Make();
+        const CScript scriptSig;
+        auto scriptPubKey{make_op_checksig_script(chronicle_sig,
+                                                  make_pub_key())};
+        scriptPubKey.push_back(OP_NOT);
+        std::atomic<malleability::status> ams{ms};
+        const auto status = VerifyScript(params,
+                                         source->GetToken(),
+                                         scriptSig,
+                                         CScript{scriptPubKey.begin(),
+                                                 scriptPubKey.end()},
+                                         flags,
+                                         BaseSignatureChecker{},
+                                         ams);
+        assert(status);
+        BOOST_CHECK_EQUAL(exp_error == SCRIPT_ERR_OK, status->first);
+        BOOST_CHECK_EQUAL(exp_error, status->second);
+        BOOST_CHECK_EQUAL(exp_mall, malleability::status{ams});
+    }
+}
+
+BOOST_AUTO_TEST_CASE(eval_script_op_checkmultisig_nullfail)
+{
+    using namespace std;
+   
+    const vector<uint8_t> null_dummy{}; // all op_checkmultisig begin with a vestigial OP_0
+
+    const vector<uint8_t> null_sig;
+    constexpr uint8_t non_chronicle_sighash{SIGHASH_ALL | SIGHASH_FORKID};
+    const auto non_chronicle_sig{make_signature(low_s_max(), non_chronicle_sighash)};
+    constexpr uint8_t chronicle_sighash{non_chronicle_sighash | SIGHASH_CHRONICLE};
+    const auto chronicle_sig{make_signature(low_s_max(), chronicle_sighash)};
+
+    const auto pub_key{make_pub_key()};
+
+    using test_args = tuple<uint32_t,                                   // flags
+                            vector<vector<uint8_t>>,                    // signatures
+                            vector<vector<uint8_t>>,                    // public keys
+                            variant<ScriptError, malleability::status>, // expected result
+                            vector<vector<uint8_t>>>;                   // expected stack
+    const vector<test_args> test_data
+    {
+        // Pre-Chronicle
+        {{},
+         {non_chronicle_sig, non_chronicle_sig},
+         {pub_key},
+         SCRIPT_ERR_SIG_COUNT,
+         {null_dummy, non_chronicle_sig, non_chronicle_sig, {2}, pub_key, {1}}},
+        
+        {{},
+         {null_sig},
+         {pub_key},
+         malleability::non_malleable,
+         {{}}},
+
+        {{},
+         {non_chronicle_sig},
+         {pub_key},
+         malleability::non_malleable,
+         {{}}},
+               
+        {SCRIPT_VERIFY_NULLFAIL,
+         {null_sig},
+         {pub_key},
+         malleability::non_malleable,
+         {{}}},
+        
+        {SCRIPT_VERIFY_NULLFAIL,
+         {non_chronicle_sig, null_sig},
+         {pub_key, pub_key},
+         SCRIPT_ERR_SIG_NULLFAIL,
+         {null_dummy, non_chronicle_sig}},
+        
+        {SCRIPT_VERIFY_NULLFAIL,
+         {null_sig, non_chronicle_sig},
+         {pub_key, pub_key},
+         SCRIPT_ERR_SIG_NULLFAIL,
+         {null_dummy, null_sig, non_chronicle_sig}},
+        
+        // Post-Chronicle
+        {{},
+         {chronicle_sig, chronicle_sig},
+         {pub_key},
+         SCRIPT_ERR_SIG_COUNT,
+         {null_dummy, chronicle_sig, chronicle_sig, {2}, pub_key, {1}}},
+        
+        {{},
+         {null_sig},
+         {pub_key},
+         malleability::non_malleable,
+         {{}}},
+
+        {{},
+         {chronicle_sig},
+         {pub_key},
+         malleability::non_malleable,
+         {{}}},
+               
+        {SCRIPT_VERIFY_NULLFAIL | SCRIPT_CHRONICLE,
+         {null_sig},
+         {pub_key},
+         malleability::non_malleable,
+         {{}}},
+        
+        {SCRIPT_VERIFY_NULLFAIL | SCRIPT_CHRONICLE,
+         {chronicle_sig, null_sig},
+         {pub_key, pub_key},
+         malleability::null_fail,
+         {{}}},
+        
+        {SCRIPT_VERIFY_NULLFAIL | SCRIPT_CHRONICLE,
+         {null_sig, chronicle_sig},
+         {pub_key, pub_key},
+         malleability::null_fail,
+         {{}}},
+        
+        // Pre/Post-Chronicle mixed
+        {SCRIPT_VERIFY_NULLFAIL | SCRIPT_CHRONICLE,
+         {non_chronicle_sig, chronicle_sig},
+         {pub_key, pub_key},
+         SCRIPT_ERR_SIG_NULLFAIL,
+         {null_dummy, non_chronicle_sig}},
+        
+        {SCRIPT_VERIFY_NULLFAIL | SCRIPT_CHRONICLE,
+         {chronicle_sig, non_chronicle_sig},
+         {pub_key, pub_key},
+         SCRIPT_ERR_SIG_NULLFAIL,
+         {null_dummy, chronicle_sig, non_chronicle_sig}},
+    };
+    for(const auto& [flags,
+                     sigs,
+                     pks,
+                     expected,
+                     exp_stack] : test_data)
+    {
+        const auto params{make_eval_script_params(GlobalConfig::GetConfig(), flags, false)};
+        auto source = task::CCancellationSource::Make();
+        LimitedStack stack(UINT32_MAX);
+
+        const auto op_checksig_script{make_op_check_multi_sig_script(sigs, pks)};
+        const auto status = EvalScript(params,
+                                       source->GetToken(),
+                                       stack,
+                                       CScript{op_checksig_script.begin(),
+                                               op_checksig_script.end()},
+                                       flags,
+                                       BaseSignatureChecker{});
+        assert(status);
+        std::visit(overload([&expected,
+                             &stack,
+                             &exp_stack](const malleability::status ms)
+                            {
+                                BOOST_CHECK_EQUAL(std::get<malleability::status>(expected),
+                                                  ms);
+                                BOOST_CHECK_EQUAL(exp_stack.size(), stack.size());
+                                for(int i{}; const auto& elem : exp_stack)
+                                {
+                                    BOOST_CHECK_EQUAL_COLLECTIONS(elem.begin(),
+                                                                  elem.end(),
+                                                                  stack.at(i).begin(),
+                                                                  stack.at(i).end());
+                                    ++i;
+                                }
+                            },
+                            [&expected,
+                             &stack,
+                             &exp_stack](const ScriptError se)
+                            {
+                                BOOST_CHECK_EQUAL(std::get<ScriptError>(expected), se); 
+                                BOOST_CHECK_EQUAL(exp_stack.size(), stack.size());
+                                for(int i{}; const auto& elem : exp_stack)
+                                {
+                                    BOOST_CHECK_EQUAL_COLLECTIONS(elem.begin(),
+                                                                  elem.end(),
+                                                                  stack.at(i).begin(),
+                                                                  stack.at(i).end());
+                                    ++i;
+                                }
+                            }),
+                   *status);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(eval_script_op_checkmultisig_nulldummy)
+{
+    using namespace std;
+   
+    const vector<uint8_t> null_sig;
+    constexpr uint8_t sighash{SIGHASH_ALL | SIGHASH_FORKID};
+    const auto sig{make_signature(low_s_max(), sighash)};
+    const auto pub_key{make_pub_key()};
+    
+    const vector<uint8_t> script_false{};
+
+    using test_args = tuple<uint32_t,                                   // flags
+                            uint8_t,                                    // dummy
+                            vector<vector<uint8_t>>,                    // signatures
+                            vector<vector<uint8_t>>,                    // public keys
+                            variant<ScriptError, malleability::status>, // expected result
+                            vector<vector<uint8_t>>>;                   // expected stack
+    const vector<test_args> test_data
+    {
+        // Pre-Chronicle
+        {{},
+         OP_0,
+         {sig},
+         {pub_key},
+         malleability::non_malleable,
+         {script_false}},
+        
+        {{},
+         OP_1,
+         {sig},
+         {pub_key},
+         malleability::non_malleable,
+         {script_false}},
+       
+        {SCRIPT_VERIFY_NULLDUMMY,
+         OP_0,
+         {sig},
+         {pub_key},
+         malleability::non_malleable,
+         {script_false}},
+        
+        {SCRIPT_VERIFY_NULLDUMMY,
+         OP_1,
+         {sig},
+         {pub_key},
+         SCRIPT_ERR_SIG_NULLDUMMY,
+         {{1}}},
+       
+        // Post-Chronicle
+        {SCRIPT_CHRONICLE,
+         OP_0,
+         {sig},
+         {pub_key},
+         malleability::non_malleable,
+         {script_false}},
+        
+        {SCRIPT_CHRONICLE,
+         OP_1,
+         {sig},
+         {pub_key},
+         malleability::non_malleable,
+         {script_false}},
+       
+        {SCRIPT_CHRONICLE | SCRIPT_VERIFY_NULLDUMMY,
+         OP_0,
+         {sig},
+         {pub_key},
+         malleability::non_malleable,
+         {script_false}},
+        
+        {SCRIPT_CHRONICLE | SCRIPT_VERIFY_NULLDUMMY,
+         OP_1,
+         {sig},
+         {pub_key},
+         malleability::null_dummy,
+         {script_false}},
+    };
+    for(const auto& [flags,
+                     dummy,
+                     sigs,
+                     pks,
+                     expected,
+                     exp_stack] : test_data)
+    {
+        const auto params{make_eval_script_params(GlobalConfig::GetConfig(), flags, false)};
+        auto source = task::CCancellationSource::Make();
+        LimitedStack stack(UINT32_MAX);
+
+        const auto op_checksig_script{make_op_check_multi_sig_script(sigs, pks, dummy)};
+        const auto status = EvalScript(params,
+                                       source->GetToken(),
+                                       stack,
+                                       CScript{op_checksig_script.begin(),
+                                               op_checksig_script.end()},
+                                       flags,
+                                       BaseSignatureChecker{});
+        assert(status);
+        std::visit(overload([&expected,
+                             &stack,
+                             &exp_stack](const malleability::status ms)
+                            {
+                                BOOST_CHECK_EQUAL(std::get<malleability::status>(expected),
+                                                  ms);
+                                BOOST_CHECK_EQUAL(exp_stack.size(), stack.size());
+                                for(int i{}; const auto& elem : exp_stack)
+                                {
+                                    BOOST_CHECK_EQUAL_COLLECTIONS(elem.begin(),
+                                                                  elem.end(),
+                                                                  stack.at(i).begin(),
+                                                                  stack.at(i).end());
+                                    ++i;
+                                }
+                            },
+                            [&expected,
+                             &stack,
+                             &exp_stack](const ScriptError se)
+                            {
+                                BOOST_CHECK_EQUAL(std::get<ScriptError>(expected), se); 
+                                BOOST_CHECK_EQUAL(exp_stack.size(), stack.size());
+                                for(int i{}; const auto& elem : exp_stack)
+                                {
+                                    BOOST_CHECK_EQUAL_COLLECTIONS(elem.begin(),
+                                                                  elem.end(),
+                                                                  stack.at(i).begin(),
+                                                                  stack.at(i).end());
+                                    ++i;
+                                }
+                            }),
+                   *status);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(verify_script_op_checksig_nulldummy)
+{
+    using namespace std;
+
+    const vector<uint8_t> empty_sig{};
+    constexpr uint8_t sighash{SIGHASH_ALL | SIGHASH_FORKID};
+    const auto sig{make_signature(low_s_max(), sighash)};
+
+    using test_args = tuple<uint32_t,              // flags
+                            uint8_t,               // dummy
+                            malleability::status,
+                            ScriptError,           // expected error
+                            malleability::status>; // expected malleability_status
+    const vector<test_args> test_data
+    {
+        // Pre-Chronicle
+        // malleability allowed
+        {{},
+         OP_0,
+         {},
+         SCRIPT_ERR_OK, malleability::non_malleable},
+
+        {{},
+         OP_1,
+         {},
+         SCRIPT_ERR_OK, malleability::non_malleable},
+
+        {SCRIPT_VERIFY_NULLDUMMY,
+         OP_0,
+         {},
+         SCRIPT_ERR_OK, malleability::non_malleable},
+
+        {SCRIPT_VERIFY_NULLDUMMY,
+         OP_1,
+         {},
+         SCRIPT_ERR_SIG_NULLDUMMY, malleability::non_malleable},
+
+        // malleability disallowed
+        {{},
+         OP_0,
+         malleability::disallowed,
+         SCRIPT_ERR_OK, malleability::disallowed},
+
+        {{},
+         OP_1,
+         malleability::disallowed,
+         SCRIPT_ERR_OK, malleability::disallowed},
+
+        {SCRIPT_VERIFY_NULLDUMMY,
+         OP_0,
+         malleability::disallowed,
+         SCRIPT_ERR_OK, malleability::disallowed},
+
+        {SCRIPT_VERIFY_NULLDUMMY,
+         OP_1,
+         malleability::disallowed,
+         SCRIPT_ERR_SIG_NULLDUMMY, malleability::disallowed},
+
+        // Post-Chronicle
+        // malleability allowed
+        {SCRIPT_CHRONICLE,
+         OP_0,
+         {},
+         SCRIPT_ERR_OK, malleability::non_malleable},
+
+        {SCRIPT_CHRONICLE,
+         OP_1,
+         {},
+         SCRIPT_ERR_OK, malleability::non_malleable},
+
+        {SCRIPT_CHRONICLE | SCRIPT_VERIFY_NULLDUMMY,
+         OP_0,
+         {},
+         SCRIPT_ERR_OK, malleability::non_malleable},
+
+        {SCRIPT_CHRONICLE | SCRIPT_VERIFY_NULLDUMMY,
+         OP_1,
+         {},
+         SCRIPT_ERR_OK, malleability::null_dummy},
+
+        // malleability disallowed
+        {SCRIPT_CHRONICLE,
+         OP_0,
+         malleability::disallowed,
+         SCRIPT_ERR_OK, malleability::disallowed},
+
+        {SCRIPT_CHRONICLE,
+         OP_1,
+         malleability::disallowed,
+         SCRIPT_ERR_OK, malleability::disallowed},
+
+        {SCRIPT_CHRONICLE | SCRIPT_VERIFY_NULLDUMMY,
+         OP_0,
+         malleability::disallowed,
+         SCRIPT_ERR_OK, malleability::disallowed},
+
+        {SCRIPT_CHRONICLE | SCRIPT_VERIFY_NULLDUMMY,
+         OP_1,
+         malleability::disallowed,
+         SCRIPT_ERR_SIG_NULLDUMMY, malleability::disallowed | malleability::null_dummy},
+    };
+    for(const auto& [flags, dummy, ms, exp_error, exp_mall] : test_data)
+    {
+        const auto params{make_verify_script_params(GlobalConfig::GetConfig(), flags, false)};
+        auto source = task::CCancellationSource::Make();
+        const CScript scriptSig;
+        auto scriptPubKey{make_op_check_multi_sig_script({sig},
+                                                         {make_pub_key()},
+                                                         dummy)};
+        scriptPubKey.push_back(OP_NOT);
+        std::atomic<malleability::status> ams{ms};
+        const auto status = VerifyScript(params,
+                                         source->GetToken(),
+                                         scriptSig,
+                                         CScript{scriptPubKey.begin(),
+                                                 scriptPubKey.end()},
+                                         flags,
+                                         BaseSignatureChecker{},
+                                         ams);
+        assert(status);
+        BOOST_CHECK_EQUAL(exp_error == SCRIPT_ERR_OK, status->first);
+        BOOST_CHECK_EQUAL(exp_error, status->second);
+        BOOST_CHECK_EQUAL(exp_mall, malleability::status{ams});
+    }
+}
+
+BOOST_AUTO_TEST_CASE(eval_script_op_if_minimal_if)
+{
+    using namespace std;
+   
+    using test_args = tuple<uint32_t,                                   // flags
+                            vector<uint8_t>,                            // script
+                            variant<ScriptError, malleability::status>, // expected result
+                            vector<vector<uint8_t>>>;                   // expected stack
+    const vector<test_args> test_data
+    {
+        // Pre-Chronicle
+        {{},
+         {OP_0, OP_IF, OP_15, OP_ELSE, OP_16, OP_ENDIF},
+         malleability::non_malleable,
+         {{16}}},
+
+        {{},
+         {OP_1, OP_IF, OP_15, OP_ELSE, OP_16, OP_ENDIF},
+         malleability::non_malleable,
+         {{15}}},
+        
+        {{},
+         {2, 0, 1, OP_IF, OP_15, OP_ELSE, OP_16, OP_ENDIF},
+         malleability::non_malleable,
+         {{15}}},
+
+        {{},
+         {OP_2, OP_IF, OP_15, OP_ELSE, OP_16, OP_ENDIF},
+         malleability::non_malleable,
+         {{15}}},
+
+        {{},
+         {OP_0, OP_NOTIF, OP_15, OP_ELSE, OP_16, OP_ENDIF},
+         malleability::non_malleable,
+         {{15}}},
+
+        {{},
+         {OP_1, OP_NOTIF, OP_15, OP_ELSE, OP_16, OP_ENDIF},
+         malleability::non_malleable,
+         {{16}}},
+        
+        {{},
+         {2, 0, 1, OP_NOTIF, OP_15, OP_ELSE, OP_16, OP_ENDIF},
+         malleability::non_malleable,
+         {{16}}},
+
+        {{},
+         {OP_2, OP_NOTIF, OP_15, OP_ELSE, OP_16, OP_ENDIF},
+         malleability::non_malleable,
+         {{16}}},
+
+        {SCRIPT_VERIFY_MINIMALIF,
+         {OP_0, OP_IF, OP_15, OP_ELSE, OP_16, OP_ENDIF},
+         malleability::non_malleable,
+         {{16}}},
+
+        {SCRIPT_VERIFY_MINIMALIF,
+         {OP_1, OP_IF, OP_15, OP_ELSE, OP_16, OP_ENDIF},
+         malleability::non_malleable,
+         {{15}}},
+        
+        {SCRIPT_VERIFY_MINIMALIF,
+         {2, 0, 1, OP_IF, OP_15, OP_ELSE, OP_16, OP_ENDIF},
+         SCRIPT_ERR_MINIMALIF,
+         {{0, 1}}},
+
+        {SCRIPT_VERIFY_MINIMALIF,
+         {OP_2, OP_IF, OP_15, OP_ELSE, OP_16, OP_ENDIF},
+         SCRIPT_ERR_MINIMALIF,
+         {{2}}},
+
+        {SCRIPT_VERIFY_MINIMALIF,
+         {OP_0, OP_NOTIF, OP_15, OP_ELSE, OP_16, OP_ENDIF},
+         malleability::non_malleable,
+         {{15}}},
+
+        {SCRIPT_VERIFY_MINIMALIF,
+         {OP_1, OP_NOTIF, OP_15, OP_ELSE, OP_16, OP_ENDIF},
+         malleability::non_malleable,
+         {{16}}},
+        
+        {SCRIPT_VERIFY_MINIMALIF,
+         {2, 0, 1, OP_NOTIF, OP_15, OP_ELSE, OP_16, OP_ENDIF},
+         SCRIPT_ERR_MINIMALIF,
+         {{0, 1}}},
+
+        {SCRIPT_VERIFY_MINIMALIF,
+         {OP_2, OP_NOTIF, OP_15, OP_ELSE, OP_16, OP_ENDIF},
+         SCRIPT_ERR_MINIMALIF,
+         {{2}}},
+
+        // Post-Chronicle
+        {SCRIPT_CHRONICLE,
+         {OP_0, OP_IF, OP_15, OP_ELSE, OP_16, OP_ENDIF},
+         malleability::non_malleable,
+         {{16}}},
+
+        {SCRIPT_CHRONICLE,
+         {OP_1, OP_IF, OP_15, OP_ELSE, OP_16, OP_ENDIF},
+         malleability::non_malleable,
+         {{15}}},
+        
+        {SCRIPT_CHRONICLE,
+         {2, 0, 1, OP_IF, OP_15, OP_ELSE, OP_16, OP_ENDIF},
+         malleability::non_malleable,
+         {{15}}},
+
+        {SCRIPT_CHRONICLE,
+         {OP_2, OP_IF, OP_15, OP_ELSE, OP_16, OP_ENDIF},
+         malleability::non_malleable,
+         {{15}}},
+
+        {SCRIPT_CHRONICLE,
+         {OP_0, OP_NOTIF, OP_15, OP_ELSE, OP_16, OP_ENDIF},
+         malleability::non_malleable,
+         {{15}}},
+
+        {SCRIPT_CHRONICLE,
+         {OP_1, OP_NOTIF, OP_15, OP_ELSE, OP_16, OP_ENDIF},
+         malleability::non_malleable,
+         {{16}}},
+        
+        {SCRIPT_CHRONICLE,
+         {2, 0, 1, OP_NOTIF, OP_15, OP_ELSE, OP_16, OP_ENDIF},
+         malleability::non_malleable,
+         {{16}}},
+
+        {SCRIPT_CHRONICLE,
+         {OP_2, OP_NOTIF, OP_15, OP_ELSE, OP_16, OP_ENDIF},
+         malleability::non_malleable,
+         {{16}}},
+
+        {SCRIPT_CHRONICLE | SCRIPT_VERIFY_MINIMALIF,
+         {OP_0, OP_IF, OP_15, OP_ELSE, OP_16, OP_ENDIF},
+         malleability::non_malleable,
+         {{16}}},
+
+        {SCRIPT_CHRONICLE | SCRIPT_VERIFY_MINIMALIF,
+         {OP_1, OP_IF, OP_15, OP_ELSE, OP_16, OP_ENDIF},
+         malleability::non_malleable,
+         {{15}}},
+        
+        {SCRIPT_CHRONICLE | SCRIPT_VERIFY_MINIMALIF,
+         {2, 0, 1, OP_IF, OP_15, OP_ELSE, OP_16, OP_ENDIF},
+         malleability::minimal_if,
+         {{15}}},
+
+        {SCRIPT_CHRONICLE | SCRIPT_VERIFY_MINIMALIF,
+         {OP_2, OP_IF, OP_15, OP_ELSE, OP_16, OP_ENDIF},
+         malleability::minimal_if,
+         {{15}}},
+
+        {SCRIPT_CHRONICLE | SCRIPT_VERIFY_MINIMALIF,
+         {OP_0, OP_NOTIF, OP_15, OP_ELSE, OP_16, OP_ENDIF},
+         malleability::non_malleable,
+         {{15}}},
+
+        {SCRIPT_CHRONICLE | SCRIPT_VERIFY_MINIMALIF,
+         {OP_1, OP_NOTIF, OP_15, OP_ELSE, OP_16, OP_ENDIF},
+         malleability::non_malleable,
+         {{16}}},
+        
+        {SCRIPT_CHRONICLE | SCRIPT_VERIFY_MINIMALIF,
+         {2, 0, 1, OP_NOTIF, OP_15, OP_ELSE, OP_16, OP_ENDIF},
+         malleability::minimal_if,
+         {{16}}},
+
+        {SCRIPT_CHRONICLE | SCRIPT_VERIFY_MINIMALIF,
+         {OP_2, OP_NOTIF, OP_15, OP_ELSE, OP_16, OP_ENDIF},
+         malleability::minimal_if,
+         {{16}}},
+    };
+    for(const auto& [flags,
+                     script,
+                     expected,
+                     exp_stack] : test_data)
+    {
+        const auto params{make_eval_script_params(GlobalConfig::GetConfig(), flags, false)};
+        auto source = task::CCancellationSource::Make();
+        LimitedStack stack(UINT32_MAX);
+        const auto status = EvalScript(params,
+                                       source->GetToken(),
+                                       stack,
+                                       CScript{script.begin(), script.end()},
+                                       flags,
+                                       BaseSignatureChecker{});
+        assert(status);
+        std::visit(overload([&expected,
+                             &stack,
+                             &exp_stack](const malleability::status ms)
+                            {
+                                BOOST_CHECK_EQUAL(std::get<malleability::status>(expected),
+                                                  ms);
+                                BOOST_CHECK_EQUAL(exp_stack.size(), stack.size());
+                                for(int i{}; const auto& elem : exp_stack)
+                                {
+                                    BOOST_CHECK_EQUAL_COLLECTIONS(elem.begin(),
+                                                                  elem.end(),
+                                                                  stack.at(i).begin(),
+                                                                  stack.at(i).end());
+                                    ++i;
+                                }
+                            },
+                            [&expected,
+                             &stack,
+                             &exp_stack](const ScriptError se)
+                            {
+                                BOOST_CHECK_EQUAL(std::get<ScriptError>(expected), se); 
+                                BOOST_CHECK_EQUAL(exp_stack.size(), stack.size());
+                                for(int i{}; const auto& elem : exp_stack)
+                                {
+                                    BOOST_CHECK_EQUAL_COLLECTIONS(elem.begin(),
+                                                                  elem.end(),
+                                                                  stack.at(i).begin(),
+                                                                  stack.at(i).end());
+                                    ++i;
+                                }
+                            }),
+                   *status);
+    }
+}
+
+BOOST_AUTO_TEST_CASE(verify_script_minimal_if)
+{
+    using namespace std;
+
+    const vector<uint8_t> empty_sig{};
+    constexpr uint8_t sighash{SIGHASH_ALL | SIGHASH_FORKID};
+    const auto sig{make_signature(low_s_max(), sighash)};
+
+    using test_args = tuple<uint32_t,              // flags
+                            vector<uint8_t>,       // script
+                            malleability::status,
+                            ScriptError,           // expected error
+                            malleability::status>; // expected malleability_status
+    const vector<test_args> test_data
+    {
+        // Pre-Chronicle
+        // malleability allowed
+        {{},
+         {OP_2, OP_IF, OP_1, OP_ENDIF},
+         {},
+         SCRIPT_ERR_OK, malleability::non_malleable},
+
+        {SCRIPT_VERIFY_MINIMALIF,
+         {OP_2, OP_IF, OP_1, OP_ENDIF},
+         {},
+         SCRIPT_ERR_MINIMALIF, malleability::non_malleable},
+
+        // malleability disallowed
+        {{},
+         {OP_2, OP_IF, OP_1, OP_ENDIF},
+         malleability::disallowed,
+         SCRIPT_ERR_OK, malleability::disallowed},
+
+        {SCRIPT_VERIFY_MINIMALIF,
+         {OP_2, OP_IF, OP_1, OP_ENDIF},
+         malleability::disallowed,
+         SCRIPT_ERR_MINIMALIF, malleability::disallowed},
+
+        // Post-Chronicle
+        // malleability allowed
+        {SCRIPT_CHRONICLE,
+         {OP_2, OP_IF, OP_1, OP_ENDIF},
+         {},
+         SCRIPT_ERR_OK, malleability::non_malleable},
+
+        {SCRIPT_CHRONICLE | SCRIPT_VERIFY_MINIMALIF,
+         {OP_2, OP_IF, OP_1, OP_ENDIF},
+         {},
+         SCRIPT_ERR_OK, malleability::minimal_if},
+
+        // malleability disallowed
+        {SCRIPT_CHRONICLE,
+         {OP_2, OP_IF, OP_1, OP_ENDIF},
+         malleability::disallowed,
+         SCRIPT_ERR_OK, malleability::disallowed},
+
+        {SCRIPT_CHRONICLE | SCRIPT_VERIFY_MINIMALIF,
+         {OP_2, OP_IF, OP_1, OP_ENDIF},
+         malleability::disallowed,
+         SCRIPT_ERR_MINIMALIF, malleability::disallowed | malleability::minimal_if},
+    };
+    for(const auto& [flags, script, ms, exp_error, exp_mall] : test_data)
+    {
+        const auto params{make_verify_script_params(GlobalConfig::GetConfig(), flags, false)};
+        auto source = task::CCancellationSource::Make();
+        const CScript scriptSig;
+        std::atomic<malleability::status> ams{ms};
+        const auto status = VerifyScript(params,
+                                         source->GetToken(),
+                                         scriptSig,
+                                         CScript{script.begin(),
+                                                 script.end()},
+                                         flags,
+                                         BaseSignatureChecker{},
+                                         ams);
+        assert(status);
+        BOOST_CHECK_EQUAL(exp_error == SCRIPT_ERR_OK, status->first);
+        BOOST_CHECK_EQUAL(exp_error, status->second);
+        BOOST_CHECK_EQUAL(exp_mall, malleability::status{ams});
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()
+
