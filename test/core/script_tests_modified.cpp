@@ -117,6 +117,21 @@ UniValue ValueFromAmount(const Amount &amount) {
 }
 // SCRIPT_ENGINE_BUILD_TEST ++++++++++++++++++++++++++++++++++++++++++++++++++++
 
+// SCRIPT_ENGINE_BUILD_TEST ++++++++++++++++++++++++++++++++++++++++++++++++++++
+// Hot fix to pass the compilation for mac-13.
+// A modified version of overload.h
+template<typename... Ts>
+struct hotfix_overload : Ts...
+{
+    using Ts::operator()...;
+    explicit hotfix_overload(Ts... ts) : Ts(std::move(ts))... {}
+};
+
+template<typename... Ts>
+hotfix_overload(Ts...)->hotfix_overload<Ts...>;
+// SCRIPT_ENGINE_BUILD_TEST ++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+
 struct ScriptErrorDesc {
     ScriptError_t err;
     const char *name;
@@ -5016,8 +5031,8 @@ BOOST_AUTO_TEST_CASE(eval_script_op_checksig_nullfail)
                                                op_checksig_script.end()},
                                        flags,
                                        BaseSignatureChecker{});
-        assert(status);
-        std::visit(overload([&expected, &stack](const malleability::status ms)
+        assert(status);        
+        std::visit(hotfix_overload([&expected, &stack](const malleability::status ms) // SCRIPT_ENGINE_BUILD_TEST ++++++++++++++++++++++++++++++++++++++++++++++++++++
                             {
                                 BOOST_CHECK_EQUAL(std::get<malleability::status>(expected),
                                                   ms);
@@ -5235,7 +5250,7 @@ BOOST_AUTO_TEST_CASE(eval_script_op_checkmultisig_nullfail)
                                        flags,
                                        BaseSignatureChecker{});
         assert(status);
-        std::visit(overload([&expected,
+        std::visit(hotfix_overload([&expected, // SCRIPT_ENGINE_BUILD_TEST ++++++++++++++++++++++++++++++++++++++++++++++++++++
                              &stack,
                              &exp_stack](const malleability::status ms)
                             {
@@ -5367,7 +5382,7 @@ BOOST_AUTO_TEST_CASE(eval_script_op_checkmultisig_nulldummy)
                                        flags,
                                        BaseSignatureChecker{});
         assert(status);
-        std::visit(overload([&expected,
+        std::visit(hotfix_overload([&expected, // SCRIPT_ENGINE_BUILD_TEST ++++++++++++++++++++++++++++++++++++++++++++++++++++
                              &stack,
                              &exp_stack](const malleability::status ms)
                             {
@@ -5715,7 +5730,7 @@ BOOST_AUTO_TEST_CASE(eval_script_op_if_minimal_if)
                                        flags,
                                        BaseSignatureChecker{});
         assert(status);
-        std::visit(overload([&expected,
+        std::visit(hotfix_overload([&expected, // SCRIPT_ENGINE_BUILD_TEST ++++++++++++++++++++++++++++++++++++++++++++++++++++
                              &stack,
                              &exp_stack](const malleability::status ms)
                             {
