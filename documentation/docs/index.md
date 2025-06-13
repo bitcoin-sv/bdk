@@ -4,6 +4,7 @@ Bitcoin Development Kit provides a facilities to work with Bitcoin SV scripts wi
 
 - [Directories Structure](directories.md)
 - [Development build](build.md)
+- [VerifyScript](verify_script.md)
 - [Object Model](ObjectModel.md)
 
 ---

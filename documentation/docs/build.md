@@ -13,8 +13,8 @@ python -m pip install pytest junitparser mkdocs pymdown-extensions plantuml_mark
 - C++ 20 compatible compiler
 - [CMake 3.30.2](https://cmake.org/download/) or later
 - [Boost 1.85](https://www.boost.org/doc/libs/1_85_0/) or later. On _Mac OS_, Boost 1.86 will break the compiler clang
-- [OpenSSL 3.0.9](https://openssl-library.org/source/index.html) or later (or 1.1.1b).
-- [BSV 1.2.0](https://github.com/bitcoin-sv/bitcoin-sv/releases) exact version.
+- [OpenSSL 3.4.0](https://openssl-library.org/source/index.html) or later (or 1.1.1b).
+- [BSV 1.2.0-Chronicle](https://github.com/bitcoin-sv/bitcoin-sv/releases) exact version.
 
 Static libraries (boost and openssl) must be compiled with `fPIC` on.
 
@@ -22,7 +22,9 @@ Static libraries (boost and openssl) must be compiled with `fPIC` on.
 - Linux : g++13 on Linux
 - MacOS : clang 15 on Mac OS
 
-Note that when building in Mac OS with clang, it only work with boost 1.78. As in boost 1.86, it seems the `boost::uuids::uuid::data_type` has changed, making the reinterpret_cast at `src/serialize.h:989` broken.
+Note that when building in Mac OS with clang, it only work with boost 1.85. As in boost 1.86, it seems the `boost::uuids::uuid::data_type` has changed, making the reinterpret_cast at `src/serialize.h:989` broken.
+
+See [prebuild dependancies](https://github.com/bitcoin-sv/bdk/blob/master/.github/workflows/prebuild_dependancies.yaml) to better understand the tooling and versions. The CI build and test is using [github workflow](https://github.com/bitcoin-sv/bdk/blob/master/.github/workflows/build_bdk.yaml).
 
 ##### Java module
 - Java JDK 11 or later
@@ -36,7 +38,20 @@ If these packages above is not dowloaded and setup with `JAVA_TOOLS`, cmake can 
 
 ##### Golang module
 Golang binding built with CGO is working fine on Linux and Mac OS. For windows, it is not well tested, as the linking with DLL is not common.
-The golang module is build into a shared library, then CGO will link dynamically to it.
+The golang module is build into a shared library, then CGO will link dynamically to it. The golang modules builds and checkin the binaries files in git repo, so users only need to do `go get ...` to get all required to run.
+
+The CGO binaries are stored in `module/gobdk/bdkcgo` for all supported system (Linux/MacOS with both arch amd/arm). These static libraries requires some system runtime libraries, mainly runtime C/C++. This means when building a `go` application with this package, the build might pass but the executable will not be able to run if these runtime libraries are missing from the system. To investigate what are the runtime dependancies of your executable, you can use `ldd` command (`otool` in MacOS). For example
+
+```
+cd module/gobdk && go build -o test_woc ./cmd/woc &&  ldd test_woc && cd ../..
+        linux-vdso.so.1 (0x00007ffc709b7000)
+        libstdc++.so.6 => /lib/x86_64-linux-gnu/libstdc++.so.6 (0x0000780f65400000)
+        libm.so.6 => /lib/x86_64-linux-gnu/libm.so.6 (0x0000780f65746000)
+        libgcc_s.so.1 => /lib/x86_64-linux-gnu/libgcc_s.so.1 (0x0000780f65718000)
+        libc.so.6 => /lib/x86_64-linux-gnu/libc.so.6 (0x0000780f65000000)
+        /lib64/ld-linux-x86-64.so.2 (0x0000780f65839000)
+```
+If you want to build and put your _go application_ in a _scratch_ container, then you'll need to copy over these shared libraries. Note that these shared libraries might require also other shared libraries ( not many though ), then use `ldd` again to find out what need to be copied over.
 
 ### Dependencies
 Dependencies marked optional apply if you wish to run the unit tests. See [Tests](#tests) for more details.

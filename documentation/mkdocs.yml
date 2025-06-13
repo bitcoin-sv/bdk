@@ -16,6 +16,7 @@ nav:
     - About : index.md
     - Directory Structure : directories.md
     - Development Build : build.md
+    - VerifyScript : verify_script.md
     - Versioning strategy : versioning.md
     - Object Model : ObjectModel.md
 

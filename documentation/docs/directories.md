@@ -7,11 +7,13 @@
 |    |---bitcoin-sv
 |    |---modules
 |         |---example
+|         |---gobdk
 |         |---java
 |         |---python
 |         |---...
 |    |---test
-|         |---cpp
+|         |---core
+|         |---golang
 |         |---java
 |         |---python
 |         |---...
