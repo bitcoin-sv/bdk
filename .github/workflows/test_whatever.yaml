@@ -7,13 +7,61 @@ jobs:
   build-bdk:
     strategy:
       matrix:
-        os: [linux-arm64-8-core, ubuntu-24.04, macos-15]
+        os: [macos-15]
       fail-fast: false
     runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Test run and build CMake
+        run: |
+          mkdir -p "build"
+          rm -fR ./build/*
+          cmake -B build -S "." -DCMAKE_OSX_ARCHITECTURES="x86_64"
+          cmake --build build
+          ls ./build/*
+          file ./build/hello
+          arch -x86_64 ./build/hello
+
+      - name: Test build Boost X86_64
+        run: |
+          export BOOST_VERSION="1.85.0"
+          export PACKAGE_NAME="dependancies_darwin_x86_64"
+          export BOOST_URL="https://github.com/boostorg/boost/releases/download/boost-$BOOST_VERSION/boost-$BOOST_VERSION-cmake.tar.gz"
+          export INSTALL_DIR="${{ github.workspace }}/$PACKAGE_NAME"
+          export BOOST_ROOT="${{ github.workspace }}/$PACKAGE_NAME/boost_$BOOST_VERSION"
+          mkdir -p $BOOST_ROOT
+
+          wget -q $BOOST_URL -O "boost-$BOOST_VERSION-cmake.tar.gz"
+          tar -xzf "boost-$BOOST_VERSION-cmake.tar.gz"
+          mkdir -p "boost-$BOOST_VERSION/build"
+          #cmake -B "./boost-$BOOST_VERSION/build" -S "./boost-$BOOST_VERSION" -DCMAKE_OSX_ARCHITECTURES="x86_64" -DBOOST_EXCLUDE_LIBRARIES="context;coroutine;coroutine2;fiber;fiber_numa;asio;cobalt;log;log_setup" -DBUILD_SHARED_LIBS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX="$BOOST_ROOT"
+          cmake -B "./boost-$BOOST_VERSION/build" -S "./boost-$BOOST_VERSION" -DCMAKE_OSX_ARCHITECTURES="x86_64" -DBOOST_INCLUDE_LIBRARIES="system;filesystem;program_options;thread;chrono;unit_test_framework" -DBUILD_SHARED_LIBS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX="$BOOST_ROOT"
+          cmake --build "./boost-$BOOST_VERSION/build" -j$(nproc) --target install
+          find "${{ github.workspace }}/$PACKAGE_NAME" -type f \( -name "*.o" -o -name "*.a" \) -print -exec sh -c 'for f; do if file "$f" | grep -q "x86_64"; then echo "✅ $f is x86_64"; else echo "❌ $f is NOT x86_64"; fi; done' sh {} +
+
+      - name: Test build OpenSSL X86_64
+        run: |
+          export OPENSSL_VERSION="3.4.0"
+          export PACKAGE_NAME="dependancies_darwin_x86_64"
+          export OPENSSL_URL="https://www.openssl.org/source/openssl-$OPENSSL_VERSION.tar.gz"
+          export INSTALL_DIR="${{ github.workspace }}/$PACKAGE_NAME"
+          export OPENSSL_ROOT_DIR="${{ github.workspace }}/$PACKAGE_NAME/openssl_$OPENSSL_VERSION"
+
+          export KERNEL_BITS=64
+          export CFLAGS="-arch x86_64"
+          export LDFLAGS="-arch x86_64"
+
+          mkdir -p $OPENSSL_ROOT_DIR
+          wget -q "$OPENSSL_URL" -O "openssl-$OPENSSL_VERSION.tar.gz"
+          tar -xzf "openssl-$OPENSSL_VERSION.tar.gz"
+          cd "openssl-$OPENSSL_VERSION"
+          ./config darwin64-x86_64-cc no-shared no-tests no-docs no-dso no-engine --prefix="$OPENSSL_ROOT_DIR" --openssldir="$OPENSSL_ROOT_DIR"
+          make -s -j$(nproc)
+          make install_sw
+          find "${{ github.workspace }}/$PACKAGE_NAME" -type f \( -name "*.o" -o -name "*.a" \) -print -exec sh -c 'for f; do if file "$f" | grep -q "x86_64"; then echo "✅ $f is x86_64"; else echo "❌ $f is NOT x86_64"; fi; done' sh {} +
 
       - name: Get OS ARCH Name
         run: |

@@ -1,11 +1,11 @@
 name: Build BDK
 
 on:
-  pull_request:
-    types: [opened, synchronize]
-  push:
-    branches:
-      - master
+  # pull_request:
+  #   types: [opened, synchronize]
+  # push:
+  #   branches:
+  #     - master
   workflow_dispatch:
     inputs:
       bitcoin-sv-commit:
