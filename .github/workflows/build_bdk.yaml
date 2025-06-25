@@ -64,7 +64,7 @@ jobs:
         shell: bash
         run: |
           echo "Checking out bitcoin-sv at commit ${{ steps.define-bitcoin-sv-commit.outputs.bsvcommit }} ..."
-          git clone https://x-access-token:${{ secrets.BITCOIN_SV_PAT }}@github.com/nchain-research/bitcoin-sv-staging.git bitcoin-sv
+          git clone https://x-access-token:${{ secrets.BITCOIN_SV_PAT }}@github.com/teranode-group/bitcoin-sv-staging.git bitcoin-sv
           cd bitcoin-sv && git checkout ${{ steps.define-bitcoin-sv-commit.outputs.bsvcommit }} && git log -3 && pwd && cd ..
           echo "Successfully checked out bitcoin-sv commit ${{ steps.define-bitcoin-sv-commit.outputs.bsvcommit }} to bitcoin-sv"
 
