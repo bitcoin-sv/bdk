@@ -7,7 +7,12 @@ jobs:
   build-upload-dependencies:
     strategy:
       matrix:
-        os: [linux-arm64-8-core, ubuntu-24.04, macos-15, macos-13]
+        include:
+          - os: linux-arm64-8-core
+          - os: ubuntu-24.04
+          - os: macos-15
+          - os: macos-15
+            arch: x86_64
       fail-fast: false
     runs-on: ${{ matrix.os }}
 
@@ -27,6 +32,10 @@ jobs:
     - name: Set Environment Variables
       run: |
         OS_ARCH="$(uname -s | tr 'A-Z' 'a-z')_$(uname -m)"
+        if [[ "${{ matrix.os }}" == "macos-15" && "${{ matrix.arch }}" == "x86_64" ]]; then
+          ## Force the OS_ARCH name for macos-15 to be x86_64 (by default it is amd)
+          OS_ARCH="darwin_x86_64"
+        fi
         PACKAGE_NAME="dependancies_$OS_ARCH"
         echo "Building $PACKAGE_NAME on $OS_ARCH"
         echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
@@ -51,7 +60,17 @@ jobs:
         wget -q $BOOST_URL -O "boost-$BOOST_VERSION-cmake.tar.gz"
         tar -xzf "boost-$BOOST_VERSION-cmake.tar.gz"
         mkdir -p "boost-$BOOST_VERSION/build"
-        cmake -B "./boost-$BOOST_VERSION/build" -S "./boost-$BOOST_VERSION" -DBUILD_SHARED_LIBS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX="$BOOST_ROOT"
+        if [[ "${{ matrix.os }}" == "macos-15" && "${{ matrix.arch }}" == "x86_64" ]]; then
+          echo "Force to build boost with arch x86_64 for macos-15 (which is an arm machine) ..."
+
+          ## Build x86_64 on macos-15 requires to skip the Boost:context. There are 2 ways
+          ##   - exclude context and all related dependencies
+          ##   - include only boost modules that are required by bsv (search for AX_BOOST_* in bsv source)
+          #cmake -B "./boost-$BOOST_VERSION/build" -S "./boost-$BOOST_VERSION" -DCMAKE_OSX_ARCHITECTURES="x86_64" -DBUILD_SHARED_LIBS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX="$BOOST_ROOT" -DBOOST_EXCLUDE_LIBRARIES="context;coroutine;coroutine2;fiber;fiber_numa;asio;cobalt;log;log_setup" 
+          cmake -B "./boost-$BOOST_VERSION/build" -S "./boost-$BOOST_VERSION" -DCMAKE_OSX_ARCHITECTURES="x86_64" -DBUILD_SHARED_LIBS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX="$BOOST_ROOT" -DBOOST_INCLUDE_LIBRARIES="system;filesystem;program_options;thread;chrono;test"
+        else
+          cmake -B "./boost-$BOOST_VERSION/build" -S "./boost-$BOOST_VERSION" -DBUILD_SHARED_LIBS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX="$BOOST_ROOT" -DBOOST_INCLUDE_LIBRARIES="system;filesystem;program_options;thread;chrono;test"
+        fi
         cmake --build "./boost-$BOOST_VERSION/build" -j$(nproc) --target install
 
     - name: Build OpenSSL
@@ -59,7 +78,16 @@ jobs:
         wget -q "$OPENSSL_URL" -O "openssl-$OPENSSL_VERSION.tar.gz"
         tar -xzf "openssl-$OPENSSL_VERSION.tar.gz"
         cd "openssl-$OPENSSL_VERSION"
-        ./config no-shared no-tests no-docs no-dso no-engine --prefix="$OPENSSL_ROOT_DIR" --openssldir="$OPENSSL_ROOT_DIR"
+
+        if [[ "${{ matrix.os }}" == "macos-15" && "${{ matrix.arch }}" == "x86_64" ]]; then
+          echo "Force to build boost with arch x86_64 for macos-15 (which is an arm machine) ..."
+          export KERNEL_BITS=64
+          export CFLAGS="-arch x86_64"
+          export LDFLAGS="-arch x86_64"
+          ./config darwin64-x86_64-cc no-shared no-tests no-docs no-dso no-engine --prefix="$OPENSSL_ROOT_DIR" --openssldir="$OPENSSL_ROOT_DIR"
+        else
+          ./config no-shared no-tests no-docs no-dso no-engine --prefix="$OPENSSL_ROOT_DIR" --openssldir="$OPENSSL_ROOT_DIR"
+        fi
         make -j$(nproc)
         make install_sw
 
