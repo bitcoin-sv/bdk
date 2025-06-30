@@ -159,13 +159,13 @@ macro(HelpFindBoost)############################################################
     set(Project_Required_BOOST_COMPONENTS
         chrono
         filesystem
-        log
-        log_setup
+        #log
+        #log_setup
         program_options
-        random
+        #random
         system
         thread
-        timer
+        #timer
         unit_test_framework
         CACHE INTERNAL "List of required boost components"
     )
