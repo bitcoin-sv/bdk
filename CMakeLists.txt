@@ -46,7 +46,7 @@ option(INSTALL_GOBDK_INSOURCE "Install the static stand alone GoBDK in source di
 
 
 if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin")
-    message(STATUS "Hot fix when building on Mac OS, boost broke the build")
+    message(STATUS "Fix when building on Mac OS, boost broke the build")
     #add_definitions(-D_LIBCPP_ENABLE_CXX17_REMOVED_UNARY_BINARY_FUNCTION)
     add_definitions(-DBOOST_NO_CXX98_FUNCTION_BASE)
 endif()
