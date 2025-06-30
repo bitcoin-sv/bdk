@@ -66,10 +66,10 @@ jobs:
           ## Build x86_64 on macos-15 requires to skip the Boost:context. There are 2 ways
           ##   - exclude context and all related dependencies
           ##   - include only boost modules that are required by bsv (search for AX_BOOST_* in bsv source)
-          #cmake -B "./boost-$BOOST_VERSION/build" -S "./boost-$BOOST_VERSION" -DCMAKE_OSX_ARCHITECTURES="x86_64" -DBUILD_SHARED_LIBS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX="$BOOST_ROOT" -DBOOST_EXCLUDE_LIBRARIES="context;coroutine;coroutine2;fiber;fiber_numa;asio;cobalt;log;log_setup" 
-          cmake -B "./boost-$BOOST_VERSION/build" -S "./boost-$BOOST_VERSION" -DCMAKE_OSX_ARCHITECTURES="x86_64" -DBUILD_SHARED_LIBS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX="$BOOST_ROOT" -DBOOST_INCLUDE_LIBRARIES="system;filesystem;program_options;thread;chrono;test"
+          #cmake -B "./boost-$BOOST_VERSION/build" -S "./boost-$BOOST_VERSION" -DBUILD_SHARED_LIBS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX="$BOOST_ROOT" -DBOOST_EXCLUDE_LIBRARIES="context;asio;cobalt;coroutine;coroutine2;fiber;fiber_numa;log;log_setup" -DCMAKE_OSX_ARCHITECTURES="x86_64"
+          cmake -B "./boost-$BOOST_VERSION/build" -S "./boost-$BOOST_VERSION" -DBUILD_SHARED_LIBS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX="$BOOST_ROOT" -DBOOST_INCLUDE_LIBRARIES="chrono;filesystem;program_options;system;test;thread;circular_buffer;multi_index;property_tree;signals2;uuid;variant" -DCMAKE_OSX_ARCHITECTURES="x86_64"
         else
-          cmake -B "./boost-$BOOST_VERSION/build" -S "./boost-$BOOST_VERSION" -DBUILD_SHARED_LIBS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX="$BOOST_ROOT" -DBOOST_INCLUDE_LIBRARIES="system;filesystem;program_options;thread;chrono;test"
+          cmake -B "./boost-$BOOST_VERSION/build" -S "./boost-$BOOST_VERSION" -DBUILD_SHARED_LIBS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX="$BOOST_ROOT" -DBOOST_INCLUDE_LIBRARIES="chrono;filesystem;program_options;system;test;thread;circular_buffer;multi_index;property_tree;signals2;uuid;variant"
         fi
         cmake --build "./boost-$BOOST_VERSION/build" -j$(nproc) --target install
 
