@@ -125,28 +125,22 @@ jobs:
         run: |
           mkdir -p "build"
           rm -fR ./build/* && rm -fR test/golang/vendor/*
+
           if [[ ${{ matrix.os }} == *'macos-15'* && "${{ matrix.arch }}" == "x86_64" ]]; then
-            cmake -B build -S "." -DINSTALL_GOBDK_INSOURCE=ON -DCMAKE_OSX_ARCHITECTURES="x86_64" -DCUSTOM_GOBDK_OS_ARCH=darwin_x86_64
+            echo "Skip building languages binding for x86_64 on macos arm, it is very complicated at runtime"
+            cmake -B build -S "." -DINSTALL_GOBDK_INSOURCE=ON -DCMAKE_OSX_ARCHITECTURES="x86_64" -DCUSTOM_GOBDK_OS_ARCH=darwin_x86_64 -DBUILD_MODULE_JAVA=OFF -DBUILD_MODULE_PYTHON=OFF -DBUILD_MODULE_GOLANG=OFF
           else
             cmake -B build -S "." -DINSTALL_GOBDK_INSOURCE=ON
           fi
+
           cmake --build build --parallel 4
-          ctest --output-on-failure --test-dir build
 
-      # - name: Build and Test BDK Mac OS 13 (amd) with hot fix
-      #   if: matrix.os == 'macos-13'
-      #   run: |
-      #     echo "Hot fix for compilation with clang 15 on macos-13 runner ... "
-      #     sed -i '' 's/throw stack_overflow_error("\([^"]*\)");/throw stack_overflow_error(std::string("\1"));/g' $BSV_ROOT/src/script/limitedstack.cpp
-      #     sed -i '' '/#include <utility>/a\
-      #     #include <string>' $BSV_ROOT/src/script/limitedstack.cpp
-      #     echo "File $BSV_ROOT/src/script/limitedstack.cpp has been modified"
-
-      #     mkdir -p "build"
-      #     rm -fR ./build/* && rm -fR test/golang/vendor/*
-      #     cmake -B build -S "." -DINSTALL_GOBDK_INSOURCE=ON
-      #     cmake --build build --parallel 4
-      #     ctest --output-on-failure --test-dir build
+          if [[ ${{ matrix.os }} == *'macos-15'* && "${{ matrix.arch }}" == "x86_64" ]]; then
+            echo "Skip running tests for x86_64 on macos arm, it is very complicated at runtime"
+          else
+            ctest --output-on-failure --test-dir build
+          fi
+          
 
       - name: Check GoBDK has changed
         id: gobdk_change
