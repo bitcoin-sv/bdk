@@ -25,7 +25,13 @@ jobs:
   build-bdk:
     strategy:
       matrix:
-        os: [linux-arm64-8-core, ubuntu-24.04, macos-15, macos-13, windows-2022]
+        include:
+          - os: linux-arm64-8-core
+          - os: ubuntu-24.04
+          - os: windows-2022
+          - os: macos-15
+          - os: macos-15
+            arch: x86_64
       fail-fast: false
     outputs:
       modified: ${{ steps.gobdk_change.outputs.modified }}
@@ -97,7 +103,7 @@ jobs:
             echo "OPENSSL_ROOT_DIR=${{ github.workspace }}/dependancies_linux_aarch64/openssl_3.4.0" >> $GITHUB_ENV
             echo "JAVA_HOME=/usr/lib/jvm/temurin-17-jdk-arm64" >> $GITHUB_ENV
           fi
-          if [[ ${{ matrix.os }} == *'macos-15'* ]]; then
+          if [[ ${{ matrix.os }} == *'macos-15'* && "${{ matrix.arch }}" != "x86_64" ]]; then
             wget https://github.com/bitcoin-sv/bdk/releases/download/depcy/dependancies_darwin_arm64.tar.gz
             tar -xzf dependancies_darwin_arm64.tar.gz
             echo "DEPENDENCIES_DIR=${{ github.workspace }}/dependancies_darwin_arm64" >> $GITHUB_ENV
@@ -105,7 +111,7 @@ jobs:
             echo "OPENSSL_ROOT_DIR=${{ github.workspace }}/dependancies_darwin_arm64/openssl_3.4.0" >> $GITHUB_ENV
             echo "JAVA_HOME=$JAVA_HOME_17_arm64" >> $GITHUB_ENV
           fi
-          if [[ ${{ matrix.os }} == *'macos-13'* ]]; then
+          if [[ ${{ matrix.os }} == *'macos-15'* && "${{ matrix.arch }}" == "x86_64" ]]; then
             wget https://github.com/bitcoin-sv/bdk/releases/download/depcy/dependancies_darwin_x86_64.tar.gz
             tar -xzf dependancies_darwin_x86_64.tar.gz
             echo "DEPENDENCIES_DIR=${{ github.workspace }}/dependancies_darwin_x86_64" >> $GITHUB_ENV
@@ -115,28 +121,32 @@ jobs:
           fi
 
       - name: Build and Test BDK Unix (all linux and mac arm)
-        if: runner.os != 'Windows' && matrix.os != 'macos-13'
+        if: runner.os != 'Windows'
         run: |
           mkdir -p "build"
           rm -fR ./build/* && rm -fR test/golang/vendor/*
-          cmake -B build -S "." -DINSTALL_GOBDK_INSOURCE=ON
+          if [[ ${{ matrix.os }} == *'macos-15'* && "${{ matrix.arch }}" == "x86_64" ]]; then
+            cmake -B build -S "." -DINSTALL_GOBDK_INSOURCE=ON -DCMAKE_OSX_ARCHITECTURES="x86_64" -DCUSTOM_GOBDK_OS_ARCH=darwin_x86_64
+          else
+            cmake -B build -S "." -DINSTALL_GOBDK_INSOURCE=ON
+          fi
           cmake --build build --parallel 4
           ctest --output-on-failure --test-dir build
 
-      - name: Build and Test BDK Mac OS 13 (amd) with hot fix
-        if: matrix.os == 'macos-13'
-        run: |
-          echo "Hot fix for compilation with clang 15 on macos-13 runner ... "
-          sed -i '' 's/throw stack_overflow_error("\([^"]*\)");/throw stack_overflow_error(std::string("\1"));/g' $BSV_ROOT/src/script/limitedstack.cpp
-          sed -i '' '/#include <utility>/a\
-          #include <string>' $BSV_ROOT/src/script/limitedstack.cpp
-          echo "File $BSV_ROOT/src/script/limitedstack.cpp has been modified"
+      # - name: Build and Test BDK Mac OS 13 (amd) with hot fix
+      #   if: matrix.os == 'macos-13'
+      #   run: |
+      #     echo "Hot fix for compilation with clang 15 on macos-13 runner ... "
+      #     sed -i '' 's/throw stack_overflow_error("\([^"]*\)");/throw stack_overflow_error(std::string("\1"));/g' $BSV_ROOT/src/script/limitedstack.cpp
+      #     sed -i '' '/#include <utility>/a\
+      #     #include <string>' $BSV_ROOT/src/script/limitedstack.cpp
+      #     echo "File $BSV_ROOT/src/script/limitedstack.cpp has been modified"
 
-          mkdir -p "build"
-          rm -fR ./build/* && rm -fR test/golang/vendor/*
-          cmake -B build -S "." -DINSTALL_GOBDK_INSOURCE=ON
-          cmake --build build --parallel 4
-          ctest --output-on-failure --test-dir build
+      #     mkdir -p "build"
+      #     rm -fR ./build/* && rm -fR test/golang/vendor/*
+      #     cmake -B build -S "." -DINSTALL_GOBDK_INSOURCE=ON
+      #     cmake --build build --parallel 4
+      #     ctest --output-on-failure --test-dir build
 
       - name: Check GoBDK has changed
         id: gobdk_change

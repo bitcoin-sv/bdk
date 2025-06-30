@@ -103,7 +103,19 @@ if(UNIX)
   endforeach()
 
   # merge all object files to a single archive file #######################
-  set(OsArch "${CMAKE_SYSTEM_NAME}_${CMAKE_SYSTEM_PROCESSOR}")
+  # OsArch variable is used to define the static libraries used in CGo build
+  # By default, it reads from the system by $CMAKE_SYSTEM_NAME and $CMAKE_SYSTEM_PROCESSOR
+  # Though in special case (e.g macos arm but forced to build x86_64), user might need to
+  # be able to customize this os_arch. In that case, add the -DCUSTOM_GOBDK_OS_ARCH= to define it.
+  # For example, on macos-15, add to cmake command -DCUSTOM_GOBDK_OS_ARCH=darwin_x86_64 to build
+  # x86_64 file
+  if(DEFINED CUSTOM_GOBDK_OS_ARCH)
+    set(OsArch "${CUSTOM_GOBDK_OS_ARCH}")
+    message("OsArch=${CUSTOM_GOBDK_OS_ARCH} was used by custom value")
+  else()
+    set(OsArch "${CMAKE_SYSTEM_NAME}_${CMAKE_SYSTEM_PROCESSOR}")
+    message("OsArch=${CUSTOM_GOBDK_OS_ARCH} used by default values read from the system")
+  endif()
   string(TOLOWER ${OsArch} os_arch)
   set(mergedArchive "libGoBDK_${os_arch}.a")
   add_custom_target(MergeGoBDK ALL
