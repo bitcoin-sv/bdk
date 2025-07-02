@@ -208,7 +208,7 @@ int main(int argc, char* argv[])
         //}
         //std::cout << std::endl;
         if (line.size() != 5) {
-            throw std::runtime_error("bad line " + std::to_string(i) + " there are only " + ::to_string(line.size()) + " elements");
+            throw std::runtime_error("bad line " + std::to_string(i) + " there are only " + std::to_string(line.size()) + " elements");
         }
 
         const std::string& networkInFile = line[0];
@@ -238,7 +238,7 @@ int main(int argc, char* argv[])
             nbTx += 1;
         }
         catch (std::exception e) {
-            std::cout << "ERROR test line : " << i + 1 << e.what() << std::endl;
+            std::cout << "ERROR test line : " << i + 1 <<" TxID : "<<TxID <<" "<< e.what() << std::endl;
         }
     }
 

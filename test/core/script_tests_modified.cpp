@@ -1,22 +1,21 @@
 /* This file is a slight modification of $BSV_ROOT/src/test/script_tests.cpp
    TODO : request bsv project to add a flag #ifdef SCRIPT_ENGINE_BUILD_TEST
  */
-
-// Copyright (c) 2011-2016 The Bitcoin Core developers
-// Copyright (c) 2019 Bitcoin Association
-// Distributed under the Open BSV software license, see the accompanying file
-// LICENSE.
-
 // SCRIPT_ENGINE_BUILD_TEST ++++++++++++++++++++++++++++++++++++++++++++++++++++
 #include <thread>
 #include <chrono>
-#ifdef NDEBUG 
+#ifdef NDEBUG
 #  define BOOST_TEST_MODULE test_core
 #else
 #  define BOOST_TEST_MODULE test_cored
 #endif
 #include <boost/test/unit_test.hpp>
 // SCRIPT_ENGINE_BUILD_TEST ++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+// Copyright (c) 2011-2016 The Bitcoin Core developers
+// Copyright (c) 2019 Bitcoin Association
+// Distributed under the Open BSV software license, see the accompanying file
+// LICENSE.
 
 #include "data/script_tests.json.h"
 
@@ -30,6 +29,7 @@
 #include "script/malleability_status.h"
 #include "script/opcodes.h"
 #include "script/script.h"
+#include "script/scriptcache.h" // SCRIPT_ENGINE_BUILD_TEST for InitScriptExecutionCache() 
 #include "script/script_error.h"
 #include "script/script_flags.h"
 #include "script/script_num.h"
@@ -40,14 +40,9 @@
 #include "test/jsonutil.h"
 #include "test/scriptflags.h"
 #include "test/sigutil.h"
+//#include "test/test_bitcoin.h" // SCRIPT_ENGINE_BUILD_TEST exploid dependancies
 #include "utilstrencodings.h"
 #include <script/interpreter.h>
-
-// SCRIPT_ENGINE_BUILD_TEST ----------------------------------------------------
-#include "script/scriptcache.h"
-//#include "test/test_bitcoin.h"
-#include "utilstrencodings.h"
-#include "config.h"
 
 #if defined(HAVE_CONSENSUS_LIB)
 #include "script/bitcoinconsensus.h"
@@ -92,7 +87,7 @@ struct BasicTestingSetup {
     }
 };
 
-Amount AmountFromValue(const UniValue &value) {
+Amount AmountFromValue(const UniValue &value) { // defined in bitcointx.cpp
     if (!value.isNum() && !value.isStr())
         throw std::runtime_error("JSONRPCError:Amount is not a number or string");
 
@@ -106,13 +101,13 @@ Amount AmountFromValue(const UniValue &value) {
     return amt;
 }
 
-UniValue ValueFromAmount(const Amount &amount) {
+UniValue ValueFromAmount(const Amount &amount) { // defined in src/rpc/server.cpp
     int64_t amt = amount.GetSatoshis();
     bool sign = amt < 0;
-    int64_t n_abs = (sign ? -amt : amt);
+    int64_t n_abs = (sign ? amt : amt);
     int64_t quotient = n_abs / COIN.GetSatoshis();
     int64_t remainder = n_abs % COIN.GetSatoshis();
-    return UniValue(UniValue::VNUM, strprintf("%s%d.%08d", sign ? "-" : "",
+    return UniValue(UniValue::VNUM, strprintf("%s%d.%08d", sign ? "" : "",
         quotient, remainder));
 }
 // SCRIPT_ENGINE_BUILD_TEST ++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -468,7 +463,7 @@ struct KeyData {
 class TestBuilder {
 private:
     //! Actually executed script
-    CScript script;
+    CScript script_;
     //! The P2SH redeemscript
     CScript redeemscript;
     CTransactionRef creditTx;
@@ -500,10 +495,21 @@ private:
         SigHashType sigHashType = SigHashType().withForkId(),
         unsigned int lenR = 32,
         unsigned int lenS = 32,
-        const Amount& amount = Amount(0))
+        const Amount& amount = Amount(0),
+        const std::optional<TxDigestAlgorithm>& forceTDA = std::nullopt)
     {
-        uint256 hash = SignatureHash(script, CTransaction(spendTx), 0,
-                                     sigHashType, amount, nullptr);
+        uint256 hash {};
+        if(forceTDA) {
+            if(forceTDA.value() == TxDigestAlgorithm::ORIGINAL) {
+                hash = SignatureHashOriginal(script, CTransaction(spendTx), 0, sigHashType);
+            }
+            else {
+                hash = SignatureHashBIP143(script, CTransaction(spendTx), 0, sigHashType, amount);
+            }
+        }
+        else {
+            hash = SignatureHash(script, CTransaction(spendTx), 0, sigHashType, amount);
+        }
         std::vector<uint8_t> vchSig, r, s;
         uint32_t iter = 0;
         do {
@@ -524,12 +530,12 @@ private:
     }
 
 public:
-    TestBuilder(const CScript& script_,
+    TestBuilder(const CScript& script,
                 const std::string& comment_,
                 uint32_t flags_,
                 bool P2SH = false,
                 const Amount& nValue_ = Amount(0))
-        : script(script_),
+        : script_(script),
           comment(comment_),
           flags(flags_),
           nValue(nValue_)
@@ -582,10 +588,10 @@ public:
         SigHashType sigHashType = SigHashType().withForkId(),
         unsigned int lenR = 32,
         unsigned int lenS = 32,
-        const Amount& amount = Amount(0))
+        const Amount& amount = Amount(0),
+        const std::optional<TxDigestAlgorithm>& forceTDA = std::nullopt)
     {
-
-        DoPush(MakeSig(script, key, sigHashType, lenR, lenS, amount));
+        DoPush(MakeSig(script_, key, sigHashType, lenR, lenS, amount, forceTDA));
         return *this;
     }
 
@@ -614,12 +620,12 @@ public:
         std::vector<CScript> separatedScripts;
         separatedScripts.emplace_back();
         
-        CScript::const_iterator pc = script.begin();
+        CScript::const_iterator pc = script_.begin();
         std::vector<uint8_t> data;
         
-        while (pc < script.end()) {
+        while (pc < script_.end()) {
             opcodetype opcode; // NOLINT(cppcoreguidelines-init-variables)
-            if (!script.GetOp(pc, opcode, data)){
+            if (!script_.GetOp(pc, opcode, data)){
                 break;
             }
             for(auto& sc : separatedScripts) {
@@ -1544,6 +1550,28 @@ BOOST_AUTO_TEST_CASE(script_json_test) {
             BOOST_TEST_MESSAGE("Exception: " << e.what());
             throw;
         }
+    }
+}
+
+BOOST_AUTO_TEST_CASE(chronicle_misc)
+{
+    const KeyData keys;
+
+    std::vector<TestBuilder> tests;
+
+    auto preGenesisFlags { StandardScriptVerifyFlags(ProtocolEra::PreGenesis) | InputScriptVerifyFlags(ProtocolEra::PreGenesis, ProtocolEra::PreGenesis) };
+    auto preForkIDFlags { preGenesisFlags & ~SCRIPT_ENABLE_SIGHASH_FORKID & ~SCRIPT_VERIFY_STRICTENC };
+
+    // Pre-ForkID, signed with original TDA but sighash has forkid flag set
+    tests.push_back(
+        TestBuilder(CScript() << ToByteVector(keys.pubkey0) << OP_CHECKSIG,
+                "PreForkID, forkid sighash set, chronicle sighash unset", preForkIDFlags, false)
+            .PushSig(keys.key0, SigHashType().withForkId(), 32, 32, Amount{0}, TxDigestAlgorithm::ORIGINAL)
+            .ScriptError(SCRIPT_ERR_OK));
+
+    for (TestBuilder& test : tests)
+    {
+        test.Test();
     }
 }
 
@@ -2835,9 +2863,7 @@ void TestCombineSigs(ProtocolEra era, ProtocolEra utxoEra) {
     // CTransaction creates a copy of CMutableTransaction and is not modified
     // when scriptPubKey is assigned to.
 
-    const int32_t tx_version{42};
     SignatureData empty;
-
     constexpr bool consensus{true};
     const uint32_t flags{MandatoryScriptVerifyFlags(era)};
     const auto params{make_eval_script_params(config, flags, consensus)};
@@ -2847,9 +2873,7 @@ void TestCombineSigs(ProtocolEra era, ProtocolEra utxoEra) {
                                                                                   0,
                                                                                   amount),
                                                empty,
-                                               tx_version,
                                                empty,
-                                               tx_version,
                                                era,
                                                utxoEra);
     BOOST_CHECK(combined.scriptSig.empty());
@@ -2861,9 +2885,7 @@ void TestCombineSigs(ProtocolEra era, ProtocolEra utxoEra) {
                                  scriptPubKey,
                                  MutableTransactionSignatureChecker(&txTo, 0, amount),
                                  SignatureData(scriptSig),
-                                 tx_version,
                                  empty,
-                                 tx_version,
                                  era,
                                  utxoEra);
     BOOST_CHECK(combined.scriptSig == scriptSig);
@@ -2871,9 +2893,7 @@ void TestCombineSigs(ProtocolEra era, ProtocolEra utxoEra) {
                                  scriptPubKey,
                                  MutableTransactionSignatureChecker(&txTo, 0, amount),
                                  empty,
-                                 tx_version,
                                  SignatureData(scriptSig),
-                                 tx_version,
                                  era,
                                  utxoEra);
     BOOST_CHECK(combined.scriptSig == scriptSig);
@@ -2885,9 +2905,7 @@ void TestCombineSigs(ProtocolEra era, ProtocolEra utxoEra) {
                                  scriptPubKey,
                                  MutableTransactionSignatureChecker(&txTo, 0, amount),
                                  SignatureData(scriptSigCopy),
-                                 tx_version,
                                  SignatureData(scriptSig),
-                                 tx_version,
                                  era,
                                  utxoEra);
     BOOST_CHECK(combined.scriptSig == scriptSigCopy ||
@@ -2904,9 +2922,7 @@ void TestCombineSigs(ProtocolEra era, ProtocolEra utxoEra) {
                                  scriptPubKey,
                                  MutableTransactionSignatureChecker(&txTo, 0, amount),
                                  SignatureData(scriptSig),
-                                 tx_version,
                                  empty,
-                                 tx_version,
                                  era,
                                  utxoEra);
     BOOST_CHECK(combined.scriptSig == scriptSig);
@@ -2914,9 +2930,7 @@ void TestCombineSigs(ProtocolEra era, ProtocolEra utxoEra) {
                                  scriptPubKey,
                                  MutableTransactionSignatureChecker(&txTo, 0, amount),
                                  empty,
-                                 tx_version,
                                  SignatureData(scriptSig),
-                                 tx_version,
                                  era,
                                  utxoEra);
     BOOST_CHECK(combined.scriptSig == scriptSig);
@@ -2927,9 +2941,7 @@ void TestCombineSigs(ProtocolEra era, ProtocolEra utxoEra) {
                                  scriptPubKey,
                                  MutableTransactionSignatureChecker(&txTo, 0, amount),
                                  SignatureData(scriptSigCopy),
-                                 tx_version,
                                  SignatureData(scriptSig),
-                                 tx_version,
                                  era,
                                  utxoEra);
     BOOST_CHECK(combined.scriptSig == scriptSigCopy ||
@@ -2943,9 +2955,7 @@ void TestCombineSigs(ProtocolEra era, ProtocolEra utxoEra) {
                                  scriptPubKey,
                                  MutableTransactionSignatureChecker(&txTo, 0, amount),
                                  SignatureData(scriptSigCopy),
-                                 tx_version,
                                  SignatureData(scriptSig),
-                                 tx_version,
                                  era,
                                  utxoEra);
     if (IsProtocolActive(utxoEra, ProtocolName::Genesis)) {
@@ -2959,9 +2969,7 @@ void TestCombineSigs(ProtocolEra era, ProtocolEra utxoEra) {
                                  scriptPubKey,
                                  MutableTransactionSignatureChecker(&txTo, 0, amount),
                                  SignatureData(scriptSig),
-                                 tx_version,
                                  SignatureData(scriptSigCopy),
-                                 tx_version,
                                  era,
                                  utxoEra);
     if (IsProtocolActive(utxoEra, ProtocolName::Genesis)) {
@@ -2980,9 +2988,7 @@ void TestCombineSigs(ProtocolEra era, ProtocolEra utxoEra) {
                                  scriptPubKey,
                                  MutableTransactionSignatureChecker(&txTo, 0, amount),
                                  SignatureData(scriptSig),
-                                 tx_version,
                                  empty,
-                                 tx_version,
                                  era,
                                  utxoEra);
     BOOST_CHECK(combined.scriptSig == scriptSig);
@@ -2990,9 +2996,7 @@ void TestCombineSigs(ProtocolEra era, ProtocolEra utxoEra) {
                                  scriptPubKey,
                                  MutableTransactionSignatureChecker(&txTo, 0, amount),
                                  empty,
-                                 tx_version,
                                  SignatureData(scriptSig),
-                                 tx_version,
                                  era,
                                  utxoEra);
     BOOST_CHECK(combined.scriptSig == scriptSig);
@@ -3032,9 +3036,7 @@ void TestCombineSigs(ProtocolEra era, ProtocolEra utxoEra) {
                                  scriptPubKey,
                                  MutableTransactionSignatureChecker(&txTo, 0, amount),
                                  SignatureData(partial1a),
-                                 tx_version,
                                  SignatureData(partial1b),
-                                 tx_version,
                                  era,
                                  utxoEra);
     BOOST_CHECK(combined.scriptSig == partial1a);
@@ -3042,9 +3044,7 @@ void TestCombineSigs(ProtocolEra era, ProtocolEra utxoEra) {
                                  scriptPubKey,
                                  MutableTransactionSignatureChecker(&txTo, 0, amount),
                                  SignatureData(partial1a),
-                                 tx_version,
                                  SignatureData(partial2a),
-                                 tx_version,
                                  era,
                                  utxoEra);
     BOOST_CHECK(combined.scriptSig == complete12);
@@ -3052,9 +3052,7 @@ void TestCombineSigs(ProtocolEra era, ProtocolEra utxoEra) {
                                  scriptPubKey,
                                  MutableTransactionSignatureChecker(&txTo, 0, amount),
                                  SignatureData(partial2a),
-                                 tx_version,
                                  SignatureData(partial1a),
-                                 tx_version,
                                  era,
                                  utxoEra);
     BOOST_CHECK(combined.scriptSig == complete12);
@@ -3062,9 +3060,7 @@ void TestCombineSigs(ProtocolEra era, ProtocolEra utxoEra) {
                                  scriptPubKey,
                                  MutableTransactionSignatureChecker(&txTo, 0, amount),
                                  SignatureData(partial1b),
-                                 tx_version,
                                  SignatureData(partial2b),
-                                 tx_version,
                                  era,
                                  utxoEra);
     BOOST_CHECK(combined.scriptSig == complete12);
@@ -3072,9 +3068,7 @@ void TestCombineSigs(ProtocolEra era, ProtocolEra utxoEra) {
                                  scriptPubKey,
                                  MutableTransactionSignatureChecker(&txTo, 0, amount),
                                  SignatureData(partial3b),
-                                 tx_version,
                                  SignatureData(partial1b),
-                                 tx_version,
                                  era,
                                  utxoEra);
     BOOST_CHECK(combined.scriptSig == complete13);
@@ -3082,9 +3076,7 @@ void TestCombineSigs(ProtocolEra era, ProtocolEra utxoEra) {
                                  scriptPubKey,
                                  MutableTransactionSignatureChecker(&txTo, 0, amount),
                                  SignatureData(partial2a),
-                                 tx_version,
                                  SignatureData(partial3a),
-                                 tx_version,
                                  era,
                                  utxoEra);
     BOOST_CHECK(combined.scriptSig == complete23);
@@ -3092,9 +3084,7 @@ void TestCombineSigs(ProtocolEra era, ProtocolEra utxoEra) {
                                  scriptPubKey,
                                  MutableTransactionSignatureChecker(&txTo, 0, amount),
                                  SignatureData(partial3b),
-                                 tx_version,
                                  SignatureData(partial2b),
-                                 tx_version,
                                  era,
                                  utxoEra);
     BOOST_CHECK(combined.scriptSig == complete23);
@@ -3102,9 +3092,7 @@ void TestCombineSigs(ProtocolEra era, ProtocolEra utxoEra) {
                                  scriptPubKey,
                                  MutableTransactionSignatureChecker(&txTo, 0, amount),
                                  SignatureData(partial3b),
-                                 tx_version,
                                  SignatureData(partial3a),
-                                 tx_version,
                                  era,
                                  utxoEra);
     BOOST_CHECK(combined.scriptSig == partial3c);
@@ -3718,11 +3706,12 @@ namespace {
         bool CheckSig(
             const std::vector<uint8_t>& scriptSig,
             const std::vector<uint8_t>& vchPubKey,
-            const CScript& scriptCode) const override
+            const CScript& scriptCode,
+            bool enabledSighashForkid) const override
         {
             auto start = std::chrono::steady_clock::now();
             bool res =
-                CachingTransactionSignatureChecker::CheckSig(scriptSig, vchPubKey, scriptCode);
+                CachingTransactionSignatureChecker::CheckSig(scriptSig, vchPubKey, scriptCode, enabledSighashForkid);
             mDuration.check +=
                 std::chrono::duration_cast<std::chrono::microseconds>(
                     std::chrono::steady_clock::now() - start);
@@ -4276,7 +4265,8 @@ BOOST_AUTO_TEST_CASE(VerifyScript_lows)
     {
         bool CheckSig(const std::vector<uint8_t> &,
                       const std::vector<uint8_t> &,
-                      const CScript&) const override
+                      const CScript&,
+                      bool) const override
         {
             return true;
         }
@@ -5016,7 +5006,7 @@ BOOST_AUTO_TEST_CASE(eval_script_op_checksig_nullfail)
                                                op_checksig_script.end()},
                                        flags,
                                        BaseSignatureChecker{});
-        assert(status);        
+        assert(status);
         std::visit(overload([&expected, &stack](const malleability::status ms)
                             {
                                 BOOST_CHECK_EQUAL(std::get<malleability::status>(expected),
