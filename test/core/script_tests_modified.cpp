@@ -23,7 +23,7 @@
 #include "core_io.h"
 #include "key.h"
 #include "keystore.h"
-#include "overload.h"
+//#include "overload.h" // broke build local mac os amd
 #include "protocol_era.h"
 #include "rpc/server.h"
 #include "script/malleability_status.h"
@@ -111,6 +111,21 @@ UniValue ValueFromAmount(const Amount &amount) { // defined in src/rpc/server.cp
         quotient, remainder));
 }
 // SCRIPT_ENGINE_BUILD_TEST ++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+// SCRIPT_ENGINE_BUILD_TEST ++++++++++++++++++++++++++++++++++++++++++++++++++++
+// hotfix for overload.h
+template<typename... Ts>
+struct overload_hotfix : Ts...
+{
+    using Ts::operator()...;
+
+    // Forwarding constructor to initialize all base classes
+    explicit overload_hotfix(Ts... ts) : Ts(std::move(ts))... {}
+}; 
+// SCRIPT_ENGINE_BUILD_TEST ++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+template <typename... Ts>
+overload_hotfix(Ts...) -> overload_hotfix<Ts...>;
 
 struct ScriptErrorDesc {
     ScriptError_t err;
@@ -5007,7 +5022,7 @@ BOOST_AUTO_TEST_CASE(eval_script_op_checksig_nullfail)
                                        flags,
                                        BaseSignatureChecker{});
         assert(status);
-        std::visit(overload([&expected, &stack](const malleability::status ms)
+        std::visit(overload_hotfix([&expected, &stack](const malleability::status ms)
                             {
                                 BOOST_CHECK_EQUAL(std::get<malleability::status>(expected),
                                                   ms);
@@ -5225,7 +5240,7 @@ BOOST_AUTO_TEST_CASE(eval_script_op_checkmultisig_nullfail)
                                        flags,
                                        BaseSignatureChecker{});
         assert(status);
-        std::visit(overload([&expected,
+        std::visit(overload_hotfix([&expected,
                              &stack,
                              &exp_stack](const malleability::status ms)
                             {
@@ -5357,7 +5372,7 @@ BOOST_AUTO_TEST_CASE(eval_script_op_checkmultisig_nulldummy)
                                        flags,
                                        BaseSignatureChecker{});
         assert(status);
-        std::visit(overload([&expected,
+        std::visit(overload_hotfix([&expected,
                              &stack,
                              &exp_stack](const malleability::status ms)
                             {
@@ -5705,7 +5720,7 @@ BOOST_AUTO_TEST_CASE(eval_script_op_if_minimal_if)
                                        flags,
                                        BaseSignatureChecker{});
         assert(status);
-        std::visit(overload([&expected,
+        std::visit(overload_hotfix([&expected,
                              &stack,
                              &exp_stack](const malleability::status ms)
                             {
