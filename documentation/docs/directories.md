@@ -8,14 +8,10 @@
 |    |---modules
 |         |---example
 |         |---gobdk
-|         |---java
-|         |---python
 |         |---...
 |    |---test
 |         |---core
 |         |---golang
-|         |---java
-|         |---python
 |         |---...
 ```
 

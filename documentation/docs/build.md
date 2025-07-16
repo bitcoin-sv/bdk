@@ -26,16 +26,6 @@ Note that when building in Mac OS with clang, it only work with boost 1.85. As i
 
 See [prebuild dependancies](https://github.com/bitcoin-sv/bdk/blob/master/.github/workflows/prebuild_dependancies.yaml) to better understand the tooling and versions. The CI build and test is using [github workflow](https://github.com/bitcoin-sv/bdk/blob/master/.github/workflows/build_bdk.yaml).
 
-##### Java module
-- Java JDK 11 or later
-- Download testng jar files `guice-4.1.0.jar`, `jcommander-1.72.jar`, `snakeyaml-1.21.jar` and `testng-7.1.0.jar`
-- The `JAVA_TOOLS` environment variable must be setup pointing to the directory containing these files
-
-If these packages above is not dowloaded and setup with `JAVA_TOOLS`, cmake can manage on its own, but it'll require internet connection.
-
-##### Python module
-- No additional requirements if Python is installed with Debug symbols
-
 ##### Golang module
 Golang binding built with CGO is working fine on Linux and Mac OS. For windows, it is not well tested, as the linking with DLL is not common.
 The golang module is build into a shared library, then CGO will link dynamically to it. The golang modules builds and checkin the binaries files in git repo, so users only need to do `go get ...` to get all required to run.
@@ -62,11 +52,6 @@ Dependencies marked optional apply if you wish to run the unit tests. See [Tests
 - Make sure the Python3 directory is included in the `PATH` environment variable
 - Make sure the `OPENSSL_ROOT_DIR` environment variable is set to the location where OpenSSL is installed
 - Make sure the `BOOST_ROOT` environment variable is set to the location where boost is installed
-
-##### Java module
-
-- Make sure the `JAVA_TOOLS` environment variable is set to the location of `junit4.jar` and `hamcreast.jar`
-By default all languange binding modules are built. If users don't want to build java module, add `-BUILD_MODULE_JAVA=OFF` to cmake command, it will deactivate build of the java binding.
 
 ## Building Bitcoin Development Kit
 It is recommended that a build directory **build** is created outside of Bitcoin Development Kit source code directory. See [directories structure](directories.md).
@@ -123,37 +108,6 @@ Once the build tools and libraries are prepared, some post installation steps ar
 make test
 ctest
 ```
-
-##### Java test from IntelliJ IDEA
-
-In general to run BDK java test from any IDE, users need to let the IDE know where to load the bdk.jar package and where is the location of the bdk_jni runtime library. Below is the explanation of how to do it with IntelliJ IDEA.
-
-Ctrl-Shift-A then type "Import project from existing source". Select directory $BDK, click next next a few time until reaching
-
-  - The window asking to select some of the directories, uncheck all, leave only the $BDK/test/java
-  - The window asking to select a library (jar file), uncheck all
-
-When the project is created, IntelliJ open a new window with projec tree there. Open File/Project Structure, then go to Modules :
-
-  - On Sources tab, select directory $BDK/test/java and make sure it is marked as "Test"
-  - On Dependencies tab :
-
-      - click on '+' button to add bdk jar file ($BUILD_DIR/generated/tools/bin/bdk-x.y.z.jar)
-      - click on '+' button to add directory $JAVA_TOOLS
-    Make sure the 2 dependencies added are checked to be used
-
-Right click on a specific *Test.java file, select recompile
-Right click on the same *Test.java file, select "create test" (there are symbol indicating TestNG), then the test configuration will open
-From the VM options, add appropriate value of
-```
--Djava_test_data_dir="$BDK/test/java/data" -Djava.library.path="$CMAKE_BUILD_DIR/x64/release"
-```
-Then the test is ready to run/debug. To debug java code, and jni C++ call:
-
-- Make sure you've built in debug mode
-- Change VM option `-Djava.library.path="$CMAKE_BUILD_DIR/x64/debug` 
-- add the argument "-Ddebug=1" to VM options
-- use the method "PackageInfo.getPID()" to get the pid of the proccess and use C++ debugger "attach to process" functionality.
 
 ##### Golang module enabling cgo
 

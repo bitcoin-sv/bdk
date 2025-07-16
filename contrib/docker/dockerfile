@@ -59,11 +59,6 @@ RUN python3 -m pip install --upgrade pip
 RUN python3 -m pip install mkdocs pymdown-extensions plantuml_markdown junitparser
 RUN python3 -m pip install pytest
 
-# Java
-RUN apt install -y default-jdk
-RUN apt install -y openjdk-8-jdk
-RUN apt install -y junit4
-
 # Create build dir for CMake   
 WORKDIR /root
 RUN mkdir build

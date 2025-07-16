@@ -8,7 +8,7 @@ The BDK consists of a number of components
 
 The object model can be found in documentation/docs/ObjectModel.md
 
-For the purpose of this document, we assume that bindings are present for Java and Python.
+For the purpose of this document, we assume that bindings are present for Golang.
 
 ## Proposal
 * Each language binding (module) will be assigned a version number, following sematic versioning rules (https://semver.org/)
@@ -27,9 +27,7 @@ The SDK version is always greater than the versions of any of its components.
 ### Examples
 If the patch versions of 2 modules (bindings or core) are incremented, then the SDK patch version is incremented. If the minor version of a module is incremented, and the patch version of another is incremented, then the SDK minor version is incremented and the patch version is reset.
 
-If the Java binding version is bumped from "1.2.3" to "1.3.0", the SDK minor version is incremented and the patch number reset, say, from "1.4.3" to "1.5.0".
-
-If the Java binding version is bumped from "1.2.3" to "1.3.0" and the Python binding version is bumped from "1.1.6" to "1.1.7", the bump to the Java binding is more significant and the SDK minor version is incremented and the patch number reset, from  "1.4.3" to "1.5.0".
+If the Golang binding version is bumped from "1.2.3" to "1.3.0", the SDK minor version is incremented and the patch number reset, say, from "1.4.3" to "1.5.0".
 
 ## Dependency on SV
 

@@ -75,7 +75,7 @@ jobs:
           echo "Successfully checked out bitcoin-sv commit ${{ steps.define-bitcoin-sv-commit.outputs.bsvcommit }} to bitcoin-sv"
 
         ## Download and setup environment varialbe
-        ## BSV_ROOT, BOOST_ROOT, OPENSSL_ROOT_DIR, JAVA_HOME
+        ## BSV_ROOT, BOOST_ROOT, OPENSSL_ROOT_DIR
       - name: Prepare Environment and Dependencies Unix
         if: runner.os != 'Windows'
         run: |
@@ -91,7 +91,6 @@ jobs:
             echo "DEPENDENCIES_DIR=${{ github.workspace }}/dependancies_linux_x86_64" >> $GITHUB_ENV
             echo "BOOST_ROOT=${{ github.workspace }}/dependancies_linux_x86_64/boost_1.85.0" >> $GITHUB_ENV
             echo "OPENSSL_ROOT_DIR=${{ github.workspace }}/dependancies_linux_x86_64/openssl_3.4.0" >> $GITHUB_ENV
-            echo "JAVA_HOME=$JAVA_HOME_17_X64" >> $GITHUB_ENV
           fi
           if [[ ${{ matrix.os }} == *'linux'* ]]; then
             sudo apt-get update
@@ -101,7 +100,6 @@ jobs:
             echo "DEPENDENCIES_DIR=${{ github.workspace }}/dependancies_linux_aarch64" >> $GITHUB_ENV
             echo "BOOST_ROOT=${{ github.workspace }}/dependancies_linux_aarch64/boost_1.85.0" >> $GITHUB_ENV
             echo "OPENSSL_ROOT_DIR=${{ github.workspace }}/dependancies_linux_aarch64/openssl_3.4.0" >> $GITHUB_ENV
-            echo "JAVA_HOME=/usr/lib/jvm/temurin-17-jdk-arm64" >> $GITHUB_ENV
           fi
           if [[ ${{ matrix.os }} == *'macos-15'* && "${{ matrix.arch }}" != "x86_64" ]]; then
             wget https://github.com/bitcoin-sv/bdk/releases/download/depcy/dependancies_darwin_arm64.tar.gz
@@ -109,7 +107,6 @@ jobs:
             echo "DEPENDENCIES_DIR=${{ github.workspace }}/dependancies_darwin_arm64" >> $GITHUB_ENV
             echo "BOOST_ROOT=${{ github.workspace }}/dependancies_darwin_arm64/boost_1.85.0" >> $GITHUB_ENV
             echo "OPENSSL_ROOT_DIR=${{ github.workspace }}/dependancies_darwin_arm64/openssl_3.4.0" >> $GITHUB_ENV
-            echo "JAVA_HOME=$JAVA_HOME_17_arm64" >> $GITHUB_ENV
           fi
           if [[ ${{ matrix.os }} == *'macos-15'* && "${{ matrix.arch }}" == "x86_64" ]]; then
             wget https://github.com/bitcoin-sv/bdk/releases/download/depcy/dependancies_darwin_x86_64.tar.gz
@@ -117,7 +114,6 @@ jobs:
             echo "DEPENDENCIES_DIR=${{ github.workspace }}/dependancies_darwin_x86_64" >> $GITHUB_ENV
             echo "BOOST_ROOT=${{ github.workspace }}/dependancies_darwin_x86_64/boost_1.85.0" >> $GITHUB_ENV
             echo "OPENSSL_ROOT_DIR=${{ github.workspace }}/dependancies_darwin_x86_64/openssl_3.4.0" >> $GITHUB_ENV
-            #echo "JAVA_HOME=$JAVA_HOME_17_X64" >> $GITHUB_ENV
           fi
 
       - name: Build and Test BDK Unix (all linux and mac arm)
@@ -128,9 +124,9 @@ jobs:
 
           if [[ ${{ matrix.os }} == *'macos-15'* && "${{ matrix.arch }}" == "x86_64" ]]; then
             echo "Skip building languages binding for x86_64 on macos arm, it is very complicated at runtime"
-            cmake -B build -S "." -DINSTALL_GOBDK_INSOURCE=ON -DCMAKE_OSX_ARCHITECTURES="x86_64" -DCUSTOM_GOBDK_OS_ARCH=darwin_x86_64 -DBUILD_MODULE_JAVA=OFF -DBUILD_MODULE_PYTHON=OFF -DBUILD_MODULE_GOLANG=OFF
+            cmake -B build -S "." -DBUILD_MODULE_GOLANG_INSTALL_INSOURCE=ON -DCMAKE_OSX_ARCHITECTURES="x86_64" -DCUSTOM_GOBDK_OS_ARCH=darwin_x86_64 -DBUILD_MODULE_GOLANG=OFF
           else
-            cmake -B build -S "." -DINSTALL_GOBDK_INSOURCE=ON
+            cmake -B build -S "." -DBUILD_MODULE_GOLANG_INSTALL_INSOURCE=ON
           fi
 
           cmake --build build --parallel 4
@@ -177,7 +173,7 @@ jobs:
         if: runner.os == 'Windows'
         run: |
           mkdir "build"
-          cmake -G"Visual Studio 17 2022" -A x64 -B "build" -S "." -DBUILD_MODULE_JAVA=OFF -DBUILD_MODULE_PYTHON=OFF -DBUILD_MODULE_GOLANG=OFF -DBOOST_ROOT="./dependancies_windows_x86_64/boost_1.85.0" -DOPENSSL_ROOT_DIR="./dependancies_windows_x86_64/openssl_3.0.14"
+          cmake -G"Visual Studio 17 2022" -A x64 -B "build" -S "." -DBUILD_MODULE_GOLANG=OFF -DBOOST_ROOT="./dependancies_windows_x86_64/boost_1.85.0" -DOPENSSL_ROOT_DIR="./dependancies_windows_x86_64/openssl_3.0.14"
           cmake --build build --config Debug --parallel 4
           ctest --output-on-failure --test-dir build -C Debug --parallel 4
           cmake --build build --config Release --parallel 4

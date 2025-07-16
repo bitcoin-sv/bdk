@@ -146,14 +146,5 @@ macro(bdkInitCMake)
   HelpFindBoost()
   #bdkPrintProperties(Boost::program_options)
 
-  include(FindPythonHelper)
-  HelpFindPython()
-  #bdkPrintPythonInfo()#Debug Log
-
-  ## To call inside the java binding module, not here
-  #include(FindJavaJDKHelper)
-  #HelpFindJavaJDK()
-  #bdkPrintJavaJDKInfo()#Debug Log
-
   enable_testing()
 endmacro()

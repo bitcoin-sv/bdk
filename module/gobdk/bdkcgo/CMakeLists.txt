@@ -125,8 +125,7 @@ if(UNIX)
                   COMMENT "Merge all in one ${mergedArchive}")
 
   install(FILES "${buildDir}/${mergedArchive}" DESTINATION "lib/bdkcgo" COMPONENT GoModules)
-  if (INSTALL_GOBDK_INSOURCE)
-    install(FILES "${buildDir}/${mergedArchive}" DESTINATION "lib/bdkcgo" COMPONENT GoModules)
+  if (BUILD_MODULE_GOLANG_INSTALL_INSOURCE)
     add_custom_command(TARGET MergeGoBDK POST_BUILD COMMAND cp "${buildDir}/${mergedArchive}" "${CMAKE_SOURCE_DIR}/module/gobdk/bdkcgo/${mergedArchive}"
       COMMENT "Install insource ${mergedArchive}"
     )

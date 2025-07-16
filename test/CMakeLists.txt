@@ -30,18 +30,6 @@ if(BDK_BUILD_BSV_TESTS)## Broken now as dependencies has been reduce to minimal
 endif()
 
 ## Test binding modules
-if(BUILD_MODULE_JAVA)
-	add_subdirectory(java)
-else()
-	message(STATUS "Testing Java module has been disabled")
-endif()
-
-if(BUILD_MODULE_PYTHON)
-	add_subdirectory(python)
-else()
-	message(STATUS "Testing Python module has been disabled")
-endif()
-
 if(BUILD_MODULE_GOLANG AND NOT MSVC)
 	add_subdirectory(golang)
 else()
