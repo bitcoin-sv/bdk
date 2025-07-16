@@ -5,15 +5,25 @@
 #  Copyright (c) 2020 nChain Limited. All rights reserved       #
 #################################################################
 
+## Test setting requires locating bsv source code
+if(NOT DEFINED BDK_BSV_ROOT_DIR)#
+  message(FATAL_ERROR "Unable to locate bsv source code by BDK_BSV_ROOT_DIR")
+endif()
+
 if(NOT Boost_FOUND)
   message(WARNING "Unable to find boost for C++ unit test, skip testing core")
   return()
 endif()
 
-## Test setting requires locating bsv source code
-if(NOT DEFINED BDK_BSV_ROOT_DIR)#
-  message(FATAL_ERROR "Unable to locate bsv source code by BDK_BSV_ROOT_DIR")
+include(FindPythonHelper)
+HelpFindPython()
+#bdkPrintPythonInfo()#Debug Log
+
+if(NOT (Python_FOUND AND Python_EXECUTABLE AND Python_Development_FOUND))
+    message(WARNING "Unable to find Python on the system which is required to generate test files")
+    return()
 endif()
+
 # This file is mainly copied from ${BDK_BSV_ROOT_DIR}/sv/src/test/CMakeLists.txt with slightl modifications
 #######################################################################
 message("Building BSV tests from ${BDK_BSV_ROOT_DIR} ...")
