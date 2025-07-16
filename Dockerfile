@@ -29,12 +29,7 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     checkinstall \
     zlib1g-dev \
-    python3 python3-pip python3-dev python-is-python3  \
-    openjdk-11-jdk
-
-# Finalize setup java jdk
-ENV JAVA_HOME=/usr/lib/jvm/java-11-openjdk-amd64
-ENV PATH="$JAVA_HOME/bin:$PATH"
+    python3 python3-pip python3-dev python-is-python3
 
 # Install python packages for building documentation
 RUN python -m pip install pytest mkdocs pymdown-extensions plantuml_markdown
