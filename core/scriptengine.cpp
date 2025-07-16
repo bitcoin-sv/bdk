@@ -5,7 +5,6 @@
 #include <script/script_flags.h>
 
 #include <chainparams_bdk.hpp>
-#include <interpreter_bdk.hpp>
 #include <extendedTx.hpp>
 #include <scriptengine.hpp>
 

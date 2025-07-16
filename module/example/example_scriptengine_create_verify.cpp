@@ -16,7 +16,6 @@
 #include "script/script_num.h"
 #include "script/sign.h"
 
-#include "interpreter_bdk.hpp"
 #include "extendedTx.hpp"
 #include "assembler.h"
 #include "utilstrencodings.h"
