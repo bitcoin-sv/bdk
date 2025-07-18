@@ -35,6 +35,7 @@ option(BDK_LOG_BSV_FILES "Log used bitcoin sv file to build" ON)
 option(BDK_BUILD_LEVELDB "Activate the build of leveldb" OFF)
 option(BDK_BUILD_UNIVALUE "Activate the build of univalue" ON)
 
+option(BDK_BUILD_CORE_ONLY "Build only core and deactivate everything else" OFF)
 option(BDK_BUILD_MODULES "Activate the build of modules" ON)
 option(BDK_BUILD_BSV_TESTS "Activate the build of bsv tests" ON)
 
@@ -76,13 +77,31 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/core)
 ## Build bdk_core
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/core)
 
-if(BDK_BUILD_MODULES)
-  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/module)
+if(NOT BDK_BUILD_CORE_ONLY)
+  if(BDK_BUILD_MODULES)
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/module)
+  endif()
+
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/test)
+
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/documentation)
+else ()
+  if(BDK_BUILD_MODULES)
+    message(WARNING "BDK_BUILD_MODULES was set while using BDK_BUILD_CORE_ONLY. This is conflictual")
+  endif()
+
+  if(BDK_BUILD_BSV_TESTS)
+    message(WARNING "BDK_BUILD_BSV_TESTS was set while using BDK_BUILD_CORE_ONLY. This is conflictual")
+  endif()
+
+  if(BUILD_MODULE_GOLANG)
+    message(WARNING "BUILD_MODULE_GOLANG was set while using BDK_BUILD_CORE_ONLY. This is conflictual")
+  endif()
+
+  if(BUILD_MODULE_GOLANG_INSTALL_INSOURCE)
+    message(WARNING "BUILD_MODULE_GOLANG_INSTALL_INSOURCE was set while using BDK_BUILD_CORE_ONLY. This is conflictual")
+  endif()
 endif()
-
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/test)
-
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/documentation)
 
 ## On Widows, need to download NSIS https://nsis.sourceforge.io/Download
 ## Possible to do WIX generator for MSI installer

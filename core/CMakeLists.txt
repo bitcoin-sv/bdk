@@ -68,7 +68,7 @@ endforeach()
 add_library(bdk_core ${BITCOIN_CONFIG_FILE} ${BDK_VERSION_CPP} ${BDK_CORE_HDR_FILES} ${BDK_CORE_SRC_FILES})
 #set_target_properties(bdk_core PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS 1)
 target_include_directories(bdk_core PUBLIC ${BSV_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(bdk_core ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT} secp256k1 ${UNIVALUE_LIB} OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono)
+target_link_libraries(bdk_core secp256k1 ${UNIVALUE_LIB} OpenSSL::Crypto OpenSSL::SSL)
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU") # remove warning on linux
     # Add the warning suppression flag to a specific source file

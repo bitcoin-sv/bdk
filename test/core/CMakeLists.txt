@@ -93,7 +93,7 @@ add_executable(test_bsv
                #"${BDK_BSV_TEST_ROOT}/opcode_tests.cpp
 )
 
-target_link_libraries(test_bsv ${CMAKE_DL_LIBS} bdk_core OpenSSL::Crypto OpenSSL::SSL)
+target_link_libraries(test_bsv ${CMAKE_DL_LIBS}  ${CMAKE_THREAD_LIBS_INIT}  bdk_core OpenSSL::Crypto OpenSSL::SSL Boost::chrono)
 if(WIN32)
   target_link_libraries(test_bsv Crypt32.lib Ws2_32)
 endif()
