@@ -254,7 +254,6 @@ function(cryptGetMinimumListBSVSource)##########################################
       "src/script/script_error.cpp"
       "src/script/script_num.cpp"
       "src/script/scriptcache.cpp"
-      "src/script/sigcache.cpp"
       "src/script/sign.cpp"     ##  Manual fix the build
       "src/script/standard.cpp"
       "src/support/cleanse.cpp"
