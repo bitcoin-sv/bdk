@@ -58,15 +58,16 @@ macro(bdkLinkTargetToBoost)##################################################
   list(GET list_arg 0 _target) # First argument is the target
   list(REMOVE_AT list_arg 0)   # Remaining element in the list should be imported boost
   #bdkPrintList("Boost components to link" "${list_arg}")#Debug log
-  
-  #if(NOT TARGET ${_target})
-  #    message(FATAL_ERROR " [${_target}] is not a TARGET")
-  #endif()
+
+  if(NOT TARGET ${_target})
+    message(FATAL_ERROR " [${_target}] is not a TARGET")
+  endif()
+
   foreach(_imported_boost IN LISTS list_arg)
     if(NOT TARGET ${_imported_boost})
       message(FATAL_ERROR " [${_imported_boost}] was not an imported target")
     endif()
-    target_link_libraries(${_target} ${_imported_boost})
+    target_link_libraries(${_target} PRIVATE ${_imported_boost})
   endforeach()
   
   if(NOT Boost_USE_STATIC_LIBS)
@@ -76,14 +77,14 @@ macro(bdkLinkTargetToBoost)##################################################
   
   if("${_imported_boost}" STREQUAL "Boost::system")
     ## Recommended by the doc as to better use of Boost::filesystem (2018/02/13 version 3)
-    target_compile_definitions(${_target} BOOST_FILESYSTEM_NO_DEPRECATED)
+    target_compile_definitions(${_target} PUBLIC BOOST_FILESYSTEM_NO_DEPRECATED)
   endif()
   if(WIN32 AND ("${_imported_boost}" STREQUAL "Boost::asio" OR "${_imported_boost}" STREQUAL "Boost::log"))
     ##https://svn.boost.org/trac10/ticket/12974?replyto=description
-    target_compile_definitions(${_target} _WIN32_WINNT=0x0A00)
+    target_compile_definitions(${_target} PUBLIC _WIN32_WINNT=0x0A00)
   endif()
   if(UNIX)
-    target_link_libraries(${_target} ${CMAKE_DL_LIBS})
+    target_link_libraries(${_target} PUBLIC ${CMAKE_DL_LIBS})
   endif()
   
 endmacro()
@@ -129,11 +130,14 @@ function(_CopyAndInstallSharedBoostComp _Boost_Comp)############################
 endfunction()
 
 
-#### Main function helping to find all boost components dynamically 
+#### HelpFindBoost help to find boost component providing the list of required component
+####     HelpFindBoost(system random)
+####     bdkLinkTargetToBoost(boost)## Header only
+#### This will find the targets of format Boost::component to be linked
+#### Note :
+####  Call find_package(Threads) before calling HelpFindBoost might fix some warning
 macro(HelpFindBoost)########################################################################################
-  if(Boost_FOUND)
-    message(FATAL_ERROR "Boost has been found previously, this function should be call only once through the entire build process")
-  endif()
+  set(list_components "${ARGN}")
 
   if(POLICY CMP0144) ## Remove warning
     cmake_policy(SET CMP0144 NEW)
@@ -150,50 +154,51 @@ macro(HelpFindBoost)############################################################
     set(BOOST_ROOT $ENV{BOOST_ROOT})
   endif()
 
-  find_package(Threads) ## find threads first might fix a warning when looking for boost thread
-
   message(STATUS "Try to find Boost in [${BOOST_ROOT}]")
 
-  ## Add a required component here  ======================
-  if(NOT Project_Required_BOOST_COMPONENTS)
-    set(Project_Required_BOOST_COMPONENTS
-        chrono
-        filesystem
-        #log
-        #log_setup
-        program_options
-        #random
-        system
-        thread
-        #timer
-        unit_test_framework
-        CACHE INTERNAL "List of required boost components"
-    )
-    #bdkPrintList("Project_Required_BOOST_COMPONENTS" "${Project_Required_BOOST_COMPONENTS}")#Debug log
+  list(LENGTH list_components nb_comps)
+  if(nb_comps LESS 1)
+    if(Boost_FOUND)
+      message(STATUS "Skip looking up for headers only Boost::boost as it was found")
+    else()
+      message(STATUS "Look up for headers only Boost::boost")
+      find_package(Boost ${boost_MINIMUM_REQUIRED} REQUIRED)
+    endif() 
+  else()
+    message(STATUS "Look up for boost components list ${list_components}")
+    foreach(_Boost_Comp ${list_components})
+      if(TARGET Boost::${_Boost_Comp})
+        message(STATUS "Skip looking up for boost component Boost::${_Boost_Comp} as it was found")
+      else()
+        message(STATUS "  Look up for boost component Boost::${_Boost_Comp}")
+        find_package(Boost ${boost_MINIMUM_REQUIRED} COMPONENTS ${_Boost_Comp} REQUIRED)
+
+        ## Check if the component not static-imported
+        isStaticImported(_IS_STATIC_IMPORTED Boost ${_Boost_Comp})
+        if(${_IS_STATIC_IMPORTED})
+          message(STATUS "  [Boost::${_Boost_Comp}] is imported as static, don't need to copy and install")
+          continue()
+        endif()
+
+        if(NOT Boost_USE_STATIC_LIBS)
+          bdkFixImportedTargetSymlink(Boost ${_Boost_Comp})
+          _CopyAndInstallSharedBoostComp(${_Boost_Comp})
+        endif()
+        #TODO add message if BOOST_FOUND to show user how to add boost linking to a target
+      endif()
+    endforeach()
   endif()
-
-  find_package(Boost ${boost_MINIMUM_REQUIRED} COMPONENTS ${Project_Required_BOOST_COMPONENTS} REQUIRED)
-
-  foreach(_Boost_Comp ${Project_Required_BOOST_COMPONENTS})
-    ## Check if the component not static-imported
-    isStaticImported(_IS_STATIC_IMPORTED Boost ${_Boost_Comp})
-    if(${_IS_STATIC_IMPORTED})
-      message(STATUS "  [Boost::${_Boost_Comp}] is imported as static, don't need to copy and install")
-      continue()
-    endif()
-
-    if(NOT Boost_USE_STATIC_LIBS)
-      bdkFixImportedTargetSymlink(Boost ${_Boost_Comp})
-      _CopyAndInstallSharedBoostComp(${_Boost_Comp})
-    endif()
-  endforeach()
-
-  #TODO add message if BOOST_FOUND to show user how to add boost linking to a target
 endmacro()
 
+#### bdkPrintBoostInfo print info of a list of found Boost::component
+####     bdkPrintBoostInfo(filesystem program_options)
 function(bdkPrintBoostInfo)
+  if(${ARGC} LESS 1)
+    message(FATAL_ERROR "Error calling function bdkPrintBoostInfo(comp1 compN), requires at least one argument")
+  endif()
+
   if(NOT Boost_USE_STATIC_LIBS)##Nothing to do more if it is statically imported
-    foreach(_Boost_Comp ${Project_Required_BOOST_COMPONENTS})
+    foreach(_Boost_Comp ${ARGN})
       bdkPrintProperties(Boost::${_Boost_Comp})
     endforeach()
   endif()
@@ -201,7 +206,7 @@ function(bdkPrintBoostInfo)
   bdkPrintProperties(Boost::diagnostic_definitions)
   bdkPrintProperties(Boost::disable_autolinking)
   bdkPrintProperties(Boost::dynamic_linking)
-  
+
   message(" --")
   message(" ---------- Boost_FOUND [${Boost_FOUND}]")
   message(" ---------- Boost_VERSION [${Boost_VERSION}]")
