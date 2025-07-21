@@ -5,6 +5,15 @@
 #  Copyright (c) 2024 nChain Limited. All rights reserved       #
 #################################################################
 
+find_package(Threads)
+include(FindBoostHelper)
+HelpFindBoost(thread filesystem program_options chrono)
+foreach(comp IN LISTS "thread" "filesystem" "program_options" "chrono")
+    if(NOT TARGET Boost::${comp})
+        message(FATAL "Boost::${comp} is required but not found")
+    endif()
+endforeach()
+
 
 #### BDK Go module version as increment of core version
 createIncrementVersion(BDK_GOLANG_VERSION_MAJOR ${BDK_VERSION_MAJOR} 0 "BDK golang major version")
@@ -39,16 +48,25 @@ set(_GO_MODULE_SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/scriptengine_cgo.cpp
 )
 
+# File ${BDK_BSV_ROOT_DIR}/src/logging.cpp initially included in core, but as it depend to Boost::filesytem
+# we remove it from core and put it where it is needed only
+set(_GO_MODULE_SOURCE_FILES
+    ${_GO_MODULE_SOURCE_FILES}
+    "${BDK_BSV_ROOT_DIR}/src/logging.cpp"
+)
+
 # The shared libraries is not to be used in a normal situation. But we keep building this target
 # just in case we might use it sometime later.
 add_library(${_GO_MODULE_NAME} SHARED ${_GO_MODULE_HEADER_FILES} ${_GO_MODULE_SOURCE_FILES} ${BDK_VERSION_GOLANG_CPP})
-target_link_libraries(${_GO_MODULE_NAME} PUBLIC bdk_core ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT} secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono)
+target_link_libraries(${_GO_MODULE_NAME} PUBLIC bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT})
+bdkLinkTargetToBoost(${_GO_MODULE_NAME} Boost::thread Boost::filesystem Boost::program_options Boost::chrono)
 target_include_directories(${_GO_MODULE_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/.. ${CMAKE_SOURCE_DIR})
 
 # The static libraries is built and to be merge will all of its dependant archives
 # to make a all-in-one standalone static library, ready to be linked in cgo
 add_library(static-${_GO_MODULE_NAME} STATIC ${_GO_MODULE_HEADER_FILES} ${_GO_MODULE_SOURCE_FILES} ${BDK_VERSION_GOLANG_CPP})
-target_link_libraries(static-${_GO_MODULE_NAME} PUBLIC bdk_core ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT} secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono)
+target_link_libraries("static-${_GO_MODULE_NAME}" PUBLIC  bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT})
+bdkLinkTargetToBoost("static-${_GO_MODULE_NAME}" Boost::thread Boost::filesystem Boost::program_options Boost::chrono)
 target_include_directories(static-${_GO_MODULE_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/.. ${CMAKE_SOURCE_DIR})
 
 source_group("_generated" FILES "${BDK_VERSION_GOLANG_CPP}")

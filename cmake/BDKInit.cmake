@@ -142,9 +142,5 @@ macro(bdkInitCMake)
   HelpFindOpenSSL()
   #bdkPrintOpenSSLInfo()#Debug Log
 
-  include(FindBoostHelper)
-  HelpFindBoost()
-  #bdkPrintProperties(Boost::program_options)
-
   enable_testing()
 endmacro()

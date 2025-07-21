@@ -5,6 +5,12 @@
 #  Copyright (c) 2020 nChain Limited. All rights reserved       #
 #################################################################
 
+include(FindBoostHelper)
+HelpFindBoost(unit_test_framework)
+if (NOT TARGET Boost::unit_test_framework)
+  message(FATAL_ERROR "Boost::unit_test_framework is required but not found")
+endif()
+
 macro(bdk_add_unit_test _targetName)
   if(NOT TARGET ${_targetName})
       message(FATAL_ERROR " [${_targetName}] is not a TARGET")

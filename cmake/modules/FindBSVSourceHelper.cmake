@@ -106,7 +106,7 @@ function(cryptGetMinimumListBSVSource)##########################################
       "src/chainparamsbase.h"  ##  Used by [base58.cpp], [chainparams.cpp], [chainparamsbase.cpp], [config.cpp], [dstencode.cpp], [interpreter.cpp], [util.cpp]
       "src/chainparamsseeds.h"  ##  Used by [chainparams.cpp]
       "src/coins.h"  ##  Used by [config.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [scriptcache.cpp]
-      "src/compat.h"  ##  Used by [base58.cpp], [chainparams.cpp], [chainparamsbase.cpp], [config.cpp], [core_read.cpp], [core_write.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [logging.cpp], [random.cpp], [scriptcache.cpp], [sigcache.cpp], [standard.cpp], [util.cpp]
+      "src/compat.h"  ##  Used by [base58.cpp], [chainparams.cpp], [chainparamsbase.cpp], [config.cpp], [core_read.cpp], [core_write.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [random.cpp], [scriptcache.cpp], [sigcache.cpp], [standard.cpp], [util.cpp]
       "src/compat/byteswap.h"  ##  Used by [amount.cpp], [assembler.cpp], [base58.cpp], [block.cpp], [chacha20.cpp], [chainparams.cpp], [config.cpp], [core_read.cpp], [core_write.cpp], [dstencode.cpp], [fRequireStandard.cpp], [hash.cpp], [interpreter.cpp], [key.cpp], [limitedstack.cpp], [merkle.cpp], [pubkey.cpp], [random.cpp], [ripemd160.cpp], [script.cpp], [scriptcache.cpp], [sha1.cpp], [sha256.cpp], [sha512.cpp], [sigcache.cpp], [standard.cpp], [transaction.cpp], [arith_uint256.cpp], [util.cpp], [utilmoneystr.cpp]
       "src/compat/endian.h"  ##  Used by [amount.cpp], [assembler.cpp], [base58.cpp], [block.cpp], [chacha20.cpp], [chainparams.cpp], [config.cpp], [core_read.cpp], [core_write.cpp], [dstencode.cpp], [fRequireStandard.cpp], [hash.cpp], [interpreter.cpp], [key.cpp], [limitedstack.cpp], [merkle.cpp], [pubkey.cpp], [random.cpp], [ripemd160.cpp], [script.cpp], [scriptcache.cpp], [sha1.cpp], [sha256.cpp], [sha512.cpp], [sigcache.cpp], [standard.cpp], [transaction.cpp], [arith_uint256.cpp], [util.cpp], [utilmoneystr.cpp]
       "src/compressor.h"  ##  Used by [config.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [scriptcache.cpp]
@@ -128,13 +128,13 @@ function(cryptGetMinimumListBSVSource)##########################################
       "src/cuckoocache.h"  ##  Used by [scriptcache.cpp], [sigcache.cpp]
       "src/dstencode.h"  ##  Used by [core_write.cpp], [dstencode.cpp]
       "src/enum_cast.h"  ##  Used by [config.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [scriptcache.cpp]
-      "src/fs.h"  ##  Used by [chainparams.cpp], [chainparamsbase.cpp], [config.cpp], [core_read.cpp], [core_write.cpp], [dstencode.cpp], [fRequireStandard.cpp], [fs.cpp], [interpreter.cpp], [logging.cpp], [random.cpp], [scriptcache.cpp], [sigcache.cpp], [standard.cpp], [util.cpp]
+      "src/fs.h"  ##  Used by [chainparams.cpp], [chainparamsbase.cpp], [config.cpp], [core_read.cpp], [core_write.cpp], [dstencode.cpp], [fRequireStandard.cpp], [fs.cpp], [interpreter.cpp], [random.cpp], [scriptcache.cpp], [sigcache.cpp], [standard.cpp], [util.cpp]
       "src/hash.h"  ##  Used by [base58.cpp], [block.cpp], [config.cpp], [core_write.cpp], [dstencode.cpp], [fRequireStandard.cpp], [hash.cpp], [interpreter.cpp], [key.cpp], [limitedstack.cpp], [merkle.cpp], [pubkey.cpp], [scriptcache.cpp], [sigcache.cpp], [standard.cpp], [transaction.cpp]
       "src/indirectmap.h"  ##  Used by [config.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [scriptcache.cpp], [sigcache.cpp]
       "src/key.h"  ##  Used by [base58.cpp], [core_write.cpp], [dstencode.cpp], [interpreter.cpp], [key.cpp]
       "src/keystore.h"  ##  Manual fix the build
       "src/limitedmap.h"  ##  Used by [config.cpp], [dstencode.cpp], [interpreter.cpp]
-      "src/logging.h"  ##  Used by [chainparams.cpp], [chainparamsbase.cpp], [config.cpp], [core_read.cpp], [core_write.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [logging.cpp], [random.cpp], [scriptcache.cpp], [sigcache.cpp], [standard.cpp], [util.cpp]
+      "src/logging.h"  ##  Used by [chainparams.cpp], [chainparamsbase.cpp], [config.cpp], [core_read.cpp], [core_write.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [random.cpp], [scriptcache.cpp], [sigcache.cpp], [standard.cpp], [util.cpp]
       "src/memusage.h"  ##  Used by [config.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [scriptcache.cpp], [sigcache.cpp]
       "src/net/association.h"  ##  Used by [config.cpp], [dstencode.cpp], [interpreter.cpp]
       "src/net/net.h"  ##  Used by [config.cpp], [dstencode.cpp], [interpreter.cpp]
@@ -180,7 +180,7 @@ function(cryptGetMinimumListBSVSource)##########################################
       "src/support/allocators/zeroafterfree.h"  ##  Used by [base58.cpp], [config.cpp], [core_read.cpp], [core_write.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [scriptcache.cpp]
       "src/support/cleanse.h"  ##  Used by [base58.cpp], [config.cpp], [core_read.cpp], [core_write.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [key.cpp], [lockedpool.cpp], [random.cpp], [scriptcache.cpp]
       "src/support/lockedpool.h"  ##  Used by [base58.cpp], [core_write.cpp], [dstencode.cpp], [interpreter.cpp], [key.cpp], [lockedpool.cpp]
-      "src/sync.h"  ##  Used by [chainparams.cpp], [chainparamsbase.cpp], [config.cpp], [core_read.cpp], [core_write.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [logging.cpp], [random.cpp], [scriptcache.cpp], [sigcache.cpp], [standard.cpp], [util.cpp]
+      "src/sync.h"  ##  Used by [chainparams.cpp], [chainparamsbase.cpp], [config.cpp], [core_read.cpp], [core_write.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [random.cpp], [scriptcache.cpp], [sigcache.cpp], [standard.cpp], [util.cpp]
       "src/task.h"  ##  Used by [config.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [scriptcache.cpp]
       "src/task_helpers.h"  ##  Used by [config.cpp], [dstencode.cpp], [interpreter.cpp]
       "src/taskcancellation.h"  ##  Used by [config.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [scriptcache.cpp]
@@ -188,10 +188,10 @@ function(cryptGetMinimumListBSVSource)##########################################
       "src/threadpool.h"  ##  Used by [config.cpp], [dstencode.cpp], [interpreter.cpp]
       "src/threadpoolT.h"  ##  Used by [config.cpp], [dstencode.cpp], [interpreter.cpp]
       "src/threadpriority.h"  ##  Used by [config.cpp], [dstencode.cpp], [interpreter.cpp]
-      "src/threadsafety.h"  ##  Used by [chainparams.cpp], [chainparamsbase.cpp], [config.cpp], [core_read.cpp], [core_write.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [logging.cpp], [random.cpp], [scriptcache.cpp], [sigcache.cpp], [standard.cpp], [util.cpp]
+      "src/threadsafety.h"  ##  Used by [chainparams.cpp], [chainparamsbase.cpp], [config.cpp], [core_read.cpp], [core_write.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [random.cpp], [scriptcache.cpp], [sigcache.cpp], [standard.cpp], [util.cpp]
       "src/time_locked_mempool.h"  ##  Used by [config.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [scriptcache.cpp]
       "src/timedata.h"  ##  Used by [config.cpp], [dstencode.cpp], [interpreter.cpp]
-      "src/tinyformat.h"  ##  Used by [amount.cpp], [block.cpp], [chainparams.cpp], [chainparamsbase.cpp], [config.cpp], [core_read.cpp], [core_write.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [logging.cpp], [random.cpp], [script.cpp], [scriptcache.cpp], [sigcache.cpp], [standard.cpp], [transaction.cpp], [util.cpp], [utilmoneystr.cpp], [utilstrencodings.cpp]
+      "src/tinyformat.h"  ##  Used by [amount.cpp], [block.cpp], [chainparams.cpp], [chainparamsbase.cpp], [config.cpp], [core_read.cpp], [core_write.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [random.cpp], [script.cpp], [scriptcache.cpp], [sigcache.cpp], [standard.cpp], [transaction.cpp], [util.cpp], [utilmoneystr.cpp], [utilstrencodings.cpp]
       "src/verify_script_flags.h"  ## Manual add
       "src/tx_mempool_info.h"  ##  Used by [config.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [scriptcache.cpp]
       "src/txmempool.h"  ##  Used by [config.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [scriptcache.cpp]
@@ -202,10 +202,10 @@ function(cryptGetMinimumListBSVSource)##########################################
       "src/txn_validation_data.h"  ##  Used by [config.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [scriptcache.cpp]
       "src/txn_validation_result.h"  ##  Used by [config.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [scriptcache.cpp]
       "src/uint256.h"  ##  Used by [base58.cpp], [block.cpp], [chainparams.cpp], [config.cpp], [core_read.cpp], [core_write.cpp], [dstencode.cpp], [fRequireStandard.cpp], [hash.cpp], [interpreter.cpp], [key.cpp], [limitedstack.cpp], [merkle.cpp], [pubkey.cpp], [random.cpp], [scriptcache.cpp], [sigcache.cpp], [standard.cpp], [transaction.cpp], [arith_uint256.cpp], [util.cpp], [utilmoneystr.cpp]
-      "src/util.h"  ##  Used by [chainparams.cpp], [chainparamsbase.cpp], [config.cpp], [core_read.cpp], [core_write.cpp], [dstencode.cpp], [interpreter.cpp], [logging.cpp], [random.cpp], [scriptcache.cpp], [sigcache.cpp], [standard.cpp], [util.cpp]
+      "src/util.h"  ##  Used by [chainparams.cpp], [chainparamsbase.cpp], [config.cpp], [core_read.cpp], [core_write.cpp], [dstencode.cpp], [interpreter.cpp], [random.cpp], [scriptcache.cpp], [sigcache.cpp], [standard.cpp], [util.cpp]
       "src/utilmoneystr.h"  ##  Used by [core_write.cpp], [utilmoneystr.cpp]
       "src/utilstrencodings.h"  ##  Used by [block.cpp], [chainparams.cpp], [core_read.cpp], [core_write.cpp], [merkle.cpp], [random.cpp], [script.cpp], [standard.cpp], [transaction.cpp], [arith_uint256.cpp], [util.cpp], [utilmoneystr.cpp], [utilstrencodings.cpp]
-      "src/utiltime.h"  ##  Used by [chainparams.cpp], [chainparamsbase.cpp], [config.cpp], [core_read.cpp], [core_write.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [logging.cpp], [random.cpp], [scriptcache.cpp], [sigcache.cpp], [standard.cpp], [util.cpp], [utiltime.cpp]
+      "src/utiltime.h"  ##  Used by [chainparams.cpp], [chainparamsbase.cpp], [config.cpp], [core_read.cpp], [core_write.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [random.cpp], [scriptcache.cpp], [sigcache.cpp], [standard.cpp], [util.cpp], [utiltime.cpp]
       "src/validation.h"  ##  Used by [config.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [scriptcache.cpp]
       "src/version.h"  ##  Used by [base58.cpp], [block.cpp], [chainparams.cpp], [config.cpp], [core_read.cpp], [core_write.cpp], [dstencode.cpp], [fRequireStandard.cpp], [hash.cpp], [interpreter.cpp], [key.cpp], [limitedstack.cpp], [merkle.cpp], [pubkey.cpp], [scriptcache.cpp], [sigcache.cpp], [standard.cpp], [transaction.cpp]
       "src/versionbits.h"  ##  Used by [config.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [scriptcache.cpp]
@@ -239,7 +239,6 @@ function(cryptGetMinimumListBSVSource)##########################################
       "src/hash.cpp"
       "src/key.cpp"
       "src/keystore.cpp"  ##  Manual fix the build
-      "src/logging.cpp"
       "src/primitives/block.cpp"
       "src/primitives/transaction.cpp"
       "src/protocol_era.cpp"
