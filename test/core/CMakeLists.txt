@@ -6,7 +6,7 @@
 #################################################################
 
 include(FindBoostHelper)
-HelpFindBoost(filesystem chrono thread program_options)
+HelpFindBoost(thread filesystem program_options chrono)
 foreach(comp IN LISTS "filesystem" "chrono" "thread" "program_options")
     if(NOT TARGET Boost::${comp})
         message(FATAL "Boost::${comp} is required but not found")
@@ -121,24 +121,20 @@ bdk_add_unit_test(test_bsv)
 message("Building BDK core tests ...")
 
 add_executable(test_assembler "${CMAKE_CURRENT_SOURCE_DIR}/test_assembler.cpp" "${BDK_BSV_ROOT_DIR}/src/logging.cpp")
-target_link_libraries(test_assembler PRIVATE bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL ${CMAKE_DL_LIBS})
+target_link_libraries(test_assembler PRIVATE bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono ${CMAKE_DL_LIBS})
 bdk_add_unit_test(test_assembler)
-bdkLinkTargetToBoost(test_assembler Boost::filesystem Boost::program_options Boost::thread)
 
 add_executable(test_extended_tx "${CMAKE_CURRENT_SOURCE_DIR}/test_extended_tx.cpp" "${BDK_BSV_ROOT_DIR}/src/logging.cpp")
-target_link_libraries(test_extended_tx PRIVATE bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL ${CMAKE_DL_LIBS})
+target_link_libraries(test_extended_tx PRIVATE bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono ${CMAKE_DL_LIBS})
 bdk_add_unit_test(test_extended_tx)
-bdkLinkTargetToBoost(test_extended_tx Boost::filesystem Boost::program_options Boost::thread)
 
 add_executable(test_script_error "${CMAKE_CURRENT_SOURCE_DIR}/test_script_error.cpp" "${BDK_BSV_ROOT_DIR}/src/logging.cpp")
-target_link_libraries(test_script_error PRIVATE bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL ${CMAKE_DL_LIBS})
+target_link_libraries(test_script_error PRIVATE bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono ${CMAKE_DL_LIBS})
 bdk_add_unit_test(test_script_error)
-bdkLinkTargetToBoost(test_script_error Boost::filesystem Boost::program_options Boost::thread)
 
 add_executable(test_scriptengine "${CMAKE_CURRENT_SOURCE_DIR}/test_scriptengine.cpp" "${BDK_BSV_ROOT_DIR}/src/logging.cpp")
-target_link_libraries(test_scriptengine PRIVATE bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL ${CMAKE_DL_LIBS})
+target_link_libraries(test_scriptengine PRIVATE bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono ${CMAKE_DL_LIBS})
 bdk_add_unit_test(test_scriptengine)
-bdkLinkTargetToBoost(test_scriptengine Boost::filesystem Boost::program_options Boost::thread)
 
 if(CMAKE_CONFIGURATION_TYPES)
   set_target_properties(test_bsv PROPERTIES FOLDER "test/core/bsv" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d

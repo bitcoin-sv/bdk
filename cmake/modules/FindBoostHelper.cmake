@@ -69,20 +69,7 @@ macro(bdkLinkTargetToBoost)##################################################
     endif()
     target_link_libraries(${_target} PRIVATE ${_imported_boost})
   endforeach()
-  
-  if(NOT Boost_USE_STATIC_LIBS)
-    target_compile_definitions(${_target} PUBLIC BOOST_ALL_NO_LIB BOOST_ALL_DYN_LINK)
-    #target_link_libraries(${_target} Boost::disable_autolinking Boost::dynamic_linking)## Doesn't work well with UNIX
-  endif()
-  
-  if("${_imported_boost}" STREQUAL "Boost::system")
-    ## Recommended by the doc as to better use of Boost::filesystem (2018/02/13 version 3)
-    target_compile_definitions(${_target} PUBLIC BOOST_FILESYSTEM_NO_DEPRECATED)
-  endif()
-  if(WIN32 AND ("${_imported_boost}" STREQUAL "Boost::asio" OR "${_imported_boost}" STREQUAL "Boost::log"))
-    ##https://svn.boost.org/trac10/ticket/12974?replyto=description
-    target_compile_definitions(${_target} PUBLIC _WIN32_WINNT=0x0A00)
-  endif()
+
   if(UNIX)
     target_link_libraries(${_target} PUBLIC ${CMAKE_DL_LIBS})
   endif()
@@ -158,7 +145,7 @@ macro(HelpFindBoost)############################################################
 
   list(LENGTH list_components nb_comps)
   if(nb_comps LESS 1)
-    if(Boost_FOUND)
+    if(TARGET Boost::boost)
       message(STATUS "Skip looking up for headers only Boost::boost as it was found")
     else()
       message(STATUS "Look up for headers only Boost::boost")

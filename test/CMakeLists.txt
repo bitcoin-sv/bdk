@@ -37,7 +37,7 @@ endif()
 
 ## Test binding modules
 if(BUILD_MODULE_GOLANG AND NOT MSVC)
-	add_subdirectory(golang)
+  add_subdirectory(golang)
 else()
-	message(STATUS "Testing Golang module has been disabled")
+  message(STATUS "Testing Golang module has been disabled")
 endif()
