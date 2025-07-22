@@ -58,15 +58,13 @@ set(_GO_MODULE_SOURCE_FILES
 # The shared libraries is not to be used in a normal situation. But we keep building this target
 # just in case we might use it sometime later.
 add_library(${_GO_MODULE_NAME} SHARED ${_GO_MODULE_HEADER_FILES} ${_GO_MODULE_SOURCE_FILES} ${BDK_VERSION_GOLANG_CPP})
-target_link_libraries(${_GO_MODULE_NAME} PUBLIC bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT})
-bdkLinkTargetToBoost(${_GO_MODULE_NAME} Boost::thread Boost::filesystem Boost::program_options Boost::chrono)
+target_link_libraries(${_GO_MODULE_NAME} PUBLIC bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT})
 target_include_directories(${_GO_MODULE_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/.. ${CMAKE_SOURCE_DIR})
 
 # The static libraries is built and to be merge will all of its dependant archives
 # to make a all-in-one standalone static library, ready to be linked in cgo
 add_library(static-${_GO_MODULE_NAME} STATIC ${_GO_MODULE_HEADER_FILES} ${_GO_MODULE_SOURCE_FILES} ${BDK_VERSION_GOLANG_CPP})
-target_link_libraries("static-${_GO_MODULE_NAME}" PUBLIC  bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT})
-bdkLinkTargetToBoost("static-${_GO_MODULE_NAME}" Boost::thread Boost::filesystem Boost::program_options Boost::chrono)
+target_link_libraries("static-${_GO_MODULE_NAME}" PUBLIC  bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT})
 target_include_directories(static-${_GO_MODULE_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/.. ${CMAKE_SOURCE_DIR})
 
 source_group("_generated" FILES "${BDK_VERSION_GOLANG_CPP}")
