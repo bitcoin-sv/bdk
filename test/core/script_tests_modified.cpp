@@ -2434,7 +2434,7 @@ BOOST_AUTO_TEST_CASE(script_PushData) {
     auto res = EvalScript(params,
                           source->GetToken(),
                           directStack,
-                          CScript(direct.data(), direct.data() + direct.size()), // SCRIPT_ENGINE_BUILD_TEST -------
+                          CScript(direct.begin(), direct.end()),
                           flags,
                           BaseSignatureChecker());
     assert(res);
@@ -2444,7 +2444,7 @@ BOOST_AUTO_TEST_CASE(script_PushData) {
     res = EvalScript(params,
                      source->GetToken(),
                      pushdata1Stack,
-                     CScript(pushdata1.data(), pushdata1.data() + pushdata1.size()), // SCRIPT_ENGINE_BUILD_TEST -------
+                     CScript(pushdata1.begin(), pushdata1.end()),
                      flags,
                      BaseSignatureChecker());
     assert(res);
@@ -2455,7 +2455,7 @@ BOOST_AUTO_TEST_CASE(script_PushData) {
     res = EvalScript(params,
                      source->GetToken(),
                      pushdata2Stack,
-                     CScript(pushdata2.data(), pushdata2.data() + pushdata2.size()), // SCRIPT_ENGINE_BUILD_TEST -------
+                     CScript(pushdata2.begin(), pushdata2.end()),
                      flags,
                      BaseSignatureChecker());
     assert(res);
@@ -2466,7 +2466,7 @@ BOOST_AUTO_TEST_CASE(script_PushData) {
     res = EvalScript(params,
                      source->GetToken(),
                      pushdata4Stack,
-                     CScript(pushdata4.data(), pushdata4.data() + pushdata4.size()),  // SCRIPT_ENGINE_BUILD_TEST -------
+                     CScript(pushdata4.begin(), pushdata4.end()),
                      flags,
                      BaseSignatureChecker());
     assert(res);
@@ -3174,7 +3174,7 @@ BOOST_AUTO_TEST_CASE(script_IsPushOnly_on_invalid_scripts) {
     // consensus critical as the P2SH evaluation would fail first due to the
     // invalid push. Still, it doesn't hurt to test it explicitly.
     static const std::array<uint8_t, 1> direct = {1};
-    BOOST_CHECK(!CScript(direct.data(), direct.data() + direct.size()).IsPushOnly()); // SCRIPT_ENGINE_BUILD_TEST -------
+    BOOST_CHECK(!CScript(direct.begin(), direct.end()).IsPushOnly());
 }
 
 BOOST_AUTO_TEST_CASE(script_GetScriptAsm) {
