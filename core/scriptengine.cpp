@@ -1,4 +1,5 @@
 #include <base58.h>
+#include <policy/policy.h>
 #include <protocol_era.h>
 #include <core_io.h>
 #include <verify_script_flags.h>
@@ -25,7 +26,7 @@ bsv::CScriptEngine::CScriptEngine(const std::string chainName)
 }
 
 
-const GlobalConfig& bsv::CScriptEngine::GetGlobalConfig() {
+const ConfigScriptPolicy& bsv::CScriptEngine::GetConfigScriptPolicy() {
     return bsvConfig;
 }
 
@@ -138,18 +139,18 @@ uint32_t bsv::CScriptEngine::CalculateFlags(int32_t utxoHeight, int32_t blockHei
         // For tx coming from a block.
         // blockHeight is the block the tx belong to
         // In that case, the chainTip is blockHeight-1
-        era = GetProtocolEra(bsvConfig, blockHeight );
+        era = GetProtocolEra(bsvConfig.GetGenesisActivationHeight(), bsvConfig.GetChronicleActivationHeight(), blockHeight );
         const Consensus::Params& consensusparams = chainParams->GetConsensus();
         protocolFlags = GetBlockScriptFlags(consensusparams, blockHeight - 1 , era);
     } else {
         // For tx coming from a peer
         // blockHeight is the chain tip (highest current block)
-        era = GetProtocolEra(bsvConfig, blockHeight + 1);
+        era = GetProtocolEra(bsvConfig.GetGenesisActivationHeight(), bsvConfig.GetChronicleActivationHeight(), blockHeight + 1);
         const bool requireStandard = chainParams->RequireStandard();
         protocolFlags = GetScriptVerifyFlags(era, requireStandard);
     }
 
-    ProtocolEra utxoEra{ GetProtocolEra(bsvConfig, utxoHeight) };
+    ProtocolEra utxoEra{ GetProtocolEra(bsvConfig.GetGenesisActivationHeight(), bsvConfig.GetChronicleActivationHeight(), utxoHeight) };
     const uint32_t utxoFlags { InputScriptVerifyFlags(era, utxoEra) };
 
     return (protocolFlags | utxoFlags);
@@ -176,7 +177,7 @@ uint64_t bsv::CScriptEngine::GetSigOpCount(std::span<const uint8_t> extendedTX, 
 
     // SigOpCount is use only in case the tx come from a peer
     // Where the protocol era is calculated based on blockHeight + 1
-    const auto era = GetProtocolEra(bsvConfig, blockHeight + 1);
+    const auto era = GetProtocolEra(bsvConfig.GetGenesisActivationHeight(), bsvConfig.GetChronicleActivationHeight(), blockHeight + 1);
 
 
     // The part GetSigOpCountWithoutP2SH //////////////////////////////////////////////////
@@ -212,7 +213,7 @@ uint64_t bsv::CScriptEngine::GetSigOpCount(std::span<const uint8_t> extendedTX, 
 
     uint64_t nSigOpsP2SH{0};
     for (size_t index = 0; index < eTX.vutxo.size(); ++index) {
-        const ProtocolEra utxoEra = GetProtocolEra(bsvConfig, utxoHeights[index]);
+        const ProtocolEra utxoEra = GetProtocolEra(bsvConfig.GetGenesisActivationHeight(), bsvConfig.GetChronicleActivationHeight(), utxoHeights[index]);
         if (IsProtocolActive(utxoEra, ProtocolName::Genesis)) {
             continue;
         }
