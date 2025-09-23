@@ -8,8 +8,9 @@
 #include <optional>
 #include <utility>
 
-#include <config.h>
+//#include <config.h>
 #include <chainparams.h>
+#include <configscriptpolicy.h>
 #include <taskcancellation.h>
 #include <script/script.h>
 #include <script/malleability_status.h>
@@ -77,10 +78,10 @@ class CScriptEngine {
         // instead of the implicitly calculated flags
         ScriptError VerifyScript(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool consensus, std::span<const uint32_t> customFlags = std::span<const uint32_t>()) const;
 
-        const GlobalConfig& GetGlobalConfig();
+        const ConfigScriptPolicy& GetConfigScriptPolicy();
 
     private :
-        GlobalConfig bsvConfig;
+        ConfigScriptPolicy bsvConfig;
         std::unique_ptr<CChainParams> chainParams;
         std::shared_ptr<task::CCancellationSource> source;
 

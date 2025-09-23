@@ -6,7 +6,7 @@
 
 #include "base58.h"
 #include "chainparams.h"
-#include "config.h"
+#include "util.h" // SelectParams
 #include "core_io.h"
 #include "key.h"
 #include "script/script_num.h"
@@ -101,7 +101,7 @@ int main(int argc, char* argv[])
     const auto network = CBaseChainParams::MAIN;
     bsv::CScriptEngine se(network);
 
-    SelectParams(network); // must select params to set secret string
+    SelectParams(network, std::nullopt); // must select params to set secret string
     const std::string strSecret1 = "5HxWvvfubhXpYYpS3tJkw6fq9jE9j18THftkZjHHfmFiWtmAbrj";
     CBitcoinSecret bsecret1;
     bsecret1.SetString(strSecret1);
