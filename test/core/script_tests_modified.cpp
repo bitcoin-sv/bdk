@@ -355,7 +355,7 @@ static void DoTest(const CScript& scriptPubKey,
     if(flags & SCRIPT_VERIFY_CLEANSTACK)
         flags |= SCRIPT_VERIFY_P2SH;
 
-    const auto params{make_verify_script_params(config, flags, true)};
+    const auto params{make_verify_script_params(config.GetConfigScriptPolicy(), flags, true)};
 
     CMutableTransaction txCredit =
         BuildCreditingTransaction(scriptPubKey, nValue);
@@ -2428,7 +2428,7 @@ BOOST_AUTO_TEST_CASE(script_PushData) {
     static const std::array<uint8_t, 6> pushdata4 = {OP_PUSHDATA4, 1, 0, 0, 0, 0x5a};
 
     const uint32_t flags{SCRIPT_VERIFY_P2SH};
-    const auto params{make_eval_script_params(testConfig, flags, true)};
+    const auto params{make_eval_script_params(testConfig.GetConfigScriptPolicy(), flags, true)};
     auto source = task::CCancellationSource::Make();
     LimitedStack directStack(UINT32_MAX);
     auto res = EvalScript(params,
@@ -2491,7 +2491,7 @@ BOOST_AUTO_TEST_CASE(op_pushdata1_op_size)
 
     CScript script(args.begin(), args.end());
     const auto flags{SCRIPT_UTXO_AFTER_GENESIS};
-    const auto params{make_eval_script_params(config, flags, false)};
+    const auto params{make_eval_script_params(config.GetConfigScriptPolicy(), flags, false)};
     auto source = task::CCancellationSource::Make();
     LimitedStack stack(UINT32_MAX);
     const auto status = EvalScript(params,
@@ -2522,7 +2522,7 @@ BOOST_AUTO_TEST_CASE(op_pushdata2_op_size)
 
     CScript script(args.begin(), args.end());
     const auto flags{SCRIPT_UTXO_AFTER_GENESIS};
-    const auto params{make_eval_script_params(config, flags, false)};
+    const auto params{make_eval_script_params(config.GetConfigScriptPolicy(), flags, false)};
     auto source = task::CCancellationSource::Make();
     LimitedStack stack(UINT32_MAX);
     const auto status = EvalScript(params,
@@ -2557,7 +2557,7 @@ BOOST_AUTO_TEST_CASE(op_pushdata4_op_size)
 
     CScript script(args.begin(), args.end());
     const auto flags{SCRIPT_UTXO_AFTER_GENESIS};
-    const auto params{make_eval_script_params(config, flags, false)};
+    const auto params{make_eval_script_params(config.GetConfigScriptPolicy(), flags, false)};
     auto source = task::CCancellationSource::Make();
     LimitedStack stack(UINT32_MAX);
     const auto status = EvalScript(params,
@@ -2625,7 +2625,7 @@ BOOST_AUTO_TEST_CASE(script_CHECKMULTISIG12) {
 
     CScript goodsig1 =
         sign_multisig(scriptPubKey12, key1, CTransaction(txTo12));
-    const auto params{make_verify_script_params(testConfig, flags, true)};
+    const auto params{make_verify_script_params(testConfig.GetConfigScriptPolicy(), flags, true)};
     auto source = task::CCancellationSource::Make();
     auto res =
         VerifyScript(params,
@@ -2711,7 +2711,7 @@ BOOST_AUTO_TEST_CASE(script_CHECKMULTISIG23)
     keys.push_back(key1);
     keys.push_back(key2);
     CScript goodsig1 = sign_multisig(scriptPubKey23, keys, txTo23);
-    const auto params{make_verify_script_params(testConfig, flags, true)};
+    const auto params{make_verify_script_params(testConfig.GetConfigScriptPolicy(), flags, true)};
     auto source = task::CCancellationSource::Make();
     auto res =
         VerifyScript(params,
@@ -2881,7 +2881,7 @@ void TestCombineSigs(ProtocolEra era, ProtocolEra utxoEra) {
     SignatureData empty;
     constexpr bool consensus{true};
     const uint32_t flags{MandatoryScriptVerifyFlags(era)};
-    const auto params{make_eval_script_params(config, flags, consensus)};
+    const auto params{make_eval_script_params(config.GetConfigScriptPolicy(), flags, consensus)};
     SignatureData combined = CombineSignatures(params,
                                                scriptPubKey,
                                                MutableTransactionSignatureChecker(&txTo,
@@ -2894,7 +2894,7 @@ void TestCombineSigs(ProtocolEra era, ProtocolEra utxoEra) {
     BOOST_CHECK(combined.scriptSig.empty());
 
     // Single signature case:
-    SignSignature(config, keystore, era, utxoEra, CTransaction(txFrom), txTo, 0,
+    SignSignature(config.GetConfigScriptPolicy(), keystore, era, utxoEra, CTransaction(txFrom), txTo, 0,
                   SigHashType()); // changes scriptSig
     combined = CombineSignatures(params,
                                  scriptPubKey,
@@ -2914,7 +2914,7 @@ void TestCombineSigs(ProtocolEra era, ProtocolEra utxoEra) {
     BOOST_CHECK(combined.scriptSig == scriptSig);
     CScript scriptSigCopy = scriptSig;
     // Signing again will give a different, valid signature:
-    SignSignature(config, keystore, era, utxoEra, CTransaction(txFrom), txTo, 0,
+    SignSignature(config.GetConfigScriptPolicy(), keystore, era, utxoEra, CTransaction(txFrom), txTo, 0,
                   SigHashType());
     combined = CombineSignatures(params,
                                  scriptPubKey,
@@ -2931,7 +2931,7 @@ void TestCombineSigs(ProtocolEra era, ProtocolEra utxoEra) {
     pkSingle << ToByteVector(keys[0].GetPubKey()) << OP_CHECKSIG;
     keystore.AddCScript(pkSingle);
     scriptPubKey = GetScriptForDestination(CScriptID(pkSingle));
-    SignSignature(config, keystore, era, utxoEra, CTransaction(txFrom), txTo, 0,
+    SignSignature(config.GetConfigScriptPolicy(), keystore, era, utxoEra, CTransaction(txFrom), txTo, 0,
                   SigHashType());
     combined = CombineSignatures(params,
                                  scriptPubKey,
@@ -2950,7 +2950,7 @@ void TestCombineSigs(ProtocolEra era, ProtocolEra utxoEra) {
                                  utxoEra);
     BOOST_CHECK(combined.scriptSig == scriptSig);
     scriptSigCopy = scriptSig;
-    SignSignature(config, keystore, era, utxoEra, CTransaction(txFrom), txTo, 0,
+    SignSignature(config.GetConfigScriptPolicy(), keystore, era, utxoEra, CTransaction(txFrom), txTo, 0,
                   SigHashType());
     combined = CombineSignatures(params,
                                  scriptPubKey,
@@ -2997,7 +2997,7 @@ void TestCombineSigs(ProtocolEra era, ProtocolEra utxoEra) {
     // Hardest case:  Multisig 2-of-3
     scriptPubKey = GetScriptForMultisig(2, pubkeys);
     keystore.AddCScript(scriptPubKey);
-    SignSignature(config, keystore, era, utxoEra, CTransaction(txFrom), txTo, 0,
+    SignSignature(config.GetConfigScriptPolicy(), keystore, era, utxoEra, CTransaction(txFrom), txTo, 0,
                   SigHashType());
     combined = CombineSignatures(params,
                                  scriptPubKey,
@@ -3125,7 +3125,7 @@ BOOST_AUTO_TEST_CASE(script_combineSigs) {
 BOOST_AUTO_TEST_CASE(script_standard_push)
 {
     constexpr uint32_t flags{SCRIPT_VERIFY_MINIMALDATA};
-    const auto params{make_verify_script_params(testConfig, flags, true)};
+    const auto params{make_verify_script_params(testConfig.GetConfigScriptPolicy(), flags, true)};
     auto source = task::CCancellationSource::Make();
     for (int i = 0; i < 67'000; i++) {
         CScript script;
@@ -3743,7 +3743,7 @@ BOOST_AUTO_TEST_CASE(caching_invalid_signatures)
 {
     auto source = task::CCancellationSource::Make();
     const uint32_t flags_genesis{flags | SCRIPT_UTXO_AFTER_GENESIS | SCRIPT_GENESIS};
-    const auto params{make_verify_script_params(testConfig, flags_genesis, true)};
+    const auto params{make_verify_script_params(testConfig.GetConfigScriptPolicy(), flags_genesis, true)};
   
     int iterations = 30;
     std::size_t pubkeys_per_multisig = 200;
@@ -3851,7 +3851,7 @@ BOOST_AUTO_TEST_CASE(mt_2_plus_2)
         CScript script(args.begin(), args.end());
 
         const auto flags{SCRIPT_UTXO_AFTER_GENESIS};
-        const auto params{make_eval_script_params(config, flags, false)};
+        const auto params{make_eval_script_params(config.GetConfigScriptPolicy(), flags, false)};
         auto source = task::CCancellationSource::Make();
         LimitedStack stack(UINT32_MAX);
         const auto status = EvalScript(params,
@@ -3967,7 +3967,7 @@ BOOST_AUTO_TEST_CASE(mt_p2pkh)
         CScript script(args.begin(), args.end());
 
         const auto flags{SCRIPT_UTXO_AFTER_GENESIS};
-        const auto params{make_eval_script_params(config, flags, false)};
+        const auto params{make_eval_script_params(config.GetConfigScriptPolicy(), flags, false)};
         auto source = task::CCancellationSource::Make();
         LimitedStack stack(UINT32_MAX);
         const string serialized_tx{
@@ -4240,7 +4240,7 @@ BOOST_AUTO_TEST_CASE(EvalScript_lows)
     for(const auto& [flags, s, exp_error, exp_mall] : test_data)
     {
         const Config& config = GlobalConfig::GetConfig();
-        const auto params{make_eval_script_params(config, flags, false)};
+        const auto params{make_eval_script_params(config.GetConfigScriptPolicy(), flags, false)};
         auto source = task::CCancellationSource::Make();
         LimitedStack stack(UINT32_MAX);
 
@@ -4330,7 +4330,7 @@ BOOST_AUTO_TEST_CASE(VerifyScript_lows)
     for(const auto& [flags, s, sig_hash, exp_error, exp_mall] : test_data)
     {
         const Config& config = GlobalConfig::GetConfig();
-        const auto params{make_verify_script_params(config, flags, false)};
+        const auto params{make_verify_script_params(config.GetConfigScriptPolicy(), flags, false)};
         auto source = task::CCancellationSource::Make();
 
         const vector<uint8_t> scriptSig;
@@ -4466,7 +4466,7 @@ BOOST_AUTO_TEST_CASE(EvalScript_op_checksig_forkid_chronicle)
     for(const auto& [flags, sighash, exp_error, exp_mall] : test_data)
     {
         const Config& config = GlobalConfig::GetConfig();
-        const auto params{make_eval_script_params(config, flags, false)};
+        const auto params{make_eval_script_params(config.GetConfigScriptPolicy(), flags, false)};
         auto source = task::CCancellationSource::Make();
         LimitedStack stack(UINT32_MAX);
         const auto script{make_op_checksig_script(make_signature(low_s_max(), sighash),
@@ -4610,7 +4610,7 @@ BOOST_AUTO_TEST_CASE(EvalScript_op_checkmultisig_forkid_chronicle)
     for(const auto& [flags, sighash, exp_error, exp_mall] : test_data)
     {
         const Config& config = GlobalConfig::GetConfig();
-        const auto params{make_eval_script_params(config, flags, false)};
+        const auto params{make_eval_script_params(config.GetConfigScriptPolicy(), flags, false)};
         auto source = task::CCancellationSource::Make();
         LimitedStack stack(UINT32_MAX);
         const auto script{make_op_check_multi_sig_script({make_signature(low_s_max(), sighash)},
@@ -4646,7 +4646,7 @@ BOOST_AUTO_TEST_CASE(EvalScript_multiple_op_checksig_forkid_chronicle)
     using namespace std;
         
     const Config& config = GlobalConfig::GetConfig();
-    const auto params{make_eval_script_params(config, flags, false)};
+    const auto params{make_eval_script_params(config.GetConfigScriptPolicy(), flags, false)};
     auto source = task::CCancellationSource::Make();
     
     using test_args = tuple<vector<uint8_t>,   // sighashes
@@ -4698,7 +4698,7 @@ BOOST_AUTO_TEST_CASE(EvalScript_multiple_op_checkmultisig_forkid_relax)
     using namespace std;
 
     const Config& config = GlobalConfig::GetConfig();
-    const auto params{make_eval_script_params(config, flags, false)};
+    const auto params{make_eval_script_params(config.GetConfigScriptPolicy(), flags, false)};
     auto source = task::CCancellationSource::Make();
     
     using test_args = tuple<vector<uint8_t>,   // sighashes
@@ -4836,7 +4836,7 @@ BOOST_AUTO_TEST_CASE(EvalScript_minimal_encoding)
     for(const auto& [flags, s, sig_hash, exp_error, exp_mall] : test_data)
     {
         const Config& config = GlobalConfig::GetConfig();
-        const auto params{make_eval_script_params(config, flags, false)};
+        const auto params{make_eval_script_params(config.GetConfigScriptPolicy(), flags, false)};
         auto source = task::CCancellationSource::Make();
         LimitedStack stack(UINT32_MAX);
       
@@ -4916,7 +4916,7 @@ BOOST_AUTO_TEST_CASE(VerifyScript_minimal_encoding)
     for(const auto& [flags, scriptSig, sig_hash, exp_error, exp_mall] : test_data)
     {
         const Config& config = GlobalConfig::GetConfig();
-        const auto params{make_verify_script_params(config, flags, false)};
+        const auto params{make_verify_script_params(config.GetConfigScriptPolicy(), flags, false)};
         auto source = task::CCancellationSource::Make();
       
         const auto scriptPubKey{[&sig_hash]{
@@ -5009,7 +5009,7 @@ BOOST_AUTO_TEST_CASE(eval_script_op_checksig_nullfail)
     };
     for(const auto& [flags, sig, expected] : test_data)
     {
-        const auto params{make_eval_script_params(GlobalConfig::GetConfig(), flags, false)};
+        const auto params{make_eval_script_params(GlobalConfig::GetConfig().GetConfigScriptPolicy(), flags, false)};
         auto source = task::CCancellationSource::Make();
         LimitedStack stack(UINT32_MAX);
         const auto op_checksig_script{make_op_checksig_script(sig,
@@ -5091,7 +5091,7 @@ BOOST_AUTO_TEST_CASE(verify_script_op_checksig_nullfail)
     };
     for(const auto& [flags, ms, exp_error, exp_mall] : test_data)
     {
-        const auto params{make_verify_script_params(GlobalConfig::GetConfig(), flags, false)};
+        const auto params{make_verify_script_params(GlobalConfig::GetConfig().GetConfigScriptPolicy(), flags, false)};
         auto source = task::CCancellationSource::Make();
         const CScript scriptSig;
         auto scriptPubKey{make_op_checksig_script(chronicle_sig,
@@ -5227,7 +5227,7 @@ BOOST_AUTO_TEST_CASE(eval_script_op_checkmultisig_nullfail)
                      expected,
                      exp_stack] : test_data)
     {
-        const auto params{make_eval_script_params(GlobalConfig::GetConfig(), flags, false)};
+        const auto params{make_eval_script_params(GlobalConfig::GetConfig().GetConfigScriptPolicy(), flags, false)};
         auto source = task::CCancellationSource::Make();
         LimitedStack stack(UINT32_MAX);
 
@@ -5359,7 +5359,7 @@ BOOST_AUTO_TEST_CASE(eval_script_op_checkmultisig_nulldummy)
                      expected,
                      exp_stack] : test_data)
     {
-        const auto params{make_eval_script_params(GlobalConfig::GetConfig(), flags, false)};
+        const auto params{make_eval_script_params(GlobalConfig::GetConfig().GetConfigScriptPolicy(), flags, false)};
         auto source = task::CCancellationSource::Make();
         LimitedStack stack(UINT32_MAX);
 
@@ -5510,7 +5510,7 @@ BOOST_AUTO_TEST_CASE(verify_script_op_checksig_nulldummy)
     };
     for(const auto& [flags, dummy, ms, exp_error, exp_mall] : test_data)
     {
-        const auto params{make_verify_script_params(GlobalConfig::GetConfig(), flags, false)};
+        const auto params{make_verify_script_params(GlobalConfig::GetConfig().GetConfigScriptPolicy(), flags, false)};
         auto source = task::CCancellationSource::Make();
         const CScript scriptSig;
         auto scriptPubKey{make_op_check_multi_sig_script({sig},
@@ -5710,7 +5710,7 @@ BOOST_AUTO_TEST_CASE(eval_script_op_if_minimal_if)
                      expected,
                      exp_stack] : test_data)
     {
-        const auto params{make_eval_script_params(GlobalConfig::GetConfig(), flags, false)};
+        const auto params{make_eval_script_params(GlobalConfig::GetConfig().GetConfigScriptPolicy(), flags, false)};
         auto source = task::CCancellationSource::Make();
         LimitedStack stack(UINT32_MAX);
         const auto status = EvalScript(params,
@@ -5818,7 +5818,7 @@ BOOST_AUTO_TEST_CASE(verify_script_minimal_if)
     };
     for(const auto& [flags, script, ms, exp_error, exp_mall] : test_data)
     {
-        const auto params{make_verify_script_params(GlobalConfig::GetConfig(), flags, false)};
+        const auto params{make_verify_script_params(GlobalConfig::GetConfig().GetConfigScriptPolicy(), flags, false)};
         auto source = task::CCancellationSource::Make();
         const CScript scriptSig;
         std::atomic<malleability::status> ams{ms};
