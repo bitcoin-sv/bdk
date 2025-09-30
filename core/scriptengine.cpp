@@ -278,7 +278,7 @@ bitcoinconsensus_error bsv::CScriptEngine::CheckConsensus(std::span<const uint8_
 
         uint32_t flags;
         if (!useCustomFlags) {
-            flags == CalculateFlags(utxoHeight, blockHeight, consensus);
+            flags = CalculateFlags(utxoHeight, blockHeight, consensus);
             flags &= SCRIPT_VERIFY_NULLDUMMY; // SCRIPT_VERIFY_NULLDUMMY was missing in GetBlockScriptFlags
         }
         else {
