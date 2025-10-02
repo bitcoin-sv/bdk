@@ -37,7 +37,7 @@ option(BDK_BUILD_UNIVALUE "Activate the build of univalue" ON)
 
 option(BDK_BUILD_CORE_ONLY "Build only core and deactivate everything else" OFF)
 option(BDK_BUILD_MODULES "Activate the build of modules" ON)
-option(BDK_BUILD_BSV_TESTS "Activate the build of bsv tests" ON)
+option(BDK_BUILD_CORE_TESTS "Activate the build of core tests" ON)
 
 # Language binding modules are all built by default. Activate one will deactivate other
 option(BUILD_MODULE_GOLANG "Build and test the Golang module" ON)
@@ -90,8 +90,8 @@ else ()
     message(WARNING "BDK_BUILD_MODULES was set while using BDK_BUILD_CORE_ONLY. This is conflictual")
   endif()
 
-  if(BDK_BUILD_BSV_TESTS)
-    message(WARNING "BDK_BUILD_BSV_TESTS was set while using BDK_BUILD_CORE_ONLY. This is conflictual")
+  if(BDK_BUILD_CORE_TESTS)
+    message(WARNING "BDK_BUILD_CORE_TESTS was set while using BDK_BUILD_CORE_ONLY. This is conflictual")
   endif()
 
   if(BUILD_MODULE_GOLANG)
