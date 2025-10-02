@@ -31,7 +31,7 @@ macro(bdk_add_unit_test _targetName)
   endif()
 endmacro()
 
-if(BDK_BUILD_BSV_TESTS)## Broken now as dependencies has been reduce to minimal
+if(BDK_BUILD_CORE_TESTS)## Broken now as dependencies has been reduce to minimal
   add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/core")
 endif()
 
