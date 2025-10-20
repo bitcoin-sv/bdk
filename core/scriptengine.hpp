@@ -8,9 +8,8 @@
 #include <optional>
 #include <utility>
 
-//#include <config.h>
-#include <chainparams.h>
 #include <configscriptpolicy.h>
+#include <chainparams.h>
 #include <taskcancellation.h>
 #include <script/script.h>
 #include <script/malleability_status.h>
@@ -78,10 +77,8 @@ class CScriptEngine {
         // instead of the implicitly calculated flags
         ScriptError VerifyScript(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool consensus, std::span<const uint32_t> customFlags = std::span<const uint32_t>()) const;
 
-        const ConfigScriptPolicy& GetConfigScriptPolicy();
-
     private :
-        ConfigScriptPolicy bsvConfig;
+        ConfigScriptPolicy policySettings;
         std::unique_ptr<CChainParams> chainParams;
         std::shared_ptr<task::CCancellationSource> source;
 
@@ -90,8 +87,7 @@ class CScriptEngine {
             const CScript& locking_script,
             const bool consensus,
             const unsigned int flags,
-            BaseSignatureChecker& sig_checker,
-            std::atomic<malleability::status>& malleability
+            BaseSignatureChecker& sig_checker
         ) const;
 
         // helper to convert the optional (returned by ScriptVerify) to raw ScriptError
