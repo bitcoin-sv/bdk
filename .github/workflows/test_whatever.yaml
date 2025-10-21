@@ -7,7 +7,7 @@ jobs:
   build-bdk:
     strategy:
       matrix:
-        os: [linux-arm64-8-core, ubuntu-24.04, macos-15]
+        os: [linux-arm64-8-core, ubuntu-22.04, macos-15]
       fail-fast: false
     runs-on: ${{ matrix.os }}
 

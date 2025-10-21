@@ -19,7 +19,7 @@ python -m pip install pytest junitparser mkdocs pymdown-extensions plantuml_mark
 Static libraries (boost and openssl) must be compiled with `fPIC` on.
 
 - Windows : Visual Studio Community Edition 2022 on windows, make sure MSBuild is in the PATH.
-- Linux : g++13 on Linux
+- Linux : g++11 on Linux
 - MacOS : clang 15 on Mac OS
 
 Note that when building in Mac OS with clang, it only work with boost 1.85. As in boost 1.86, it seems the `boost::uuids::uuid::data_type` has changed, making the reinterpret_cast at `src/serialize.h:989` broken.
