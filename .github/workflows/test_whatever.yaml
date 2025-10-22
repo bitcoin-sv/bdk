@@ -7,7 +7,7 @@ jobs:
   build-bdk:
     strategy:
       matrix:
-        os: [linux-arm64-8-core, ubuntu-22.04, macos-15]
+        os: [ubuntu-22.04-arm, macos-15-intel]
       fail-fast: false
     runs-on: ${{ matrix.os }}
 
@@ -24,22 +24,8 @@ jobs:
           echo "Checking G++ version..."
           g++ --version
 
-      - name: Check Runtime Libraries
+      - name: Print OS and Architecture
         run: |
-          echo "Compiling a simple test program..."
-          echo '#include <iostream>' > test.cpp
-          echo 'int main() { std::cout << "Hello, world!" << std::endl; return 0; }' >> test.cpp
-          g++ test.cpp -o testcpp
-          
-          echo "Checking linked runtime libraries with ldd..."
-          ldd testcpp
-
-      - name: Check libstdc++ Version
-        run: |
-          echo "Checking libstdc++ version..."
-          strings /usr/lib/x86_64-linux-gnu/libstdc++.so.6 | grep GLIBCXX || echo "libstdc++ not found"
-
-      - name: Check glibc Version
-        run: |
-          echo "Checking glibc version..."
-          ldd --version
+          echo "Running on OS: $(uname -s)"
+          echo "CPU Architecture: $(uname -m)"
+          echo "OS_ARCH: $OS_ARCH"
