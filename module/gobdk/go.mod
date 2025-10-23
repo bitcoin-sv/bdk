@@ -1,8 +1,6 @@
 module github.com/bitcoin-sv/bdk/module/gobdk
 
-go 1.23.0
-
-toolchain go1.24.1
+go 1.24
 
 replace github.com/libsv/go-bt/v2 => github.com/ordishs/go-bt/v2 v2.2.12
 

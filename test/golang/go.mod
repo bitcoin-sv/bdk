@@ -1,8 +1,6 @@
 module github.com/bitcoin-sv/bdk/test/golang
 
-go 1.23.0
-
-toolchain go1.24.1
+go 1.24
 
 require (
 	github.com/bitcoin-sv/bdk/module/gobdk v0.0.0-20240904084246-cb0e25691dc9

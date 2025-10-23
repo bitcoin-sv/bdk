@@ -26,12 +26,10 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: linux-arm64-8-core
+          - os: ubuntu-22.04-arm
           - os: ubuntu-22.04
-          - os: windows-2022
           - os: macos-15
-          - os: macos-15
-            arch: x86_64
+          - os: macos-15-intel
       fail-fast: false
     outputs:
       modified: ${{ steps.gobdk_change.outputs.modified }}
@@ -52,6 +50,14 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: '3.x'
+
+      - name: Set up Go 1.24.9
+        # ubuntu-22.04 already have go 1.24.9
+        if: matrix.os != 'ubuntu-22.04'
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.9'
+          check-latest: false
 
       - name: Define dependant bitcoin-sv commit
         id: define-bitcoin-sv-commit
@@ -83,7 +89,7 @@ jobs:
           python -m pip install --upgrade pip --break-system-packages
           python -m pip install -U pytest junitparser mkdocs pymdown-extensions plantuml_markdown --break-system-packages
           echo "OS_ARCH=$(uname -s | tr 'A-Z' 'a-z')_$(uname -m)" >> $GITHUB_ENV
-          if [[ ${{ matrix.os }} == *'ubuntu'* ]]; then
+          if [[ "${{ matrix.os }}" == "ubuntu-22.04" ]]; then
             sudo apt-get update
             sudo apt-get install -y build-essential g++ wget
             wget https://github.com/bitcoin-sv/bdk/releases/download/depcy/dependancies_linux_x86_64.tar.gz
@@ -92,7 +98,7 @@ jobs:
             echo "BOOST_ROOT=${{ github.workspace }}/dependancies_linux_x86_64/boost_1.85.0" >> $GITHUB_ENV
             echo "OPENSSL_ROOT_DIR=${{ github.workspace }}/dependancies_linux_x86_64/openssl_3.4.0" >> $GITHUB_ENV
           fi
-          if [[ ${{ matrix.os }} == *'linux'* ]]; then
+          if [[ "${{ matrix.os }}" == "ubuntu-22.04-arm" ]]; then
             sudo apt-get update
             sudo apt-get install -y build-essential g++ wget
             wget https://github.com/bitcoin-sv/bdk/releases/download/depcy/dependancies_linux_aarch64.tar.gz
@@ -101,14 +107,14 @@ jobs:
             echo "BOOST_ROOT=${{ github.workspace }}/dependancies_linux_aarch64/boost_1.85.0" >> $GITHUB_ENV
             echo "OPENSSL_ROOT_DIR=${{ github.workspace }}/dependancies_linux_aarch64/openssl_3.4.0" >> $GITHUB_ENV
           fi
-          if [[ ${{ matrix.os }} == *'macos-15'* && "${{ matrix.arch }}" != "x86_64" ]]; then
+          if [[ "${{ matrix.os }}" == "macos-15" ]]; then
             wget https://github.com/bitcoin-sv/bdk/releases/download/depcy/dependancies_darwin_arm64.tar.gz
             tar -xzf dependancies_darwin_arm64.tar.gz
             echo "DEPENDENCIES_DIR=${{ github.workspace }}/dependancies_darwin_arm64" >> $GITHUB_ENV
             echo "BOOST_ROOT=${{ github.workspace }}/dependancies_darwin_arm64/boost_1.85.0" >> $GITHUB_ENV
             echo "OPENSSL_ROOT_DIR=${{ github.workspace }}/dependancies_darwin_arm64/openssl_3.4.0" >> $GITHUB_ENV
           fi
-          if [[ ${{ matrix.os }} == *'macos-15'* && "${{ matrix.arch }}" == "x86_64" ]]; then
+          if [[ "${{ matrix.os }}" == "macos-15-intel" ]]; then
             wget https://github.com/bitcoin-sv/bdk/releases/download/depcy/dependancies_darwin_x86_64.tar.gz
             tar -xzf dependancies_darwin_x86_64.tar.gz
             echo "DEPENDENCIES_DIR=${{ github.workspace }}/dependancies_darwin_x86_64" >> $GITHUB_ENV
@@ -122,21 +128,9 @@ jobs:
           mkdir -p "build"
           rm -fR ./build/* && rm -fR test/golang/vendor/*
 
-          if [[ ${{ matrix.os }} == *'macos-15'* && "${{ matrix.arch }}" == "x86_64" ]]; then
-            echo "Skip building languages binding for x86_64 on macos arm, it is very complicated at runtime"
-            cmake -B build -S "." -DBUILD_MODULE_GOLANG_INSTALL_INSOURCE=ON -DCMAKE_OSX_ARCHITECTURES="x86_64" -DCUSTOM_GOBDK_OS_ARCH=darwin_x86_64 -DBUILD_MODULE_GOLANG=OFF
-          else
-            cmake -B build -S "." -DBUILD_MODULE_GOLANG_INSTALL_INSOURCE=ON
-          fi
-
+          cmake -B build -S "." -DBUILD_MODULE_GOLANG_INSTALL_INSOURCE=ON
           cmake --build build --parallel 4
-
-          if [[ ${{ matrix.os }} == *'macos-15'* && "${{ matrix.arch }}" == "x86_64" ]]; then
-            echo "Skip running tests for x86_64 on macos arm, it is very complicated at runtime"
-          else
-            ctest --output-on-failure --test-dir build
-          fi
-          
+          ctest --output-on-failure --test-dir build
 
       - name: Check GoBDK has changed
         id: gobdk_change
