@@ -8,10 +8,7 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: ubuntu-22.04-arm
-          - os: ubuntu-22.04
-          - os: macos-15
-          - os: macos-15-intel
+          - os: windows-2022
       fail-fast: false
     runs-on: ${{ matrix.os }}
 
@@ -19,36 +16,50 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Go 1.24.9
-        if: matrix.os != 'ubuntu-22.04'
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.24.9'
-          check-latest: false
-
-      - name: Get OS ARCH Name
+      - name: Install NASM
+        shell: pwsh
         run: |
-          echo "OS_ARCH=$(uname -s | tr 'A-Z' 'a-z')_$(uname -m)" >> $GITHUB_ENV
+          choco install nasm --no-progress -y
+          choco info nasm
+          Write-Host "NASM installed."
 
-      - name: Display G++ Version
+      - name: Download OpenSSL 3.4.0 source
+        shell: pwsh
         run: |
-          echo "Checking default g++ version..."
-          g++ --version
-          which g++
+          $version = "3.4.0"
+          $archive = "openssl-$version.tar.gz"
+          $url = "https://www.openssl.org/source/openssl-$version.tar.gz"
+          Write-Host "Downloading OpenSSL from $url ..."
+          $ProgressPreference = 'SilentlyContinue'
+          try {
+            Start-BitsTransfer -Source $url -Destination $archive -ErrorAction Stop
+          } catch {
+            Write-Host "Start-BitsTransfer failed, falling back to curl..."
+            curl.exe -L $url -o $archive
+          }
+          tar -xzf $archive
+          Rename-Item "openssl-$version" "openssl"
 
-      - name: Display go version
+      - name: Configure, Build and Install OpenSSL (MSVC x64)
+        shell: cmd
         run: |
-          echo "Checking default go version..."
-          go version
-          go env
-          which go
+          REM Add NASM to PATH
+          set PATH="C:\Program Files\NASM;%PATH%"
 
-      - name: Display cmake version
-        run: |
-          echo "Checking default cmake version..."
-          cmake --version
-          which cmake
+          "C:\Program Files\NASM\nasm.exe" -v
+          
+          REM Initialize Visual Studio environment
+          call "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\VC\Auxiliary\Build\vcvarsall.bat" x64
+          
+          cd openssl
+          perl Configure VC-WIN64A no-shared no-tests no-docs no-dso no-engine --prefix=%CD%\..\openssl-install
+          nmake
+          nmake install_sw
 
-      - name: Display OS ARCH
+      - name: Verify Installation
+        shell: pwsh
         run: |
-          echo "echo OS_ARCH : $OS_ARCH"
+          Write-Host "Installed headers:"
+          Get-ChildItem "${{ github.workspace }}\openssl-install\include" -Recurse | Select-Object -First 10
+          Write-Host "Installed libraries:"
+          Get-ChildItem "${{ github.workspace }}\openssl-install\lib" -Recurse | Select-Object -First 10
