@@ -363,6 +363,25 @@ ScriptError bsv::CScriptEngine::VerifyScript(std::span<const uint8_t> extendedTX
     return SCRIPT_ERR_OK;
 }
 
+std::vector<ScriptError> bsv::CScriptEngine::VerifyScriptBatch(const VerifyBatch& batch) const
+{
+    std::vector<ScriptError> results;
+    results.reserve(batch.size());
+
+    for (const auto& elem : batch) {
+        ScriptError result = VerifyScript(
+            elem.extendedTX,
+            elem.utxoHeights,
+            elem.blockHeight,
+            elem.consensus,
+            elem.customFlags
+        );
+        results.push_back(result);
+    }
+
+    return results;
+}
+
 ScriptError bsv::CScriptEngine::verifyImpl(
     const CScript& unlocking_script,
     const CScript& locking_script,
