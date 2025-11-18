@@ -1,5 +1,6 @@
 #include <bdkcgo/scriptengine_cgo.h>
 #include <core/scriptengine.hpp>
+#include <core/verifyarg.hpp>
 
 
 int ScriptEngine_CPP_SCRIPT_ERR_ERROR_COUNT(){
@@ -194,5 +195,37 @@ int ScriptEngine_VerifyScriptWithCustomFlags(ScriptEngineCGO cgoEngine, const ch
     catch (const std::exception& e) {
         std::cout << "CGO EXCEPTION : " << __FILE__ << ":" << __LINE__ << "    at " << __func__  << e.what() << std::endl;
         return SCRIPT_ERR_ERROR_COUNT + 1;
+    }
+}
+
+int* ScriptEngine_VerifyScriptBatch(ScriptEngineCGO cgoEngine, VerifyBatchCGO cgoBatch, int* resultSize) {
+    try {
+        bsv::CScriptEngine* engine = static_cast<bsv::CScriptEngine*>(cgoEngine);
+        bsv::VerifyBatch* batch = static_cast<bsv::VerifyBatch*>(cgoBatch);
+
+        // Call the C++ VerifyScriptBatch method
+        std::vector<ScriptError> results = engine->VerifyScriptBatch(*batch);
+
+        // Allocate C array for results
+        const size_t size = results.size();
+        *resultSize = static_cast<int>(size);
+
+        int* resultArray = static_cast<int*>(malloc(size * sizeof(int)));
+        if (resultArray == nullptr) {
+            *resultSize = 0;
+            return nullptr;
+        }
+
+        // Copy results to C array
+        for (size_t i = 0; i < size; ++i) {
+            resultArray[i] = static_cast<int>(results[i]);
+        }
+
+        return resultArray;
+    }
+    catch (const std::exception& e) {
+        std::cout << "CGO EXCEPTION : " << __FILE__ << ":" << __LINE__ << "    at " << __func__ << " " << e.what() << std::endl;
+        *resultSize = 0;
+        return nullptr;
     }
 }

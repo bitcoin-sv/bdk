@@ -299,3 +299,41 @@ func (se *ScriptEngine) GetGenesisActivationHeight() int32 {
 func (se *ScriptEngine) GetChronicleActivationHeight() int32 {
 	return int32(C.ScriptEngine_GetChronicleActivationHeight(se.cSEPtr))
 }
+
+// VerifyScriptBatch processes a batch of script verifications
+// Takes a VerifyBatch containing multiple verification tasks and returns a slice of ScriptError results
+// Each result corresponds to one verification task in the batch, in the same order
+// Returns nil on success or an error slice where each element represents the verification result
+func (se *ScriptEngine) VerifyScriptBatch(batch *VerifyBatch) []ScriptError {
+	if batch == nil || batch.cBatchPtr == nil {
+		return nil
+	}
+
+	var resultSize C.int
+	resultsPtr := C.ScriptEngine_VerifyScriptBatch(se.cSEPtr, batch.cBatchPtr, &resultSize)
+
+	if resultsPtr == nil || resultSize == 0 {
+		return nil
+	}
+
+	// Free the C array after we're done
+	defer C.free(unsafe.Pointer(resultsPtr))
+
+	// Convert C array to Go slice
+	size := int(resultSize)
+	results := make([]ScriptError, size)
+
+	// Create a Go slice backed by the C array
+	cResults := unsafe.Slice((*C.int)(resultsPtr), size)
+
+	for i := 0; i < size; i++ {
+		errCode := int(cResults[i])
+		if errCode == int(SCRIPT_ERR_OK) {
+			results[i] = nil
+		} else {
+			results[i] = NewScriptError(ScriptErrorCode(errCode))
+		}
+	}
+
+	return results
+}
