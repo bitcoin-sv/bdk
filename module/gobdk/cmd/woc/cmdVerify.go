@@ -75,6 +75,7 @@ func processVerificationSingle(se *bdkscript.ScriptEngine, csvData []CsvDataReco
 	localCount := 0
 	processedCount := 0
 	nbFailed := 0
+	var verifyScriptElapsed time.Duration
 
 	for i, record := range csvData {
 		tx, err := bt.NewTxFromString(record.TxHexExtended)
@@ -93,7 +94,10 @@ func processVerificationSingle(se *bdkscript.ScriptEngine, csvData []CsvDataReco
 		}
 
 		// Verify script
-		if err := se.VerifyScript(record.TxBinExtended, record.DataUTXOHeights, record.BlockHeight, true); err != nil {
+		verifyStart := time.Now()
+		err = se.VerifyScript(record.TxBinExtended, record.DataUTXOHeights, record.BlockHeight, true)
+		verifyScriptElapsed += time.Since(verifyStart)
+		if err != nil {
 			log.Printf("ERROR verifying record at %v, txID : %v, error \n\n%v\n\n", i, record.TXID, err)
 			nbFailed += 1
 		}
@@ -113,6 +117,7 @@ func processVerificationSingle(se *bdkscript.ScriptEngine, csvData []CsvDataReco
 		}
 	}
 
+	log.Printf("VerifyScript Time: %.4f seconds", verifyScriptElapsed.Seconds())
 	return nbFailed
 }
 
@@ -129,6 +134,7 @@ func processVerificationBatch(se *bdkscript.ScriptEngine, csvData []CsvDataRecor
 	processedBatchCount := 0
 	nbFailed := 0
 	batchIndices := make([]int, 0, cmdVerifyBatchSize)
+	var verifyScriptBatchElapsed time.Duration
 
 	for i, record := range csvData {
 		tx, err := bt.NewTxFromString(record.TxHexExtended)
@@ -154,7 +160,9 @@ func processVerificationBatch(se *bdkscript.ScriptEngine, csvData []CsvDataRecor
 		if batch.Size() >= cmdVerifyBatchSize || i == len(csvData)-1 {
 			// Verify batch
 			batchSize := batch.Size()
+			verifyBatchStart := time.Now()
 			results := se.VerifyScriptBatch(batch)
+			verifyScriptBatchElapsed += time.Since(verifyBatchStart)
 
 			// Process results
 			for j, err := range results {
@@ -189,6 +197,7 @@ func processVerificationBatch(se *bdkscript.ScriptEngine, csvData []CsvDataRecor
 		}
 	}
 
+	log.Printf("VerifyScriptBatch Time: %.4f seconds", verifyScriptBatchElapsed.Seconds())
 	return nbFailed
 }
 
