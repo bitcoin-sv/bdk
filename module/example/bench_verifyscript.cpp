@@ -1,4 +1,4 @@
-/// Benchmark program for se.VerifyScript with hardcoded transaction data
+/// Benchmark program for se.VerifyScript and se.VerifyScriptBatch with hardcoded transaction data
 
 #include <cassert>
 #include <iostream>
@@ -14,6 +14,7 @@
 #include "assembler.h"
 #include "utilstrencodings.h"
 #include "scriptengine.hpp"
+#include "verifyarg.hpp"
 
 namespace po = boost::program_options;
 
@@ -32,14 +33,18 @@ const std::vector<int32_t> UTXO_HEIGHTS = {574441};
 int main(int argc, char* argv[])
 {
     int iterations = 10000;
+    int batchSize = 1000;
     bool disableConsensus = false;
+    bool benchBatch = false;
 
     // Define and parse the command line options
     po::options_description desc("Allowed options");
     desc.add_options()
         ("help,h", "produce help message")
         ("iterations,i", po::value<int>(&iterations)->default_value(10000), "number of iterations to run")
-        ("disable-consensus,c", po::bool_switch(&disableConsensus)->default_value(false), "disable the consensus");
+        ("batch-size,b", po::value<int>(&batchSize)->default_value(1000), "batch size (number of transactions per batch)")
+        ("disable-consensus,c", po::bool_switch(&disableConsensus)->default_value(false), "disable the consensus")
+        ("bench-batch", po::bool_switch(&benchBatch)->default_value(false), "benchmark batch processing instead of single");
 
     po::variables_map vm;
     try {
@@ -61,6 +66,10 @@ int main(int argc, char* argv[])
     std::cout << "  TXID: " << TX_ID << std::endl;
     std::cout << "  Block Height: " << BLOCK_HEIGHT << std::endl;
     std::cout << "  Transaction Size: " << TX_HEX_EXTENDED.length() / 2 << " bytes" << std::endl;
+    std::cout << "  Mode: " << (benchBatch ? "Batch" : "Single") << std::endl;
+    if (benchBatch) {
+        std::cout << "  Batch Size: " << batchSize << " transactions" << std::endl;
+    }
     std::cout << "  Iterations: " << iterations << std::endl;
     std::cout << "  Consensus: " << (disableConsensus ? "disabled" : "enabled") << std::endl;
     std::cout << std::endl;
@@ -75,11 +84,35 @@ int main(int argc, char* argv[])
 
     // Warmup run (not measured)
     std::cout << "Running warmup..." << std::endl;
-    for (int i = 0; i < 100; ++i) {
-        const ScriptError ret = se.VerifyScript(txBinExtended, utxoHeights, BLOCK_HEIGHT, consensus);
-        if (ret != SCRIPT_ERR_OK) {
-            std::cerr << "ERROR: VerifyScript failed during warmup" << std::endl;
-            return 1;
+
+    if (benchBatch) {
+        // Warmup for batch mode
+        for (int i = 0; i < 10; ++i) {
+            bsv::VerifyBatch batch;
+            batch.reserve(batchSize);
+            for (int j = 0; j < batchSize; ++j) {
+                batch.add(bsv::VerifyArg(txBinExtended, utxoHeights, BLOCK_HEIGHT, consensus));
+            }
+            const auto results = se.VerifyScriptBatch(batch);
+            if (results.size() != static_cast<size_t>(batchSize)) {
+                std::cerr << "ERROR: VerifyScriptBatch returned wrong number of results during warmup" << std::endl;
+                return 1;
+            }
+            for (const auto& ret : results) {
+                if (ret != SCRIPT_ERR_OK) {
+                    std::cerr << "ERROR: VerifyScriptBatch failed during warmup" << std::endl;
+                    return 1;
+                }
+            }
+        }
+    } else {
+        // Warmup for single mode
+        for (int i = 0; i < 100; ++i) {
+            const ScriptError ret = se.VerifyScript(txBinExtended, utxoHeights, BLOCK_HEIGHT, consensus);
+            if (ret != SCRIPT_ERR_OK) {
+                std::cerr << "ERROR: VerifyScript failed during warmup" << std::endl;
+                return 1;
+            }
         }
     }
 
@@ -90,24 +123,62 @@ int main(int argc, char* argv[])
     std::chrono::nanoseconds minDuration = std::chrono::nanoseconds::max();
     std::chrono::nanoseconds maxDuration(0);
 
-    for (int i = 0; i < iterations; ++i) {
-        auto start = std::chrono::high_resolution_clock::now();
-        const ScriptError ret = se.VerifyScript(txBinExtended, utxoHeights, BLOCK_HEIGHT, consensus);
-        auto end = std::chrono::high_resolution_clock::now();
+    if (benchBatch) {
+        // Benchmark batch mode
+        for (int i = 0; i < iterations; ++i) {
+            bsv::VerifyBatch batch;
+            batch.reserve(batchSize);
+            for (int j = 0; j < batchSize; ++j) {
+                batch.add(bsv::VerifyArg(txBinExtended, utxoHeights, BLOCK_HEIGHT, consensus));
+            }
 
-        if (ret != SCRIPT_ERR_OK) {
-            std::cerr << "ERROR: VerifyScript failed at iteration " << i << std::endl;
-            return 1;
+            auto start = std::chrono::high_resolution_clock::now();
+            const auto results = se.VerifyScriptBatch(batch);
+            auto end = std::chrono::high_resolution_clock::now();
+
+            if (results.size() != static_cast<size_t>(batchSize)) {
+                std::cerr << "ERROR: VerifyScriptBatch returned wrong number of results at iteration " << i << std::endl;
+                return 1;
+            }
+
+            for (size_t j = 0; j < results.size(); ++j) {
+                if (results[j] != SCRIPT_ERR_OK) {
+                    std::cerr << "ERROR: VerifyScriptBatch failed at iteration " << i << ", item " << j << std::endl;
+                    return 1;
+                }
+            }
+
+            auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+            totalDuration += duration;
+
+            if (duration < minDuration) {
+                minDuration = duration;
+            }
+            if (duration > maxDuration) {
+                maxDuration = duration;
+            }
         }
+    } else {
+        // Benchmark single mode
+        for (int i = 0; i < iterations; ++i) {
+            auto start = std::chrono::high_resolution_clock::now();
+            const ScriptError ret = se.VerifyScript(txBinExtended, utxoHeights, BLOCK_HEIGHT, consensus);
+            auto end = std::chrono::high_resolution_clock::now();
 
-        auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
-        totalDuration += duration;
+            if (ret != SCRIPT_ERR_OK) {
+                std::cerr << "ERROR: VerifyScript failed at iteration " << i << std::endl;
+                return 1;
+            }
 
-        if (duration < minDuration) {
-            minDuration = duration;
-        }
-        if (duration > maxDuration) {
-            maxDuration = duration;
+            auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+            totalDuration += duration;
+
+            if (duration < minDuration) {
+                minDuration = duration;
+            }
+            if (duration > maxDuration) {
+                maxDuration = duration;
+            }
         }
     }
 
@@ -121,13 +192,27 @@ int main(int argc, char* argv[])
     std::cout << "==================" << std::endl;
     std::cout << std::fixed << std::setprecision(2);
     std::cout << "Total time:        " << std::setprecision(4) << totalSeconds << " seconds" << std::endl;
-    std::cout << "Average per call:  " << std::setprecision(2) << avgMicroseconds << " µs ("
-              << std::setprecision(0) << avgNanoseconds << " ns)" << std::endl;
+    if (benchBatch) {
+        std::cout << "Average per batch: " << std::setprecision(2) << avgMicroseconds / 1000.0 << " ms ("
+                  << std::setprecision(0) << avgNanoseconds << " ns)" << std::endl;
+        double avgPerTx = avgNanoseconds / batchSize;
+        std::cout << "Average per tx:    " << std::setprecision(2) << avgPerTx / 1000.0 << " µs ("
+                  << std::setprecision(0) << avgPerTx << " ns)" << std::endl;
+    } else {
+        std::cout << "Average per call:  " << std::setprecision(2) << avgMicroseconds << " µs ("
+                  << std::setprecision(0) << avgNanoseconds << " ns)" << std::endl;
+    }
     std::cout << "Min:               " << std::setprecision(2) << minDuration.count() / 1000.0 << " µs ("
               << minDuration.count() << " ns)" << std::endl;
     std::cout << "Max:               " << std::setprecision(2) << maxDuration.count() / 1000.0 << " µs ("
               << maxDuration.count() << " ns)" << std::endl;
-    std::cout << "Throughput:        " << std::setprecision(0) << (iterations / totalSeconds) << " calls/sec" << std::endl;
+
+    if (benchBatch) {
+        int totalTx = iterations * batchSize;
+        std::cout << "Throughput:        " << std::setprecision(0) << (totalTx / totalSeconds) << " tx/sec" << std::endl;
+    } else {
+        std::cout << "Throughput:        " << std::setprecision(0) << (iterations / totalSeconds) << " calls/sec" << std::endl;
+    }
 
     return 0;
 }

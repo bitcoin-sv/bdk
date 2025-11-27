@@ -129,148 +129,273 @@ The C code runs **96% slower** than equivalent Go code! This is because:
 
 ---
 
-### Script Verification Benchmarks (100,000 iterations)
+### Script Verification Benchmarks (Release Build - 2025-11-27)
 
-#### Go Implementation (via CGO to C++)
+**Test Environment:**
+- Build: Release (optimized, -O3)
+- CPU: Intel Core i9-9980HK @ 2.40GHz
+- Test Duration: ~10 seconds per benchmark
+- Transaction: d43ad4d4...eae0bad7 (192 bytes, 1 input, 2 outputs)
 
-```
-BenchmarkVerifyScript-16               	  100000	     48579 ns/op	  (consensus: enabled)
-BenchmarkVerifyScript_NoConsensus-16   	  100000	     47962 ns/op	  (consensus: disabled)
-```
+#### Performance Results
 
-#### C++ Implementation (native)
-
-```
-With consensus enabled (-i 100000):
-  Average per call:  42.99 µs (42,991 ns)
-  Min:               37.16 µs (37,161 ns)
-  Max:               300.70 µs (300,700 ns)
-  Throughput:        23,260 calls/sec
-
-With consensus disabled (-i 100000 -c):
-  Average per call:  43.10 µs (43,102 ns)
-  Min:               35.84 µs (35,841 ns)
-  Max:               1013.90 µs (1,013,900 ns)
-  Throughput:        23,201 calls/sec
-```
+| Mode | Batch Size | Implementation | Iterations | Total Txs | Time/tx (µs) | Throughput (tx/sec) |
+|------|------------|----------------|------------|-----------|--------------|---------------------|
+| **Single** | 1 | **C++** | 10,000 | 10,000 | **41.05** | **24,373** |
+| **Single** | 1 | **Go** | 10,000 | 10,000 | **46.85** | **21,415** |
+| Batch | 10 | C++ | 1,000 | 10,000 | 48.72 | 20,526 |
+| Batch | 10 | Go | 1,000 | 10,000 | 47.42 | 21,090 |
+| Batch | 100 | C++ | 100 | 10,000 | 48.52 | 20,608 |
+| Batch | 100 | Go | 100 | 10,000 | 45.87 | 21,803 |
+| Batch | 1000 | C++ | 10 | 10,000 | 44.23 | 22,611 |
+| Batch | 1000 | Go | 10 | 10,000 | 47.46 | 21,072 |
+| Batch | 10000 | C++ | 1 | 10,000 | 47.75 | 20,943 |
+| Batch | 10000 | Go | 1 | 10,000 | 77.01 | 12,986 |
 
 ---
 
 ## Performance Analysis
 
-### CGO Overhead in VerifyScript
+### 1. CGO Overhead: Go Single vs C++ Single
 
-| Implementation | Time (ns) | Overhead vs C++ |
-|----------------|-----------|-----------------|
-| **C++ Native** | 42,991 | baseline |
-| **Go via CGO** | 48,579 | +5,588 ns (+13.0%) |
+| Implementation | Time/tx (µs) | Throughput (tx/sec) | Overhead |
+|----------------|--------------|---------------------|----------|
+| **C++ Single** | 41.05 | 24,373 | baseline |
+| **Go Single** | 46.85 | 21,415 | +5.80 µs (+14.1%) |
 
-**CGO adds ~5.6 µs (5,588 ns) overhead per VerifyScript call**
+**Result**: Go via CGO has 14.1% overhead compared to native C++. Go achieves 88% of C++ performance.
 
-This is **100x larger** than the simple CGO boundary crossing (~54 ns). Why?
+**Analysis**: The CGO overhead is relatively small for this workload. The script verification operation is complex enough (~41-47 µs) that the CGO call overhead (~5.8 µs) represents about 14% of total execution time. This includes the boundary crossing cost (~20-50 ns) plus any data marshaling and microarchitectural effects.
 
-The overhead includes:
-1. **CGO boundary crossing**: ~54 ns (1.0%)
-2. **Data marshaling**: Converting Go slices to C pointers (~500 ns) (9%)
-3. **Microarchitectural effects**: Cache misses, pipeline disruption (~5,000 ns) (90%)
+### 2. Batch Performance: Optimal Batch Sizes
 
-The large microarchitectural overhead happens because VerifyScript:
-- Performs complex cryptographic operations (ECDSA signature verification)
-- Accesses large code paths in C++ (~100KB+ of hot code)
-- After CGO boundary crossing, all this code runs in "cold" state
+**C++ Batch Performance:**
 
-### Consensus Check Impact
+| Config | Time/tx (µs) | vs C++ Single (41.05 µs) | Change |
+|--------|--------------|--------------------------|--------|
+| **C++ Single** | 41.05 | baseline | - |
+| C++ Batch-10 | 48.72 | +7.67 µs | 18.7% slower |
+| C++ Batch-100 | 48.52 | +7.47 µs | 18.2% slower |
+| C++ Batch-1000 | 44.23 | +3.18 µs | 7.7% slower |
+| C++ Batch-10000 | 47.75 | +6.70 µs | 16.3% slower |
 
-Surprisingly, consensus checking has **minimal impact**:
-- **C++ with consensus**: 42,991 ns
-- **C++ without consensus**: 43,102 ns
-- **Difference**: +111 ns (+0.26%)
+**Result**: C++ batch mode is slower than single mode for all batch sizes. Best batch performance is with batch size of 1000 (only 7.7% slower than single mode).
 
-- **Go with consensus**: 48,579 ns
-- **Go without consensus**: 47,962 ns
-- **Difference**: -617 ns (-1.27%)
+**Go Batch Performance:**
 
-The consensus check is highly optimized and adds negligible overhead.
+| Config | Time/tx (µs) | vs Go Single (46.85 µs) | Change |
+|--------|--------------|------------------------|--------|
+| **Go Single** | 46.85 | baseline | - |
+| Go Batch-10 | 47.42 | +0.57 µs | 1.2% slower |
+| Go Batch-100 | 45.87 | -0.98 µs | 2.1% faster |
+| Go Batch-1000 | 47.46 | +0.61 µs | 1.3% slower |
+| Go Batch-10000 | 77.01 | +30.16 µs | 64.4% slower |
 
-### Throughput Comparison
+**Result**: Go batch mode performs similarly to single mode for small-to-medium batches (10-1000), with batch size of 100 being 2.1% faster. Very large batches (10000) degrade significantly (64.4% slower).
 
-| Implementation | Calls/sec | Transactions/sec (batch of 100) |
-|----------------|-----------|----------------------------------|
-| **C++ Native** | 23,260 | 232.6 (per core) |
-| **Go via CGO** | 20,583 | 205.8 (per core) |
+### 3. Batch Performance Analysis
 
-On a 16-core machine: **~3,700 tx/sec (C++)** vs **~3,300 tx/sec (Go)**
+**Batch Mode Performance:**
+
+The batch mode shows mixed results compared to single-transaction mode:
+- **C++ Batch**: 7.7-18.7% slower than single mode (best: 1000 tx batch)
+- **Go Batch**: 2.1% faster to 1.3% slower for small-medium batches (best: 100 tx batch)
+
+**Why is batch mode slower for C++?**
+The current implementation may have overhead from:
+1. **Batch construction**: Creating and managing batch data structures
+2. **Iterator overhead**: Sequential loop through batch elements
+3. **Memory access patterns**: Less optimal cache behavior compared to optimized single-call path
+
+**Large Batch Degradation (10K transactions):**
+
+Both implementations degrade at 10K batch size:
+- **C++**: 16.3% slower than single
+- **Go**: 64.4% slower than single
+
+This is likely due to:
+1. **Memory pressure**: 10K transactions × ~200 bytes = ~2 MB of data
+2. **Cache thrashing**: Working set exceeds L2/L3 cache capacity
+3. **Go GC pressure** (Go only): Large batch object may trigger garbage collection
+
+**Optimal Batch Sizes:**
+- **C++**: Use single-transaction mode (best performance) or batch size 1000 (7.7% slower)
+- **Go**: Use single-transaction mode or batch size 100 (2.1% faster)
+- **Avoid**: Batches >1000 (significant performance degradation)
 
 ---
 
 ## Key Takeaways
 
-### 1. CGO Overhead is Context-Dependent
+### 1. CGO Overhead is Small but Measurable
 
-- **Simple operations** (<1 µs): CGO overhead dominates (50-100% slower)
-- **Medium operations** (1-10 µs): CGO adds 10-50% overhead
-- **Complex operations** (>50 µs): CGO adds <10% overhead
+For complex operations like script verification (~41-47 µs), the CGO overhead is relatively small:
+- **C++ Single**: 41.05 µs/tx (24,373 tx/sec)
+- **Go Single**: 46.85 µs/tx (21,415 tx/sec)
+- **CGO Overhead**: +5.80 µs (+14.1%)
 
-### 2. VerifyScript Performance
+**Key Insight**: Go achieves 88% of native C++ performance. The 14% overhead comes from CGO boundary crossing (~20-50 ns), data marshaling, and microarchitectural effects. This is acceptable overhead for most production workloads.
 
-- **C++ native**: ~43 µs/call (23,260 calls/sec)
-- **Go via CGO**: ~49 µs/call (20,583 calls/sec)
-- **Overhead**: ~13% slower via CGO
+### 2. Single benchmark is more consistent than batch benchmark
 
-For script verification, **CGO overhead is acceptable** because:
-- The operation itself takes ~43 µs (800x the CGO boundary cost)
-- The 13% overhead is reasonable for the safety and convenience of Go
-- Batching can reduce the overhead further
+The benchmark results show that single-transaction mode provides the best consistancy:
+- **C++ Single**: 41.05 µs/tx
+- **Go Single**: 46.85 µs/tx
 
-### 3. When to Use CGO
+Batch mode shows mixed results:
+- **C++ Batch**: 7.7-18.7% slower than single mode
+- **Go Batch**: Mostly equivalent to single mode (2.1% faster at best)
+- **Large batches (10K)**: Significant degradation for both (16-64% slower)
 
-✅ **Good use cases**:
-- Heavy computations (>10 µs per call)
-- Cryptographic operations
-- Complex algorithms with large code size
-- Operations that can be batched
+### 3. Benchmark Variability and CGO Overhead Sources
 
-❌ **Bad use cases**:
-- Simple operations (<1 µs)
-- High-frequency calls (millions per second)
-- Operations that benefit from Go's optimizations (simple loops, bounds checking)
+**Important Note on Result Variability:**
 
-### 4. Optimization Strategies
+Despite the typical results shown above, different benchmark runs can produce varying outcomes. Sometimes Go can even appear faster than C++ in certain runs. This **non-deterministic behavior** is due to:
 
-For applications using VerifyScript via CGO:
+1. **Unmanaged Heap Allocations**: Deep within the C++ core functions, the creation and deserialization of `CTransaction` objects involve numerous heap allocations that are not under our direct control. Each `VerifyScript` call triggers transaction deserialization from binary format, which allocates memory dynamically.
 
-1. **Batching**: Use `VerifyScriptBatch` instead of individual calls
-   - Amortizes CGO overhead across many transactions
-   - Reduces overhead from 13% to <1%
+2. **Memory Allocator State**: The performance of heap allocation depends on the allocator's internal state (fragmentation, free list state, cache locality), which varies between runs.
 
-2. **Worker pools**: Keep CGO calls in dedicated goroutines
-   - Reduces context switching overhead
-   - Improves cache locality
+3. **CPU State Variability**: Cache warming, branch predictor state, CPU frequency scaling, and other microarchitectural factors can vary between runs.
 
-3. **Data pre-processing**: Parse and prepare data in Go before CGO call
-   - Minimize time spent in "cold" C++ execution state
-   - Let Go handle simple operations
+4. **System Background Activity**: OS scheduling, other processes, interrupts, and system services can affect timing measurements.
 
-### 5. Surprising Results
+**Sources of CGO Overhead:**
 
-The benchmark reveals counter-intuitive behavior:
+The 14% CGO overhead observed in Go comes from multiple sources:
 
-1. **C code via CGO is slower than pure Go** (for simple operations)
-   - Not due to C being slow, but due to microarchitectural disruption
+1. **Boundary Crossing Cost** (~20-50 ns per call):
+   - Stack switching between Go's segmented stacks and C's fixed stacks
+   - Register save/restore operations
+   - Runtime coordination between Go scheduler and C execution
 
-2. **CGO overhead >> boundary crossing time** (5,588 ns vs 54 ns)
-   - Most overhead is invisible: cache misses, pipeline stalls, predictor resets
+2. **Data Marshaling**:
+   - Converting Go slices to C pointers (`[]byte` to `const uint8_t*`)
+   - Copying or pinning Go memory to prevent garbage collection during C execution
+   - Converting C return values back to Go types
 
-3. **Consensus checking is nearly free** (<1% impact)
-   - Shows how well-optimized the C++ implementation is
+3. **Microarchitectural Effects**:
+   - CPU pipeline flush when crossing the Go↔C boundary
+   - Instruction cache misses (switching between Go and C code)
+   - Branch predictor reset across language boundaries
+   - Memory prefetcher disruption
+
+4. **Memory Allocation Patterns**:
+   - The C++ implementation performs extensive heap allocations during transaction deserialization
+   - Go's garbage collector may interact with C memory allocations, adding overhead
+   - Cache effects from allocation patterns differ between pure C++ and Go→C paths
+
+**Recommendation**: When benchmarking CGO performance, always run multiple iterations and consider the average/median rather than a single run. The variability is inherent to the current implementation's reliance on dynamic memory allocation.
 
 ---
 
-## Conclusion
+## Running the Benchmarks
 
-CGO adds ~13% overhead to VerifyScript calls, which is acceptable for:
-- The complexity and security of the operation
-- The convenience and safety of Go's memory management
-- The ability to leverage Go's concurrency primitives
+**C++ Benchmarks:**
+```bash
+cd /home/ctnguyen/development/bitcoin-sv/build
 
-For high-throughput scenarios, use `VerifyScriptBatch` to reduce overhead to <1%.
+# Single mode (10,000 iterations)
+./x64/release/bench_verifyscript_single -i 10000
+
+# Batch modes
+./x64/release/bench_verifyscript_batch -i 1000 -b 10
+./x64/release/bench_verifyscript_batch -i 100 -b 100
+./x64/release/bench_verifyscript_batch -i 10 -b 1000
+./x64/release/bench_verifyscript_batch -i 1 -b 10000
+```
+
+**Go Benchmarks:**
+```bash
+cd /home/ctnguyen/development/bitcoin-sv/bdk/module/gobdk/cgobench
+
+# Single mode (10,000 iterations)
+go test -bench=BenchmarkVerifyScript_Single$ -benchtime=10000x -run=^$ -benchmem
+
+# Batch modes
+go test -bench=BenchmarkVerifyScriptBatch_10$ -benchtime=1000x -run=^$ -benchmem
+go test -bench=BenchmarkVerifyScriptBatch_100$ -benchtime=100x -run=^$ -benchmem
+go test -bench=BenchmarkVerifyScriptBatch_1000$ -benchtime=10x -run=^$ -benchmem
+go test -bench=BenchmarkVerifyScriptBatch_10000$ -benchtime=1x -run=^$ -benchmem
+```
+
+---
+
+## Memory Profiling (C++ Debug Builds)
+
+Memory profiling was performed using Valgrind on debug builds to understand allocation patterns and confirm the extensive heap allocation behavior mentioned above.
+
+**Note**: Memory profiling data is from debug builds and should NOT be compared with release build performance data. Memory allocation counts help understand implementation behavior but don't directly correlate with release build performance.
+
+### Test Configuration
+
+| Test | Mode | Batch Size | Iterations | Total Transactions |
+|------|------|------------|------------|-------------------|
+| **Test 1** | Single | 1 tx/call | 1000 calls | 1000 |
+| **Test 2** | Batch | 1000 tx/batch | 1 call | 1000 |
+
+**Commands used:**
+```bash
+# Test 1: Single mode - 1000 iterations of single transaction verification
+valgrind --tool=dhat ./x64/debug/bench_verifyscript_singled -i 1000
+
+# Test 2: Batch mode - 1 batch of 1000 transactions
+valgrind --tool=dhat ./x64/debug/bench_verifyscript_batchd -i 1 -b 1000
+```
+
+### DHAT Results: Allocation Counts
+
+| Metric | Test 1: Single (1000 tx) | Test 2: Batch (1000 tx) | Ratio |
+|--------|--------------------------|-------------------------|-------|
+| **Total malloc/new calls** | 30,813 | 258,560 | 8.39× |
+| **Total bytes allocated** | 2,087,582 | 16,317,128 | 7.82× |
+| **Allocations per transaction** | 30.8 | 258.6 | **8.39× worse** |
+| **Bytes per transaction** | 2,088 | 16,317 | **7.82× worse** |
+| **Memory reads per tx** | 29.8 KB | 283.5 KB | **9.51× worse** |
+| **Memory writes per tx** | 8.4 KB | 77.2 KB | **9.19× worse** |
+
+### Massif Results: Heap Memory
+
+| Metric | Test 1: Single (1000 tx) | Test 2: Batch (1000 tx) | Ratio |
+|--------|--------------------------|-------------------------|-------|
+| **Peak heap size** | 535.4 KB | 594.8 KB | 1.11× |
+| **Total bytes allocated** | 2.09 MB | 16.32 MB | **7.82× worse** |
+| **Heap at program end** | 0 bytes (all freed) | 0 bytes (all freed) | - |
+
+### Key Findings
+
+**Extensive Heap Allocation Chaos Confirmed:**
+
+The Valgrind profiling reveals extreme heap allocation behavior in transaction verification:
+- **31 heap allocations per transaction** in single mode
+- **259 heap allocations per transaction** in batch mode (**8.4× more**)
+
+This extensive allocation is due to transaction deserialization. From the C++ source code, each `VerifyScript` call deserializes the transaction from binary format:
+
+```cpp
+// From scriptengine.cpp
+ScriptError VerifyScript(..., std::span<const uint8_t> extendedTX, ...) {
+    // Deserialize transaction from binary EVERY TIME
+    CDataStream tx_stream(begin, end, SER_NETWORK, PROTOCOL_VERSION);
+    bsv::CMutableTransactionExtended eTX;
+    tx_stream >> eTX;  // HEAP ALLOCATIONS HERE
+
+    const CTransaction ctx(eTX.mtx);  // MORE HEAP ALLOCATIONS
+    ...
+}
+```
+
+**Why This Causes Performance Variability:**
+
+1. **Allocator State Dependency**: Each heap allocation's performance depends on the allocator's current state (free list, fragmentation level)
+2. **Cache Effects**: Memory allocation patterns affect CPU cache behavior, which varies between runs
+3. **Non-deterministic Timing**: The combination of ~100+ allocations per transaction with varying allocator state creates non-deterministic performance
+
+**Batch Mode Heap Allocation Chaos:**
+
+Batch mode exhibits dramatically worse memory behavior per transaction:
+- **8.4× more allocations per transaction** (259 vs 31)
+- **7.8× more bytes allocated per transaction** (16 KB vs 2 KB)
+- **9.5× more memory reads per transaction** (284 KB vs 30 KB)
+- **9.2× more memory writes per transaction** (77 KB vs 8 KB)
