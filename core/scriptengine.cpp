@@ -1,7 +1,7 @@
 #include <base58.h>
-#include <policy/policy.h>
-#include <protocol_era.h>
 #include <core_io.h>
+#include <protocol_era.h>
+#include <policy/policy.h>
 #include <verify_script_flags.h>
 #include <script/script_flags.h>
 
@@ -25,45 +25,40 @@ bsv::CScriptEngine::CScriptEngine(const std::string chainName)
     }
 }
 
-
-const ConfigScriptPolicy& bsv::CScriptEngine::GetConfigScriptPolicy() {
-    return bsvConfig;
-}
-
 bool bsv::CScriptEngine::SetMaxOpsPerScriptPolicy(int64_t maxOpsPerScriptPolicyIn, std::string* err)
 {
-    return bsvConfig.SetMaxOpsPerScriptPolicy(maxOpsPerScriptPolicyIn, err);
+    return policySettings.SetMaxOpsPerScriptPolicy(maxOpsPerScriptPolicyIn, err);
 }
 
 bool bsv::CScriptEngine::SetMaxScriptNumLengthPolicy(int64_t maxScriptNumLengthIn, std::string* err)
 {
-    return bsvConfig.SetMaxScriptNumLengthPolicy(maxScriptNumLengthIn, err);
+    return policySettings.SetMaxScriptNumLengthPolicy(maxScriptNumLengthIn, err);
 }
 
 bool bsv::CScriptEngine::SetMaxScriptSizePolicy(int64_t maxScriptSizePolicyIn, std::string* err)
 {
-    return bsvConfig.SetMaxScriptSizePolicy(maxScriptSizePolicyIn, err);
+    return policySettings.SetMaxScriptSizePolicy(maxScriptSizePolicyIn, err);
 }
 
 bool bsv::CScriptEngine::SetMaxPubKeysPerMultiSigPolicy(int64_t maxPubKeysPerMultiSigIn, std::string* err)
 {
-    return bsvConfig.SetMaxPubKeysPerMultiSigPolicy(maxPubKeysPerMultiSigIn, err);
+    return policySettings.SetMaxPubKeysPerMultiSigPolicy(maxPubKeysPerMultiSigIn, err);
 }
 
 bool bsv::CScriptEngine::SetMaxStackMemoryUsage(int64_t maxStackMemoryUsageConsensusIn, int64_t maxStackMemoryUsagePolicyIn, std::string* err)
 {
-    return bsvConfig.SetMaxStackMemoryUsage(maxStackMemoryUsageConsensusIn, maxStackMemoryUsagePolicyIn, err);
+    return policySettings.SetMaxStackMemoryUsage(maxStackMemoryUsageConsensusIn, maxStackMemoryUsagePolicyIn, err);
 }
 
 bool bsv::CScriptEngine::SetGenesisActivationHeight(int32_t genesisActivationHeightIn, std::string* err)
 {
     bool ok{true};
-    ok = ok && bsvConfig.SetGenesisActivationHeight(genesisActivationHeightIn, err);
+    ok = ok && policySettings.SetGenesisActivationHeight(genesisActivationHeightIn, err);
 
     // Chronicle height should be always at least genesis height
-    auto chronicleHeight = bsvConfig.GetChronicleActivationHeight();
-    if ( chronicleHeight < bsvConfig.GetGenesisActivationHeight() ) {
-        ok = ok && bsvConfig.SetChronicleActivationHeight(genesisActivationHeightIn, err);
+    auto chronicleHeight = policySettings.GetChronicleActivationHeight();
+    if ( chronicleHeight < policySettings.GetGenesisActivationHeight() ) {
+        ok = ok && policySettings.SetChronicleActivationHeight(genesisActivationHeightIn, err);
     }
 
     return ok;
@@ -72,12 +67,12 @@ bool bsv::CScriptEngine::SetGenesisActivationHeight(int32_t genesisActivationHei
 bool bsv::CScriptEngine::SetChronicleActivationHeight(int32_t chronicleActivationHeightIn, std::string* err)
 {
     bool ok{true};
-    ok = ok && bsvConfig.SetChronicleActivationHeight(chronicleActivationHeightIn, err);
+    ok = ok && policySettings.SetChronicleActivationHeight(chronicleActivationHeightIn, err);
 
     // Chronicle height should be always at least genesis height
-    auto genesisHeight = bsvConfig.GetGenesisActivationHeight();
-    if ( bsvConfig.GetChronicleActivationHeight() < genesisHeight ) {
-        ok = ok && bsvConfig.SetGenesisActivationHeight(chronicleActivationHeightIn, err);
+    auto genesisHeight = policySettings.GetGenesisActivationHeight();
+    if ( policySettings.GetChronicleActivationHeight() < genesisHeight ) {
+        ok = ok && policySettings.SetGenesisActivationHeight(chronicleActivationHeightIn, err);
     }
 
     return ok;
@@ -85,7 +80,7 @@ bool bsv::CScriptEngine::SetChronicleActivationHeight(int32_t chronicleActivatio
 
 uint64_t bsv::CScriptEngine::GetMaxOpsPerScript(bool isGenesisEnabled, bool consensus) const
 {
-    return bsvConfig.GetMaxOpsPerScript(isGenesisEnabled, consensus);
+    return policySettings.GetMaxOpsPerScript(isGenesisEnabled, consensus);
 }
 
 uint64_t bsv::CScriptEngine::GetMaxScriptNumLength(bool isGenesisEnabled, bool isChronicleEnabled, bool isConsensus) const
@@ -103,32 +98,32 @@ uint64_t bsv::CScriptEngine::GetMaxScriptNumLength(bool isGenesisEnabled, bool i
         era = ProtocolEra::PostChronicle;
     }
 
-    return bsvConfig.GetMaxScriptNumLength(era, isConsensus);
+    return policySettings.GetMaxScriptNumLength(era, isConsensus);
 }
 
 uint64_t bsv::CScriptEngine::GetMaxScriptSize(bool isGenesisEnabled, bool isConsensus) const
 {
-    return bsvConfig.GetMaxScriptSize(isGenesisEnabled, isConsensus);
+    return policySettings.GetMaxScriptSize(isGenesisEnabled, isConsensus);
 }
 
 uint64_t bsv::CScriptEngine::GetMaxPubKeysPerMultiSig(bool isGenesisEnabled, bool isConsensus) const
 {
-    return bsvConfig.GetMaxPubKeysPerMultiSig(isGenesisEnabled, isConsensus);
+    return policySettings.GetMaxPubKeysPerMultiSig(isGenesisEnabled, isConsensus);
 }
 
 uint64_t bsv::CScriptEngine::GetMaxStackMemoryUsage(bool isGenesisEnabled, bool isConsensus) const
 {
-    return bsvConfig.GetMaxStackMemoryUsage(isGenesisEnabled, isConsensus);
+    return policySettings.GetMaxStackMemoryUsage(isGenesisEnabled, isConsensus);
 }
 
 int32_t bsv::CScriptEngine::GetGenesisActivationHeight() const
 {
-    return bsvConfig.GetGenesisActivationHeight();
+    return policySettings.GetGenesisActivationHeight();
 }
 
 int32_t bsv::CScriptEngine::GetChronicleActivationHeight() const
 {
-    return bsvConfig.GetChronicleActivationHeight();
+    return policySettings.GetChronicleActivationHeight();
 }
 
 uint32_t bsv::CScriptEngine::CalculateFlags(int32_t utxoHeight, int32_t blockHeight, bool consensus) const
@@ -139,18 +134,18 @@ uint32_t bsv::CScriptEngine::CalculateFlags(int32_t utxoHeight, int32_t blockHei
         // For tx coming from a block.
         // blockHeight is the block the tx belong to
         // In that case, the chainTip is blockHeight-1
-        era = GetProtocolEra(bsvConfig.GetGenesisActivationHeight(), bsvConfig.GetChronicleActivationHeight(), blockHeight );
+        era = GetProtocolEra(policySettings, blockHeight );
         const Consensus::Params& consensusparams = chainParams->GetConsensus();
         protocolFlags = GetBlockScriptFlags(consensusparams, blockHeight - 1 , era);
     } else {
         // For tx coming from a peer
         // blockHeight is the chain tip (highest current block)
-        era = GetProtocolEra(bsvConfig.GetGenesisActivationHeight(), bsvConfig.GetChronicleActivationHeight(), blockHeight + 1);
+        era = GetProtocolEra(policySettings, blockHeight + 1);
         const bool requireStandard = chainParams->RequireStandard();
         protocolFlags = GetScriptVerifyFlags(era, requireStandard);
     }
 
-    ProtocolEra utxoEra{ GetProtocolEra(bsvConfig.GetGenesisActivationHeight(), bsvConfig.GetChronicleActivationHeight(), utxoHeight) };
+    ProtocolEra utxoEra{ GetProtocolEra(policySettings, utxoHeight) };
     const uint32_t utxoFlags { InputScriptVerifyFlags(era, utxoEra) };
 
     return (protocolFlags | utxoFlags);
@@ -177,7 +172,7 @@ uint64_t bsv::CScriptEngine::GetSigOpCount(std::span<const uint8_t> extendedTX, 
 
     // SigOpCount is use only in case the tx come from a peer
     // Where the protocol era is calculated based on blockHeight + 1
-    const auto era = GetProtocolEra(bsvConfig.GetGenesisActivationHeight(), bsvConfig.GetChronicleActivationHeight(), blockHeight + 1);
+    const auto era = GetProtocolEra(policySettings, blockHeight + 1);
 
 
     // The part GetSigOpCountWithoutP2SH //////////////////////////////////////////////////
@@ -213,7 +208,7 @@ uint64_t bsv::CScriptEngine::GetSigOpCount(std::span<const uint8_t> extendedTX, 
 
     uint64_t nSigOpsP2SH{0};
     for (size_t index = 0; index < eTX.vutxo.size(); ++index) {
-        const ProtocolEra utxoEra = GetProtocolEra(bsvConfig.GetGenesisActivationHeight(), bsvConfig.GetChronicleActivationHeight(), utxoHeights[index]);
+        const ProtocolEra utxoEra = GetProtocolEra(policySettings, utxoHeights[index]);
         if (IsProtocolActive(utxoEra, ProtocolName::Genesis)) {
             continue;
         }
@@ -267,7 +262,6 @@ bitcoinconsensus_error bsv::CScriptEngine::CheckConsensus(std::span<const uint8_
     }
 
     const CTransaction ctx(eTX.mtx); // costly conversion due to hash calculation
-    std::atomic<malleability::status> ms{};
     const bool useCustomFlags = !customFlags.empty();
     for (size_t index = 0; index < eTX.vutxo.size(); ++index) {
         const uint64_t amount = eTX.vutxo[index].nValue.GetSatoshis();
@@ -330,7 +324,6 @@ ScriptError bsv::CScriptEngine::VerifyScript(std::span<const uint8_t> extendedTX
     }
 
     const CTransaction ctx(eTX.mtx); // costly conversion due to hash calculation
-    std::atomic<malleability::status> ms{};
     const bool useCustomFlags = !customFlags.empty();
     for (size_t index = 0; index < eTX.vutxo.size(); ++index) {
         const uint64_t amount = eTX.vutxo[index].nValue.GetSatoshis();
@@ -349,8 +342,7 @@ ScriptError bsv::CScriptEngine::VerifyScript(std::span<const uint8_t> extendedTX
                 lscript,
                 consensus,
                 flags,
-                sig_checker,
-                ms);
+                sig_checker);
         }
         else
         {
@@ -359,8 +351,7 @@ ScriptError bsv::CScriptEngine::VerifyScript(std::span<const uint8_t> extendedTX
                 lscript,
                 consensus,
                 flags,
-                sig_checker,
-                ms);
+                sig_checker);
         }
 
         // Return first error encountered
@@ -377,34 +368,22 @@ ScriptError bsv::CScriptEngine::verifyImpl(
     const CScript& locking_script,
     const bool consensus,
     const unsigned int flags,
-    BaseSignatureChecker& sig_checker,
-    std::atomic<malleability::status>& malleability
+    BaseSignatureChecker& sig_checker
 ) const
 {
     // Call of the bsv VerifyScript
-    const verify_script_params veriParams{make_verify_script_params(bsvConfig, flags, consensus)};
+    const verify_script_params veriParams{make_verify_script_params(policySettings, flags, consensus)};
     const auto ret = ::VerifyScript(veriParams,
         source->GetToken(),
         unlocking_script,
         locking_script,
         flags,
-        sig_checker,
-        malleability);
-    return helperOptional2ScriptError(ret);
-}
-
-ScriptError bsv::CScriptEngine::helperOptional2ScriptError(const std::optional<std::pair<bool, ScriptError>>& ret)  const {
-    // If the returned result is empty, we don't know what kind of error is that
-    if (!ret.has_value()) {
+        sig_checker);
+    
+    if (!ret.has_value())
         return SCRIPT_ERR_UNKNOWN_ERROR;
-    }
-
-    // If the returned result is true and error code is not OK, then we don't know what happened
-    if (ret->first && ret->second != SCRIPT_ERR_OK) {
-        return SCRIPT_ERR_UNKNOWN_ERROR;
-    }
-
-    return ret->second;
+    
+    return ret.value();
 }
 
 int bsv::CPP_SCRIPT_ERR_ERROR_COUNT(){

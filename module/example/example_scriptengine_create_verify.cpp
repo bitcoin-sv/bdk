@@ -101,7 +101,7 @@ int main(int argc, char* argv[])
     const auto network = CBaseChainParams::MAIN;
     bsv::CScriptEngine se(network);
 
-    SelectParams(network, std::nullopt); // must select params to set secret string
+    SelectParams(network, std::nullopt);
     const std::string strSecret1 = "5HxWvvfubhXpYYpS3tJkw6fq9jE9j18THftkZjHHfmFiWtmAbrj";
     CBitcoinSecret bsecret1;
     bsecret1.SetString(strSecret1);

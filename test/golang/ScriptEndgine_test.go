@@ -14,14 +14,14 @@ func TestNewScriptEngine(t *testing.T) {
 		se := goscript.NewScriptEngine("main")
 		assert.NotNil(t, se, "Expect non nil script engine")
 		assert.Equal(t, se.GetGenesisActivationHeight(), int32(620538))
-		assert.Equal(t, se.GetChronicleActivationHeight(), int32(921788))
+		assert.Equal(t, se.GetChronicleActivationHeight(), int32(943816))
 	})
 
 	t.Run("testnet", func(t *testing.T) {
 		se := goscript.NewScriptEngine("test")
 		assert.NotNil(t, se, "Expect non nil script engine")
 		assert.Equal(t, se.GetGenesisActivationHeight(), int32(1344302))
-		assert.Equal(t, se.GetChronicleActivationHeight(), int32(1686611))
+		assert.Equal(t, se.GetChronicleActivationHeight(), int32(1713168))
 	})
 
 	t.Run("regtest", func(t *testing.T) {
