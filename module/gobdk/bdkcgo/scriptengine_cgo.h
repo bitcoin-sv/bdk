@@ -22,6 +22,11 @@ int ScriptEngine_CPP_SCRIPT_ERR_ERROR_COUNT();
 typedef void* ScriptEngineCGO;
 
 /**
+ * Forward declaration for VerifyBatchCGO (defined in verifybatch_cgo.h)
+ */
+typedef void* VerifyBatchCGO;
+
+/**
  * Handle constructor and destructor
  */
 ScriptEngineCGO ScriptEngine_Create(const char* networkNamePtr, int networkNameLen);
@@ -110,6 +115,15 @@ int ScriptEngine_VerifyScriptWithCustomFlags(ScriptEngineCGO cgoEngine,
 	int32_t blockHeight, bool consensus,
 	const uint32_t* cFlagsPtr, int cFlagsLen
 );
+
+/*
+ * VerifyScriptBatch processes a batch of script verifications
+ *
+ * Returns a pointer to an array of error codes (int array)
+ * The caller must free the returned array using free()
+ * The array size matches the batch size
+ */
+int* ScriptEngine_VerifyScriptBatch(ScriptEngineCGO cgoEngine, VerifyBatchCGO cgoBatch, int* resultSize);
 
 #ifdef __cplusplus
 }
