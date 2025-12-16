@@ -7,6 +7,7 @@
 #include <memory>
 #include <optional>
 #include <utility>
+#include <vector>
 
 #include <configscriptpolicy.h>
 #include <chainparams.h>
@@ -14,9 +15,11 @@
 #include <script/script.h>
 #include <script/interpreter.h>
 #include <script/bitcoinconsensus.h>
+#include <verifyarg.hpp>
 
 namespace bsv
 {
+
 /**
  *
  * CScriptEngine hold its own GlobalConfig, ChainParams and CCancellationSource
@@ -71,10 +74,14 @@ class CScriptEngine {
         bitcoinconsensus_error CheckConsensus(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, std::span<const uint32_t> customFlags = std::span<const uint32_t>()) const;
 
         // VerifyScript extract the extended transaction, then forward to bsv call
-        // 
+        //
         // If client uses a custom flags different than zero, then this will be used
         // instead of the implicitly calculated flags
         ScriptError VerifyScript(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool consensus, std::span<const uint32_t> customFlags = std::span<const uint32_t>()) const;
+
+        // VerifyScriptBatch processes multiple script verifications in a batch
+        // Returns a vector of ScriptError results, one for each VerifyArg in the input
+        std::vector<ScriptError> VerifyScriptBatch(const VerifyBatch& batch) const;
 
     private :
         ConfigScriptPolicy policySettings;

@@ -5,6 +5,7 @@
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <iomanip>
 #include <vector>
 #include <string>
 #include <stdexcept>
@@ -22,10 +23,19 @@
 namespace po = boost::program_options;
 namespace pt = boost::property_tree;
 
+// CsvDataRecord structure matching the Go version
+struct CsvDataRecord {
+    std::string chainNet;
+    int32_t blockHeight;
+    std::string txID;
+    std::string txHexExtended;
+    std::string utxoHeights;
+    std::vector<int32_t> dataUTXOHeights;
+    std::vector<uint8_t> txBinExtended;
+};
 
-void doVerifyScript(const bsv::CScriptEngine& se, const std::span<const int32_t> utxoHeights, const int32_t blockHeight, const std::string& txID, const std::string& txHexExtended, const bool consensus) {
-    const std::vector<uint8_t> etxBin = ParseHex(txHexExtended);
-    const std::span<const uint8_t> etx(etxBin.data(), etxBin.size());
+std::chrono::nanoseconds doVerifyScript(const bsv::CScriptEngine& se, const CsvDataRecord& record, const bool consensus) {
+    const std::span<const uint8_t> etx(record.txBinExtended.data(), record.txBinExtended.size());
 
     const char* begin{ reinterpret_cast<const char*>(etx.data()) };
     const char* end{ reinterpret_cast<const char*>(etx.data() + etx.size()) };
@@ -33,31 +43,36 @@ void doVerifyScript(const bsv::CScriptEngine& se, const std::span<const int32_t>
     bsv::CMutableTransactionExtended eTX;
     is>> eTX;
 
-    ////Recover the hex
+    ////Recover the binary
     CDataStream os(SER_NETWORK, PROTOCOL_VERSION);
     os << eTX;
     const std::vector<uint8_t> outBin(os.begin(), os.end());
-    const std::string recovTxHexExtended = bsv::Bin2Hex(outBin);
-    if (txHexExtended != recovTxHexExtended) {
-        throw std::runtime_error("ERROR recover extended hex for TxID " + txID);
+    if (record.txBinExtended != outBin) {
+        throw std::runtime_error("ERROR recover binary for TxID " + record.txID);
     }
 
     const std::string recovTxID = eTX.mtx.GetId().ToString();
-    if (txID != recovTxID) {
-        throw std::runtime_error("ERROR recover txID for TxID " + txID);
+    if (record.txID != recovTxID) {
+        throw std::runtime_error("ERROR recover txID for TxID " + record.txID);
     }
 
+    std::span<const int32_t> utxoHeights(record.dataUTXOHeights);
     if (consensus) {
-        const bitcoinconsensus_error cret = se.CheckConsensus(etxBin, utxoHeights, blockHeight);
+        const bitcoinconsensus_error cret = se.CheckConsensus(record.txBinExtended, utxoHeights, record.blockHeight);
         if (cret != bitcoinconsensus_ERR_OK) {
-            throw std::runtime_error("ERROR check consensus for TxID " + txID);
+            throw std::runtime_error("ERROR check consensus for TxID " + record.txID);
         }
     }
 
-    const ScriptError ret = se.VerifyScript(etxBin, utxoHeights, blockHeight, consensus);
+    auto verifyStart = std::chrono::high_resolution_clock::now();
+    const ScriptError ret = se.VerifyScript(record.txBinExtended, utxoHeights, record.blockHeight, consensus);
+    auto verifyEnd = std::chrono::high_resolution_clock::now();
+
     if (ret != SCRIPT_ERR_OK) {
-        throw std::runtime_error("ERROR verify script for TxID " + txID);
+        throw std::runtime_error("ERROR verify script for TxID " + record.txID);
     }
+
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(verifyEnd - verifyStart);
 }
 
 // Function to trim leading and trailing whitespace
@@ -111,10 +126,27 @@ std::vector<std::string> split(const std::string& line, char delimiter = ',') {
     return result;
 }
 
-// Function to read a CSV file
-std::vector<std::vector<std::string>> parseCSV(const std::string& filename) {
+
+std::vector<int32_t> parseUTXOStr(const std::string& utxoStr, char delimiter = '|') {
+    std::vector<int32_t> result;
+    std::stringstream ss(utxoStr);
+    std::string token;
+
+    while (std::getline(ss, token, delimiter)) {
+        try {
+            result.push_back(std::stoi(token));
+        }
+        catch (const std::exception& e) {
+            std::cerr << "Error parsing integer: " << e.what() << std::endl;
+        }
+    }
+    return result;
+}
+
+// Function to read and parse CSV file into CsvDataRecord structures
+std::vector<CsvDataRecord> parseCSV(const std::string& filename) {
     std::ifstream file(filename);
-    std::vector<std::vector<std::string>> data;
+    std::vector<CsvDataRecord> data;
     std::string line;
 
     if (!file.is_open()) {
@@ -137,7 +169,32 @@ std::vector<std::vector<std::string>> parseCSV(const std::string& filename) {
 
         //Skip the header
         if (iLine > 0) {
-            data.push_back(row);
+            if (row.size() != 5) {
+                throw std::runtime_error("bad line " + std::to_string(iLine) + " there are only " + std::to_string(row.size()) + " elements");
+            }
+
+            CsvDataRecord record;
+            // Trim whitespace from all fields
+            record.chainNet = trim(row[0]);
+            record.txID = trim(row[2]);
+            record.txHexExtended = trim(row[3]);
+            record.utxoHeights = trim(row[4]);
+
+            // Parse block height
+            std::stringstream ss(row[1]);
+            if (!(ss >> record.blockHeight)) {
+                throw std::runtime_error("failed to convert to int32 block height at line " + std::to_string(iLine));
+            }
+
+            // Preparse binary tx (matching Go's hex.DecodeString)
+            record.txBinExtended = ParseHex(record.txHexExtended);
+
+            // Parse UTXO heights (matching Go's strings.Split and parsing)
+            if (!record.utxoHeights.empty()) {
+                record.dataUTXOHeights = parseUTXOStr(record.utxoHeights);
+            }
+
+            data.push_back(record);
         }
 
         ++iLine;
@@ -145,22 +202,6 @@ std::vector<std::vector<std::string>> parseCSV(const std::string& filename) {
 
     file.close();
     return data;
-}
-
-std::vector<int32_t> parseUTXOStr(const std::string& utxoStr, char delimiter = '|') {
-    std::vector<int32_t> result;
-    std::stringstream ss(utxoStr);
-    std::string token;
-
-    while (std::getline(ss, token, delimiter)) {
-        try {
-            result.push_back(std::stoi(token));
-        }
-        catch (const std::exception& e) {
-            std::cerr << "Error parsing integer: " << e.what() << std::endl;
-        }
-    }
-    return result;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -199,51 +240,37 @@ int main(int argc, char* argv[])
     const auto csvData = parseCSV(csvFilePath);
     const bsv::CScriptEngine se(network);
     std::chrono::duration<double> elapsed;
+    std::chrono::nanoseconds verifyScriptElapsed(0);
     size_t nbTx{ 0 };
-    for (size_t i = 0; i < csvData.size();++i) {
-        auto line = csvData[i];
-        //std::cout << std::endl;
-        //for (auto record : line) {
-        //    std::cout << "["<< record << "]" << std::endl;
-        //}
-        //std::cout << std::endl;
-        if (line.size() != 5) {
-            throw std::runtime_error("bad line " + std::to_string(i) + " there are only " + std::to_string(line.size()) + " elements");
+
+    // Check the network is consistent
+    for (size_t i = 0; i < csvData.size(); ++i) {
+        if (csvData[i].chainNet != network) {
+            throw std::runtime_error("ERROR record " + std::to_string(i) + ", inconsistent network. Data " +
+                                   csvData[i].chainNet + ", input " + network);
         }
+    }
 
-        const std::string& networkInFile = line[0];
-        if (networkInFile != network) {
-            throw std::runtime_error("bad network" + networkInFile + " at line " + std::to_string(i) + ". Inconsistent with the global network setting : " + network);
-        }
+    const bool consensus = !disableConsensus;
+    for (size_t i = 0; i < csvData.size(); ++i) {
+        const auto& record = csvData[i];
 
-        const std::string& TxID = line[2];
-        const std::string& TxHexExtended = line[3];
-
-        std::stringstream ss(line[1]);
-        int32_t blockHeight;
-        if (!(ss >> blockHeight)){
-            throw std::runtime_error("failed to convert to uint32 block height");
-        }
-
-        const std::string& utxoHeightsStr = line[4];
-        const auto utxoVector = parseUTXOStr(utxoHeightsStr);
-        std::span<const int32_t> utxoHeights(utxoVector);
-
-        const bool consensus = !disableConsensus;
         try {
             auto start = std::chrono::high_resolution_clock::now();
-            doVerifyScript(se, utxoHeights, blockHeight, TxID, TxHexExtended, consensus);
+            auto verifyDuration = doVerifyScript(se, record, consensus);
             auto end = std::chrono::high_resolution_clock::now();
             elapsed += (end - start);
+            verifyScriptElapsed += verifyDuration;
             nbTx += 1;
         }
         catch (std::exception e) {
-            std::cout << "ERROR test line : " << i + 1 <<" TxID : "<<TxID <<" "<< e.what() << std::endl;
+            std::cout << "ERROR test line : " << i + 1 <<" TxID : " << record.txID << " " << e.what() << std::endl;
         }
     }
 
     std::cout << "End Of Program, total csv " << csvData.size() << " lines" << std::endl;
     std::cout << "Nb Txs " << nbTx << std::endl;
     std::cout << "Processed Time " << elapsed.count() << std::endl;
+    std::cout << "VerifyScript Time " << std::fixed << std::setprecision(4) << verifyScriptElapsed.count() / 1e9 << " seconds" << std::endl;
     return 0;
 }
