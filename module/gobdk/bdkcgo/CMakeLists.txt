@@ -40,6 +40,7 @@ set(_GO_MODULE_HEADER_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/scriptengine_cgo.h
     ${CMAKE_CURRENT_SOURCE_DIR}/version_cgo.h
     ${CMAKE_CURRENT_SOURCE_DIR}/secp256k1_cloned.h # added here to be installed but won't be include twice as it use the same guard SECP256K1_H
+     "${BSV_APPLICATION_HDR_FILES}"
 )
 
 set(_GO_MODULE_SOURCE_FILES
@@ -48,11 +49,9 @@ set(_GO_MODULE_SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/scriptengine_cgo.cpp
 )
 
-# File ${BDK_BSV_ROOT_DIR}/src/logging.cpp initially included in core, but as it depend to Boost::filesytem
-# we remove it from core and put it where it is needed only
 set(_GO_MODULE_SOURCE_FILES
     ${_GO_MODULE_SOURCE_FILES}
-    "${BDK_BSV_ROOT_DIR}/src/logging.cpp"
+     "${BSV_APPLICATION_SRC_FILES}"
 )
 
 # The shared libraries is not to be used in a normal situation. But we keep building this target

@@ -16,21 +16,6 @@ class CChainParams;
 namespace bsv
 {
     /**
-     * Custom chain params selector that wrap the SelectParams from bsv implementation
-     * and some additional chain params supported here
-     * 
-     * Additional chain are
-     *   - Tera TestNet : teratestnet
-     *   - Tera Scaling TestNet : tstn
-     * 
-     * @throws std::runtime_error when the chain is not supported.
-     *
-     * TODO : to remove once have the factory implemented
-     */
-    void select_params(const std::string &chain);
-
-
-    /**
      * Implementation factory for extensible custom CChainParams
      * If it is main, test, regtest, stn network, use the bitcoin-sv existing creator
      * Otherwise, use the registered factory here

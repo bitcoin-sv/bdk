@@ -101,10 +101,10 @@ add_executable(test_bsv
 #               "${BDK_BSV_TEST_ROOT}/config_tests.cpp"
                "${BDK_BSV_TEST_ROOT}/scriptflags.cpp"
                "${BDK_BSV_TEST_ROOT}/scriptnum_tests.cpp"
-               ## These two files below are for dependencies resolve
+               "${BSV_APPLICATION_HDR_FILES}"
+               "${BSV_APPLICATION_SRC_FILES}"
+               "${BDK_BSV_ROOT_DIR}/src/script/scriptcache.cpp"
                "${BDK_BSV_ROOT_DIR}/src/script/sigcache.cpp"
-               "${BDK_BSV_ROOT_DIR}/src/logging.cpp"
-               ## TODO
                #"${BDK_BSV_TEST_ROOT}/opcode_tests.cpp
 )
 
@@ -120,19 +120,19 @@ bdk_add_unit_test(test_bsv)
 ## Test for the bdk core part ######################################################
 message("Building BDK core tests ...")
 
-add_executable(test_assembler "${CMAKE_CURRENT_SOURCE_DIR}/test_assembler.cpp" "${BDK_BSV_ROOT_DIR}/src/logging.cpp")
+add_executable(test_assembler "${CMAKE_CURRENT_SOURCE_DIR}/test_assembler.cpp" "${BSV_APPLICATION_HDR_FILES}" "${BSV_APPLICATION_SRC_FILES}")
 target_link_libraries(test_assembler PRIVATE bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono ${CMAKE_DL_LIBS})
 bdk_add_unit_test(test_assembler)
 
-add_executable(test_extended_tx "${CMAKE_CURRENT_SOURCE_DIR}/test_extended_tx.cpp" "${BDK_BSV_ROOT_DIR}/src/logging.cpp")
+add_executable(test_extended_tx "${CMAKE_CURRENT_SOURCE_DIR}/test_extended_tx.cpp" "${BSV_APPLICATION_HDR_FILES}" "${BSV_APPLICATION_SRC_FILES}")
 target_link_libraries(test_extended_tx PRIVATE bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono ${CMAKE_DL_LIBS})
 bdk_add_unit_test(test_extended_tx)
 
-add_executable(test_script_error "${CMAKE_CURRENT_SOURCE_DIR}/test_script_error.cpp" "${BDK_BSV_ROOT_DIR}/src/logging.cpp")
+add_executable(test_script_error "${CMAKE_CURRENT_SOURCE_DIR}/test_script_error.cpp" "${BSV_APPLICATION_HDR_FILES}" "${BSV_APPLICATION_SRC_FILES}")
 target_link_libraries(test_script_error PRIVATE bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono ${CMAKE_DL_LIBS})
 bdk_add_unit_test(test_script_error)
 
-add_executable(test_scriptengine "${CMAKE_CURRENT_SOURCE_DIR}/test_scriptengine.cpp" "${BDK_BSV_ROOT_DIR}/src/logging.cpp")
+add_executable(test_scriptengine "${CMAKE_CURRENT_SOURCE_DIR}/test_scriptengine.cpp" "${BSV_APPLICATION_HDR_FILES}" "${BSV_APPLICATION_SRC_FILES}")
 target_link_libraries(test_scriptengine PRIVATE bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono ${CMAKE_DL_LIBS})
 bdk_add_unit_test(test_scriptengine)
 

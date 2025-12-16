@@ -117,34 +117,6 @@ class TeraScalingTestNetParams : public CChainParams {
         }
 };
 
-/**
- * select_params is the bdk specific of bsv SelectParam
- * It is a wrapper or 'override' version of SelectParam
- * 
- * It hander the the extra custom chain params that are listed above
- * 
- * TODO :
- *   As we don't have direct write access to the variable `globalChainParams`
- *   So we can not set custom chain params. For now, we just map any custom
- *   chain param to the regtest params
- * 
- *   Which means the script validation behavior of any custom chain will be
- *   as they are regtest mode
- */
-void bsv::select_params(const std::string &chain)
-{
-    if (chain == CustomChainParams::TERATESTNET) {
-        //globalChainParams = std::unique_ptr<CChainParams>(new TeraTestNetParams());
-        SelectParams("regtest");
-    }
-    else if (chain == CustomChainParams::TERASCALINGTESTNET) {
-        //globalChainParams = std::unique_ptr<CChainParams>(new TeraScalingTestNetParams());
-        SelectParams("regtest");
-    } else {
-        SelectParams(chain);        
-    }
-}
-
 // Registration TeraTestNetParams and TeraScalingTestNetParams to the factory
 static bsv::RegisterCustomChainParams<TeraTestNetParams> teraTestNetReg(CustomChainParams::TERATESTNET);
 static bsv::RegisterCustomChainParams<TeraScalingTestNetParams> teraScalingTestNetReg( CustomChainParams::TERASCALINGTESTNET);

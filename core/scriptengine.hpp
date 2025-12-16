@@ -8,11 +8,10 @@
 #include <optional>
 #include <utility>
 
-#include <config.h>
+#include <configscriptpolicy.h>
 #include <chainparams.h>
 #include <taskcancellation.h>
 #include <script/script.h>
-#include <script/malleability_status.h>
 #include <script/interpreter.h>
 #include <script/bitcoinconsensus.h>
 
@@ -77,10 +76,8 @@ class CScriptEngine {
         // instead of the implicitly calculated flags
         ScriptError VerifyScript(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool consensus, std::span<const uint32_t> customFlags = std::span<const uint32_t>()) const;
 
-        const GlobalConfig& GetGlobalConfig();
-
     private :
-        GlobalConfig bsvConfig;
+        ConfigScriptPolicy policySettings;
         std::unique_ptr<CChainParams> chainParams;
         std::shared_ptr<task::CCancellationSource> source;
 
@@ -89,12 +86,8 @@ class CScriptEngine {
             const CScript& locking_script,
             const bool consensus,
             const unsigned int flags,
-            BaseSignatureChecker& sig_checker,
-            std::atomic<malleability::status>& malleability
+            BaseSignatureChecker& sig_checker
         ) const;
-
-        // helper to convert the optional (returned by ScriptVerify) to raw ScriptError
-        ScriptError helperOptional2ScriptError(const std::optional<std::pair<bool, ScriptError>>& ret) const;
 };
 
 // export the value of SCRIPT_ERR_ERROR_COUNT
