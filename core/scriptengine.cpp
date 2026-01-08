@@ -4,6 +4,7 @@
 #include <policy/policy.h>
 #include <verify_script_flags.h>
 #include <script/script_flags.h>
+#include <script/standard.h>
 
 #include <chainparams_bdk.hpp>
 #include <extendedTx.hpp>
@@ -296,6 +297,47 @@ bitcoinconsensus_error bsv::CScriptEngine::CheckConsensus(std::span<const uint8_
     return bitcoinconsensus_ERR_OK;
 }
 
+// Helper function to perform standardness checks
+// Returns SCRIPT_ERR_OK if all checks pass, otherwise returns SCRIPT_ERR_UNKNOWN_ERROR
+ScriptError checkStandardness(
+    const task::CCancellationToken& token,
+    const ConfigScriptPolicy& policySettings,
+    const CTransaction& tx,
+    const bsv::CMutableTransactionExtended& eTX,
+    std::span<const int32_t> utxoHeights,
+    int32_t blockHeight
+)
+{
+    // Check if transaction is standard (IsStandardTx)
+    std::string reason;
+    if (!IsStandardTx(policySettings, tx, blockHeight, reason)) {
+        // Transaction is not standard
+        return SCRIPT_ERR_UNKNOWN_ERROR;
+    }
+
+    // Check if inputs are standard (AreInputsStandard equivalent)
+    // We replicate the logic from AreInputsStandard but use embedded utxos instead of CCoinsViewCache
+    if (!tx.IsCoinBase()) {
+        constexpr bool consensus = false;
+        constexpr uint32_t flags = SCRIPT_VERIFY_NONE;
+        const auto params = make_eval_script_params(policySettings, flags, consensus);
+
+        for (size_t i = 0; i < tx.vin.size(); ++i) {
+            const CScript& scriptSig = tx.vin[i].scriptSig;
+            const CScript& prevScript = eTX.vutxo[i].scriptPubKey;
+            const ProtocolEra utxoEra = GetProtocolEra(policySettings, utxoHeights[i]);
+
+            auto result = IsInputStandard(token, params, scriptSig, prevScript, utxoEra, flags);
+            if (!result.has_value() || !result.value()) {
+                // Input is not standard or check was cancelled
+                return SCRIPT_ERR_UNKNOWN_ERROR;
+            }
+        }
+    }
+
+    return SCRIPT_ERR_OK;
+}
+
 ScriptError bsv::CScriptEngine::VerifyScript(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool consensus, std::span<const uint32_t> customFlags) const
 {
     const char* begin{ reinterpret_cast<const char*>(extendedTX.data()) };
@@ -324,6 +366,15 @@ ScriptError bsv::CScriptEngine::VerifyScript(std::span<const uint8_t> extendedTX
     }
 
     const CTransaction ctx(eTX.mtx); // costly conversion due to hash calculation
+
+    // Perform standardness checks when consensus=false
+    if (!consensus) {
+        ScriptError standardnessError = checkStandardness(source->GetToken(), policySettings, ctx, eTX, utxoHeights, blockHeight);
+        if (standardnessError != SCRIPT_ERR_OK) {
+            return standardnessError;
+        }
+    }
+
     const bool useCustomFlags = !customFlags.empty();
     for (size_t index = 0; index < eTX.vutxo.size(); ++index) {
         const uint64_t amount = eTX.vutxo[index].nValue.GetSatoshis();

@@ -114,6 +114,14 @@ if(WIN32)
   target_link_libraries(test_bsv PRIVATE Crypt32.lib Ws2_32)
 endif()
 target_include_directories(test_bsv PRIVATE "${BDK_BSV_TEST_ROOT}")
+
+# Ensure HAVE_CONSENSUS_LIB is not defined for test_bsv
+if(MSVC)
+    target_compile_options(test_bsv PRIVATE "/UHAVE_CONSENSUS_LIB")
+else()
+    target_compile_options(test_bsv PRIVATE "-UHAVE_CONSENSUS_LIB")
+endif()
+
 bdk_add_unit_test(test_bsv)
 
 ####################################################################################

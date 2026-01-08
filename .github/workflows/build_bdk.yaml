@@ -11,7 +11,7 @@ on:
       bitcoin-sv-commit:
         description: 'Custom bitcoin-sv commit to be used to build bdk'
         required: false
-        default: 0af3eaf6402e1b7632eefe891860a0be5c2e8724
+        default: 429f24430f3354ca13d7c7c7a4beb7b6610bdfa2
       commit-built-binaries:
         description: 'Enable/Disable github workflow to commit the binaries built by the workflow'
         required: true
@@ -19,7 +19,7 @@ on:
         type: boolean
 
 env:
-  DEFAULT_BITCOIN_SV_COMMIT: 0af3eaf6402e1b7632eefe891860a0be5c2e8724
+  DEFAULT_BITCOIN_SV_COMMIT: 429f24430f3354ca13d7c7c7a4beb7b6610bdfa2
 
 jobs:
   build-bdk:
