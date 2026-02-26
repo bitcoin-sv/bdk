@@ -368,7 +368,8 @@ ScriptError bsv::CScriptEngine::VerifyScript(std::span<const uint8_t> extendedTX
     const CTransaction ctx(eTX.mtx); // costly conversion due to hash calculation
 
     // Perform standardness checks when consensus=false
-    if (!consensus) {
+    const bool requireStandard = chainParams->RequireStandard();
+    if (!consensus && requireStandard) {
         ScriptError standardnessError = checkStandardness(source->GetToken(), policySettings, ctx, eTX, utxoHeights, blockHeight);
         if (standardnessError != SCRIPT_ERR_OK) {
             return standardnessError;
