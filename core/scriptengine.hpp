@@ -14,7 +14,6 @@
 #include <taskcancellation.h>
 #include <script/script.h>
 #include <script/interpreter.h>
-#include <script/bitcoinconsensus.h>
 #include <verifyarg.hpp>
 
 namespace bsv
@@ -65,13 +64,6 @@ class CScriptEngine {
         //   - consensus=true  --> flags to check a tx coming from a peer  (enforce policies check)
         //   - consensus=false --> flags to check a tx coming from a block (   skip policies check)
         uint32_t CalculateFlags(int32_t utxoHeight, int32_t blockHeight, bool consensus) const;
-
-        // CheckConsensus is to call only in the context consensus = true.
-        // It deserialize the transaction and process some prechecks if all the data is conformed.
-        // 
-        // If client uses a custom flags different than zero, then this will be used
-        // instead of the implicitly calculated flags
-        bitcoinconsensus_error CheckConsensus(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, std::span<const uint32_t> customFlags = std::span<const uint32_t>()) const;
 
         // VerifyScript extract the extended transaction, then forward to bsv call
         //

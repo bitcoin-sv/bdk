@@ -95,17 +95,6 @@ int ScriptEngine_VerifyScript(ScriptEngineCGO cgoEngine,
 );
 
 /*
- * CheckConsensus take same inputs as VerifyScript, except that it doesn't need
- * the consensus parameters, as the function is executed only in the context
- * consensus = true
- */
-int ScriptEngine_CheckConsensus(ScriptEngineCGO cgoEngine,
-	const char* extendedTxPtr, int extendedTxLen,
-	const int32_t* hUTXOsPtr, int hUTXOsLen,
-	int32_t blockHeight
-);
-
-/*
  * VerifyScriptWithCustomFlags take same inputs as VerifyScript, with additional
  * argument custom flags array.
  */

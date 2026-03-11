@@ -57,13 +57,6 @@ std::chrono::nanoseconds doVerifyScript(const bsv::CScriptEngine& se, const CsvD
     }
 
     std::span<const int32_t> utxoHeights(record.dataUTXOHeights);
-    if (consensus) {
-        const bitcoinconsensus_error cret = se.CheckConsensus(record.txBinExtended, utxoHeights, record.blockHeight);
-        if (cret != bitcoinconsensus_ERR_OK) {
-            throw std::runtime_error("ERROR check consensus for TxID " + record.txID);
-        }
-    }
-
     auto verifyStart = std::chrono::high_resolution_clock::now();
     const ScriptError ret = se.VerifyScript(record.txBinExtended, utxoHeights, record.blockHeight, consensus);
     auto verifyEnd = std::chrono::high_resolution_clock::now();
