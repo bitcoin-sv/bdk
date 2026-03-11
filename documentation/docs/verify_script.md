@@ -38,15 +38,15 @@ Flags are canonical combination of individual flags
     SCRIPT_VERIFY_COMPRESSED_PUBKEYTYPE
     SCRIPT_ENABLE_SIGHASH_FORKID
     SCRIPT_GENESIS
-    SCRIPT_UTXO_AFTER_GENESIS
+    SCRIPT_UTXO_AFTER_GENESIS      // Per-input: UTXO was created after Genesis activation
     SCRIPT_CHRONICLE
-    SCRIPT_UTXO_AFTER_CHRONICLE
+    SCRIPT_UTXO_AFTER_CHRONICLE    // Per-input: UTXO was created after Chronicle activation
     SCRIPT_FLAG_LAST
 ```
 
 When we flatten out the flags calculation of in the two different contexts as mentioned above, we have
 
-`GetScriptVerifyFlags` can have these flags, depending to the era ( of the block )
+`GetScriptVerifyFlags` can have these flags, depending on the era (derived from chain tip + 1)
 
 ```
     SCRIPT_VERIFY_P2SH
@@ -61,30 +61,34 @@ When we flatten out the flags calculation of in the two different contexts as me
     SCRIPT_VERIFY_CHECKSEQUENCEVERIFY
     SCRIPT_VERIFY_NULLFAIL
     SCRIPT_ENABLE_SIGHASH_FORKID
-    SCRIPT_GENESIS   // If Chronicle is not activated and genesis is activated
-    SCRIPT_CHRONICLE // If Chronicle is activated
-    // In case non required standard ( non mainnet )
-    // If usage of promiscious flags, then the flags is simply
-    // the set promiscious one + SCRIPT_ENABLE_SIGHASH_FORKID
+    SCRIPT_GENESIS   // If genesis is activated (regardless of Chronicle)
+    SCRIPT_CHRONICLE // If Chronicle is activated (both SCRIPT_GENESIS and SCRIPT_CHRONICLE are set when both eras are active)
+    // On non-mainnet only (require_standard = false):
+    //   If promiscuous mempool flags are set, the entire flag set is replaced by
+    //   prom_mempool_flags, then SCRIPT_ENABLE_SIGHASH_FORKID is unconditionally re-added.
 ```
 
-`GetBlockScriptFlags` can have these flags, depending to the actual block height
+Note: `SCRIPT_VERIFY_SIGPUSHONLY` is **not** part of the base flags here — it is added per-input (see Per-input flags below).
+
+`GetBlockScriptFlags` can have these flags, depending on the actual block height (height-based hard-fork activation)
 
 ```
 GetBlockScriptFlags(blockHeight)
-    SCRIPT_VERIFY_NONE
-    SCRIPT_VERIFY_P2SH
-    SCRIPT_VERIFY_STRICTENC
-    SCRIPT_VERIFY_DERSIG
-    SCRIPT_VERIFY_LOW_S
-    SCRIPT_VERIFY_SIGPUSHONLY
-    SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY
-    SCRIPT_VERIFY_CHECKSEQUENCEVERIFY
-    SCRIPT_VERIFY_NULLFAIL
-    SCRIPT_ENABLE_SIGHASH_FORKID
-    SCRIPT_GENESIS
-    SCRIPT_CHRONICLE
+    SCRIPT_VERIFY_NONE                 // starting value (= 0), not a real flag
+    SCRIPT_VERIFY_P2SH                 // height >= p2shHeight
+    SCRIPT_VERIFY_STRICTENC            // height >= uahfHeight (UAHF)
+    SCRIPT_VERIFY_DERSIG               // (height + 1) >= BIP66Height
+    SCRIPT_VERIFY_LOW_S                // height >= daaHeight
+    SCRIPT_VERIFY_SIGPUSHONLY          // Genesis active — added at base level (not per-input)
+    SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY  // (height + 1) >= BIP65Height
+    SCRIPT_VERIFY_CHECKSEQUENCEVERIFY  // (height + 1) >= CSVHeight
+    SCRIPT_VERIFY_NULLFAIL             // height >= daaHeight
+    SCRIPT_ENABLE_SIGHASH_FORKID       // height >= uahfHeight (UAHF)
+    SCRIPT_GENESIS                     // Genesis protocol active for this block height
+    SCRIPT_CHRONICLE                   // Chronicle protocol active for this block height
 ```
+
+Notable absences vs `GetScriptVerifyFlags`: no `SCRIPT_VERIFY_NULLDUMMY`, `SCRIPT_VERIFY_CLEANSTACK`, `SCRIPT_VERIFY_MINIMALDATA`, `SCRIPT_VERIFY_DISCOURAGE_UPGRADABLE_NOPS` — these are policy-only flags, not consensus rules.
 
 There are some _predefined_ combined flags to be used for convenient (being flattened out):
 
@@ -203,9 +207,80 @@ POST_CHRONICLE_STANDARD_NOT_MANDATORY_VERIFY_FLAGS =
         POST_CHRONICLE_STANDARD_SCRIPT_VERIFY_FLAGS &~POST_CHRONICLE_MANDATORY_SCRIPT_VERIFY_FLAGS
 ```
 
+### Per-input flags
+
+After the base flags are computed, `CheckInputScripts` adds per-UTXO flags via `InputScriptVerifyFlags(spendingEra, utxoEra)`. These are ORed with the base flags for each individual input:
+
+```
+SCRIPT_VERIFY_SIGPUSHONLY    // spending era >= Genesis (peer path only — already in base for block path)
+SCRIPT_UTXO_AFTER_GENESIS    // UTXO creation era >= Genesis
+SCRIPT_UTXO_AFTER_CHRONICLE  // UTXO creation era >= Chronicle
+```
+
+This means a transaction spending old (pre-Genesis) UTXOs and new (post-Chronicle) UTXOs in the same transaction will have different flags per input.
+
 ---
 
-## Analysis VerifyScript Call stack
+## Two Transaction Validation Paths
+
+A transaction is validated differently depending on whether it arrives **from a peer** (mempool admission) or **from a block** (block connection). Understanding this distinction is key to interpreting any `VerifyScript` call.
+
+### Path 1 — Transaction from a block (`BlockValidateTxns`)
+
+- **Flags function:** `GetBlockScriptFlags(parentBlockHeight)` — height-based, hard-fork activation only
+- **consensus parameter:** `true` — skips policy checks inside `VerifyScript`
+- **Calls:** exactly one `CheckInputs` per transaction
+- **Failure:** block rejected; peer banned (DoS=100), except for locally-configured frozen TXOs
+
+This path is strict and simple: the transaction either passes the consensus rules or the whole block is rejected.
+
+### Path 2 — Transaction from a peer (`TxnValidation`)
+
+- **Flags function:** `GetScriptVerifyFlags(era)` — era-based, includes policy flags
+- **consensus parameter:** `false` — policy rules (standardness) are enforced
+- **Calls:** up to **three** `CheckInputs` calls
+
+#### Why up to three calls?
+
+| Call | Flags used | Purpose |
+|------|-----------|---------|
+| **1** | `GetScriptVerifyFlags` (full policy set) | Primary validation — enforce all policy rules |
+| **2** | `GetBlockScriptFlags(chainTip)` | Sanity check — would this tx be valid in the next block? |
+| **3** | `MandatoryScriptVerifyFlags(era)` | Last resort — does it pass at least the consensus-mandatory rules? |
+
+Calls 2 and 3 only run when `require_standard = false` (non-mainnet) **and** the promiscuous mempool config dropped flags that the block tip enforces. On mainnet (`require_standard = true`) Call 1's flag set is always a strict superset of the block-tip set, so Calls 2 and 3 always pass trivially.
+
+#### Chronicle grace period (Call 1 only)
+
+During the Chronicle activation grace period, if Call 1 fails, the validation is **retried once** with the inverse-era flags (pre-Chronicle flags). If the retry passes, the transaction is rejected with **no peer ban** — the peer may simply not have activated Chronicle yet.
+
+#### Failure outcomes (peer path)
+
+| Situation | Consequence |
+|-----------|-------------|
+| Fails on a policy-only flag | Rejected, **no ban** |
+| Fails on a consensus flag | Rejected, peer **banned** |
+| Timeout (script ran too long) | Rejected, **no ban** |
+| Fails Call 1 during Chronicle grace period, passes retry | Rejected, **no ban** |
+| Fails Call 3 (mandatory fallback) | Rejected, peer **banned** |
+| Passes Call 3 with promiscuous config | Accepted, warning logged |
+
+### Key differences at a glance
+
+| Aspect | From a block | From a peer |
+|--------|-------------|-------------|
+| Flags function | `GetBlockScriptFlags` | `GetScriptVerifyFlags` |
+| Flag basis | Hard-fork height thresholds | Era-based standard/mandatory sets |
+| `consensus` to `VerifyScript` | `true` | `false` |
+| Policy flags (`NULLDUMMY`, `CLEANSTACK`, etc.) | **No** | **Yes** |
+| `SCRIPT_VERIFY_SIGPUSHONLY` | In base flags (Genesis) | Per-input only |
+| Number of `CheckInputs` calls | 1 | Up to 3 |
+| Grace period retry | No | Yes (Chronicle only) |
+| Failure consequence | Block rejected + peer banned | Depends on which flag failed |
+
+---
+
+## Detail VerifyScript Call stack
 
 Below is a summary of analysis `VerifyScript` caller
 
