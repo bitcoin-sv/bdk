@@ -45,6 +45,19 @@ class CScriptEngine {
         // Forward set genesis height and chronicle height to GlobalConfig
         bool SetGenesisActivationHeight(int32_t genesisActivationHeightIn, std::string* err);
         bool SetChronicleActivationHeight(int32_t chronicleActivationHeightIn, std::string* err);
+        bool SetGenesisGracefulPeriod(int64_t genesisGracefulPeriodIn, std::string* err);
+        bool SetChronicleGracefulPeriod(int64_t chronicleGracefulPeriodIn, std::string* err);
+
+        // Forward other policy setters to ConfigScriptPolicy
+        bool SetMaxTxSizePolicy(int64_t value, std::string* err);
+        void SetDataCarrierSize(uint64_t dataCarrierSize);
+        void SetDataCarrier(bool dataCarrier);
+        void SetAcceptNonStandardOutput(bool accept);
+        void SetRequireStandard(bool require);
+        void SetPermitBareMultisig(bool permit);
+
+        // Reset all policy settings to defaults
+        void ResetDefault();
 
         // Forward getter to GlobalConfig call
         uint64_t GetMaxOpsPerScript(bool isGenesisEnabled, bool isConsensus) const;
@@ -52,8 +65,16 @@ class CScriptEngine {
         uint64_t GetMaxScriptSize(bool isGenesisEnabled, bool isConsensus) const;
         uint64_t GetMaxPubKeysPerMultiSig(bool isGenesisEnabled, bool isConsensus) const;
         uint64_t GetMaxStackMemoryUsage(bool isGenesisEnabled, bool isConsensus) const;
+        uint64_t GetMaxTxSize(bool isGenesisEnabled, bool isChronicleEnabled, bool isConsensus) const; // Genesis and Chronicle should not both true
+        uint64_t GetDataCarrierSize() const;
+        bool GetDataCarrier() const;
+        bool GetAcceptNonStandardOutput(bool isGenesisEnabled, bool isChronicleEnabled) const; // Genesis and Chronicle should not both true
+        bool GetRequireStandard() const;
+        bool GetPermitBareMultisig() const;
         int32_t GetGenesisActivationHeight() const;
         int32_t GetChronicleActivationHeight() const;
+        uint64_t GetGenesisGracefulPeriod() const;
+        uint64_t GetChronicleGracefulPeriod() const;
 
         // GetSigOpCount returns the number of sig ops in a extended transactions
         // It might throw an exception if any issue to calculate the number of sigops

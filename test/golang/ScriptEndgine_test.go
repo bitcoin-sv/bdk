@@ -126,6 +126,73 @@ func TestScriptEnginePolicySettings(t *testing.T) {
 	})
 }
 
+func TestScriptEnginePolicySettingsNew(t *testing.T) {
+	se := goscript.NewScriptEngine("main")
+
+	t.Run("GenesisGracefulPeriod", func(t *testing.T) {
+		err := se.SetGenesisGracefulPeriod(50)
+		assert.Nil(t, err)
+		assert.Equal(t, uint64(50), se.GetGenesisGracefulPeriod())
+	})
+
+	t.Run("ChronicleGracefulPeriod", func(t *testing.T) {
+		err := se.SetChronicleGracefulPeriod(50)
+		assert.Nil(t, err)
+		assert.Equal(t, uint64(50), se.GetChronicleGracefulPeriod())
+	})
+
+	t.Run("MaxTxSizePolicy", func(t *testing.T) {
+		err := se.SetMaxTxSizePolicy(1024 * 1024)
+		assert.Nil(t, err)
+		assert.Equal(t, uint64(1024*1024), se.GetMaxTxSize(true, false, false))
+	})
+
+	t.Run("DataCarrierSize", func(t *testing.T) {
+		se.SetDataCarrierSize(512)
+		assert.Equal(t, uint64(512), se.GetDataCarrierSize())
+	})
+
+	t.Run("DataCarrier", func(t *testing.T) {
+		se.SetDataCarrier(false)
+		assert.Equal(t, false, se.GetDataCarrier())
+		se.SetDataCarrier(true)
+		assert.Equal(t, true, se.GetDataCarrier())
+	})
+
+	t.Run("AcceptNonStandardOutput", func(t *testing.T) {
+		se.SetAcceptNonStandardOutput(false)
+		assert.Equal(t, false, se.GetAcceptNonStandardOutput(true, false))
+		se.SetAcceptNonStandardOutput(true)
+		assert.Equal(t, true, se.GetAcceptNonStandardOutput(true, false))
+	})
+
+	t.Run("RequireStandard", func(t *testing.T) {
+		se.SetRequireStandard(false)
+		assert.Equal(t, false, se.GetRequireStandard())
+		se.SetRequireStandard(true)
+		assert.Equal(t, true, se.GetRequireStandard())
+	})
+
+	t.Run("PermitBareMultisig", func(t *testing.T) {
+		se.SetPermitBareMultisig(false)
+		assert.Equal(t, false, se.GetPermitBareMultisig())
+		se.SetPermitBareMultisig(true)
+		assert.Equal(t, true, se.GetPermitBareMultisig())
+	})
+
+	t.Run("ResetDefault", func(t *testing.T) {
+		se.SetDataCarrier(false)
+		se.SetRequireStandard(false)
+		se.SetPermitBareMultisig(false)
+		se.ResetDefault()
+		assert.Equal(t, true, se.GetDataCarrier())
+		assert.Equal(t, true, se.GetRequireStandard())
+		assert.Equal(t, true, se.GetPermitBareMultisig())
+		assert.Equal(t, uint64(72), se.GetGenesisGracefulPeriod())
+		assert.Equal(t, uint64(72), se.GetChronicleGracefulPeriod())
+	})
+}
+
 func TestScriptEngineGetSigOpCount(t *testing.T) {
 	t.Run("TXID 7be4fa421844154ec4105894def768a8bcd80da25792947d585274ce38c07105", func(t *testing.T) {
 		//This is on mainnet TxID = "7be4fa421844154ec4105894def768a8bcd80da25792947d585274ce38c07105";
