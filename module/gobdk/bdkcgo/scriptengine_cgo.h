@@ -45,6 +45,15 @@ const char* ScriptEngine_SetMaxPubKeysPerMultiSigPolicy(ScriptEngineCGO cgoEngin
 const char* ScriptEngine_SetMaxStackMemoryUsage(ScriptEngineCGO cgoEngine, int64_t maxStackMemoryUsageConsensusIn, int64_t maxStackMemoryUsagePolicyIn);
 const char* ScriptEngine_SetGenesisActivationHeight(ScriptEngineCGO cgoEngine, int32_t genesisActivationHeightIn);
 const char* ScriptEngine_SetChronicleActivationHeight(ScriptEngineCGO cgoEngine, int32_t chronicleActivationHeightIn);
+const char* ScriptEngine_SetGenesisGracefulPeriod(ScriptEngineCGO cgoEngine, int64_t genesisGracefulPeriodIn);
+const char* ScriptEngine_SetChronicleGracefulPeriod(ScriptEngineCGO cgoEngine, int64_t chronicleGracefulPeriodIn);
+const char* ScriptEngine_SetMaxTxSizePolicy(ScriptEngineCGO cgoEngine, int64_t value);
+void ScriptEngine_SetDataCarrierSize(ScriptEngineCGO cgoEngine, uint64_t dataCarrierSize);
+void ScriptEngine_SetDataCarrier(ScriptEngineCGO cgoEngine, bool dataCarrier);
+void ScriptEngine_SetAcceptNonStandardOutput(ScriptEngineCGO cgoEngine, bool accept);
+void ScriptEngine_SetRequireStandard(ScriptEngineCGO cgoEngine, bool require);
+void ScriptEngine_SetPermitBareMultisig(ScriptEngineCGO cgoEngine, bool permit);
+void ScriptEngine_ResetDefault(ScriptEngineCGO cgoEngine);
 
 // Forward getter to GlobalConfig call
 uint64_t ScriptEngine_GetMaxOpsPerScript(ScriptEngineCGO cgoEngine, bool isGenesisEnabled, bool consensus);
@@ -52,8 +61,16 @@ uint64_t ScriptEngine_GetMaxScriptNumLength(ScriptEngineCGO cgoEngine, bool isGe
 uint64_t ScriptEngine_GetMaxScriptSize(ScriptEngineCGO cgoEngine, bool isGenesisEnabled, bool isConsensus);
 uint64_t ScriptEngine_GetMaxPubKeysPerMultiSig(ScriptEngineCGO cgoEngine, bool isGenesisEnabled, bool consensus);
 uint64_t ScriptEngine_GetMaxStackMemoryUsage(ScriptEngineCGO cgoEngine, bool isGenesisEnabled, bool consensus);
+uint64_t ScriptEngine_GetMaxTxSize(ScriptEngineCGO cgoEngine, bool isGenesisEnabled, bool isChronicleEnabled, bool isConsensus);
+uint64_t ScriptEngine_GetDataCarrierSize(ScriptEngineCGO cgoEngine);
+bool ScriptEngine_GetDataCarrier(ScriptEngineCGO cgoEngine);
+bool ScriptEngine_GetAcceptNonStandardOutput(ScriptEngineCGO cgoEngine, bool isGenesisEnabled, bool isChronicleEnabled);
+bool ScriptEngine_GetRequireStandard(ScriptEngineCGO cgoEngine);
+bool ScriptEngine_GetPermitBareMultisig(ScriptEngineCGO cgoEngine);
 int32_t ScriptEngine_GetGenesisActivationHeight(ScriptEngineCGO cgoEngine);
 int32_t ScriptEngine_GetChronicleActivationHeight(ScriptEngineCGO cgoEngine);
+uint64_t ScriptEngine_GetGenesisGracefulPeriod(ScriptEngineCGO cgoEngine);
+uint64_t ScriptEngine_GetChronicleGracefulPeriod(ScriptEngineCGO cgoEngine);
 
 /*
  * ScriptEngine_GetSigOpCount calculate the number of sigops in a transaction

@@ -120,6 +120,97 @@ int32_t ScriptEngine_GetChronicleActivationHeight(ScriptEngineCGO cgoEngine)
     return static_cast<bsv::CScriptEngine*>(cgoEngine)->GetChronicleActivationHeight();
 }
 
+uint64_t ScriptEngine_GetGenesisGracefulPeriod(ScriptEngineCGO cgoEngine)
+{
+    return static_cast<bsv::CScriptEngine*>(cgoEngine)->GetGenesisGracefulPeriod();
+}
+
+uint64_t ScriptEngine_GetChronicleGracefulPeriod(ScriptEngineCGO cgoEngine)
+{
+    return static_cast<bsv::CScriptEngine*>(cgoEngine)->GetChronicleGracefulPeriod();
+}
+
+const char* ScriptEngine_SetGenesisGracefulPeriod(ScriptEngineCGO cgoEngine, int64_t genesisGracefulPeriodIn)
+{
+    std::string err;
+    static_cast<bsv::CScriptEngine*>(cgoEngine)->SetGenesisGracefulPeriod(genesisGracefulPeriodIn, &err);
+    return _helper_string2char(err);
+}
+
+const char* ScriptEngine_SetChronicleGracefulPeriod(ScriptEngineCGO cgoEngine, int64_t chronicleGracefulPeriodIn)
+{
+    std::string err;
+    static_cast<bsv::CScriptEngine*>(cgoEngine)->SetChronicleGracefulPeriod(chronicleGracefulPeriodIn, &err);
+    return _helper_string2char(err);
+}
+
+const char* ScriptEngine_SetMaxTxSizePolicy(ScriptEngineCGO cgoEngine, int64_t value)
+{
+    std::string err;
+    static_cast<bsv::CScriptEngine*>(cgoEngine)->SetMaxTxSizePolicy(value, &err);
+    return _helper_string2char(err);
+}
+
+void ScriptEngine_SetDataCarrierSize(ScriptEngineCGO cgoEngine, uint64_t dataCarrierSize)
+{
+    static_cast<bsv::CScriptEngine*>(cgoEngine)->SetDataCarrierSize(dataCarrierSize);
+}
+
+void ScriptEngine_SetDataCarrier(ScriptEngineCGO cgoEngine, bool dataCarrier)
+{
+    static_cast<bsv::CScriptEngine*>(cgoEngine)->SetDataCarrier(dataCarrier);
+}
+
+void ScriptEngine_SetAcceptNonStandardOutput(ScriptEngineCGO cgoEngine, bool accept)
+{
+    static_cast<bsv::CScriptEngine*>(cgoEngine)->SetAcceptNonStandardOutput(accept);
+}
+
+void ScriptEngine_SetRequireStandard(ScriptEngineCGO cgoEngine, bool require)
+{
+    static_cast<bsv::CScriptEngine*>(cgoEngine)->SetRequireStandard(require);
+}
+
+void ScriptEngine_SetPermitBareMultisig(ScriptEngineCGO cgoEngine, bool permit)
+{
+    static_cast<bsv::CScriptEngine*>(cgoEngine)->SetPermitBareMultisig(permit);
+}
+
+void ScriptEngine_ResetDefault(ScriptEngineCGO cgoEngine)
+{
+    static_cast<bsv::CScriptEngine*>(cgoEngine)->ResetDefault();
+}
+
+uint64_t ScriptEngine_GetMaxTxSize(ScriptEngineCGO cgoEngine, bool isGenesisEnabled, bool isChronicleEnabled, bool isConsensus)
+{
+    return static_cast<bsv::CScriptEngine*>(cgoEngine)->GetMaxTxSize(isGenesisEnabled, isChronicleEnabled, isConsensus);
+}
+
+uint64_t ScriptEngine_GetDataCarrierSize(ScriptEngineCGO cgoEngine)
+{
+    return static_cast<bsv::CScriptEngine*>(cgoEngine)->GetDataCarrierSize();
+}
+
+bool ScriptEngine_GetDataCarrier(ScriptEngineCGO cgoEngine)
+{
+    return static_cast<bsv::CScriptEngine*>(cgoEngine)->GetDataCarrier();
+}
+
+bool ScriptEngine_GetAcceptNonStandardOutput(ScriptEngineCGO cgoEngine, bool isGenesisEnabled, bool isChronicleEnabled)
+{
+    return static_cast<bsv::CScriptEngine*>(cgoEngine)->GetAcceptNonStandardOutput(isGenesisEnabled, isChronicleEnabled);
+}
+
+bool ScriptEngine_GetRequireStandard(ScriptEngineCGO cgoEngine)
+{
+    return static_cast<bsv::CScriptEngine*>(cgoEngine)->GetRequireStandard();
+}
+
+bool ScriptEngine_GetPermitBareMultisig(ScriptEngineCGO cgoEngine)
+{
+    return static_cast<bsv::CScriptEngine*>(cgoEngine)->GetPermitBareMultisig();
+}
+
 uint64_t ScriptEngine_GetSigOpCount(ScriptEngineCGO cgoEngine, const char* extendedTxPtr, int extendedTxLen, const int32_t* hUTXOsPtr, int hUTXOsLen, int32_t blockHeight, char** errStr) {
     try {
         std::span<const uint8_t> extendedTx;

@@ -269,6 +269,106 @@ func (se *ScriptEngine) GetChronicleActivationHeight() int32 {
 	return int32(C.ScriptEngine_GetChronicleActivationHeight(se.cSEPtr))
 }
 
+// GetGenesisGracefulPeriod get the genesis graceful period being set
+func (se *ScriptEngine) GetGenesisGracefulPeriod() uint64 {
+	return uint64(C.ScriptEngine_GetGenesisGracefulPeriod(se.cSEPtr))
+}
+
+// GetChronicleGracefulPeriod get the chronicle graceful period being set
+func (se *ScriptEngine) GetChronicleGracefulPeriod() uint64 {
+	return uint64(C.ScriptEngine_GetChronicleGracefulPeriod(se.cSEPtr))
+}
+
+// SetGenesisGracefulPeriod set the GenesisGracefulPeriod in the C++ ScriptEngine
+func (se *ScriptEngine) SetGenesisGracefulPeriod(genesisGracefulPeriodIn int64) error {
+	errCStr := C.ScriptEngine_SetGenesisGracefulPeriod(se.cSEPtr, C.int64_t(genesisGracefulPeriodIn))
+	if errCStr == nil {
+		return nil
+	}
+	defer C.free(unsafe.Pointer(errCStr))
+	return errors.New(C.GoString(errCStr))
+}
+
+// SetChronicleGracefulPeriod set the ChronicleGracefulPeriod in the C++ ScriptEngine
+func (se *ScriptEngine) SetChronicleGracefulPeriod(chronicleGracefulPeriodIn int64) error {
+	errCStr := C.ScriptEngine_SetChronicleGracefulPeriod(se.cSEPtr, C.int64_t(chronicleGracefulPeriodIn))
+	if errCStr == nil {
+		return nil
+	}
+	defer C.free(unsafe.Pointer(errCStr))
+	return errors.New(C.GoString(errCStr))
+}
+
+// SetMaxTxSizePolicy set the MaxTxSizePolicy in the C++ ScriptEngine
+func (se *ScriptEngine) SetMaxTxSizePolicy(value int64) error {
+	errCStr := C.ScriptEngine_SetMaxTxSizePolicy(se.cSEPtr, C.int64_t(value))
+	if errCStr == nil {
+		return nil
+	}
+	defer C.free(unsafe.Pointer(errCStr))
+	return errors.New(C.GoString(errCStr))
+}
+
+// SetDataCarrierSize set the DataCarrierSize in the C++ ScriptEngine
+func (se *ScriptEngine) SetDataCarrierSize(dataCarrierSize uint64) {
+	C.ScriptEngine_SetDataCarrierSize(se.cSEPtr, C.uint64_t(dataCarrierSize))
+}
+
+// SetDataCarrier set the DataCarrier flag in the C++ ScriptEngine
+func (se *ScriptEngine) SetDataCarrier(dataCarrier bool) {
+	C.ScriptEngine_SetDataCarrier(se.cSEPtr, C.bool(dataCarrier))
+}
+
+// SetAcceptNonStandardOutput set the AcceptNonStandardOutput flag in the C++ ScriptEngine
+func (se *ScriptEngine) SetAcceptNonStandardOutput(accept bool) {
+	C.ScriptEngine_SetAcceptNonStandardOutput(se.cSEPtr, C.bool(accept))
+}
+
+// SetRequireStandard set the RequireStandard flag in the C++ ScriptEngine
+func (se *ScriptEngine) SetRequireStandard(require bool) {
+	C.ScriptEngine_SetRequireStandard(se.cSEPtr, C.bool(require))
+}
+
+// SetPermitBareMultisig set the PermitBareMultisig flag in the C++ ScriptEngine
+func (se *ScriptEngine) SetPermitBareMultisig(permit bool) {
+	C.ScriptEngine_SetPermitBareMultisig(se.cSEPtr, C.bool(permit))
+}
+
+// ResetDefault resets all policy settings to their default values
+func (se *ScriptEngine) ResetDefault() {
+	C.ScriptEngine_ResetDefault(se.cSEPtr)
+}
+
+// GetMaxTxSize get the MaxTxSize for the given protocol era
+func (se *ScriptEngine) GetMaxTxSize(isGenesisEnabled, isChronicleEnabled, isConsensus bool) uint64 {
+	return uint64(C.ScriptEngine_GetMaxTxSize(se.cSEPtr, C.bool(isGenesisEnabled), C.bool(isChronicleEnabled), C.bool(isConsensus)))
+}
+
+// GetDataCarrierSize get the DataCarrierSize being set
+func (se *ScriptEngine) GetDataCarrierSize() uint64 {
+	return uint64(C.ScriptEngine_GetDataCarrierSize(se.cSEPtr))
+}
+
+// GetDataCarrier get the DataCarrier flag being set
+func (se *ScriptEngine) GetDataCarrier() bool {
+	return bool(C.ScriptEngine_GetDataCarrier(se.cSEPtr))
+}
+
+// GetAcceptNonStandardOutput get the AcceptNonStandardOutput flag for the given protocol era
+func (se *ScriptEngine) GetAcceptNonStandardOutput(isGenesisEnabled, isChronicleEnabled bool) bool {
+	return bool(C.ScriptEngine_GetAcceptNonStandardOutput(se.cSEPtr, C.bool(isGenesisEnabled), C.bool(isChronicleEnabled)))
+}
+
+// GetRequireStandard get the RequireStandard flag being set
+func (se *ScriptEngine) GetRequireStandard() bool {
+	return bool(C.ScriptEngine_GetRequireStandard(se.cSEPtr))
+}
+
+// GetPermitBareMultisig get the PermitBareMultisig flag being set
+func (se *ScriptEngine) GetPermitBareMultisig() bool {
+	return bool(C.ScriptEngine_GetPermitBareMultisig(se.cSEPtr))
+}
+
 // VerifyScriptBatch processes a batch of script verifications
 // Takes a VerifyBatch containing multiple verification tasks and returns a slice of ScriptError results
 // Each result corresponds to one verification task in the batch, in the same order

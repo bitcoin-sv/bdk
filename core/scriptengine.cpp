@@ -127,6 +127,115 @@ int32_t bsv::CScriptEngine::GetChronicleActivationHeight() const
     return policySettings.GetChronicleActivationHeight();
 }
 
+uint64_t bsv::CScriptEngine::GetGenesisGracefulPeriod() const
+{
+    return policySettings.GetGenesisGracefulPeriod();
+}
+
+uint64_t bsv::CScriptEngine::GetChronicleGracefulPeriod() const
+{
+    return policySettings.GetChronicleGracefulPeriod();
+}
+
+bool bsv::CScriptEngine::SetGenesisGracefulPeriod(int64_t genesisGracefulPeriodIn, std::string* err)
+{
+    return policySettings.SetGenesisGracefulPeriod(genesisGracefulPeriodIn, err);
+}
+
+bool bsv::CScriptEngine::SetChronicleGracefulPeriod(int64_t chronicleGracefulPeriodIn, std::string* err)
+{
+    return policySettings.SetChronicleGracefulPeriod(chronicleGracefulPeriodIn, err);
+}
+
+bool bsv::CScriptEngine::SetMaxTxSizePolicy(int64_t value, std::string* err)
+{
+    return policySettings.SetMaxTxSizePolicy(value, err);
+}
+
+void bsv::CScriptEngine::SetDataCarrierSize(uint64_t dataCarrierSize)
+{
+    policySettings.SetDataCarrierSize(dataCarrierSize);
+}
+
+void bsv::CScriptEngine::SetDataCarrier(bool dataCarrier)
+{
+    policySettings.SetDataCarrier(dataCarrier);
+}
+
+void bsv::CScriptEngine::SetAcceptNonStandardOutput(bool accept)
+{
+    policySettings.SetAcceptNonStandardOutput(accept);
+}
+
+void bsv::CScriptEngine::SetRequireStandard(bool require)
+{
+    policySettings.SetRequireStandard(require);
+}
+
+void bsv::CScriptEngine::SetPermitBareMultisig(bool permit)
+{
+    policySettings.SetPermitBareMultisig(permit);
+}
+
+void bsv::CScriptEngine::ResetDefault()
+{
+    policySettings.ResetDefault();
+}
+
+uint64_t bsv::CScriptEngine::GetMaxTxSize(bool isGenesisEnabled, bool isChronicleEnabled, bool isConsensus) const
+{
+    if (isGenesisEnabled && isChronicleEnabled) {
+        throw std::runtime_error("protocol should not be both Genesis and Chronicle");
+    }
+
+    ProtocolEra era{ProtocolEra::PreGenesis};
+    if (isGenesisEnabled) {
+        era = ProtocolEra::PostGenesis;
+    }
+    if (isChronicleEnabled) {
+        era = ProtocolEra::PostChronicle;
+    }
+
+    return policySettings.GetMaxTxSize(era, isConsensus);
+}
+
+uint64_t bsv::CScriptEngine::GetDataCarrierSize() const
+{
+    return policySettings.GetDataCarrierSize();
+}
+
+bool bsv::CScriptEngine::GetDataCarrier() const
+{
+    return policySettings.GetDataCarrier();
+}
+
+bool bsv::CScriptEngine::GetAcceptNonStandardOutput(bool isGenesisEnabled, bool isChronicleEnabled) const
+{
+    if (isGenesisEnabled && isChronicleEnabled) {
+        throw std::runtime_error("protocol should not be both Genesis and Chronicle");
+    }
+
+    ProtocolEra era{ProtocolEra::PreGenesis};
+    if (isGenesisEnabled) {
+        era = ProtocolEra::PostGenesis;
+    }
+    if (isChronicleEnabled) {
+        era = ProtocolEra::PostChronicle;
+    }
+
+    return policySettings.GetAcceptNonStandardOutput(era);
+}
+
+bool bsv::CScriptEngine::GetRequireStandard() const
+{
+    return policySettings.GetRequireStandard();
+}
+
+bool bsv::CScriptEngine::GetPermitBareMultisig() const
+{
+    return policySettings.GetPermitBareMultisig();
+}
+
 uint32_t bsv::CScriptEngine::CalculateFlags(int32_t utxoHeight, int32_t blockHeight, bool consensus) const
 {
     ProtocolEra era;
