@@ -30,10 +30,10 @@ macro(bdkSetCompilationOptions)## This has to be macro instead of a function bec
     if(UNIX)
       set(CMAKE_CXX_FLAGS "-fPIC -fvisibility=default" CACHE STRING "compilation flags for C++" FORCE)
       set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g3 " CACHE STRING "flags for C++ debug version" FORCE)
-      set(CMAKE_CXX_FLAGS_RELEASE "-O3 -g0 -DNDEBUG" CACHE STRING "flags for C++ release version" FORCE)
+      set(CMAKE_CXX_FLAGS_RELEASE "-O3 -march=native -g0 -DNDEBUG" CACHE STRING "flags for C++ release version" FORCE)
       set(CMAKE_C_FLAGS "-fPIC" CACHE STRING "flags for C" FORCE)
       set(CMAKE_C_FLAGS_DEBUG "-O0 -g3" CACHE STRING "flags for C debug version" FORCE)
-      set(CMAKE_C_FLAGS_RELEASE "-O3 -g0 -DNDEBUG" CACHE STRING "flags for C release version" FORCE)
+      set(CMAKE_C_FLAGS_RELEASE "-O3 -march=native -g0 -DNDEBUG" CACHE STRING "flags for C release version" FORCE)
     endif()
 
     set(BDK_SET_COMPILATION_OPTIONS_DONE TRUE CACHE BOOL "Protect to call twices")
