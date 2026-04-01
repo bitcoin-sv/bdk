@@ -185,6 +185,8 @@ if(UNIX)
   endif()
 
   ## Install shared library with os_arch naming for purego usage
+  ## IMPORTANT: shared lib goes into bdkpurego/lib/, NOT bdkcgo/ — placing it next
+  ## to the static .a would cause the CGO linker to prefer the .so and break static linking.
   if(APPLE)
     set(sharedLibExt "dylib")
   else()
@@ -192,11 +194,12 @@ if(UNIX)
   endif()
   set(sharedLibName "libGoBDK_${os_arch}.${sharedLibExt}")
   set_target_properties(${_GO_MODULE_NAME} PROPERTIES OUTPUT_NAME "GoBDK_${os_arch}")
-  install(FILES "$<TARGET_FILE:${_GO_MODULE_NAME}>" DESTINATION "lib/bdkcgo" COMPONENT GoModules)
+  install(FILES "$<TARGET_FILE:${_GO_MODULE_NAME}>" DESTINATION "lib/bdkpurego" COMPONENT GoModules)
   if (BUILD_MODULE_GOLANG_INSTALL_INSOURCE)
     add_custom_command(TARGET ${_GO_MODULE_NAME} POST_BUILD
-      COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:${_GO_MODULE_NAME}>" "${CMAKE_SOURCE_DIR}/module/gobdk/bdkcgo/${sharedLibName}"
-      COMMENT "Install insource ${sharedLibName}"
+      COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_SOURCE_DIR}/module/gobdk/bdkpurego/lib"
+      COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:${_GO_MODULE_NAME}>" "${CMAKE_SOURCE_DIR}/module/gobdk/bdkpurego/lib/${sharedLibName}"
+      COMMENT "Install insource ${sharedLibName} to bdkpurego/lib/"
     )
   endif()
 

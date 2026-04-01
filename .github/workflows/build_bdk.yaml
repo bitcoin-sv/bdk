@@ -43,7 +43,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.head_ref }}
+          ref: ${{ github.head_ref || github.ref }}
           fetch-depth: 0
 
       - name: Set up Python 3
@@ -147,7 +147,7 @@ jobs:
             LIB_EXT="so"
           fi
           cd test/golang
-          BDK_LIB_PATH=${{ github.workspace }}/module/gobdk/bdkcgo/libGoBDK_${{ env.OS_ARCH }}.${LIB_EXT} \
+          BDK_LIB_PATH=${{ github.workspace }}/module/gobdk/bdkpurego/lib/libGoBDK_${{ env.OS_ARCH }}.${LIB_EXT} \
           CGO_ENABLED=0 go test -tags purego -mod=mod ./...
 
       - name: Check GoBDK has changed
@@ -179,8 +179,8 @@ jobs:
         with:
           name: libGoBDK_shared_${{ env.OS_ARCH }}
           path: |
-            ./module/gobdk/bdkcgo/libGoBDK_${{ env.OS_ARCH }}.dylib
-            ./module/gobdk/bdkcgo/libGoBDK_${{ env.OS_ARCH }}.so
+            ./module/gobdk/bdkpurego/lib/libGoBDK_${{ env.OS_ARCH }}.dylib
+            ./module/gobdk/bdkpurego/lib/libGoBDK_${{ env.OS_ARCH }}.so
           retention-days: 1
           overwrite: true
           if-no-files-found: ignore
