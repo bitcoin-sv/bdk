@@ -1,0 +1,11 @@
+# IDE
+.idea/
+
+# CMake build output
+build/
+
+# Shared libraries (build artifacts for purego)
+module/gobdk/bdkpurego/lib/
+
+# Go vendor directory (test module)
+test/golang/vendor/
