@@ -4,8 +4,9 @@
 # CMake build output
 build/
 
-# Shared libraries (build artifacts for purego)
-module/gobdk/bdkpurego/lib/
+# Shared libraries for purego are committed (same as static .a files in bdkcgo/)
+# Only ignore intermediate build artifacts, not the final libs
+# module/gobdk/bdkpurego/lib/  -- tracked, not ignored
 
 # Go vendor directory (test module)
 test/golang/vendor/
