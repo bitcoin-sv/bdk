@@ -8,6 +8,7 @@
 #include <optional>
 #include <utility>
 #include <vector>
+#include <thread>
 
 #include <configscriptpolicy.h>
 #include <chainparams.h>
@@ -95,6 +96,12 @@ class CScriptEngine {
         // VerifyScriptBatch processes multiple script verifications in a batch
         // Returns a vector of ScriptError results, one for each VerifyArg in the input
         std::vector<ScriptError> VerifyScriptBatch(const VerifyBatch& batch) const;
+
+        // VerifyScriptBatchParallel processes multiple script verifications in parallel
+        // numThreads: number of threads to use (0 = std::thread::hardware_concurrency())
+        // Divides the batch into chunks and processes each chunk on a separate thread
+        // Per-item exceptions are caught and reported as SCRIPT_ERR_UNKNOWN_ERROR
+        std::vector<ScriptError> VerifyScriptBatchParallel(const VerifyBatch& batch, size_t numThreads = 0) const;
 
     private :
         ConfigScriptPolicy policySettings;

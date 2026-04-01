@@ -131,6 +131,16 @@ int ScriptEngine_VerifyScriptWithCustomFlags(ScriptEngineCGO cgoEngine,
  */
 int* ScriptEngine_VerifyScriptBatch(ScriptEngineCGO cgoEngine, VerifyBatchCGO cgoBatch, int* resultSize);
 
+/*
+ * VerifyScriptBatchParallel processes a batch of script verifications in parallel
+ *
+ * numThreads: number of threads to use (0 = hardware_concurrency)
+ * Returns a pointer to an array of error codes (int array)
+ * The caller must free the returned array using free()
+ * The array size matches the batch size
+ */
+int* ScriptEngine_VerifyScriptBatchParallel(ScriptEngineCGO cgoEngine, VerifyBatchCGO cgoBatch, int numThreads, int* resultSize);
+
 #ifdef __cplusplus
 }
 #endif

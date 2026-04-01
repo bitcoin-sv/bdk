@@ -1,3 +1,5 @@
+//go:build cgo && !purego
+
 package script
 
 /*
@@ -393,6 +395,38 @@ func (se *ScriptEngine) VerifyScriptBatch(batch *VerifyBatch) []ScriptError {
 	results := make([]ScriptError, size)
 
 	// Create a Go slice backed by the C array
+	cResults := unsafe.Slice((*C.int)(resultsPtr), size)
+
+	for i := 0; i < size; i++ {
+		errCode := int(cResults[i])
+		if errCode == int(SCRIPT_ERR_OK) {
+			results[i] = nil
+		} else {
+			results[i] = NewScriptError(ScriptErrorCode(errCode))
+		}
+	}
+
+	return results
+}
+
+// VerifyScriptBatchParallel processes a batch of script verifications in parallel on the C++ side
+// numThreads controls concurrency: 0 means use hardware_concurrency (all available cores)
+func (se *ScriptEngine) VerifyScriptBatchParallel(batch *VerifyBatch, numThreads int) []ScriptError {
+	if batch == nil || batch.cBatchPtr == nil {
+		return nil
+	}
+
+	var resultSize C.int
+	resultsPtr := C.ScriptEngine_VerifyScriptBatchParallel(se.cSEPtr, batch.cBatchPtr, C.int(numThreads), &resultSize)
+
+	if resultsPtr == nil || resultSize == 0 {
+		return nil
+	}
+
+	defer C.free(unsafe.Pointer(resultsPtr))
+
+	size := int(resultSize)
+	results := make([]ScriptError, size)
 	cResults := unsafe.Slice((*C.int)(resultsPtr), size)
 
 	for i := 0; i < size; i++ {
