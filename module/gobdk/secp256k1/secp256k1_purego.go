@@ -22,12 +22,12 @@ const (
 var (
 	pSecp256k1ContextCreate          func(flags uint32) uintptr
 	pSecp256k1ContextDestroy         func(ctx uintptr)
-	pSecp256k1EcdsaSignatureParseDer func(ctx uintptr, sig uintptr, input uintptr, inputlen uint) int32
+	pSecp256k1EcdsaSignatureParseDer func(ctx uintptr, sig uintptr, input uintptr, inputlen uintptr) int32
 	pSecp256k1EcdsaSignatureSerializeDer func(ctx uintptr, output uintptr, outputlen uintptr, sig uintptr) int32
 	pSecp256k1EcdsaSignatureNormalize func(ctx uintptr, sigout uintptr, sigin uintptr) int32
 	pSecp256k1EcdsaVerify            func(ctx uintptr, sig uintptr, msghash32 uintptr, pubkey uintptr) int32
 	pSecp256k1EcdsaSign              func(ctx uintptr, sig uintptr, msghash32 uintptr, seckey uintptr, noncefp uintptr, ndata uintptr) int32
-	pSecp256k1EcPubkeyParse          func(ctx uintptr, pubkey uintptr, input uintptr, inputlen uint) int32
+	pSecp256k1EcPubkeyParse          func(ctx uintptr, pubkey uintptr, input uintptr, inputlen uintptr) int32
 	pSecp256k1EcPubkeySerialize      func(ctx uintptr, output uintptr, outputlen uintptr, pubkey uintptr, flags uint32) int32
 )
 
@@ -55,13 +55,13 @@ func init() {
 func VerifySignature(message []byte, signature []byte, publicKey []byte) bool {
 	// Parse DER signature into internal format
 	var cSig [64]byte
-	if pSecp256k1EcdsaSignatureParseDer(ctx, uintptr(unsafe.Pointer(&cSig[0])), uintptr(unsafe.Pointer(&signature[0])), uint(len(signature))) != 1 {
+	if pSecp256k1EcdsaSignatureParseDer(ctx, uintptr(unsafe.Pointer(&cSig[0])), uintptr(unsafe.Pointer(&signature[0])), uintptr(len(signature))) != 1 {
 		return false
 	}
 
 	// Parse public key
 	var cPubKey [64]byte
-	if pSecp256k1EcPubkeyParse(ctx, uintptr(unsafe.Pointer(&cPubKey[0])), uintptr(unsafe.Pointer(&publicKey[0])), uint(len(publicKey))) != 1 {
+	if pSecp256k1EcPubkeyParse(ctx, uintptr(unsafe.Pointer(&cPubKey[0])), uintptr(unsafe.Pointer(&publicKey[0])), uintptr(len(publicKey))) != 1 {
 		return false
 	}
 
@@ -99,7 +99,7 @@ func SignMessage(message []byte, privateKey []byte) ([]byte, error) {
 
 	// Serialize to DER
 	serializedSig := make([]byte, 72)
-	outputLen := uint(len(serializedSig))
+	outputLen := uintptr(len(serializedSig))
 
 	result = pSecp256k1EcdsaSignatureSerializeDer(ctx,
 		uintptr(unsafe.Pointer(&serializedSig[0])),
