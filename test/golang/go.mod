@@ -8,6 +8,7 @@ require (
 )
 
 require (
+	github.com/ebitengine/purego v0.10.0 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/libsv/go-bk v0.1.6 // indirect
 	github.com/pkg/errors v0.9.1 // indirect

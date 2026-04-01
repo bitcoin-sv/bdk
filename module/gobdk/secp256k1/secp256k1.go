@@ -1,3 +1,5 @@
+//go:build cgo && !purego
+
 package secp256k1
 
 /*

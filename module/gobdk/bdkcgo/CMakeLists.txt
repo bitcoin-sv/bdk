@@ -56,11 +56,40 @@ set(_GO_MODULE_SOURCE_FILES
      "${BSV_APPLICATION_SRC_FILES}"
 )
 
-# The shared libraries is not to be used in a normal situation. But we keep building this target
-# just in case we might use it sometime later.
+# The shared library is built for use with purego (Go FFI without CGO).
+# It bundles all dependencies so the .so/.dylib is self-contained.
 add_library(${_GO_MODULE_NAME} SHARED ${_GO_MODULE_HEADER_FILES} ${_GO_MODULE_SOURCE_FILES} ${BDK_VERSION_GOLANG_CPP})
-target_link_libraries(${_GO_MODULE_NAME} PUBLIC bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT})
 target_include_directories(${_GO_MODULE_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/.. ${CMAKE_SOURCE_DIR})
+
+# Collect static library paths for bundling into the shared library
+set(_SHARED_STATIC_DEPS)
+foreach(impTarget IN ITEMS OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono)
+  get_property(vImported TARGET ${impTarget} PROPERTY IMPORTED)
+  if (${vImported})
+    get_property(vLocation TARGET ${impTarget} PROPERTY LOCATION)
+    list(APPEND _SHARED_STATIC_DEPS ${vLocation})
+  endif()
+endforeach()
+
+if(APPLE)
+  # macOS: use -force_load to include all symbols from static archives
+  set(_FORCE_LOAD_FLAGS "")
+  foreach(dep IN LISTS _SHARED_STATIC_DEPS)
+    list(APPEND _FORCE_LOAD_FLAGS "-Wl,-force_load,${dep}")
+  endforeach()
+  target_link_libraries(${_GO_MODULE_NAME} PUBLIC
+    bdk_core secp256k1 univalue
+    ${_FORCE_LOAD_FLAGS}
+    ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT})
+elseif(UNIX)
+  # Linux: use --whole-archive to include all symbols from static archives
+  target_link_libraries(${_GO_MODULE_NAME} PUBLIC
+    bdk_core secp256k1 univalue
+    -Wl,--whole-archive ${_SHARED_STATIC_DEPS} -Wl,--no-whole-archive
+    ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT})
+else()
+  target_link_libraries(${_GO_MODULE_NAME} PUBLIC bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT})
+endif()
 
 # The static libraries is built and to be merge will all of its dependant archives
 # to make a all-in-one standalone static library, ready to be linked in cgo
@@ -145,6 +174,22 @@ if(UNIX)
   if (BUILD_MODULE_GOLANG_INSTALL_INSOURCE)
     add_custom_command(TARGET MergeGoBDK POST_BUILD COMMAND cp "${buildDir}/${mergedArchive}" "${CMAKE_SOURCE_DIR}/module/gobdk/bdkcgo/${mergedArchive}"
       COMMENT "Install insource ${mergedArchive}"
+    )
+  endif()
+
+  ## Install shared library with os_arch naming for purego usage
+  if(APPLE)
+    set(sharedLibExt "dylib")
+  else()
+    set(sharedLibExt "so")
+  endif()
+  set(sharedLibName "libGoBDK_${os_arch}.${sharedLibExt}")
+  set_target_properties(${_GO_MODULE_NAME} PROPERTIES OUTPUT_NAME "GoBDK_${os_arch}")
+  install(FILES "$<TARGET_FILE:${_GO_MODULE_NAME}>" DESTINATION "lib/bdkcgo" COMPONENT GoModules)
+  if (BUILD_MODULE_GOLANG_INSTALL_INSOURCE)
+    add_custom_command(TARGET ${_GO_MODULE_NAME} POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:${_GO_MODULE_NAME}>" "${CMAKE_SOURCE_DIR}/module/gobdk/bdkcgo/${sharedLibName}"
+      COMMENT "Install insource ${sharedLibName}"
     )
   endif()
 
