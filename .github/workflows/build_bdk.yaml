@@ -133,6 +133,23 @@ jobs:
           cmake --build build --parallel 4
           ctest --output-on-failure --test-dir build
 
+      - name: Build GoBDK shared library for purego
+        if: runner.os != 'Windows'
+        run: |
+          cmake --build build --target GoBDK --parallel 4
+
+      - name: Test GoBDK with purego
+        if: runner.os != 'Windows'
+        run: |
+          if [ "$(uname)" = "Darwin" ]; then
+            LIB_EXT="dylib"
+          else
+            LIB_EXT="so"
+          fi
+          cd test/golang
+          BDK_LIB_PATH=${{ github.workspace }}/module/gobdk/bdkcgo/libGoBDK_${{ env.OS_ARCH }}.${LIB_EXT} \
+          CGO_ENABLED=0 go test -tags purego -mod=mod ./...
+
       - name: Check GoBDK has changed
         id: gobdk_change
         if: runner.os != 'Windows' && github.event_name == 'workflow_dispatch'
@@ -155,6 +172,18 @@ jobs:
           path: ./module/gobdk/bdkcgo/libGoBDK_${{ env.OS_ARCH }}.a
           retention-days: 1
           overwrite: true
+
+      - name: Upload GoBDK shared libraries to artifact UNIX
+        if: runner.os != 'Windows' && github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: libGoBDK_shared_${{ env.OS_ARCH }}
+          path: |
+            ./module/gobdk/bdkcgo/libGoBDK_${{ env.OS_ARCH }}.dylib
+            ./module/gobdk/bdkcgo/libGoBDK_${{ env.OS_ARCH }}.so
+          retention-days: 1
+          overwrite: true
+          if-no-files-found: ignore
 
       - name: Prepare Environment and Dependencies for Windows
         if: runner.os == 'Windows'

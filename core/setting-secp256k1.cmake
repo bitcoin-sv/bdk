@@ -27,6 +27,20 @@ endif()
 set(SECP256K1_BUILD_TESTS OFF)
 set(SECP256K1_BUILD_EXHAUSTIVE_TESTS OFF)
 
+# Enable architecture-specific optimizations for secp256k1:
+# - x86_64: hand-optimized assembly for field/scalar ops + -march=native (AVX2, etc.)
+# - ARM64:  generic C with __int128 + -mcpu=native (Apple M-series/Neoverse tuning)
+# Also override secp256k1's default -O2 with -O3 for maximum throughput.
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64)$")
+  set(SECP256K1_ASM "x86_64" CACHE STRING "" FORCE)
+  set(SECP256K1_APPEND_CFLAGS "-march=native -O3" CACHE STRING "" FORCE)
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64|ARM64)$")
+  set(SECP256K1_ASM "OFF" CACHE STRING "" FORCE)
+  set(SECP256K1_APPEND_CFLAGS "-mcpu=native -O3" CACHE STRING "" FORCE)
+else()
+  set(SECP256K1_APPEND_CFLAGS "-O3" CACHE STRING "" FORCE)
+endif()
+
 add_subdirectory("${BDK_BSV_ROOT_DIR}/src/secp256k1" ${CMAKE_CURRENT_BINARY_DIR}/secp256k1)
 
 ## Set the IDE Folder to the created targets for secp256k1 to the right place #########

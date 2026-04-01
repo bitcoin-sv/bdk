@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <span>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <utility>
 #include <vector>
@@ -16,6 +17,7 @@
 #include <script/script.h>
 #include <script/interpreter.h>
 #include <verifyarg.hpp>
+#include <thread_pool.hpp>
 
 namespace bsv
 {
@@ -107,6 +109,11 @@ class CScriptEngine {
         ConfigScriptPolicy policySettings;
         std::unique_ptr<CChainParams> chainParams;
         std::shared_ptr<task::CCancellationSource> source;
+
+        // Lazy-initialized thread pool for VerifyScriptBatchParallel
+        mutable std::unique_ptr<ThreadPool> threadPool;
+        mutable std::once_flag threadPoolInit;
+        void ensureThreadPool() const;
 
         ScriptError verifyImpl(
             const CScript& unlocking_script,

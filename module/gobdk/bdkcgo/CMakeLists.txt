@@ -59,7 +59,9 @@ set(_GO_MODULE_SOURCE_FILES
 # The shared library is built for use with purego (Go FFI without CGO).
 # It bundles all dependencies so the .so/.dylib is self-contained.
 add_library(${_GO_MODULE_NAME} SHARED ${_GO_MODULE_HEADER_FILES} ${_GO_MODULE_SOURCE_FILES} ${BDK_VERSION_GOLANG_CPP})
-target_include_directories(${_GO_MODULE_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/.. ${CMAKE_SOURCE_DIR})
+target_include_directories(${_GO_MODULE_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/.. ${CMAKE_SOURCE_DIR} ${BSV_INCLUDE_DIRS})
+# Link boost/openssl targets so their include dirs propagate to the shared lib build
+target_link_libraries(${_GO_MODULE_NAME} PRIVATE Boost::thread Boost::filesystem Boost::program_options Boost::chrono OpenSSL::Crypto OpenSSL::SSL)
 
 # Collect static library paths for bundling into the shared library
 set(_SHARED_STATIC_DEPS)

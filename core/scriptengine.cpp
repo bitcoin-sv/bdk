@@ -473,14 +473,24 @@ std::vector<ScriptError> bsv::CScriptEngine::VerifyScriptBatch(const VerifyBatch
     return results;
 }
 
+void bsv::CScriptEngine::ensureThreadPool() const
+{
+    std::call_once(threadPoolInit, [this]() {
+        size_t n = std::thread::hardware_concurrency();
+        if (n == 0) n = 1;
+        threadPool = std::make_unique<ThreadPool>(n);
+    });
+}
+
 std::vector<ScriptError> bsv::CScriptEngine::VerifyScriptBatchParallel(const VerifyBatch& batch, size_t numThreads) const
 {
     const size_t batchSize = batch.size();
     if (batchSize == 0) return {};
 
+    ensureThreadPool();
+
     if (numThreads == 0) {
-        numThreads = std::thread::hardware_concurrency();
-        if (numThreads == 0) numThreads = 1;
+        numThreads = threadPool->size();
     }
 
     numThreads = std::min(numThreads, batchSize);
@@ -515,22 +525,22 @@ std::vector<ScriptError> bsv::CScriptEngine::VerifyScriptBatchParallel(const Ver
     const size_t chunkSize = batchSize / numThreads;
     const size_t remainder = batchSize % numThreads;
 
-    std::vector<std::thread> threads;
-    threads.reserve(numThreads - 1);
+    std::vector<std::future<void>> futures;
+    futures.reserve(numThreads - 1);
 
     size_t start = 0;
     for (size_t t = 0; t < numThreads; ++t) {
         size_t end = start + chunkSize + (t < remainder ? 1 : 0);
         if (t == numThreads - 1) {
-            worker(start, end);
+            worker(start, end);  // Main thread handles last chunk
         } else {
-            threads.emplace_back(worker, start, end);
+            futures.push_back(threadPool->submit([&worker, start, end]() { worker(start, end); }));
         }
         start = end;
     }
 
-    for (auto& t : threads) {
-        t.join();
+    for (auto& f : futures) {
+        f.get();
     }
 
     return results;
