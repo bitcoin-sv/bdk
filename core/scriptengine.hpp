@@ -5,9 +5,11 @@
 #include <cstdint>
 #include <span>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <utility>
 #include <vector>
+#include <thread>
 
 #include <configscriptpolicy.h>
 #include <chainparams.h>
@@ -15,6 +17,7 @@
 #include <script/script.h>
 #include <script/interpreter.h>
 #include <verifyarg.hpp>
+#include <thread_pool.hpp>
 
 namespace bsv
 {
@@ -96,10 +99,21 @@ class CScriptEngine {
         // Returns a vector of ScriptError results, one for each VerifyArg in the input
         std::vector<ScriptError> VerifyScriptBatch(const VerifyBatch& batch) const;
 
+        // VerifyScriptBatchParallel processes multiple script verifications in parallel
+        // numThreads: number of threads to use (0 = std::thread::hardware_concurrency())
+        // Divides the batch into chunks and processes each chunk on a separate thread
+        // Per-item exceptions are caught and reported as SCRIPT_ERR_UNKNOWN_ERROR
+        std::vector<ScriptError> VerifyScriptBatchParallel(const VerifyBatch& batch, size_t numThreads = 0) const;
+
     private :
         ConfigScriptPolicy policySettings;
         std::unique_ptr<CChainParams> chainParams;
         std::shared_ptr<task::CCancellationSource> source;
+
+        // Lazy-initialized thread pool for VerifyScriptBatchParallel
+        mutable std::unique_ptr<ThreadPool> threadPool;
+        mutable std::once_flag threadPoolInit;
+        void ensureThreadPool() const;
 
         ScriptError verifyImpl(
             const CScript& unlocking_script,

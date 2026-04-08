@@ -271,30 +271,46 @@ int ScriptEngine_VerifyScriptWithCustomFlags(ScriptEngineCGO cgoEngine, const ch
     }
 }
 
+// Helper to convert a vector of ScriptError to a malloc'd int array for CGO
+static int* _helper_results_to_carray(const std::vector<ScriptError>& results, int* resultSize) {
+    const size_t size = results.size();
+    *resultSize = static_cast<int>(size);
+
+    int* resultArray = static_cast<int*>(malloc(size * sizeof(int)));
+    if (resultArray == nullptr) {
+        *resultSize = 0;
+        return nullptr;
+    }
+
+    for (size_t i = 0; i < size; ++i) {
+        resultArray[i] = static_cast<int>(results[i]);
+    }
+
+    return resultArray;
+}
+
 int* ScriptEngine_VerifyScriptBatch(ScriptEngineCGO cgoEngine, VerifyBatchCGO cgoBatch, int* resultSize) {
     try {
         bsv::CScriptEngine* engine = static_cast<bsv::CScriptEngine*>(cgoEngine);
         bsv::VerifyBatch* batch = static_cast<bsv::VerifyBatch*>(cgoBatch);
 
-        // Call the C++ VerifyScriptBatch method
         std::vector<ScriptError> results = engine->VerifyScriptBatch(*batch);
+        return _helper_results_to_carray(results, resultSize);
+    }
+    catch (const std::exception& e) {
+        std::cout << "CGO EXCEPTION : " << __FILE__ << ":" << __LINE__ << "    at " << __func__ << " " << e.what() << std::endl;
+        *resultSize = 0;
+        return nullptr;
+    }
+}
 
-        // Allocate C array for results
-        const size_t size = results.size();
-        *resultSize = static_cast<int>(size);
+int* ScriptEngine_VerifyScriptBatchParallel(ScriptEngineCGO cgoEngine, VerifyBatchCGO cgoBatch, int numThreads, int* resultSize) {
+    try {
+        bsv::CScriptEngine* engine = static_cast<bsv::CScriptEngine*>(cgoEngine);
+        bsv::VerifyBatch* batch = static_cast<bsv::VerifyBatch*>(cgoBatch);
 
-        int* resultArray = static_cast<int*>(malloc(size * sizeof(int)));
-        if (resultArray == nullptr) {
-            *resultSize = 0;
-            return nullptr;
-        }
-
-        // Copy results to C array
-        for (size_t i = 0; i < size; ++i) {
-            resultArray[i] = static_cast<int>(results[i]);
-        }
-
-        return resultArray;
+        std::vector<ScriptError> results = engine->VerifyScriptBatchParallel(*batch, static_cast<size_t>(numThreads));
+        return _helper_results_to_carray(results, resultSize);
     }
     catch (const std::exception& e) {
         std::cout << "CGO EXCEPTION : " << __FILE__ << ":" << __LINE__ << "    at " << __func__ << " " << e.what() << std::endl;

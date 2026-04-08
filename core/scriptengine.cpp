@@ -473,6 +473,79 @@ std::vector<ScriptError> bsv::CScriptEngine::VerifyScriptBatch(const VerifyBatch
     return results;
 }
 
+void bsv::CScriptEngine::ensureThreadPool() const
+{
+    std::call_once(threadPoolInit, [this]() {
+        size_t n = std::thread::hardware_concurrency();
+        if (n == 0) n = 1;
+        threadPool = std::make_unique<ThreadPool>(n);
+    });
+}
+
+std::vector<ScriptError> bsv::CScriptEngine::VerifyScriptBatchParallel(const VerifyBatch& batch, size_t numThreads) const
+{
+    const size_t batchSize = batch.size();
+    if (batchSize == 0) return {};
+
+    ensureThreadPool();
+
+    if (numThreads == 0) {
+        numThreads = threadPool->size();
+    }
+
+    numThreads = std::min(numThreads, batchSize);
+
+    std::vector<ScriptError> results(batchSize, SCRIPT_ERR_OK);
+
+    if (numThreads == 1) {
+        size_t i = 0;
+        for (const auto& elem : batch) {
+            try {
+                results[i] = VerifyScript(elem.extendedTX, elem.utxoHeights, elem.blockHeight, elem.consensus, elem.customFlags);
+            } catch (...) {
+                results[i] = SCRIPT_ERR_UNKNOWN_ERROR;
+            }
+            ++i;
+        }
+        return results;
+    }
+
+    auto worker = [&](size_t start, size_t end) {
+        auto it = batch.begin();
+        std::advance(it, start);
+        for (size_t i = start; i < end; ++i, ++it) {
+            try {
+                results[i] = VerifyScript(it->extendedTX, it->utxoHeights, it->blockHeight, it->consensus, it->customFlags);
+            } catch (...) {
+                results[i] = SCRIPT_ERR_UNKNOWN_ERROR;
+            }
+        }
+    };
+
+    const size_t chunkSize = batchSize / numThreads;
+    const size_t remainder = batchSize % numThreads;
+
+    std::vector<std::future<void>> futures;
+    futures.reserve(numThreads - 1);
+
+    size_t start = 0;
+    for (size_t t = 0; t < numThreads; ++t) {
+        size_t end = start + chunkSize + (t < remainder ? 1 : 0);
+        if (t == numThreads - 1) {
+            worker(start, end);  // Main thread handles last chunk
+        } else {
+            futures.push_back(threadPool->submit([&worker, start, end]() { worker(start, end); }));
+        }
+        start = end;
+    }
+
+    for (auto& f : futures) {
+        f.get();
+    }
+
+    return results;
+}
+
 ScriptError bsv::CScriptEngine::verifyImpl(
     const CScript& unlocking_script,
     const CScript& locking_script,

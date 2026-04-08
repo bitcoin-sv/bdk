@@ -1,3 +1,5 @@
+//go:build cgo && !bdk_purego
+
 package gobdk
 
 /*
