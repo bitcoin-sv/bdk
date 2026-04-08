@@ -152,7 +152,7 @@ jobs:
           ls -lh "${LIB_PATH}" || echo "WARNING: shared library not found"
           cd test/golang
           BDK_LIB_PATH=${LIB_PATH} \
-          CGO_ENABLED=0 go test -tags purego -mod=mod -v ./... || echo "::warning::purego tests failed (non-blocking)"
+          CGO_ENABLED=0 go test -tags bdk_purego -mod=mod -v ./... || echo "::warning::purego tests failed (non-blocking)"
 
       - name: Check GoBDK has changed
         id: gobdk_change

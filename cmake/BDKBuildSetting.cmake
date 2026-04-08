@@ -28,8 +28,12 @@ macro(bdkSetCompilationOptions)## This has to be macro instead of a function bec
     endif()
 
     if(UNIX)
-      # Use the correct native-tuning flag for each architecture
-      if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64)$")
+      # Use the correct native-tuning flag for each architecture.
+      # When cross-compiling on macOS (CMAKE_OSX_ARCHITECTURES set to a different arch),
+      # skip native tuning since the host CPU differs from the target.
+      if(APPLE AND CMAKE_OSX_ARCHITECTURES AND NOT CMAKE_OSX_ARCHITECTURES STREQUAL CMAKE_SYSTEM_PROCESSOR)
+        set(_BDK_NATIVE_FLAG "")
+      elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|AMD64)$")
         set(_BDK_NATIVE_FLAG "-march=native")
       elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64|ARM64)$")
         set(_BDK_NATIVE_FLAG "-mcpu=native")

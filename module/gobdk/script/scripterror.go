@@ -1,4 +1,4 @@
-//go:build cgo && !purego
+//go:build cgo && !bdk_purego
 
 package script
 
