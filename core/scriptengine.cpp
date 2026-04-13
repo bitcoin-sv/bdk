@@ -476,7 +476,8 @@ std::vector<ScriptError> bsv::CScriptEngine::VerifyScriptBatch(const VerifyBatch
 void bsv::CScriptEngine::ensureThreadPool() const
 {
     std::call_once(threadPoolInit, [this]() {
-        size_t n = std::thread::hardware_concurrency();
+        const auto physicalCores = getPhysicalCoreIds();
+        size_t n = physicalCores.size();
         if (n == 0) n = 1;
         threadPool = std::make_unique<ThreadPool>(n);
     });

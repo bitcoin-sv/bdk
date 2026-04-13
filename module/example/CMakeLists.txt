@@ -46,3 +46,7 @@ set_target_properties(example_num2bin_memoryattack PROPERTIES  FOLDER "module/ex
 add_executable(example_special_opcode_verify "${CMAKE_CURRENT_SOURCE_DIR}/example_special_opcode_verify.cpp" "${BSV_APPLICATION_HDR_FILES}" "${BSV_APPLICATION_SRC_FILES}")
 target_link_libraries(example_special_opcode_verify PRIVATE bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono ${CMAKE_DL_LIBS})
 set_target_properties(example_special_opcode_verify PROPERTIES  FOLDER "module/example" DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})
+
+add_executable(bench_verifyscript_batch_parallel "${CMAKE_CURRENT_SOURCE_DIR}/bench_verifyscript_batch_parallel.cpp" "${BSV_APPLICATION_HDR_FILES}" "${BSV_APPLICATION_SRC_FILES}")
+target_link_libraries(bench_verifyscript_batch_parallel PRIVATE bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono ${CMAKE_DL_LIBS})
+set_target_properties(bench_verifyscript_batch_parallel PROPERTIES  FOLDER "module/example" DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})
