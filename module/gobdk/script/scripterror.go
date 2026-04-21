@@ -96,12 +96,25 @@ const (
 	SCRIPT_ERR_CGO_EXCEPTION
 )
 
+// BDK-specific error codes for standardness failures (above bitcoin-sv's enum range)
+const (
+	SCRIPT_ERR_NON_STANDARD_TX    ScriptErrorCode = 200
+	SCRIPT_ERR_NON_STANDARD_INPUT ScriptErrorCode = 201
+)
+
 func CPP_SCRIPT_ERR_ERROR_COUNT() int {
 	return int(C.ScriptEngine_CPP_SCRIPT_ERR_ERROR_COUNT())
 }
 
 // errorCode2String conversion of ScriptErrorCode to string, using C++ code
 func errorCode2String(e ScriptErrorCode) string {
+	switch e {
+	case SCRIPT_ERR_NON_STANDARD_TX:
+		return "non-standard transaction"
+	case SCRIPT_ERR_NON_STANDARD_INPUT:
+		return "non-standard input"
+	}
+
 	if e > SCRIPT_ERR_ERROR_COUNT {
 		return "Exception thrown from C++ code"
 	}

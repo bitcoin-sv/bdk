@@ -10,6 +10,10 @@
 #include <extendedTx.hpp>
 #include <scriptengine.hpp>
 
+// BDK-specific error codes for standardness failures (above bitcoin-sv's SCRIPT_ERR_ERROR_COUNT)
+static constexpr ScriptError SCRIPT_ERR_NON_STANDARD_TX    = static_cast<ScriptError>(200);
+static constexpr ScriptError SCRIPT_ERR_NON_STANDARD_INPUT = static_cast<ScriptError>(201);
+
 bsv::CScriptEngine::CScriptEngine(const std::string chainName)
     : chainParams{ std::move(bsv::CreateCustomChainParams(chainName)) }
     , source{ task::CCancellationSource::Make() }
@@ -337,7 +341,6 @@ uint64_t bsv::CScriptEngine::GetSigOpCount(std::span<const uint8_t> extendedTX, 
 }
 
 // Helper function to perform standardness checks
-// Returns SCRIPT_ERR_OK if all checks pass, otherwise returns SCRIPT_ERR_UNKNOWN_ERROR
 ScriptError checkStandardness(
     const task::CCancellationToken& token,
     const ConfigScriptPolicy& policySettings,
@@ -347,15 +350,11 @@ ScriptError checkStandardness(
     int32_t blockHeight
 )
 {
-    // Check if transaction is standard (IsStandardTx)
     std::string reason;
     if (!IsStandardTx(policySettings, tx, blockHeight, reason)) {
-        // Transaction is not standard
-        return SCRIPT_ERR_UNKNOWN_ERROR;
+        return SCRIPT_ERR_NON_STANDARD_TX;
     }
 
-    // Check if inputs are standard (AreInputsStandard equivalent)
-    // We replicate the logic from AreInputsStandard but use embedded utxos instead of CCoinsViewCache
     if (!tx.IsCoinBase()) {
         constexpr bool consensus = false;
         constexpr uint32_t flags = SCRIPT_VERIFY_NONE;
@@ -368,8 +367,7 @@ ScriptError checkStandardness(
 
             auto result = IsInputStandard(token, params, scriptSig, prevScript, utxoEra, flags);
             if (!result.has_value() || !result.value()) {
-                // Input is not standard or check was cancelled
-                return SCRIPT_ERR_UNKNOWN_ERROR;
+                return SCRIPT_ERR_NON_STANDARD_INPUT;
             }
         }
     }
@@ -407,7 +405,7 @@ ScriptError bsv::CScriptEngine::VerifyScript(std::span<const uint8_t> extendedTX
     const CTransaction ctx(eTX.mtx); // costly conversion due to hash calculation
 
     // Perform standardness checks when consensus=false
-    const bool requireStandard = chainParams->RequireStandard();
+    const bool requireStandard = policySettings.GetRequireStandard();
     if (!consensus && requireStandard) {
         ScriptError standardnessError = checkStandardness(source->GetToken(), policySettings, ctx, eTX, utxoHeights, blockHeight);
         if (standardnessError != SCRIPT_ERR_OK) {
