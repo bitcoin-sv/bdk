@@ -23,7 +23,7 @@ const (
 var (
 	txBinExtended   []byte
 	dataUTXOHeights []int32
-	se              *bdkscript.ScriptEngine
+	se              *bdkscript.TxValidator
 )
 
 func init() {
@@ -48,7 +48,7 @@ func init() {
 	dataUTXOHeights = []int32{574441}
 
 	// Initialize script engine
-	se = bdkscript.NewScriptEngine(chainNet)
+	se = bdkscript.NewTxValidator(chainNet)
 }
 
 // BenchmarkVerifyScript measures the performance of VerifyScript

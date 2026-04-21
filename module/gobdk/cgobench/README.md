@@ -374,7 +374,7 @@ The Valgrind profiling reveals extreme heap allocation behavior in transaction v
 This extensive allocation is due to transaction deserialization. From the C++ source code, each `VerifyScript` call deserializes the transaction from binary format:
 
 ```cpp
-// From scriptengine.cpp
+// From txvalidator.cpp
 ScriptError VerifyScript(..., std::span<const uint8_t> extendedTX, ...) {
     // Deserialize transaction from binary EVERY TIME
     CDataStream tx_stream(begin, end, SER_NETWORK, PROTOCOL_VERSION);

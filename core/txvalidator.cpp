@@ -8,9 +8,9 @@
 
 #include <chainparams_bdk.hpp>
 #include <extendedTx.hpp>
-#include <scriptengine.hpp>
+#include <txvalidator.hpp>
 
-bsv::CScriptEngine::CScriptEngine(const std::string chainName)
+bsv::CTxValidator::CTxValidator(const std::string chainName)
     : chainParams{ std::move(bsv::CreateCustomChainParams(chainName)) }
     , source{ task::CCancellationSource::Make() }
 {
@@ -28,32 +28,32 @@ bsv::CScriptEngine::CScriptEngine(const std::string chainName)
     }
 }
 
-bool bsv::CScriptEngine::SetMaxOpsPerScriptPolicy(int64_t maxOpsPerScriptPolicyIn, std::string* err)
+bool bsv::CTxValidator::SetMaxOpsPerScriptPolicy(int64_t maxOpsPerScriptPolicyIn, std::string* err)
 {
     return policySettings.SetMaxOpsPerScriptPolicy(maxOpsPerScriptPolicyIn, err);
 }
 
-bool bsv::CScriptEngine::SetMaxScriptNumLengthPolicy(int64_t maxScriptNumLengthIn, std::string* err)
+bool bsv::CTxValidator::SetMaxScriptNumLengthPolicy(int64_t maxScriptNumLengthIn, std::string* err)
 {
     return policySettings.SetMaxScriptNumLengthPolicy(maxScriptNumLengthIn, err);
 }
 
-bool bsv::CScriptEngine::SetMaxScriptSizePolicy(int64_t maxScriptSizePolicyIn, std::string* err)
+bool bsv::CTxValidator::SetMaxScriptSizePolicy(int64_t maxScriptSizePolicyIn, std::string* err)
 {
     return policySettings.SetMaxScriptSizePolicy(maxScriptSizePolicyIn, err);
 }
 
-bool bsv::CScriptEngine::SetMaxPubKeysPerMultiSigPolicy(int64_t maxPubKeysPerMultiSigIn, std::string* err)
+bool bsv::CTxValidator::SetMaxPubKeysPerMultiSigPolicy(int64_t maxPubKeysPerMultiSigIn, std::string* err)
 {
     return policySettings.SetMaxPubKeysPerMultiSigPolicy(maxPubKeysPerMultiSigIn, err);
 }
 
-bool bsv::CScriptEngine::SetMaxStackMemoryUsage(int64_t maxStackMemoryUsageConsensusIn, int64_t maxStackMemoryUsagePolicyIn, std::string* err)
+bool bsv::CTxValidator::SetMaxStackMemoryUsage(int64_t maxStackMemoryUsageConsensusIn, int64_t maxStackMemoryUsagePolicyIn, std::string* err)
 {
     return policySettings.SetMaxStackMemoryUsage(maxStackMemoryUsageConsensusIn, maxStackMemoryUsagePolicyIn, err);
 }
 
-bool bsv::CScriptEngine::SetGenesisActivationHeight(int32_t genesisActivationHeightIn, std::string* err)
+bool bsv::CTxValidator::SetGenesisActivationHeight(int32_t genesisActivationHeightIn, std::string* err)
 {
     bool ok{true};
     ok = ok && policySettings.SetGenesisActivationHeight(genesisActivationHeightIn, err);
@@ -67,7 +67,7 @@ bool bsv::CScriptEngine::SetGenesisActivationHeight(int32_t genesisActivationHei
     return ok;
 }
 
-bool bsv::CScriptEngine::SetChronicleActivationHeight(int32_t chronicleActivationHeightIn, std::string* err)
+bool bsv::CTxValidator::SetChronicleActivationHeight(int32_t chronicleActivationHeightIn, std::string* err)
 {
     bool ok{true};
     ok = ok && policySettings.SetChronicleActivationHeight(chronicleActivationHeightIn, err);
@@ -81,12 +81,12 @@ bool bsv::CScriptEngine::SetChronicleActivationHeight(int32_t chronicleActivatio
     return ok;
 }
 
-uint64_t bsv::CScriptEngine::GetMaxOpsPerScript(bool isGenesisEnabled, bool consensus) const
+uint64_t bsv::CTxValidator::GetMaxOpsPerScript(bool isGenesisEnabled, bool consensus) const
 {
     return policySettings.GetMaxOpsPerScript(isGenesisEnabled, consensus);
 }
 
-uint64_t bsv::CScriptEngine::GetMaxScriptNumLength(bool isGenesisEnabled, bool isChronicleEnabled, bool isConsensus) const
+uint64_t bsv::CTxValidator::GetMaxScriptNumLength(bool isGenesisEnabled, bool isChronicleEnabled, bool isConsensus) const
 {
     if (isGenesisEnabled && isChronicleEnabled) {
         throw std::runtime_error("protocol should not be both Genesis and Chronicle");
@@ -104,87 +104,87 @@ uint64_t bsv::CScriptEngine::GetMaxScriptNumLength(bool isGenesisEnabled, bool i
     return policySettings.GetMaxScriptNumLength(era, isConsensus);
 }
 
-uint64_t bsv::CScriptEngine::GetMaxScriptSize(bool isGenesisEnabled, bool isConsensus) const
+uint64_t bsv::CTxValidator::GetMaxScriptSize(bool isGenesisEnabled, bool isConsensus) const
 {
     return policySettings.GetMaxScriptSize(isGenesisEnabled, isConsensus);
 }
 
-uint64_t bsv::CScriptEngine::GetMaxPubKeysPerMultiSig(bool isGenesisEnabled, bool isConsensus) const
+uint64_t bsv::CTxValidator::GetMaxPubKeysPerMultiSig(bool isGenesisEnabled, bool isConsensus) const
 {
     return policySettings.GetMaxPubKeysPerMultiSig(isGenesisEnabled, isConsensus);
 }
 
-uint64_t bsv::CScriptEngine::GetMaxStackMemoryUsage(bool isGenesisEnabled, bool isConsensus) const
+uint64_t bsv::CTxValidator::GetMaxStackMemoryUsage(bool isGenesisEnabled, bool isConsensus) const
 {
     return policySettings.GetMaxStackMemoryUsage(isGenesisEnabled, isConsensus);
 }
 
-int32_t bsv::CScriptEngine::GetGenesisActivationHeight() const
+int32_t bsv::CTxValidator::GetGenesisActivationHeight() const
 {
     return policySettings.GetGenesisActivationHeight();
 }
 
-int32_t bsv::CScriptEngine::GetChronicleActivationHeight() const
+int32_t bsv::CTxValidator::GetChronicleActivationHeight() const
 {
     return policySettings.GetChronicleActivationHeight();
 }
 
-uint64_t bsv::CScriptEngine::GetGenesisGracefulPeriod() const
+uint64_t bsv::CTxValidator::GetGenesisGracefulPeriod() const
 {
     return policySettings.GetGenesisGracefulPeriod();
 }
 
-uint64_t bsv::CScriptEngine::GetChronicleGracefulPeriod() const
+uint64_t bsv::CTxValidator::GetChronicleGracefulPeriod() const
 {
     return policySettings.GetChronicleGracefulPeriod();
 }
 
-bool bsv::CScriptEngine::SetGenesisGracefulPeriod(int64_t genesisGracefulPeriodIn, std::string* err)
+bool bsv::CTxValidator::SetGenesisGracefulPeriod(int64_t genesisGracefulPeriodIn, std::string* err)
 {
     return policySettings.SetGenesisGracefulPeriod(genesisGracefulPeriodIn, err);
 }
 
-bool bsv::CScriptEngine::SetChronicleGracefulPeriod(int64_t chronicleGracefulPeriodIn, std::string* err)
+bool bsv::CTxValidator::SetChronicleGracefulPeriod(int64_t chronicleGracefulPeriodIn, std::string* err)
 {
     return policySettings.SetChronicleGracefulPeriod(chronicleGracefulPeriodIn, err);
 }
 
-bool bsv::CScriptEngine::SetMaxTxSizePolicy(int64_t value, std::string* err)
+bool bsv::CTxValidator::SetMaxTxSizePolicy(int64_t value, std::string* err)
 {
     return policySettings.SetMaxTxSizePolicy(value, err);
 }
 
-void bsv::CScriptEngine::SetDataCarrierSize(uint64_t dataCarrierSize)
+void bsv::CTxValidator::SetDataCarrierSize(uint64_t dataCarrierSize)
 {
     policySettings.SetDataCarrierSize(dataCarrierSize);
 }
 
-void bsv::CScriptEngine::SetDataCarrier(bool dataCarrier)
+void bsv::CTxValidator::SetDataCarrier(bool dataCarrier)
 {
     policySettings.SetDataCarrier(dataCarrier);
 }
 
-void bsv::CScriptEngine::SetAcceptNonStandardOutput(bool accept)
+void bsv::CTxValidator::SetAcceptNonStandardOutput(bool accept)
 {
     policySettings.SetAcceptNonStandardOutput(accept);
 }
 
-void bsv::CScriptEngine::SetRequireStandard(bool require)
+void bsv::CTxValidator::SetRequireStandard(bool require)
 {
     policySettings.SetRequireStandard(require);
 }
 
-void bsv::CScriptEngine::SetPermitBareMultisig(bool permit)
+void bsv::CTxValidator::SetPermitBareMultisig(bool permit)
 {
     policySettings.SetPermitBareMultisig(permit);
 }
 
-void bsv::CScriptEngine::ResetDefault()
+void bsv::CTxValidator::ResetDefault()
 {
     policySettings.ResetDefault();
 }
 
-uint64_t bsv::CScriptEngine::GetMaxTxSize(bool isGenesisEnabled, bool isChronicleEnabled, bool isConsensus) const
+uint64_t bsv::CTxValidator::GetMaxTxSize(bool isGenesisEnabled, bool isChronicleEnabled, bool isConsensus) const
 {
     if (isGenesisEnabled && isChronicleEnabled) {
         throw std::runtime_error("protocol should not be both Genesis and Chronicle");
@@ -201,17 +201,17 @@ uint64_t bsv::CScriptEngine::GetMaxTxSize(bool isGenesisEnabled, bool isChronicl
     return policySettings.GetMaxTxSize(era, isConsensus);
 }
 
-uint64_t bsv::CScriptEngine::GetDataCarrierSize() const
+uint64_t bsv::CTxValidator::GetDataCarrierSize() const
 {
     return policySettings.GetDataCarrierSize();
 }
 
-bool bsv::CScriptEngine::GetDataCarrier() const
+bool bsv::CTxValidator::GetDataCarrier() const
 {
     return policySettings.GetDataCarrier();
 }
 
-bool bsv::CScriptEngine::GetAcceptNonStandardOutput(bool isGenesisEnabled, bool isChronicleEnabled) const
+bool bsv::CTxValidator::GetAcceptNonStandardOutput(bool isGenesisEnabled, bool isChronicleEnabled) const
 {
     if (isGenesisEnabled && isChronicleEnabled) {
         throw std::runtime_error("protocol should not be both Genesis and Chronicle");
@@ -228,17 +228,17 @@ bool bsv::CScriptEngine::GetAcceptNonStandardOutput(bool isGenesisEnabled, bool 
     return policySettings.GetAcceptNonStandardOutput(era);
 }
 
-bool bsv::CScriptEngine::GetRequireStandard() const
+bool bsv::CTxValidator::GetRequireStandard() const
 {
     return policySettings.GetRequireStandard();
 }
 
-bool bsv::CScriptEngine::GetPermitBareMultisig() const
+bool bsv::CTxValidator::GetPermitBareMultisig() const
 {
     return policySettings.GetPermitBareMultisig();
 }
 
-uint32_t bsv::CScriptEngine::CalculateFlags(int32_t utxoHeight, int32_t blockHeight, bool consensus) const
+uint32_t bsv::CTxValidator::CalculateFlags(int32_t utxoHeight, int32_t blockHeight, bool consensus) const
 {
     ProtocolEra era;
     uint32_t protocolFlags;
@@ -269,7 +269,7 @@ uint32_t bsv::CScriptEngine::CalculateFlags(int32_t utxoHeight, int32_t blockHei
 // of the huge dependencies
 //
 // So we replicate them here
-uint64_t bsv::CScriptEngine::GetSigOpCount(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight) const {
+uint64_t bsv::CTxValidator::GetSigOpCount(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight) const {
     const char* begin{ reinterpret_cast<const char*>(extendedTX.data()) };
     const char* end{ reinterpret_cast<const char*>(extendedTX.data() + extendedTX.size()) };
     CDataStream tx_stream(begin, end, SER_NETWORK, PROTOCOL_VERSION);
@@ -419,7 +419,7 @@ ScriptError checkStandardness(
     return SCRIPT_ERR_OK;
 }
 
-ScriptError bsv::CScriptEngine::VerifyScript(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool consensus, std::span<const uint32_t> customFlags) const
+ScriptError_t bsv::CTxValidator::VerifyScript(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool consensus, std::span<const uint32_t> customFlags) const
 {
     const char* begin{ reinterpret_cast<const char*>(extendedTX.data()) };
     const char* end{ reinterpret_cast<const char*>(extendedTX.data() + extendedTX.size()) };
@@ -496,7 +496,7 @@ ScriptError bsv::CScriptEngine::VerifyScript(std::span<const uint8_t> extendedTX
     return SCRIPT_ERR_OK;
 }
 
-std::vector<ScriptError> bsv::CScriptEngine::VerifyScriptBatch(const VerifyBatch& batch) const
+std::vector<ScriptError_t> bsv::CTxValidator::VerifyScriptBatch(const VerifyBatch& batch) const
 {
     std::vector<ScriptError> results;
     results.reserve(batch.size());
@@ -515,7 +515,7 @@ std::vector<ScriptError> bsv::CScriptEngine::VerifyScriptBatch(const VerifyBatch
     return results;
 }
 
-ScriptError bsv::CScriptEngine::verifyImpl(
+ScriptError_t bsv::CTxValidator::verifyImpl(
     const CScript& unlocking_script,
     const CScript& locking_script,
     const bool consensus,

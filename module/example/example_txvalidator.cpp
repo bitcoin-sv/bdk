@@ -18,7 +18,7 @@
 #include "extendedTx.hpp"
 #include "assembler.h"
 #include "utilstrencodings.h"
-#include "scriptengine.hpp"
+#include "txvalidator.hpp"
 
 namespace po = boost::program_options;
 namespace pt = boost::property_tree;
@@ -34,7 +34,7 @@ struct CsvDataRecord {
     std::vector<uint8_t> txBinExtended;
 };
 
-std::chrono::nanoseconds doVerifyScript(const bsv::CScriptEngine& se, const CsvDataRecord& record, const bool consensus) {
+std::chrono::nanoseconds doVerifyScript(const bsv::CTxValidator& se, const CsvDataRecord& record, const bool consensus) {
     const std::span<const uint8_t> etx(record.txBinExtended.data(), record.txBinExtended.size());
 
     const char* begin{ reinterpret_cast<const char*>(etx.data()) };
@@ -231,7 +231,7 @@ int main(int argc, char* argv[])
     }
 
     const auto csvData = parseCSV(csvFilePath);
-    const bsv::CScriptEngine se(network);
+    const bsv::CTxValidator se(network);
     std::chrono::duration<double> elapsed;
     std::chrono::nanoseconds verifyScriptElapsed(0);
     size_t nbTx{ 0 };

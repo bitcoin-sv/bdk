@@ -1,5 +1,5 @@
-#ifndef __SCRIPTENGINE_HPP__
-#define __SCRIPTENGINE_HPP__
+#ifndef __TXVALIDATOR_HPP__
+#define __TXVALIDATOR_HPP__
 
 #include <string>
 #include <cstdint>
@@ -21,7 +21,7 @@ namespace bsv
 
 /**
  *
- * CScriptEngine hold its own GlobalConfig, ChainParams and CCancellationSource
+ * CTxValidator hold its own GlobalConfig, ChainParams and CCancellationSource
  * objects in order to execute the script fully
  *
  * It forward the config settings to its own GlobalConfig instance
@@ -31,9 +31,9 @@ namespace bsv
  *   - Remove the usage of old implementation where it use implicitly global objects in bsv
  *
  */
-class CScriptEngine {
+class CTxValidator {
     public:
-        CScriptEngine(const std::string chainName);
+        CTxValidator(const std::string chainName);
 
         // Forward policy settings call to GlobalConfig
         bool SetMaxOpsPerScriptPolicy(int64_t maxOpsPerScriptPolicyIn, std::string* error);
@@ -90,18 +90,18 @@ class CScriptEngine {
         //
         // If client uses a custom flags different than zero, then this will be used
         // instead of the implicitly calculated flags
-        ScriptError VerifyScript(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool consensus, std::span<const uint32_t> customFlags = std::span<const uint32_t>()) const;
+        ScriptError_t VerifyScript(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool consensus, std::span<const uint32_t> customFlags = std::span<const uint32_t>()) const;
 
         // VerifyScriptBatch processes multiple script verifications in a batch
         // Returns a vector of ScriptError results, one for each VerifyArg in the input
-        std::vector<ScriptError> VerifyScriptBatch(const VerifyBatch& batch) const;
+        std::vector<ScriptError_t> VerifyScriptBatch(const VerifyBatch& batch) const;
 
     private :
         ConfigScriptPolicy policySettings;
         std::unique_ptr<CChainParams> chainParams;
         std::shared_ptr<task::CCancellationSource> source;
 
-        ScriptError verifyImpl(
+        ScriptError_t verifyImpl(
             const CScript& unlocking_script,
             const CScript& locking_script,
             const bool consensus,
@@ -115,4 +115,4 @@ int CPP_SCRIPT_ERR_ERROR_COUNT();
 
 } // namespace bsv
 
-#endif /* __SCRIPTENGINE_HPP__ */
+#endif /* __TXVALIDATOR_HPP__ */

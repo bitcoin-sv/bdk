@@ -51,9 +51,9 @@ class Stack
     +int64 size();
     +byte[] at(int pos);
 }
-class ScriptEngine 
+class TxValidator 
 {
-	+ScriptEngine(Config config, uint64 Flags);
+	+TxValidator(Config config, uint64 Flags);
 	
 	+Status execute(byte[] script, CancellationToken token, String txHex, int index, int amount);
     +Status execute(String script, CancellationToken token, String txHex, int index, int amount);
@@ -62,7 +62,7 @@ class ScriptEngine
 	+boolean[] getExecState();
 	+boolean[] getElseState();
 }
-ScriptEngine --> Stack : stack
-ScriptEngine --> Stack : alt-stack
+TxValidator --> Stack : stack
+TxValidator --> Stack : alt-stack
 @enduml
 

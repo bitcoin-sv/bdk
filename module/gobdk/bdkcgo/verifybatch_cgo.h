@@ -28,7 +28,7 @@ void VerifyBatch_Destroy(VerifyBatchCGO cgoBatch);
 
 /**
  * VerifyBatch_Add adds a verification argument to the batch using C-style parameters
- * This follows the same pattern as ScriptEngine_VerifyScriptWithCustomFlags
+ * This follows the same pattern as TxValidator_VerifyScriptWithCustomFlags
  *
  * Parameters:
  *   cgoBatch - The batch to add to

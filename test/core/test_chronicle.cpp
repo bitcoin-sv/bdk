@@ -39,7 +39,7 @@
 #include "util.h"
 
 #include "extendedTx.hpp"
-#include "scriptengine.hpp"
+#include "txvalidator.hpp"
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Block-height constants  (mainnet)
@@ -147,12 +147,12 @@ static ScriptError Verify(const bsv::CMutableTransactionExtended& eTX,
                            int32_t utxoHeight,
                            int32_t blockHeight,
                            bool consensus,
-                           bsv::CScriptEngine& se);
+                           bsv::CTxValidator& se);
 
 // Verify eTX with an explicit script flags word, bypassing both the automatic
 // flag-computation logic and the standardness pre-check.
 //
-// Internally passes consensus=true to CScriptEngine::VerifyScript so that the
+// Internally passes consensus=true to CTxValidator::VerifyScript so that the
 // standardness filter does not run, then overrides the per-input flags via the
 // customFlags parameter.  This allows tests to supply the exact flag combination
 // used by the policy path (e.g. with SCRIPT_VERIFY_DISCOURAGE_UPGRADABLE_NOPS)
@@ -166,13 +166,13 @@ static ScriptError Verify(const bsv::CMutableTransactionExtended& eTX,
 static ScriptError VerifyWithFlags(const bsv::CMutableTransactionExtended& eTX,
                                     int32_t blockHeight,
                                     uint32_t flags,
-                                    bsv::CScriptEngine& se);
+                                    bsv::CTxValidator& se);
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Test suite
 // ═══════════════════════════════════════════════════════════════════════════
 
-// CScriptEngine("main") initialises its own internal CChainParams but does NOT
+// CTxValidator("main") initialises its own internal CChainParams but does NOT
 // set the global chain-params singleton used by CBitcoinSecret / CKey address
 // functions (Params()).  The fixture calls SelectParams once before each test
 // so that LoadKey() and any address-related helpers can access global params.
@@ -206,7 +206,7 @@ BOOST_FIXTURE_TEST_SUITE(test_chronicle, ChainParamsFixture)
 // Reference: src/script/interpreter.cpp:2306-2319
 BOOST_AUTO_TEST_CASE(test_push_only_scriptsig)
 {
-    bsv::CScriptEngine se("main");
+    bsv::CTxValidator se("main");
     const CKey key = LoadKey();
 
     // Lock the UTXO: top of stack must equal 5.
@@ -264,7 +264,7 @@ BOOST_AUTO_TEST_CASE(test_push_only_scriptsig)
 // Reference: src/script/interpreter.cpp:293-300, src/script/sighashtype.h:58-61
 BOOST_AUTO_TEST_CASE(test_sighash_chronicle)
 {
-    bsv::CScriptEngine se("main");
+    bsv::CTxValidator se("main");
     const CKey key    = LoadKey();
     const CPubKey pub = key.GetPubKey();
 
@@ -331,7 +331,7 @@ BOOST_AUTO_TEST_CASE(test_sighash_chronicle)
 // Reference: src/configscriptpolicy.cpp:77-108, src/consensus/consensus.h:62-66
 BOOST_AUTO_TEST_CASE(test_script_num_length)
 {
-    bsv::CScriptEngine se("main");
+    bsv::CTxValidator se("main");
 
     // 5-byte minimal positive CScriptNum encoding.
     // Little-endian sign-magnitude: {0x00×4, 0x01} = value 2^32.
@@ -389,7 +389,7 @@ BOOST_AUTO_TEST_CASE(test_script_num_length)
 // Reference: src/script/interpreter.cpp:596-606
 BOOST_AUTO_TEST_CASE(test_op_ver)
 {
-    bsv::CScriptEngine se("main");
+    bsv::CTxValidator se("main");
     const CKey key = LoadKey();
 
     // Expected 4-byte little-endian encoding of tx version 1.
@@ -451,7 +451,7 @@ BOOST_AUTO_TEST_CASE(test_op_ver)
 // Reference: src/script/interpreter.cpp:771-779
 BOOST_AUTO_TEST_CASE(test_op_verif)
 {
-    bsv::CScriptEngine se("main");
+    bsv::CTxValidator se("main");
     const CKey key = LoadKey();
 
     // ── Part A: functional conditional ────────────────────────────────────
@@ -565,7 +565,7 @@ BOOST_AUTO_TEST_CASE(test_op_verif)
 // Reference: src/script/interpreter.cpp:607-639
 BOOST_AUTO_TEST_CASE(test_op_substr)
 {
-    bsv::CScriptEngine se("main");
+    bsv::CTxValidator se("main");
     const CKey key = LoadKey();
 
     // ── Policy path: DISCOURAGE fires immediately, no stack changes needed ──
@@ -636,7 +636,7 @@ BOOST_AUTO_TEST_CASE(test_op_substr)
 // Reference: src/script/interpreter.cpp:640-664
 BOOST_AUTO_TEST_CASE(test_op_left)
 {
-    bsv::CScriptEngine se("main");
+    bsv::CTxValidator se("main");
     const CKey key = LoadKey();
 
     // ── Policy path: DISCOURAGE fires immediately ──
@@ -701,7 +701,7 @@ BOOST_AUTO_TEST_CASE(test_op_left)
 // Reference: src/script/interpreter.cpp:665-689
 BOOST_AUTO_TEST_CASE(test_op_right)
 {
-    bsv::CScriptEngine se("main");
+    bsv::CTxValidator se("main");
     const CKey key = LoadKey();
 
     // ── Policy path: DISCOURAGE fires immediately ──
@@ -765,7 +765,7 @@ BOOST_AUTO_TEST_CASE(test_op_right)
 // Reference: src/script/interpreter.cpp:690-725
 BOOST_AUTO_TEST_CASE(test_op_lshiftnum)
 {
-    bsv::CScriptEngine se("main");
+    bsv::CTxValidator se("main");
     const CKey key = LoadKey();
 
     // ── Policy path: DISCOURAGE fires immediately ──
@@ -826,7 +826,7 @@ BOOST_AUTO_TEST_CASE(test_op_lshiftnum)
 // Reference: src/script/interpreter.cpp:726-761
 BOOST_AUTO_TEST_CASE(test_op_rshiftnum)
 {
-    bsv::CScriptEngine se("main");
+    bsv::CTxValidator se("main");
     const CKey key = LoadKey();
 
     // ── Policy path: DISCOURAGE fires immediately ──
@@ -889,7 +889,7 @@ BOOST_AUTO_TEST_CASE(test_op_rshiftnum)
 // Reference: src/script/interpreter.cpp:362-365
 BOOST_AUTO_TEST_CASE(test_op_2mul)
 {
-    bsv::CScriptEngine se("main");
+    bsv::CTxValidator se("main");
     const CKey key = LoadKey();
 
     CScript opcodeCheck;
@@ -929,7 +929,7 @@ BOOST_AUTO_TEST_CASE(test_op_2mul)
 // Reference: src/script/interpreter.cpp:362-365
 BOOST_AUTO_TEST_CASE(test_op_2div)
 {
-    bsv::CScriptEngine se("main");
+    bsv::CTxValidator se("main");
     const CKey key = LoadKey();
 
     CScript opcodeCheck;
@@ -1053,7 +1053,7 @@ static ScriptError Verify(const bsv::CMutableTransactionExtended& eTX,
                            int32_t utxoHeight,
                            int32_t blockHeight,
                            bool consensus,
-                           bsv::CScriptEngine& se)
+                           bsv::CTxValidator& se)
 {
     CDataStream out(SER_NETWORK, PROTOCOL_VERSION);
     out << eTX;
@@ -1070,7 +1070,7 @@ static ScriptError Verify(const bsv::CMutableTransactionExtended& eTX,
 static ScriptError VerifyWithFlags(const bsv::CMutableTransactionExtended& eTX,
                                     int32_t blockHeight,
                                     uint32_t flags,
-                                    bsv::CScriptEngine& se)
+                                    bsv::CTxValidator& se)
 {
     CDataStream out(SER_NETWORK, PROTOCOL_VERSION);
     out << eTX;

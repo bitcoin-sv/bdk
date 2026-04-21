@@ -9,57 +9,57 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestNewScriptEngine(t *testing.T) {
+func TestNewTxValidator(t *testing.T) {
 	t.Run("mainnet", func(t *testing.T) {
-		se := goscript.NewScriptEngine("main")
+		se := goscript.NewTxValidator("main")
 		assert.NotNil(t, se, "Expect non nil script engine")
 		assert.Equal(t, se.GetGenesisActivationHeight(), int32(620538))
 		assert.Equal(t, se.GetChronicleActivationHeight(), int32(943816))
 	})
 
 	t.Run("testnet", func(t *testing.T) {
-		se := goscript.NewScriptEngine("test")
+		se := goscript.NewTxValidator("test")
 		assert.NotNil(t, se, "Expect non nil script engine")
 		assert.Equal(t, se.GetGenesisActivationHeight(), int32(1344302))
 		assert.Equal(t, se.GetChronicleActivationHeight(), int32(1713168))
 	})
 
 	t.Run("regtest", func(t *testing.T) {
-		se := goscript.NewScriptEngine("regtest")
+		se := goscript.NewTxValidator("regtest")
 		assert.NotNil(t, se, "Expect non nil script engine")
 		assert.Equal(t, se.GetGenesisActivationHeight(), int32(10000))
 		assert.Equal(t, se.GetChronicleActivationHeight(), int32(15000))
 	})
 
 	t.Run("stn", func(t *testing.T) {
-		se := goscript.NewScriptEngine("stn")
+		se := goscript.NewTxValidator("stn")
 		assert.NotNil(t, se, "Expect non nil script engine")
 		assert.Equal(t, se.GetGenesisActivationHeight(), int32(100))
 		assert.Equal(t, se.GetChronicleActivationHeight(), int32(250))
 	})
 
 	t.Run("teratestnet", func(t *testing.T) {
-		se := goscript.NewScriptEngine("teratestnet")
+		se := goscript.NewTxValidator("teratestnet")
 		assert.NotNil(t, se, "Expect non nil script engine")
 		assert.Equal(t, se.GetGenesisActivationHeight(), int32(1))
 		assert.Equal(t, se.GetChronicleActivationHeight(), int32(1))
 	})
 
 	t.Run("tera scaling testnet", func(t *testing.T) {
-		se := goscript.NewScriptEngine("tstn")
+		se := goscript.NewTxValidator("tstn")
 		assert.NotNil(t, se, "Expect non nil script engine")
 		assert.Equal(t, se.GetGenesisActivationHeight(), int32(1))
 		assert.Equal(t, se.GetChronicleActivationHeight(), int32(1))
 	})
 
 	t.Run("wrong network", func(t *testing.T) {
-		se := goscript.NewScriptEngine("foo")
+		se := goscript.NewTxValidator("foo")
 		assert.Nil(t, se, "Expect nil script engine")
 	})
 }
 
-func TestScriptEnginePolicySettings(t *testing.T) {
-	se := goscript.NewScriptEngine("main")
+func TestTxValidatorPolicySettings(t *testing.T) {
+	se := goscript.NewTxValidator("main")
 
 	t.Run("MaxOpsPerScriptPolicy", func(t *testing.T) {
 		maxOpsPerScriptPolicyIn := int64(1000)
@@ -126,8 +126,8 @@ func TestScriptEnginePolicySettings(t *testing.T) {
 	})
 }
 
-func TestScriptEnginePolicySettingsNew(t *testing.T) {
-	se := goscript.NewScriptEngine("main")
+func TestTxValidatorPolicySettingsNew(t *testing.T) {
+	se := goscript.NewTxValidator("main")
 
 	t.Run("GenesisGracefulPeriod", func(t *testing.T) {
 		err := se.SetGenesisGracefulPeriod(50)
@@ -193,7 +193,7 @@ func TestScriptEnginePolicySettingsNew(t *testing.T) {
 	})
 }
 
-func TestScriptEngineGetSigOpCount(t *testing.T) {
+func TestTxValidatorGetSigOpCount(t *testing.T) {
 	t.Run("TXID 7be4fa421844154ec4105894def768a8bcd80da25792947d585274ce38c07105", func(t *testing.T) {
 		//This is on mainnet TxID = "7be4fa421844154ec4105894def768a8bcd80da25792947d585274ce38c07105";
 		eTxHEX := "020000000000000000ef023f6c667203b47ce2fed8c8bcc78d764c39da9c0094f1a49074e05f66910e9c44000000006b4c69522102401d5481712745cf7ada12b7251c85ca5f1b8b6c859c7e81b8002a85b0f36d3c21039d8b1e461715ddd4d10806125be8592e6f48fb69e4c31699ce6750da1c9eaeb32103af3b35d4ad547fd1ce102bbd5cce36de2277723796f1b4001ec0ea6a1db6474053aeffffffffa73018250000000017a91413402e079464ec2a85e5a613732c78b0613fcc65873f6c667203b47ce2fed8c8bcc78d764c39da9c0094f1a49074e05f66910e9c44010000006b4c69522102401d5481712745cf7ada12b7251c85ca5f1b8b6c859c7e81b8002a85b0f36d3c21039d8b1e461715ddd4d10806125be8592e6f48fb69e4c31699ce6750da1c9eaeb32103af3b35d4ad547fd1ce102bbd5cce36de2277723796f1b4001ec0ea6a1db6474053aeffffffff34b82f000000000017a91413402e079464ec2a85e5a613732c78b0613fcc65870187e74725000000001976a9141be3d23725148a90807ee6df191bcdfcf083a3b288ac00000000"
@@ -202,14 +202,14 @@ func TestScriptEngineGetSigOpCount(t *testing.T) {
 
 		eTx, _ := hex.DecodeString(eTxHEX)
 
-		se := goscript.NewScriptEngine("main")
+		se := goscript.NewTxValidator("main")
 		nbSigOpos, err := se.GetSigOpCount(eTx, utxo, blockHeight)
 		assert.Nil(t, err, "GetSigOpCount should return no error")
 		assert.Equal(t, nbSigOpos, uint64(1), "GetSigOpCount should return no zero value")
 	})
 }
 
-func TestScriptEngineScriptVerify(t *testing.T) {
+func TestTxValidatorScriptVerify(t *testing.T) {
 	t.Run("TXID 7be4fa421844154ec4105894def768a8bcd80da25792947d585274ce38c07105", func(t *testing.T) {
 		//This is on mainnet TxID = "7be4fa421844154ec4105894def768a8bcd80da25792947d585274ce38c07105";
 		eTxHEX := "020000000000000000ef023f6c667203b47ce2fed8c8bcc78d764c39da9c0094f1a49074e05f66910e9c44000000006b4c69522102401d5481712745cf7ada12b7251c85ca5f1b8b6c859c7e81b8002a85b0f36d3c21039d8b1e461715ddd4d10806125be8592e6f48fb69e4c31699ce6750da1c9eaeb32103af3b35d4ad547fd1ce102bbd5cce36de2277723796f1b4001ec0ea6a1db6474053aeffffffffa73018250000000017a91413402e079464ec2a85e5a613732c78b0613fcc65873f6c667203b47ce2fed8c8bcc78d764c39da9c0094f1a49074e05f66910e9c44010000006b4c69522102401d5481712745cf7ada12b7251c85ca5f1b8b6c859c7e81b8002a85b0f36d3c21039d8b1e461715ddd4d10806125be8592e6f48fb69e4c31699ce6750da1c9eaeb32103af3b35d4ad547fd1ce102bbd5cce36de2277723796f1b4001ec0ea6a1db6474053aeffffffff34b82f000000000017a91413402e079464ec2a85e5a613732c78b0613fcc65870187e74725000000001976a9141be3d23725148a90807ee6df191bcdfcf083a3b288ac00000000"
@@ -218,7 +218,7 @@ func TestScriptEngineScriptVerify(t *testing.T) {
 
 		eTx, _ := hex.DecodeString(eTxHEX)
 
-		se := goscript.NewScriptEngine("main")
+		se := goscript.NewTxValidator("main")
 		err := se.VerifyScript(eTx, utxo, blockHeight, true)
 		assert.Nil(t, err, "VerifyExtend should return no error")
 	})
@@ -238,13 +238,13 @@ func TestScriptEngineScriptVerify(t *testing.T) {
 		eTx, _ := hex.DecodeString(eTxHEX)
 
 		// VerifyExtendFull the transaction with empty inputs, expect error
-		se := goscript.NewScriptEngine("main")
+		se := goscript.NewTxValidator("main")
 		err := se.VerifyScript(eTx, utxo, blockHeight, true)
 		assert.NotNil(t, err, "VerifyScript should return error for zero utxo")
 	})
 }
 
-func TestScriptEngineScriptVerifyWithCustomFlags(t *testing.T) {
+func TestTxValidatorScriptVerifyWithCustomFlags(t *testing.T) {
 	t.Run("TXID 7be4fa421844154ec4105894def768a8bcd80da25792947d585274ce38c07105", func(t *testing.T) {
 		//This is on mainnet TxID = "7be4fa421844154ec4105894def768a8bcd80da25792947d585274ce38c07105";
 		eTxHEX := "020000000000000000ef023f6c667203b47ce2fed8c8bcc78d764c39da9c0094f1a49074e05f66910e9c44000000006b4c69522102401d5481712745cf7ada12b7251c85ca5f1b8b6c859c7e81b8002a85b0f36d3c21039d8b1e461715ddd4d10806125be8592e6f48fb69e4c31699ce6750da1c9eaeb32103af3b35d4ad547fd1ce102bbd5cce36de2277723796f1b4001ec0ea6a1db6474053aeffffffffa73018250000000017a91413402e079464ec2a85e5a613732c78b0613fcc65873f6c667203b47ce2fed8c8bcc78d764c39da9c0094f1a49074e05f66910e9c44010000006b4c69522102401d5481712745cf7ada12b7251c85ca5f1b8b6c859c7e81b8002a85b0f36d3c21039d8b1e461715ddd4d10806125be8592e6f48fb69e4c31699ce6750da1c9eaeb32103af3b35d4ad547fd1ce102bbd5cce36de2277723796f1b4001ec0ea6a1db6474053aeffffffff34b82f000000000017a91413402e079464ec2a85e5a613732c78b0613fcc65870187e74725000000001976a9141be3d23725148a90807ee6df191bcdfcf083a3b288ac00000000"
@@ -254,7 +254,7 @@ func TestScriptEngineScriptVerifyWithCustomFlags(t *testing.T) {
 
 		eTx, _ := hex.DecodeString(eTxHEX)
 
-		se := goscript.NewScriptEngine("main")
+		se := goscript.NewTxValidator("main")
 		err := se.VerifyScriptWithCustomFlags(eTx, utxo, blockHeight, true, flags)
 		assert.Nil(t, err, "WithCustomFlags should return no error")
 	})

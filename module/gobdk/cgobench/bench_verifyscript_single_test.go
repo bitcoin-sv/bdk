@@ -30,7 +30,7 @@ func init() {
 	dataUTXOHeights = []int32{574441}
 
 	// Initialize script engine
-	se = bdkscript.NewScriptEngine(chainNet)
+	se = bdkscript.NewTxValidator(chainNet)
 }
 
 // BenchmarkVerifyScript_Single measures the performance of VerifyScript

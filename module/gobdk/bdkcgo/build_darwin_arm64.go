@@ -7,7 +7,7 @@ package bdkcgo
 #include <bdkcgo/gobdk.h>
 #include <bdkcgo/asm_cgo.h>
 #include <bdkcgo/script_error_cgo.h>
-#include <bdkcgo/scriptengine_cgo.h>
+#include <bdkcgo/txvalidator_cgo.h>
 #include <bdkcgo/secp256k1_cloned.h>
 #include <bdkcgo/version_cgo.h>
 */
