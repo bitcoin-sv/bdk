@@ -1,5 +1,5 @@
-#include "scriptengine_wasm.h"
-#include <scriptengine.hpp>
+#include "txvalidator_wasm.h"
+#include <txvalidator.hpp>
 
 #include <emscripten/bind.h>   // embind
 

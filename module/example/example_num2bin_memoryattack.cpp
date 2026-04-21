@@ -43,7 +43,7 @@
 
 #include "assembler.h"
 #include "extendedTx.hpp"
-#include "scriptengine.hpp"
+#include "txvalidator.hpp"
 #include "utilstrencodings.h"
 
 namespace po = boost::program_options;
@@ -212,7 +212,7 @@ int main(int argc, char* argv[])
     std::cout << "  Serialized size : " << etxBin.size() << " bytes\n\n";
 
     const std::array<int32_t, 1> utxoArray = {UTXO_HEIGHT};
-    const bsv::CScriptEngine se(network);
+    const bsv::CTxValidator se(network);
 
     std::cout << "Calling VerifyScript (consensus=true)... " << std::flush;
     const ScriptError ret = se.VerifyScript(

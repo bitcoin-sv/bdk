@@ -13,7 +13,7 @@
 #include "extendedTx.hpp"
 #include "assembler.h"
 #include "utilstrencodings.h"
-#include "scriptengine.hpp"
+#include "txvalidator.hpp"
 #include "verifyarg.hpp"
 
 namespace po = boost::program_options;
@@ -71,7 +71,7 @@ int main(int argc, char* argv[])
     const bool consensus = !disableConsensus;
 
     // Initialize script engine
-    const bsv::CScriptEngine se(CHAIN_NET);
+    const bsv::CTxValidator se(CHAIN_NET);
 
     // Pre-construct the batch ONCE (outside of timing)
     std::cout << "Pre-constructing batch of " << batchSize << " transactions..." << std::endl;

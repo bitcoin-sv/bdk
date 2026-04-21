@@ -83,7 +83,7 @@ namespace po = boost::program_options;
 
 #include "assembler.h"
 #include "extendedTx.hpp"
-#include "scriptengine.hpp"
+#include "txvalidator.hpp"
 #include "utilstrencodings.h"
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -753,7 +753,7 @@ static bool RunCase(const OpcodeCase&               tc,
                     size_t                           index,
                     size_t                           total,
                     const CKey&                      key,
-                    const bsv::CScriptEngine&        se,
+                    const bsv::CTxValidator&        se,
                     const std::array<int32_t, 1>&    utxoHeights)
 {
     std::cout << "[" << std::setw(2) << index << "/" << total << "]  "
@@ -843,7 +843,7 @@ int main(int argc, char* argv[])
     SelectParams(network, std::nullopt);
 
     const CKey key = LoadKey();
-    const bsv::CScriptEngine se(network);
+    const bsv::CTxValidator se(network);
     const std::array<int32_t, 1> utxoHeights = {UTXO_HEIGHT};
 
     // ── Header ───────────────────────────────────────────────────────────

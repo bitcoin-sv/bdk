@@ -60,7 +60,7 @@ func NewVerifyBatch(capacity ...int) *VerifyBatch {
 //   - customFlags: Optional custom flags array (can be nil or empty)
 //
 // All verification arguments are collected and will be processed together
-// when the batch is submitted to ScriptEngine for verification
+// when the batch is submitted to TxValidator for verification
 func (vb *VerifyBatch) Add(extendedTX []byte, utxoHeights []int32, blockHeight int32, consensus bool, customFlags []uint32) {
 	lenTx := len(extendedTX)
 	var txPtr *C.char

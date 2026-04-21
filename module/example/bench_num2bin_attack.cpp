@@ -34,7 +34,7 @@ namespace po = boost::program_options;
 
 #include "assembler.h"
 #include "extendedTx.hpp"
-#include "scriptengine.hpp"
+#include "txvalidator.hpp"
 
 // ============================================================
 // Fixed benchmark parameters (not exposed as program args)
@@ -229,7 +229,7 @@ struct BenchResult {
     double throughput() const { return iters    / total_s(); }
 };
 
-static BenchResult RunBenchmark(const bsv::CScriptEngine&   se,
+static BenchResult RunBenchmark(const bsv::CTxValidator&   se,
                                  const std::vector<uint8_t>& txBin,
                                  std::span<const int32_t>    utxoHeights,
                                  int32_t                     blockHeight,
@@ -334,7 +334,7 @@ int main(int argc, char* argv[])
     std::cout << "  Iterations     : " << nbIter << "\n";
     std::cout << "\n";
 
-    const bsv::CScriptEngine se(network);
+    const bsv::CTxValidator se(network);
     const std::array<int32_t, 1> utxoArray = {UTXO_HEIGHT};
     const std::span<const int32_t> utxoSpan(utxoArray);
 

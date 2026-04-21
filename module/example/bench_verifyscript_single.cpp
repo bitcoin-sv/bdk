@@ -13,7 +13,7 @@
 #include "extendedTx.hpp"
 #include "assembler.h"
 #include "utilstrencodings.h"
-#include "scriptengine.hpp"
+#include "txvalidator.hpp"
 
 namespace po = boost::program_options;
 
@@ -72,7 +72,7 @@ int main(int argc, char* argv[])
     const bool consensus = !disableConsensus;
 
     // Initialize script engine
-    const bsv::CScriptEngine se(CHAIN_NET);
+    const bsv::CTxValidator se(CHAIN_NET);
 
     // Warmup run (not measured)
     std::cout << "Running warmup..." << std::endl;

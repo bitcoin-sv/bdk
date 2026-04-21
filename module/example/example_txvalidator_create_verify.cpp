@@ -19,7 +19,7 @@
 #include "extendedTx.hpp"
 #include "assembler.h"
 #include "utilstrencodings.h"
-#include "scriptengine.hpp"
+#include "txvalidator.hpp"
 
 const std::string strSecret1 = "5HxWvvfubhXpYYpS3tJkw6fq9jE9j18THftkZjHHfmFiWtmAbrj";
 
@@ -198,7 +198,7 @@ bool AppendScriptPubKey(CScript& script) {
 int main(int argc, char* argv[])
 {
     const auto network = CBaseChainParams::MAIN;
-    bsv::CScriptEngine se(network);
+    bsv::CTxValidator se(network);
 
     const bsv::CMutableTransactionExtended eTX = BuildReguarTransaction(network);
     //const bsv::CMutableTransactionExtended eTX = BuildP2SHTransaction(network);

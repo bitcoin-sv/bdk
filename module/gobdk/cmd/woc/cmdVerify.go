@@ -39,7 +39,7 @@ func init() {
 }
 
 func execVerify(cmd *cobra.Command, args []string) {
-	se := bdkscript.NewScriptEngine(network)
+	se := bdkscript.NewTxValidator(network)
 	if se == nil {
 		log.Fatalf("ERROR unable to create script engine")
 	}
@@ -70,7 +70,7 @@ func execVerify(cmd *cobra.Command, args []string) {
 	log.Printf("TOTAL processed %8d txs, elapsed : %8.2f s,    GLOBAL TPS %13.2f, FAILED : %v", len(csvData), elapsed.Seconds(), tps, nbFailed)
 }
 
-func processVerificationSingle(se *bdkscript.ScriptEngine, csvData []CsvDataRecord) int {
+func processVerificationSingle(se *bdkscript.TxValidator, csvData []CsvDataRecord) int {
 	localStartTime := time.Now()
 	localCount := 0
 	processedCount := 0
@@ -121,7 +121,7 @@ func processVerificationSingle(se *bdkscript.ScriptEngine, csvData []CsvDataReco
 	return nbFailed
 }
 
-func processVerificationBatch(se *bdkscript.ScriptEngine, csvData []CsvDataRecord) int {
+func processVerificationBatch(se *bdkscript.TxValidator, csvData []CsvDataRecord) int {
 	batch := bdkscript.NewVerifyBatch(cmdVerifyBatchSize)
 	if batch == nil {
 		log.Fatalf("ERROR unable to create verify batch")

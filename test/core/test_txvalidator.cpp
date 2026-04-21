@@ -5,9 +5,9 @@
 /// Define test module name with debug postfix
 /// Use it as an example how to add a test module
 #ifdef NDEBUG
-#define BOOST_TEST_MODULE test_scriptengine
+#define BOOST_TEST_MODULE test_txvalidator
 #else
-#define BOOST_TEST_MODULE test_scriptengined
+#define BOOST_TEST_MODULE test_txvalidatord
 #endif
 
 #include <boost/algorithm/hex.hpp>
@@ -25,7 +25,7 @@
 #include "chainparams.h"
 #include "chainparamsbase.h"
 
-#include "scriptengine.hpp"
+#include "txvalidator.hpp"
 #include "chainparams_bdk.hpp"
 #include "extendedTx.hpp"
 
@@ -34,7 +34,7 @@ namespace ba = boost::algorithm;
 using namespace std;
 using namespace bsv;
 
-BOOST_AUTO_TEST_SUITE(test_scriptengine)
+BOOST_AUTO_TEST_SUITE(test_txvalidator)
 
 // A custom chain params
 class MyParams : public CChainParams {
@@ -141,7 +141,7 @@ BOOST_AUTO_TEST_CASE(get_block_script_flags)
 BOOST_AUTO_TEST_CASE(custom_genesis_height)
 {
     const int32_t h{ 1000 };
-    bsv::CScriptEngine se("main");
+    bsv::CTxValidator se("main");
     std::string err;
     const bool ok = se.SetGenesisActivationHeight(h, &err);
     BOOST_CHECK(ok);
@@ -161,7 +161,7 @@ BOOST_AUTO_TEST_CASE(test_verify_script)
     const std::vector<uint8_t> etxBin = ParseHex(TxHexExtended);
     const std::span<const uint8_t> etx(etxBin.data(), etxBin.size());
     std::span<const int32_t> utxo(utxoArray);
-    bsv::CScriptEngine se("main");
+    bsv::CTxValidator se("main");
     const auto status = se.VerifyScript(etx, utxo, blockHeight, true);
     BOOST_CHECK_EQUAL(SCRIPT_ERR_OK, status);
 }
@@ -179,7 +179,7 @@ BOOST_AUTO_TEST_CASE(test_verify_script_custom_flags)
     const std::span<const uint8_t> etx(etxBin.data(), etxBin.size());
     std::span<const int32_t> utxo(utxoArray);
     std::span<const uint32_t> customFlags(customFlagsArray);
-    bsv::CScriptEngine se("main");
+    bsv::CTxValidator se("main");
     const auto status = se.VerifyScript(etx, utxo, blockHeight, true, customFlags);
     BOOST_CHECK_EQUAL(SCRIPT_ERR_OK, status);
 }
@@ -214,7 +214,7 @@ BOOST_AUTO_TEST_CASE(test_verify_empty_utxos)
     std::vector<uint8_t> emptyUtxoEtxBin(ss.begin(), ss.end());
     const std::span<const uint8_t> emptyUtxoEtx(emptyUtxoEtxBin.data(), emptyUtxoEtxBin.size());
 
-    bsv::CScriptEngine se("main");
+    bsv::CTxValidator se("main");
     const auto status = se.VerifyScript(emptyUtxoEtx, utxo, blockHeight, true);
     BOOST_CHECK_EQUAL(SCRIPT_ERR_UNKNOWN_ERROR, status);
 }

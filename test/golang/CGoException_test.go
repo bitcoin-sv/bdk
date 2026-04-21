@@ -9,12 +9,12 @@ import (
 
 func TestExceptionBadTransaction(t *testing.T) {
 	t.Run("handle wrong network exception", func(t *testing.T) {
-		se := goscript.NewScriptEngine("foo")
+		se := goscript.NewTxValidator("foo")
 		assert.Nil(t, se, "Expect nil script engine")
 	})
 
 	t.Run("Bad tx serialization", func(t *testing.T) {
-		se := goscript.NewScriptEngine("main")
+		se := goscript.NewTxValidator("main")
 		err := se.VerifyScript([]byte{0}, []int32{0}, int32(0), true)
 		assert.NotNil(t, err, "Expect error")
 		assert.Equal(t, err.Code(), goscript.SCRIPT_ERR_CGO_EXCEPTION, "Expect exception error")

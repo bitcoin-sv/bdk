@@ -97,7 +97,7 @@ const (
 )
 
 func CPP_SCRIPT_ERR_ERROR_COUNT() int {
-	return int(C.ScriptEngine_CPP_SCRIPT_ERR_ERROR_COUNT())
+	return int(C.TxValidator_CPP_SCRIPT_ERR_ERROR_COUNT())
 }
 
 // errorCode2String conversion of ScriptErrorCode to string, using C++ code
