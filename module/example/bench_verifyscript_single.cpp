@@ -77,8 +77,8 @@ int main(int argc, char* argv[])
     // Warmup run (not measured)
     std::cout << "Running warmup..." << std::endl;
     for (int i = 0; i < 100; ++i) {
-        const ScriptError ret = se.VerifyScript(txBinExtended, utxoHeights, BLOCK_HEIGHT, consensus);
-        if (ret != SCRIPT_ERR_OK) {
+        const TxError ret = se.VerifyScript(txBinExtended, utxoHeights, BLOCK_HEIGHT, consensus);
+        if (!bsv::TxErrorIsOk(ret)) {
             std::cerr << "ERROR: VerifyScript failed during warmup" << std::endl;
             return 1;
         }
@@ -93,10 +93,10 @@ int main(int argc, char* argv[])
 
     for (int i = 0; i < iterations; ++i) {
         auto start = std::chrono::high_resolution_clock::now();
-        const ScriptError ret = se.VerifyScript(txBinExtended, utxoHeights, BLOCK_HEIGHT, consensus);
+        const TxError ret = se.VerifyScript(txBinExtended, utxoHeights, BLOCK_HEIGHT, consensus);
         auto end = std::chrono::high_resolution_clock::now();
 
-        if (ret != SCRIPT_ERR_OK) {
+        if (!bsv::TxErrorIsOk(ret)) {
             std::cerr << "ERROR: VerifyScript failed at iteration " << i << std::endl;
             return 1;
         }

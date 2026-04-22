@@ -90,7 +90,7 @@ int main(int argc, char* argv[])
             return 1;
         }
         for (const auto& ret : results) {
-            if (ret != SCRIPT_ERR_OK) {
+            if (!bsv::TxErrorIsOk(ret)) {
                 std::cerr << "ERROR: VerifyScriptBatch failed during warmup" << std::endl;
                 return 1;
             }
@@ -115,7 +115,7 @@ int main(int argc, char* argv[])
         }
 
         for (size_t j = 0; j < results.size(); ++j) {
-            if (results[j] != SCRIPT_ERR_OK) {
+            if (!bsv::TxErrorIsOk(results[j])) {
                 std::cerr << "ERROR: VerifyScriptBatch failed at iteration " << i << ", item " << j << std::endl;
                 return 1;
             }

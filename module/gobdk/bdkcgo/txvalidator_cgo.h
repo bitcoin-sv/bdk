@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <bdkcgo/txerror_cgo.h>
+#include <bdkcgo/doserror_cgo.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -96,26 +98,25 @@ uint64_t TxValidator_GetSigOpCount(TxValidatorCGO cgoEngine,
 uint32_t TxValidator_CalculateFlags(TxValidatorCGO cgoEngine, int32_t utxoHeight, int32_t blockHeight, bool consensus);
 
 /*
- * VerifyScript take inputs in C-style and forward the input to the C++ call
- * It returns error code rather than error string for performant purpose.
+ * VerifyScript take inputs in C-style and forward the input to the C++ call.
  *
  * Inputs C-Style
  *   - Extended Transaction binary
  *   - Array of utxo heights ( required to calculate flags )
  *   - Block Height
- *   - Consensus toogle
+ *   - Consensus toggle
  */
-int TxValidator_VerifyScript(TxValidatorCGO cgoEngine,
+TxError TxValidator_VerifyScript(TxValidatorCGO cgoEngine,
 	const char* extendedTxPtr, int extendedTxLen,
 	const int32_t* hUTXOsPtr, int hUTXOsLen,
 	int32_t blockHeight, bool consensus
 );
 
 /*
- * VerifyScriptWithCustomFlags take same inputs as VerifyScript, with additional
- * argument custom flags array.
+ * VerifyScriptWithCustomFlags takes the same inputs as VerifyScript, with an
+ * additional custom flags array.
  */
-int TxValidator_VerifyScriptWithCustomFlags(TxValidatorCGO cgoEngine,
+TxError TxValidator_VerifyScriptWithCustomFlags(TxValidatorCGO cgoEngine,
 	const char* extendedTxPtr, int extendedTxLen,
 	const int32_t* hUTXOsPtr, int hUTXOsLen,
 	int32_t blockHeight, bool consensus,
@@ -123,13 +124,26 @@ int TxValidator_VerifyScriptWithCustomFlags(TxValidatorCGO cgoEngine,
 );
 
 /*
- * VerifyScriptBatch processes a batch of script verifications
+ * VerifyScriptBatch processes a batch of script verifications.
  *
- * Returns a pointer to an array of error codes (int array)
- * The caller must free the returned array using free()
- * The array size matches the batch size
+ * Returns a pointer to a malloc'd array of TxError structs, one per batch entry.
+ * The caller must free the returned array using free().
+ * resultSize is set to the number of elements.
  */
-int* TxValidator_VerifyScriptBatch(TxValidatorCGO cgoEngine, VerifyBatchCGO cgoBatch, int* resultSize);
+TxError* TxValidator_VerifyScriptBatch(TxValidatorCGO cgoEngine, VerifyBatchCGO cgoBatch, int* resultSize);
+
+/*
+ * TxValidator_CheckTransaction runs all tx-level checks then script verification.
+ * consensus=false → peer context (policy + consensus checks)
+ * consensus=true  → block context (consensus checks only)
+ *
+ * Returns a TxError struct: { domain, code }.
+ * domain=TX_ERR_DOMAIN_OK on success.
+ */
+TxError TxValidator_CheckTransaction(TxValidatorCGO cgoEngine,
+    const char* extendedTxPtr, int extendedTxLen,
+    const int32_t* hUTXOsPtr, int hUTXOsLen,
+    int32_t blockHeight, bool consensus);
 
 #ifdef __cplusplus
 }

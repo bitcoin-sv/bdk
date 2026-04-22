@@ -58,10 +58,10 @@ std::chrono::nanoseconds doVerifyScript(const bsv::CTxValidator& se, const CsvDa
 
     std::span<const int32_t> utxoHeights(record.dataUTXOHeights);
     auto verifyStart = std::chrono::high_resolution_clock::now();
-    const ScriptError ret = se.VerifyScript(record.txBinExtended, utxoHeights, record.blockHeight, consensus);
+    const TxError ret = se.VerifyScript(record.txBinExtended, utxoHeights, record.blockHeight, consensus);
     auto verifyEnd = std::chrono::high_resolution_clock::now();
 
-    if (ret != SCRIPT_ERR_OK) {
+    if (!bsv::TxErrorIsOk(ret)) {
         throw std::runtime_error("ERROR verify script for TxID " + record.txID);
     }
 

@@ -241,10 +241,10 @@ static BenchResult RunBenchmark(const bsv::CTxValidator&   se,
 
     for (int i = 0; i < iterations; ++i) {
         const auto start = std::chrono::steady_clock::now();
-        const ScriptError ret = se.VerifyScript(txBin, utxoHeights, blockHeight, consensus);
+        const TxError ret = se.VerifyScript(txBin, utxoHeights, blockHeight, consensus);
         const auto end   = std::chrono::steady_clock::now();
 
-        if (ret != SCRIPT_ERR_OK)
+        if (!bsv::TxErrorIsOk(ret))
             throw std::runtime_error("VerifyScript failed at iteration " + std::to_string(i));
 
         const int64_t ns =
@@ -348,10 +348,10 @@ int main(int argc, char* argv[])
 
     // ---- Pre-flight: verify both are valid ----
     std::cout << "Pre-flight verification...\n";
-    if (se.VerifyScript(standardBin, utxoSpan, BLOCK_HEIGHT, CONSENSUS) != SCRIPT_ERR_OK)
+    if (!bsv::TxErrorIsOk(se.VerifyScript(standardBin, utxoSpan, BLOCK_HEIGHT, CONSENSUS)))
         throw std::runtime_error("Standard tx: pre-flight failed");
     std::cout << "  Standard tx : SCRIPT_ERR_OK\n";
-    if (se.VerifyScript(attackBin,   utxoSpan, BLOCK_HEIGHT, CONSENSUS) != SCRIPT_ERR_OK)
+    if (!bsv::TxErrorIsOk(se.VerifyScript(attackBin,   utxoSpan, BLOCK_HEIGHT, CONSENSUS)))
         throw std::runtime_error("Attack tx: pre-flight failed");
     std::cout << "  Attack  tx  : SCRIPT_ERR_OK  (attack succeeds silently)\n";
     std::cout << "\n";

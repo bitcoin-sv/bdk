@@ -234,71 +234,60 @@ uint32_t TxValidator_CalculateFlags(TxValidatorCGO cgoEngine, int32_t utxoHeight
     return static_cast<bsv::CTxValidator*>(cgoEngine)->CalculateFlags(utxoHeight, blockHeight, consensus);
 }
 
-int TxValidator_VerifyScript(TxValidatorCGO cgoEngine, const char* extendedTxPtr, int extendedTxLen, const int32_t* hUTXOsPtr, int hUTXOsLen, int32_t blockHeight, bool consensus){
+TxError TxValidator_VerifyScript(TxValidatorCGO cgoEngine, const char* extendedTxPtr, int extendedTxLen, const int32_t* hUTXOsPtr, int hUTXOsLen, int32_t blockHeight, bool consensus){
+    std::span<const uint8_t> extendedTx;
+    if (extendedTxPtr != nullptr && extendedTxLen > 0) {
+        const uint8_t* pTX = static_cast<const uint8_t*>(reinterpret_cast<const void*>(extendedTxPtr));
+        extendedTx = std::span<const uint8_t>(pTX, extendedTxLen);
+    }
+    std::span<const int32_t> hUTXOs{ hUTXOsPtr, (size_t)hUTXOsLen };
+    return static_cast<bsv::CTxValidator*>(cgoEngine)->VerifyScript(extendedTx, hUTXOs, blockHeight, consensus);
+}
+
+TxError TxValidator_VerifyScriptWithCustomFlags(TxValidatorCGO cgoEngine, const char* extendedTxPtr, int extendedTxLen, const int32_t* hUTXOsPtr, int hUTXOsLen, int32_t blockHeight, bool consensus, const uint32_t* cFlagsPtr, int cFlagsLen){
+    std::span<const uint8_t> extendedTx;
+    if (extendedTxPtr != nullptr && extendedTxLen > 0) {
+        const uint8_t* pTX = static_cast<const uint8_t*>(reinterpret_cast<const void*>(extendedTxPtr));
+        extendedTx = std::span<const uint8_t>(pTX, extendedTxLen);
+    }
+    std::span<const int32_t> hUTXOs{ hUTXOsPtr, (size_t)hUTXOsLen };
+    std::span<const uint32_t> cFlags{ cFlagsPtr, (size_t)cFlagsLen };
+    return static_cast<bsv::CTxValidator*>(cgoEngine)->VerifyScript(extendedTx, hUTXOs, blockHeight, consensus, cFlags);
+}
+
+TxError TxValidator_CheckTransaction(TxValidatorCGO cgoEngine, const char* extendedTxPtr, int extendedTxLen, const int32_t* hUTXOsPtr, int hUTXOsLen, int32_t blockHeight, bool consensus) {
     try {
         std::span<const uint8_t> extendedTx;
         if (extendedTxPtr != nullptr && extendedTxLen > 0) {
             const uint8_t* pTX = static_cast<const uint8_t*>(reinterpret_cast<const void*>(extendedTxPtr));
             extendedTx = std::span<const uint8_t>(pTX, extendedTxLen);
         }
-
         std::span<const int32_t> hUTXOs{ hUTXOsPtr, (size_t)hUTXOsLen };
-
-        return static_cast<bsv::CTxValidator*>(cgoEngine)->VerifyScript(extendedTx, hUTXOs, blockHeight, consensus);
+        return static_cast<bsv::CTxValidator*>(cgoEngine)->CheckTransaction(extendedTx, hUTXOs, blockHeight, consensus);
     }
-    catch (const std::exception& e) {
-        std::cout << "CGO EXCEPTION : " << __FILE__ << ":" << __LINE__ << "    at " << __func__  << e.what() << std::endl;
-        return SCRIPT_ERR_ERROR_COUNT + 1;
+    catch (const std::exception&) {
+        return bsv::TxErrorException();
     }
 }
 
-int TxValidator_VerifyScriptWithCustomFlags(TxValidatorCGO cgoEngine, const char* extendedTxPtr, int extendedTxLen, const int32_t* hUTXOsPtr, int hUTXOsLen, int32_t blockHeight, bool consensus, const uint32_t* cFlagsPtr, int cFlagsLen){
-    try {
-        std::span<const uint8_t> extendedTx;
-        if (extendedTxPtr != nullptr && extendedTxLen > 0) {
-            const uint8_t* pTX = static_cast<const uint8_t*>(reinterpret_cast<const void*>(extendedTxPtr));
-            extendedTx = std::span<const uint8_t>(pTX, extendedTxLen);
-        }
+TxError* TxValidator_VerifyScriptBatch(TxValidatorCGO cgoEngine, VerifyBatchCGO cgoBatch, int* resultSize) {
+    bsv::CTxValidator* engine = static_cast<bsv::CTxValidator*>(cgoEngine);
+    bsv::VerifyBatch* batch = static_cast<bsv::VerifyBatch*>(cgoBatch);
 
-        std::span<const int32_t> hUTXOs{ hUTXOsPtr, (size_t)hUTXOsLen };
-        std::span<const uint32_t> cFlags{ cFlagsPtr, (size_t)cFlagsLen };
+    std::vector<TxError> results = engine->VerifyScriptBatch(*batch);
 
-        return static_cast<bsv::CTxValidator*>(cgoEngine)->VerifyScript(extendedTx, hUTXOs, blockHeight, consensus, cFlags);
-    }
-    catch (const std::exception& e) {
-        std::cout << "CGO EXCEPTION : " << __FILE__ << ":" << __LINE__ << "    at " << __func__  << e.what() << std::endl;
-        return SCRIPT_ERR_ERROR_COUNT + 1;
-    }
-}
+    const size_t size = results.size();
+    *resultSize = static_cast<int>(size);
 
-int* TxValidator_VerifyScriptBatch(TxValidatorCGO cgoEngine, VerifyBatchCGO cgoBatch, int* resultSize) {
-    try {
-        bsv::CTxValidator* engine = static_cast<bsv::CTxValidator*>(cgoEngine);
-        bsv::VerifyBatch* batch = static_cast<bsv::VerifyBatch*>(cgoBatch);
-
-        // Call the C++ VerifyScriptBatch method
-        std::vector<ScriptError> results = engine->VerifyScriptBatch(*batch);
-
-        // Allocate C array for results
-        const size_t size = results.size();
-        *resultSize = static_cast<int>(size);
-
-        int* resultArray = static_cast<int*>(malloc(size * sizeof(int)));
-        if (resultArray == nullptr) {
-            *resultSize = 0;
-            return nullptr;
-        }
-
-        // Copy results to C array
-        for (size_t i = 0; i < size; ++i) {
-            resultArray[i] = static_cast<int>(results[i]);
-        }
-
-        return resultArray;
-    }
-    catch (const std::exception& e) {
-        std::cout << "CGO EXCEPTION : " << __FILE__ << ":" << __LINE__ << "    at " << __func__ << " " << e.what() << std::endl;
+    TxError* resultArray = static_cast<TxError*>(malloc(size * sizeof(TxError)));
+    if (resultArray == nullptr) {
         *resultSize = 0;
         return nullptr;
     }
+
+    for (size_t i = 0; i < size; ++i) {
+        resultArray[i] = results[i];
+    }
+
+    return resultArray;
 }

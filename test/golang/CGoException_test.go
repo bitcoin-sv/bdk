@@ -17,6 +17,8 @@ func TestExceptionBadTransaction(t *testing.T) {
 		se := goscript.NewTxValidator("main")
 		err := se.VerifyScript([]byte{0}, []int32{0}, int32(0), true)
 		assert.NotNil(t, err, "Expect error")
-		assert.Equal(t, err.Code(), goscript.SCRIPT_ERR_CGO_EXCEPTION, "Expect exception error")
+		scriptErr, ok := err.(goscript.ScriptError)
+		assert.True(t, ok, "Expect ScriptError type")
+		assert.Equal(t, goscript.SCRIPT_ERR_CGO_EXCEPTION, scriptErr.Code(), "Expect exception error")
 	})
 }
