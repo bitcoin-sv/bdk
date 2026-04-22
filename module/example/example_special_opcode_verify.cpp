@@ -777,13 +777,13 @@ static bool RunCase(const OpcodeCase&               tc,
     const std::vector<uint8_t> etxBin(out.begin(), out.end());
 
     // Verify in post-Chronicle consensus context
-    const ScriptError ret = se.VerifyScript(
+    const TxError ret = se.VerifyScript(
         etxBin,
         std::span<const int32_t>(utxoHeights),
         BLOCK_HEIGHT,
         /*consensus=*/true);
 
-    if (ret == SCRIPT_ERR_OK)
+    if (bsv::TxErrorIsOk(ret))
     {
         const std::string etxHex = bsv::Bin2Hex(etxBin);
         std::cout << "       Result           : VALID (SCRIPT_ERR_OK)\n"
@@ -792,8 +792,8 @@ static bool RunCase(const OpcodeCase&               tc,
         return true;
     }
 
-    std::cout << "       Result           : INVALID (ScriptError = "
-              << static_cast<int>(ret) << ")\n\n";
+    std::cout << "       Result           : INVALID (domain=" << ret.domain
+              << " code=" << ret.code << ")\n\n";
     return false;
 }
 

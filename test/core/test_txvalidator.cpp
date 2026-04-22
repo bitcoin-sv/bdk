@@ -28,6 +28,7 @@
 #include "txvalidator.hpp"
 #include "chainparams_bdk.hpp"
 #include "extendedTx.hpp"
+#include "txerror.h"
 
 namespace ba = boost::algorithm;
 
@@ -163,7 +164,7 @@ BOOST_AUTO_TEST_CASE(test_verify_script)
     std::span<const int32_t> utxo(utxoArray);
     bsv::CTxValidator se("main");
     const auto status = se.VerifyScript(etx, utxo, blockHeight, true);
-    BOOST_CHECK_EQUAL(SCRIPT_ERR_OK, status);
+    BOOST_CHECK(bsv::TxErrorIsOk(status));
 }
 
 BOOST_AUTO_TEST_CASE(test_verify_script_custom_flags)
@@ -181,7 +182,7 @@ BOOST_AUTO_TEST_CASE(test_verify_script_custom_flags)
     std::span<const uint32_t> customFlags(customFlagsArray);
     bsv::CTxValidator se("main");
     const auto status = se.VerifyScript(etx, utxo, blockHeight, true, customFlags);
-    BOOST_CHECK_EQUAL(SCRIPT_ERR_OK, status);
+    BOOST_CHECK(bsv::TxErrorIsOk(status));
 }
 
 BOOST_AUTO_TEST_CASE(test_verify_empty_utxos)
@@ -216,7 +217,7 @@ BOOST_AUTO_TEST_CASE(test_verify_empty_utxos)
 
     bsv::CTxValidator se("main");
     const auto status = se.VerifyScript(emptyUtxoEtx, utxo, blockHeight, true);
-    BOOST_CHECK_EQUAL(SCRIPT_ERR_UNKNOWN_ERROR, status);
+    BOOST_CHECK(!bsv::TxErrorIsOk(status));
 }
 
 BOOST_AUTO_TEST_SUITE_END()

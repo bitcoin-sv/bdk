@@ -9,6 +9,7 @@ import "C"
 
 import (
 	"errors"
+	"fmt"
 	"runtime"
 	"unsafe"
 
@@ -84,47 +85,33 @@ func (se *TxValidator) CalculateFlags(utxoHeight int32, blockHeight int32, conse
 //   - The array of the utxo heights ( required to calculate the flags )
 //   - The current block height
 //   - The consensus parameter
-func (se *TxValidator) VerifyScript(extendedTX []byte, utxoHeights []int32, blockHeight int32, consensus bool) ScriptError {
-
+func (se *TxValidator) VerifyScript(extendedTX []byte, utxoHeights []int32, blockHeight int32, consensus bool) error {
 	lenTx := len(extendedTX)
 	var txPtr *C.char
-
 	if lenTx > 0 {
 		txPtr = (*C.char)(unsafe.Pointer(&extendedTX[0]))
 	}
 
 	lenUtxo := len(utxoHeights)
-
 	var utxoPtr *C.int32_t
 	if lenUtxo > 0 {
 		utxoPtr = (*C.int32_t)(unsafe.Pointer(&utxoHeights[0]))
 	}
 
-	errCode := int(C.TxValidator_VerifyScript(se.cSEPtr, txPtr, C.int(lenTx), utxoPtr, C.int(lenUtxo), C.int32_t(blockHeight), C.bool(consensus)))
-
-	if errCode == int(SCRIPT_ERR_OK) {
-		return nil
-	}
-
-	return NewScriptError(ScriptErrorCode(errCode))
+	result := C.TxValidator_VerifyScript(se.cSEPtr, txPtr, C.int(lenTx), utxoPtr, C.int(lenUtxo), C.int32_t(blockHeight), C.bool(consensus))
+	return translateTxError(result)
 }
 
-// VerifyScriptWithCustomFlags call VerifyScript with addtional arguments
-//   - The custom flags
-//
-// This is usually to be used in test or play with the different flags
-// than the implicitly provided
-func (se *TxValidator) VerifyScriptWithCustomFlags(extendedTX []byte, utxoHeights []int32, blockHeight int32, consensus bool, customFlags []uint32) ScriptError {
-
+// VerifyScriptWithCustomFlags calls VerifyScript with an additional custom flags array.
+// This is usually used in tests or to experiment with flags other than the implicitly calculated ones.
+func (se *TxValidator) VerifyScriptWithCustomFlags(extendedTX []byte, utxoHeights []int32, blockHeight int32, consensus bool, customFlags []uint32) error {
 	lenTx := len(extendedTX)
 	var txPtr *C.char
-
 	if lenTx > 0 {
 		txPtr = (*C.char)(unsafe.Pointer(&extendedTX[0]))
 	}
 
 	lenUtxo := len(utxoHeights)
-
 	var utxoPtr *C.int32_t
 	if lenUtxo > 0 {
 		utxoPtr = (*C.int32_t)(unsafe.Pointer(&utxoHeights[0]))
@@ -136,13 +123,8 @@ func (se *TxValidator) VerifyScriptWithCustomFlags(extendedTX []byte, utxoHeight
 		flagsPtr = (*C.uint32_t)(unsafe.Pointer(&customFlags[0]))
 	}
 
-	errCode := int(C.TxValidator_VerifyScriptWithCustomFlags(se.cSEPtr, txPtr, C.int(lenTx), utxoPtr, C.int(lenUtxo), C.int32_t(blockHeight), C.bool(consensus), flagsPtr, C.int(lenFlags)))
-
-	if errCode == int(SCRIPT_ERR_OK) {
-		return nil
-	}
-
-	return NewScriptError(ScriptErrorCode(errCode))
+	result := C.TxValidator_VerifyScriptWithCustomFlags(se.cSEPtr, txPtr, C.int(lenTx), utxoPtr, C.int(lenUtxo), C.int32_t(blockHeight), C.bool(consensus), flagsPtr, C.int(lenFlags))
+	return translateTxError(result)
 }
 
 // SetMaxOpsPerScriptPolicy set the MaxOpsPerScriptPolicy in the C++ TxValidator
@@ -369,11 +351,10 @@ func (se *TxValidator) GetPermitBareMultisig() bool {
 	return bool(C.TxValidator_GetPermitBareMultisig(se.cSEPtr))
 }
 
-// VerifyScriptBatch processes a batch of script verifications
-// Takes a VerifyBatch containing multiple verification tasks and returns a slice of ScriptError results
-// Each result corresponds to one verification task in the batch, in the same order
-// Returns nil on success or an error slice where each element represents the verification result
-func (se *TxValidator) VerifyScriptBatch(batch *VerifyBatch) []ScriptError {
+// VerifyScriptBatch processes a batch of script verifications.
+// Returns a slice of errors, one per batch entry, in the same order.
+// Each element may be nil (success), a ScriptError, a DoSError, or a generic exception error.
+func (se *TxValidator) VerifyScriptBatch(batch *VerifyBatch) []error {
 	if batch == nil || batch.cBatchPtr == nil {
 		return nil
 	}
@@ -385,24 +366,52 @@ func (se *TxValidator) VerifyScriptBatch(batch *VerifyBatch) []ScriptError {
 		return nil
 	}
 
-	// Free the C array after we're done
 	defer C.free(unsafe.Pointer(resultsPtr))
 
-	// Convert C array to Go slice
 	size := int(resultSize)
-	results := make([]ScriptError, size)
+	results := make([]error, size)
 
-	// Create a Go slice backed by the C array
-	cResults := unsafe.Slice((*C.int)(resultsPtr), size)
-
+	cResults := unsafe.Slice((*C.TxError)(resultsPtr), size)
 	for i := 0; i < size; i++ {
-		errCode := int(cResults[i])
-		if errCode == int(SCRIPT_ERR_OK) {
-			results[i] = nil
-		} else {
-			results[i] = NewScriptError(ScriptErrorCode(errCode))
-		}
+		results[i] = translateTxError(cResults[i])
 	}
 
 	return results
+}
+
+// CheckTransaction runs all tx-level checks then script verification.
+// consensus=false → peer context (policy + consensus checks)
+// consensus=true  → block context (consensus checks only)
+// Returns nil on success, DoSError or ScriptError on failure.
+func (se *TxValidator) CheckTransaction(extendedTX []byte, utxoHeights []int32, blockHeight int32, consensus bool) error {
+	lenTx := len(extendedTX)
+	var txPtr *C.char
+	if lenTx > 0 {
+		txPtr = (*C.char)(unsafe.Pointer(&extendedTX[0]))
+	}
+
+	lenUtxo := len(utxoHeights)
+	var utxoPtr *C.int32_t
+	if lenUtxo > 0 {
+		utxoPtr = (*C.int32_t)(unsafe.Pointer(&utxoHeights[0]))
+	}
+
+	result := C.TxValidator_CheckTransaction(se.cSEPtr, txPtr, C.int(lenTx), utxoPtr, C.int(lenUtxo), C.int32_t(blockHeight), C.bool(consensus))
+	return translateTxError(result)
+}
+
+// translateTxError converts a C TxError into a Go error. Returns nil on success.
+func translateTxError(r C.TxError) error {
+	switch r.domain {
+	case C.TX_ERR_DOMAIN_OK:
+		return nil
+	case C.TX_ERR_DOMAIN_SCRIPT:
+		return NewScriptError(ScriptErrorCode(r.code))
+	case C.TX_ERR_DOMAIN_DOS:
+		return NewDoSError(DoSErrorCode(r.code))
+	case C.TX_ERR_DOMAIN_EXCEPTION:
+		return NewScriptError(SCRIPT_ERR_CGO_EXCEPTION)
+	default:
+		return fmt.Errorf("unknown TxError domain=%d code=%d", r.domain, r.code)
+	}
 }

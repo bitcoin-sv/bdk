@@ -15,6 +15,8 @@
 #include <script/script.h>
 #include <script/interpreter.h>
 #include <verifyarg.hpp>
+#include <txerror.h>
+#include <doserror.hpp>
 
 namespace bsv
 {
@@ -90,18 +92,57 @@ class CTxValidator {
         //
         // If client uses a custom flags different than zero, then this will be used
         // instead of the implicitly calculated flags
-        ScriptError_t VerifyScript(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool consensus, std::span<const uint32_t> customFlags = std::span<const uint32_t>()) const;
+        TxError VerifyScript(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool consensus, std::span<const uint32_t> customFlags = std::span<const uint32_t>()) const;
 
         // VerifyScriptBatch processes multiple script verifications in a batch
-        // Returns a vector of ScriptError results, one for each VerifyArg in the input
-        std::vector<ScriptError_t> VerifyScriptBatch(const VerifyBatch& batch) const;
+        // Returns a vector of TxError results, one for each VerifyArg in the input
+        std::vector<TxError> VerifyScriptBatch(const VerifyBatch& batch) const;
+
+        // CheckTransaction runs all tx-level checks then script verification.
+        // consensus=false → peer context (all checks including policy)
+        // consensus=true  → block context (consensus checks only)
+        // TODO: implement
+        TxError CheckTransaction(std::span<const uint8_t> extendedTX,
+                                 std::span<const int32_t> utxoHeights,
+                                 int32_t blockHeight,
+                                 bool consensus) const;
+
+        // CheckPrevOutputs rejects any input with a null prevout (all-zero txid + 0xFFFFFFFF index).
+        // Both peer and block context.
+        // TODO: implement
+        TxError CheckPrevOutputs(std::span<const uint8_t> extendedTX) const;
+
+        // CheckOutputs rejects P2SH locking scripts in outputs after Genesis activation height.
+        // Both peer and block context.
+        // TODO: implement
+        TxError CheckOutputs(std::span<const uint8_t> extendedTX, int32_t blockHeight) const;
+
+        // CheckConsensusSigops enforces the pre-Genesis 20,000 sigop limit (without P2SH redeem scripts).
+        // Both peer and block context.
+        // TODO: implement
+        TxError CheckConsensusSigops(std::span<const uint8_t> extendedTX, int32_t blockHeight) const;
+
+        // CheckSigOpsPolicy enforces the configurable sigop policy limit (with P2SH redeem scripts).
+        // Peer/mempool context only.
+        // TODO: implement
+        TxError CheckSigOpsPolicy(std::span<const uint8_t> extendedTX,
+                                  std::span<const int32_t> utxoHeights,
+                                  int32_t blockHeight) const;
+
+        // IsFreeConsolidation returns OK if the transaction qualifies as a fee-exempt consolidation.
+        // Returns NotFreeConsolidation if it does not qualify.
+        // Peer/mempool context only.
+        // TODO: implement
+        TxError IsFreeConsolidation(std::span<const uint8_t> extendedTX,
+                                    std::span<const int32_t> utxoHeights,
+                                    int32_t blockHeight) const;
 
     private :
         ConfigScriptPolicy policySettings;
         std::unique_ptr<CChainParams> chainParams;
         std::shared_ptr<task::CCancellationSource> source;
 
-        ScriptError_t verifyImpl(
+        TxError verifyImpl(
             const CScript& unlocking_script,
             const CScript& locking_script,
             const bool consensus,

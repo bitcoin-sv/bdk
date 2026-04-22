@@ -215,11 +215,11 @@ int main(int argc, char* argv[])
     const bsv::CTxValidator se(network);
 
     std::cout << "Calling VerifyScript (consensus=true)... " << std::flush;
-    const ScriptError ret = se.VerifyScript(
+    const TxError ret = se.VerifyScript(
         etxBin, std::span<const int32_t>(utxoArray), BLOCK_HEIGHT, CONSENSUS);
     std::cout << "done\n\n";
 
-    if (ret == SCRIPT_ERR_OK) {
+    if (bsv::TxErrorIsOk(ret)) {
         std::cout << "Result : VALID  (SCRIPT_ERR_OK)\n"
                   << "\n"
                   << "A transaction that forces " << numChains
@@ -231,6 +231,6 @@ int main(int argc, char* argv[])
         return 0;
     }
 
-    std::cout << "Result : INVALID  (error code " << static_cast<int>(ret) << ")\n";
+    std::cout << "Result : INVALID  (domain=" << ret.domain << " code=" << ret.code << ")\n";
     return 1;
 }

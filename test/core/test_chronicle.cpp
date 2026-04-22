@@ -142,31 +142,21 @@ static bsv::CMutableTransactionExtended MakeSignedExtendedTx(
     int32_t txVersion = 1);
 
 // Serialize eTX to binary (BIP-239 extended format) and call VerifyScript.
-// Returns the ScriptError from the engine.
-static ScriptError Verify(const bsv::CMutableTransactionExtended& eTX,
-                           int32_t utxoHeight,
-                           int32_t blockHeight,
-                           bool consensus,
-                           bsv::CTxValidator& se);
+static TxError Verify(const bsv::CMutableTransactionExtended& eTX,
+                      int32_t utxoHeight,
+                      int32_t blockHeight,
+                      bool consensus,
+                      bsv::CTxValidator& se);
 
 // Verify eTX with an explicit script flags word, bypassing both the automatic
 // flag-computation logic and the standardness pre-check.
-//
-// Internally passes consensus=true to CTxValidator::VerifyScript so that the
-// standardness filter does not run, then overrides the per-input flags via the
-// customFlags parameter.  This allows tests to supply the exact flag combination
-// used by the policy path (e.g. with SCRIPT_VERIFY_DISCOURAGE_UPGRADABLE_NOPS)
-// even for non-standard scripts that would otherwise be rejected before the
-// interpreter runs.
-//
-// Note: because consensus=true is passed internally, make_eval_script_params
-// receives isConsensus=true and uses the consensus script-number limits.
-// For tests that specifically target policy script-number limits this matters,
-// but for NOP / DISCOURAGE tests the script-number limit is irrelevant.
-static ScriptError VerifyWithFlags(const bsv::CMutableTransactionExtended& eTX,
-                                    int32_t blockHeight,
-                                    uint32_t flags,
-                                    bsv::CTxValidator& se);
+static TxError VerifyWithFlags(const bsv::CMutableTransactionExtended& eTX,
+                               int32_t blockHeight,
+                               uint32_t flags,
+                               bsv::CTxValidator& se);
+
+// Returns true if r carries the given ScriptError_t (OK maps to domain OK).
+static bool txErrorIsScript(TxError r, ScriptError_t e);
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Test suite
@@ -233,18 +223,22 @@ BOOST_AUTO_TEST_CASE(test_push_only_scriptsig)
     const int32_t utxoH = POST_GENESIS_UTXO_HEIGHT;
 
     // Pre-Chronicle block: push-only always enforced regardless of tx version.
-    BOOST_CHECK_EQUAL(SCRIPT_ERR_SIG_PUSHONLY,
-        Verify(eTX_V1, utxoH, PRE_CHRONICLE_BLOCK_HEIGHT, /*consensus=*/true, se));
-    BOOST_CHECK_EQUAL(SCRIPT_ERR_SIG_PUSHONLY,
-        Verify(eTX_V2, utxoH, PRE_CHRONICLE_BLOCK_HEIGHT, /*consensus=*/true, se));
+    BOOST_CHECK(txErrorIsScript(
+        Verify(eTX_V1, utxoH, PRE_CHRONICLE_BLOCK_HEIGHT, /*consensus=*/true, se),
+        SCRIPT_ERR_SIG_PUSHONLY));
+    BOOST_CHECK(txErrorIsScript(
+        Verify(eTX_V2, utxoH, PRE_CHRONICLE_BLOCK_HEIGHT, /*consensus=*/true, se),
+        SCRIPT_ERR_SIG_PUSHONLY));
 
     // Post-Chronicle block, version = 1: push-only still enforced.
-    BOOST_CHECK_EQUAL(SCRIPT_ERR_SIG_PUSHONLY,
-        Verify(eTX_V1, utxoH, POST_CHRONICLE_BLOCK_HEIGHT, /*consensus=*/true, se));
+    BOOST_CHECK(txErrorIsScript(
+        Verify(eTX_V1, utxoH, POST_CHRONICLE_BLOCK_HEIGHT, /*consensus=*/true, se),
+        SCRIPT_ERR_SIG_PUSHONLY));
 
     // Post-Chronicle block, version = 2: push-only lifted for malleable txns.
-    BOOST_CHECK_EQUAL(SCRIPT_ERR_OK,
-        Verify(eTX_V2, utxoH, POST_CHRONICLE_BLOCK_HEIGHT, /*consensus=*/true, se));
+    BOOST_CHECK(txErrorIsScript(
+        Verify(eTX_V2, utxoH, POST_CHRONICLE_BLOCK_HEIGHT, /*consensus=*/true, se),
+        SCRIPT_ERR_OK));
 }
 
 // ── Test 2 ─────────────────────────────────────────────────────────────────
@@ -291,12 +285,14 @@ BOOST_AUTO_TEST_CASE(test_sighash_chronicle)
     const int32_t utxoH = POST_GENESIS_UTXO_HEIGHT;
 
     // Pre-Chronicle block: SCRIPT_CHRONICLE not set → modifier rejected.
-    BOOST_CHECK_EQUAL(SCRIPT_ERR_ILLEGAL_CHRONICLE,
-        Verify(eTX, utxoH, PRE_CHRONICLE_BLOCK_HEIGHT, /*consensus=*/true, se));
+    BOOST_CHECK(txErrorIsScript(
+        Verify(eTX, utxoH, PRE_CHRONICLE_BLOCK_HEIGHT, /*consensus=*/true, se),
+        SCRIPT_ERR_ILLEGAL_CHRONICLE));
 
     // Post-Chronicle block: SCRIPT_CHRONICLE set → modifier accepted.
-    BOOST_CHECK_EQUAL(SCRIPT_ERR_OK,
-        Verify(eTX, utxoH, POST_CHRONICLE_BLOCK_HEIGHT, /*consensus=*/true, se));
+    BOOST_CHECK(txErrorIsScript(
+        Verify(eTX, utxoH, POST_CHRONICLE_BLOCK_HEIGHT, /*consensus=*/true, se),
+        SCRIPT_ERR_OK));
 }
 
 // ── Test 3 ─────────────────────────────────────────────────────────────────
@@ -360,12 +356,14 @@ BOOST_AUTO_TEST_CASE(test_script_num_length)
     const int32_t blockH = POST_GENESIS_UTXO_HEIGHT;
 
     // Pre-Genesis UTXO: consensus limit = 4 bytes; 5-byte operand rejected.
-    BOOST_CHECK_EQUAL(SCRIPT_ERR_SCRIPTNUM_OVERFLOW,
-        Verify(eTX, PRE_GENESIS_UTXO_HEIGHT, blockH, /*consensus=*/true, se));
+    BOOST_CHECK(txErrorIsScript(
+        Verify(eTX, PRE_GENESIS_UTXO_HEIGHT, blockH, /*consensus=*/true, se),
+        SCRIPT_ERR_SCRIPTNUM_OVERFLOW));
 
     // Post-Genesis UTXO: consensus limit = 750 KB; 5-byte operand accepted.
-    BOOST_CHECK_EQUAL(SCRIPT_ERR_OK,
-        Verify(eTX, POST_GENESIS_UTXO_HEIGHT, blockH, /*consensus=*/true, se));
+    BOOST_CHECK(txErrorIsScript(
+        Verify(eTX, POST_GENESIS_UTXO_HEIGHT, blockH, /*consensus=*/true, se),
+        SCRIPT_ERR_OK));
 }
 
 // ── Test 4 ─────────────────────────────────────────────────────────────────
@@ -404,14 +402,16 @@ BOOST_AUTO_TEST_CASE(test_op_ver)
         MakeSignedExtendedTx(opcodeCheck, noOperands, key, /*txVersion=*/1);
 
     // Pre-Chronicle UTXO: OP_VER is a bad opcode.
-    BOOST_CHECK_EQUAL(SCRIPT_ERR_BAD_OPCODE,
+    BOOST_CHECK(txErrorIsScript(
         Verify(eTX, PRE_CHRONICLE_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT,
-               /*consensus=*/true, se));
+               /*consensus=*/true, se),
+        SCRIPT_ERR_BAD_OPCODE));
 
     // Post-Chronicle UTXO: OP_VER pushes the tx version → comparison passes.
-    BOOST_CHECK_EQUAL(SCRIPT_ERR_OK,
+    BOOST_CHECK(txErrorIsScript(
         Verify(eTX, POST_CHRONICLE_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT,
-               /*consensus=*/true, se));
+               /*consensus=*/true, se),
+        SCRIPT_ERR_OK));
 }
 
 // ── Test 5 ─────────────────────────────────────────────────────────────────
@@ -481,14 +481,16 @@ BOOST_AUTO_TEST_CASE(test_op_verif)
         eTX.mtx   = txSpend;
 
         // Pre-Chronicle UTXO: OP_VERIF is unconditionally bad (fExec=true).
-        BOOST_CHECK_EQUAL(SCRIPT_ERR_BAD_OPCODE,
+        BOOST_CHECK(txErrorIsScript(
             Verify(eTX, PRE_CHRONICLE_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT,
-                   /*consensus=*/true, se));
+                   /*consensus=*/true, se),
+            SCRIPT_ERR_BAD_OPCODE));
 
         // Post-Chronicle UTXO: OP_VERIF compares version (1==1) → OK.
-        BOOST_CHECK_EQUAL(SCRIPT_ERR_OK,
+        BOOST_CHECK(txErrorIsScript(
             Verify(eTX, POST_CHRONICLE_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT,
-                   /*consensus=*/true, se));
+                   /*consensus=*/true, se),
+            SCRIPT_ERR_OK));
     }
 
     // ── Part B: dead branch — Genesis relaxed OP_VERIF's dead-branch behavior ─
@@ -524,15 +526,17 @@ BOOST_AUTO_TEST_CASE(test_op_verif)
 
         // Pre-Genesis UTXO: OP_VERIF in dead branch → BAD_OPCODE
         // (utxo_after_genesis = false → no NOP exemption).
-        BOOST_CHECK_EQUAL(SCRIPT_ERR_BAD_OPCODE,
+        BOOST_CHECK(txErrorIsScript(
             Verify(eTX, PRE_GENESIS_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT,
-                   /*consensus=*/true, se));
+                   /*consensus=*/true, se),
+            SCRIPT_ERR_BAD_OPCODE));
 
         // Post-Genesis, pre-Chronicle UTXO: Genesis NOP exemption applies →
         // OP_VERIF in dead branch is skipped → OP_1 → OK.
-        BOOST_CHECK_EQUAL(SCRIPT_ERR_OK,
+        BOOST_CHECK(txErrorIsScript(
             Verify(eTX, PRE_CHRONICLE_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT,
-                   /*consensus=*/true, se));
+                   /*consensus=*/true, se),
+            SCRIPT_ERR_OK));
     }
 }
 
@@ -586,9 +590,10 @@ BOOST_AUTO_TEST_CASE(test_op_substr)
 
         // POLICY_FLAGS_PRE_CHRONICLE matches GetScriptVerifyFlags(PostGenesis)
         // | InputScriptVerifyFlags(PostGenesis, PostGenesis): includes DISCOURAGE.
-        BOOST_CHECK_EQUAL(SCRIPT_ERR_DISCOURAGE_UPGRADABLE_NOPS,
+        BOOST_CHECK(txErrorIsScript(
             VerifyWithFlags(discourageTX, POST_CHRONICLE_BLOCK_HEIGHT,
-                            POLICY_FLAGS_PRE_CHRONICLE, se));
+                            POLICY_FLAGS_PRE_CHRONICLE, se),
+            SCRIPT_ERR_DISCOURAGE_UPGRADABLE_NOPS));
     }
 
     // ── Consensus path: NOP leaves stack unchanged; EQUALVERIFY exposes it ──
@@ -607,14 +612,16 @@ BOOST_AUTO_TEST_CASE(test_op_substr)
         MakeSignedExtendedTx(opcodeCheck, operandPushes, key);
 
     // Pre-Chronicle, consensus: NOP leaves operands on stack; EQUALVERIFY fails.
-    BOOST_CHECK_EQUAL(SCRIPT_ERR_EQUALVERIFY,
+    BOOST_CHECK(txErrorIsScript(
         Verify(eTX, PRE_CHRONICLE_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT,
-               /*consensus=*/true, se));
+               /*consensus=*/true, se),
+        SCRIPT_ERR_EQUALVERIFY));
 
     // Post-Chronicle: OP_SUBSTR extracts "BC" → EQUALVERIFY passes → OK.
-    BOOST_CHECK_EQUAL(SCRIPT_ERR_OK,
+    BOOST_CHECK(txErrorIsScript(
         Verify(eTX, POST_CHRONICLE_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT,
-               /*consensus=*/true, se));
+               /*consensus=*/true, se),
+        SCRIPT_ERR_OK));
 }
 
 // ── Test 7 ─────────────────────────────────────────────────────────────────
@@ -652,9 +659,10 @@ BOOST_AUTO_TEST_CASE(test_op_left)
         discourageTX.vutxo = txCredit.vout;
         discourageTX.mtx   = txSpend;
 
-        BOOST_CHECK_EQUAL(SCRIPT_ERR_DISCOURAGE_UPGRADABLE_NOPS,
+        BOOST_CHECK(txErrorIsScript(
             VerifyWithFlags(discourageTX, POST_CHRONICLE_BLOCK_HEIGHT,
-                            POLICY_FLAGS_PRE_CHRONICLE, se));
+                            POLICY_FLAGS_PRE_CHRONICLE, se),
+            SCRIPT_ERR_DISCOURAGE_UPGRADABLE_NOPS));
     }
 
     // ── Consensus path: NOP leaves stack unchanged; EQUALVERIFY exposes it ──
@@ -671,14 +679,16 @@ BOOST_AUTO_TEST_CASE(test_op_left)
         MakeSignedExtendedTx(opcodeCheck, operandPushes, key);
 
     // Pre-Chronicle, consensus: NOP leaves operands on stack; EQUALVERIFY fails.
-    BOOST_CHECK_EQUAL(SCRIPT_ERR_EQUALVERIFY,
+    BOOST_CHECK(txErrorIsScript(
         Verify(eTX, PRE_CHRONICLE_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT,
-               /*consensus=*/true, se));
+               /*consensus=*/true, se),
+        SCRIPT_ERR_EQUALVERIFY));
 
     // Post-Chronicle: OP_LEFT extracts "AB" → EQUALVERIFY passes → OK.
-    BOOST_CHECK_EQUAL(SCRIPT_ERR_OK,
+    BOOST_CHECK(txErrorIsScript(
         Verify(eTX, POST_CHRONICLE_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT,
-               /*consensus=*/true, se));
+               /*consensus=*/true, se),
+        SCRIPT_ERR_OK));
 }
 
 // ── Test 8 ─────────────────────────────────────────────────────────────────
@@ -717,9 +727,10 @@ BOOST_AUTO_TEST_CASE(test_op_right)
         discourageTX.vutxo = txCredit.vout;
         discourageTX.mtx   = txSpend;
 
-        BOOST_CHECK_EQUAL(SCRIPT_ERR_DISCOURAGE_UPGRADABLE_NOPS,
+        BOOST_CHECK(txErrorIsScript(
             VerifyWithFlags(discourageTX, POST_CHRONICLE_BLOCK_HEIGHT,
-                            POLICY_FLAGS_PRE_CHRONICLE, se));
+                            POLICY_FLAGS_PRE_CHRONICLE, se),
+            SCRIPT_ERR_DISCOURAGE_UPGRADABLE_NOPS));
     }
 
     // ── Consensus path: NOP leaves stack unchanged; EQUALVERIFY exposes it ──
@@ -736,14 +747,16 @@ BOOST_AUTO_TEST_CASE(test_op_right)
         MakeSignedExtendedTx(opcodeCheck, operandPushes, key);
 
     // Pre-Chronicle, consensus: NOP leaves operands on stack; EQUALVERIFY fails.
-    BOOST_CHECK_EQUAL(SCRIPT_ERR_EQUALVERIFY,
+    BOOST_CHECK(txErrorIsScript(
         Verify(eTX, PRE_CHRONICLE_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT,
-               /*consensus=*/true, se));
+               /*consensus=*/true, se),
+        SCRIPT_ERR_EQUALVERIFY));
 
     // Post-Chronicle: OP_RIGHT extracts "CD" → EQUALVERIFY passes → OK.
-    BOOST_CHECK_EQUAL(SCRIPT_ERR_OK,
+    BOOST_CHECK(txErrorIsScript(
         Verify(eTX, POST_CHRONICLE_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT,
-               /*consensus=*/true, se));
+               /*consensus=*/true, se),
+        SCRIPT_ERR_OK));
 }
 
 // ── Test 9 ─────────────────────────────────────────────────────────────────
@@ -781,9 +794,10 @@ BOOST_AUTO_TEST_CASE(test_op_lshiftnum)
         discourageTX.vutxo = txCredit.vout;
         discourageTX.mtx   = txSpend;
 
-        BOOST_CHECK_EQUAL(SCRIPT_ERR_DISCOURAGE_UPGRADABLE_NOPS,
+        BOOST_CHECK(txErrorIsScript(
             VerifyWithFlags(discourageTX, POST_CHRONICLE_BLOCK_HEIGHT,
-                            POLICY_FLAGS_PRE_CHRONICLE, se));
+                            POLICY_FLAGS_PRE_CHRONICLE, se),
+            SCRIPT_ERR_DISCOURAGE_UPGRADABLE_NOPS));
     }
 
     // ── Consensus path: NOP leaves stack unchanged; EQUALVERIFY exposes it ──
@@ -797,14 +811,16 @@ BOOST_AUTO_TEST_CASE(test_op_lshiftnum)
         MakeSignedExtendedTx(opcodeCheck, operandPushes, key);
 
     // Pre-Chronicle, consensus: NOP leaves operands on stack; EQUALVERIFY fails.
-    BOOST_CHECK_EQUAL(SCRIPT_ERR_EQUALVERIFY,
+    BOOST_CHECK(txErrorIsScript(
         Verify(eTX, PRE_CHRONICLE_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT,
-               /*consensus=*/true, se));
+               /*consensus=*/true, se),
+        SCRIPT_ERR_EQUALVERIFY));
 
     // Post-Chronicle: 3 << 2 = 12 → EQUALVERIFY passes → OK.
-    BOOST_CHECK_EQUAL(SCRIPT_ERR_OK,
+    BOOST_CHECK(txErrorIsScript(
         Verify(eTX, POST_CHRONICLE_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT,
-               /*consensus=*/true, se));
+               /*consensus=*/true, se),
+        SCRIPT_ERR_OK));
 }
 
 // ── Test 10 ────────────────────────────────────────────────────────────────
@@ -842,9 +858,10 @@ BOOST_AUTO_TEST_CASE(test_op_rshiftnum)
         discourageTX.vutxo = txCredit.vout;
         discourageTX.mtx   = txSpend;
 
-        BOOST_CHECK_EQUAL(SCRIPT_ERR_DISCOURAGE_UPGRADABLE_NOPS,
+        BOOST_CHECK(txErrorIsScript(
             VerifyWithFlags(discourageTX, POST_CHRONICLE_BLOCK_HEIGHT,
-                            POLICY_FLAGS_PRE_CHRONICLE, se));
+                            POLICY_FLAGS_PRE_CHRONICLE, se),
+            SCRIPT_ERR_DISCOURAGE_UPGRADABLE_NOPS));
     }
 
     // ── Consensus path: NOP leaves stack unchanged; EQUALVERIFY exposes it ──
@@ -858,14 +875,16 @@ BOOST_AUTO_TEST_CASE(test_op_rshiftnum)
         MakeSignedExtendedTx(opcodeCheck, operandPushes, key);
 
     // Pre-Chronicle, consensus: NOP leaves operands on stack; EQUALVERIFY fails.
-    BOOST_CHECK_EQUAL(SCRIPT_ERR_EQUALVERIFY,
+    BOOST_CHECK(txErrorIsScript(
         Verify(eTX, PRE_CHRONICLE_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT,
-               /*consensus=*/true, se));
+               /*consensus=*/true, se),
+        SCRIPT_ERR_EQUALVERIFY));
 
     // Post-Chronicle: 12 >> 2 = 3 → EQUALVERIFY passes → OK.
-    BOOST_CHECK_EQUAL(SCRIPT_ERR_OK,
+    BOOST_CHECK(txErrorIsScript(
         Verify(eTX, POST_CHRONICLE_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT,
-               /*consensus=*/true, se));
+               /*consensus=*/true, se),
+        SCRIPT_ERR_OK));
 }
 
 // ── Test 11 ────────────────────────────────────────────────────────────────
@@ -901,13 +920,15 @@ BOOST_AUTO_TEST_CASE(test_op_2mul)
     const bsv::CMutableTransactionExtended eTX =
         MakeSignedExtendedTx(opcodeCheck, operandPushes, key);
 
-    BOOST_CHECK_EQUAL(SCRIPT_ERR_DISABLED_OPCODE,
+    BOOST_CHECK(txErrorIsScript(
         Verify(eTX, PRE_CHRONICLE_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT,
-               /*consensus=*/true, se));
+               /*consensus=*/true, se),
+        SCRIPT_ERR_DISABLED_OPCODE));
 
-    BOOST_CHECK_EQUAL(SCRIPT_ERR_OK,
+    BOOST_CHECK(txErrorIsScript(
         Verify(eTX, POST_CHRONICLE_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT,
-               /*consensus=*/true, se));
+               /*consensus=*/true, se),
+        SCRIPT_ERR_OK));
 }
 
 // ── Test 12 ────────────────────────────────────────────────────────────────
@@ -941,13 +962,15 @@ BOOST_AUTO_TEST_CASE(test_op_2div)
     const bsv::CMutableTransactionExtended eTX =
         MakeSignedExtendedTx(opcodeCheck, operandPushes, key);
 
-    BOOST_CHECK_EQUAL(SCRIPT_ERR_DISABLED_OPCODE,
+    BOOST_CHECK(txErrorIsScript(
         Verify(eTX, PRE_CHRONICLE_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT,
-               /*consensus=*/true, se));
+               /*consensus=*/true, se),
+        SCRIPT_ERR_DISABLED_OPCODE));
 
-    BOOST_CHECK_EQUAL(SCRIPT_ERR_OK,
+    BOOST_CHECK(txErrorIsScript(
         Verify(eTX, POST_CHRONICLE_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT,
-               /*consensus=*/true, se));
+               /*consensus=*/true, se),
+        SCRIPT_ERR_OK));
 }
 
 BOOST_AUTO_TEST_SUITE_END()
@@ -1049,11 +1072,11 @@ static bsv::CMutableTransactionExtended MakeSignedExtendedTx(
     return eTX;
 }
 
-static ScriptError Verify(const bsv::CMutableTransactionExtended& eTX,
-                           int32_t utxoHeight,
-                           int32_t blockHeight,
-                           bool consensus,
-                           bsv::CTxValidator& se)
+static TxError Verify(const bsv::CMutableTransactionExtended& eTX,
+                      int32_t utxoHeight,
+                      int32_t blockHeight,
+                      bool consensus,
+                      bsv::CTxValidator& se)
 {
     CDataStream out(SER_NETWORK, PROTOCOL_VERSION);
     out << eTX;
@@ -1067,22 +1090,26 @@ static ScriptError Verify(const bsv::CMutableTransactionExtended& eTX,
         consensus);
 }
 
-static ScriptError VerifyWithFlags(const bsv::CMutableTransactionExtended& eTX,
-                                    int32_t blockHeight,
-                                    uint32_t flags,
-                                    bsv::CTxValidator& se)
+static TxError VerifyWithFlags(const bsv::CMutableTransactionExtended& eTX,
+                               int32_t blockHeight,
+                               uint32_t flags,
+                               bsv::CTxValidator& se)
 {
     CDataStream out(SER_NETWORK, PROTOCOL_VERSION);
     out << eTX;
     const std::vector<uint8_t> etxBin(out.begin(), out.end());
 
-    // utxoHeight is unused when customFlags override CalculateFlags.
     std::array<int32_t, 1> dummyHeights{0};
     std::array<uint32_t, 1> customFlags{flags};
     return se.VerifyScript(
         etxBin,
         std::span<const int32_t>(dummyHeights),
         blockHeight,
-        /*consensus=*/true,     // bypasses the standardness pre-filter
+        /*consensus=*/true,
         std::span<const uint32_t>(customFlags));
+}
+
+static bool txErrorIsScript(TxError r, ScriptError_t e) {
+    if (e == SCRIPT_ERR_OK) return r.domain == TX_ERR_DOMAIN_OK;
+    return r.domain == TX_ERR_DOMAIN_SCRIPT && r.code == static_cast<int32_t>(e);
 }
