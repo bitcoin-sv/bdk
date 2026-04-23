@@ -555,8 +555,9 @@ TxError bsv::CTxValidator::implCheckStandardness(
             const ProtocolEra utxoEra = GetProtocolEra(policySettings, utxoHeights[i]);
 
             auto result = IsInputStandard(source->GetToken(), params, scriptSig, prevScript, utxoEra, flags);
-            if (!result.has_value() || !result.value())
+            if (!result.has_value() || !result.value()){
                 return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::NotStandard));
+            }
         }
     }
 
