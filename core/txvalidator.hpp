@@ -17,6 +17,7 @@
 #include <verifyarg.hpp>
 #include <txerror.h>
 #include <doserror.hpp>
+#include <extendedTx.hpp>
 
 namespace bsv
 {
@@ -107,6 +108,12 @@ class CTxValidator {
                                  int32_t blockHeight,
                                  bool consensus) const;
 
+        // CheckStandardness verifies IsStandardTx + AreInputsStandard.
+        // Policy-path check only (not applicable in block/consensus context).
+        TxError CheckStandardness(std::span<const uint8_t> extendedTX,
+                                  std::span<const int32_t> utxoHeights,
+                                  int32_t blockHeight) const;
+
         // CheckPrevOutputs rejects any input with a null prevout (all-zero txid + 0xFFFFFFFF index).
         // Both peer and block context.
         // TODO: implement
@@ -142,12 +149,65 @@ class CTxValidator {
         std::unique_ptr<CChainParams> chainParams;
         std::shared_ptr<task::CCancellationSource> source;
 
-        TxError verifyImpl(
+        // Per-input script execution — thin wrapper around the BSV core ::VerifyScript.
+        TxError bsvVerifyScript(
             const CScript& unlocking_script,
             const CScript& locking_script,
             const bool consensus,
             const unsigned int flags,
             BaseSignatureChecker& sig_checker
+        ) const;
+
+        // Whole-tx script verification loop (no deserialization; can throw).
+        TxError implVerifyScript(
+            const CTransaction& ctx,
+            const std::vector<CTxOut>& prevUTXO,
+            std::span<const int32_t> utxoHeights,
+            int32_t blockHeight,
+            bool consensus,
+            std::span<const uint32_t> customFlags = std::span<const uint32_t>()
+        ) const;
+
+        TxError implCheckStandardness(
+            const CTransaction& tx,
+            const std::vector<CTxOut>& prevUTXO,
+            std::span<const int32_t> utxoHeights,
+            int32_t blockHeight
+        ) const;
+
+        TxError implCheckPrevOutputs(
+            const CTransaction& tx
+        ) const;
+
+        TxError implCheckOutputs(
+            const CTransaction& tx,
+            int32_t blockHeight
+        ) const;
+
+        TxError implCheckConsensusSigops(
+            const CTransaction& tx,
+            int32_t blockHeight
+        ) const;
+
+        TxError implCheckSigOpsPolicy(
+            const CTransaction& tx,
+            const std::vector<CTxOut>& prevUTXO,
+            std::span<const int32_t> utxoHeights,
+            int32_t blockHeight
+        ) const;
+
+        TxError implIsFreeConsolidation(
+            const CTransaction& tx,
+            const std::vector<CTxOut>& prevUTXO,
+            std::span<const int32_t> utxoHeights,
+            int32_t blockHeight
+        ) const;
+
+        uint64_t implGetSigOpCount(
+            const CTransaction& ctx,
+            const std::vector<CTxOut>& prevUTXO,
+            std::span<const int32_t> utxoHeights,
+            int32_t blockHeight
         ) const;
 };
 
