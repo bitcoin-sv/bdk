@@ -88,7 +88,7 @@ jobs:
         run: |
           echo "BSV_ROOT=${{ github.workspace }}/bitcoin-sv" >> $GITHUB_ENV
           python -m pip install --upgrade pip --break-system-packages
-          python -m pip install -U pytest junitparser mkdocs pymdown-extensions plantuml_markdown --break-system-packages
+          python -m pip install -U pytest junitparser mkdocs pymdown-extensions plantuml_markdown requests --break-system-packages
           echo "OS_ARCH=$(uname -s | tr 'A-Z' 'a-z')_$(uname -m)" >> $GITHUB_ENV
           if [[ "${{ matrix.os }}" == "ubuntu-22.04" ]]; then
             sudo apt-get update
