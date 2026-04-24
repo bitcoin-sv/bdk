@@ -59,6 +59,12 @@ class CTxValidator {
         void SetRequireStandard(bool require);
         void SetPermitBareMultisig(bool permit);
 
+        // Consolidation policy settings
+        void SetMinConsolidationFactor(uint64_t value);
+        void SetMaxConsolidationInputScriptSize(uint64_t value);
+        void SetMinConfConsolidationInput(uint64_t value);
+        void SetAcceptNonStdConsolidationInput(bool value);
+
         // Reset all policy settings to defaults
         void ResetDefault();
 
@@ -78,6 +84,12 @@ class CTxValidator {
         int32_t GetChronicleActivationHeight() const;
         uint64_t GetGenesisGracefulPeriod() const;
         uint64_t GetChronicleGracefulPeriod() const;
+
+        // Consolidation policy getters
+        uint64_t GetMinConsolidationFactor() const;
+        uint64_t GetMaxConsolidationInputScriptSize() const;
+        uint64_t GetMinConfConsolidationInput() const;
+        bool GetAcceptNonStdConsolidationInput() const;
 
         // GetSigOpCount returns the number of sig ops in a extended transactions
         // It might throw an exception if any issue to calculate the number of sigops
@@ -148,6 +160,12 @@ class CTxValidator {
         ConfigScriptPolicy policySettings;
         std::unique_ptr<CChainParams> chainParams;
         std::shared_ptr<task::CCancellationSource> source;
+
+        // Consolidation policy settings (not part of ConfigScriptPolicy)
+        uint64_t consolidationMinFactor{20};
+        uint64_t consolidationMaxInputScriptSize{150};
+        uint64_t consolidationMinConf{6};
+        bool consolidationAcceptNonStd{false};
 
         // Per-input script execution — thin wrapper around the BSV core ::VerifyScript.
         TxError bsvVerifyScript(
