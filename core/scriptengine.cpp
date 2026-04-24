@@ -17,6 +17,8 @@ bsv::CScriptEngine::CScriptEngine(const std::string chainName)
     std::string errStr;
     bool ok {true};
 
+    policySettings.SetRequireStandard(chainParams->RequireStandard());
+
     int32_t genesisHeight;
     int32_t chronicleHeight;
     ok = ok && this->SetGenesisActivationHeight(chainParams->GetConsensus().genesisHeight, &errStr);
@@ -338,6 +340,34 @@ uint64_t bsv::CScriptEngine::GetSigOpCount(std::span<const uint8_t> extendedTX, 
 
 // Helper function to perform standardness checks
 // Returns SCRIPT_ERR_OK if all checks pass, otherwise returns SCRIPT_ERR_UNKNOWN_ERROR
+// Replicates the standardness checks performed by bitcoin-sv's TxnValidation
+// (validation.cpp) when a transaction is received from a peer (consensus=false).
+// This is never called during block validation (consensus=true).
+//
+// The check has two stages, both governed by acceptNonStandardOutput, which is
+// era-dependent:
+//   pre-Genesis  : acceptNonStandardOutput = !requireStandard
+//   post-Genesis : acceptNonStandardOutput = policySettings.acceptNonStandardOutput (default true)
+//
+// Stage 1 — output standardness (IsStandardTx):
+//   FAILS when IsStandardTx returns false AND:
+//     - acceptNonStandardOutput is false, OR
+//     - era is Genesis AND requireStandard is true AND reason != "scriptpubkey"
+//   PASSES otherwise. In particular, post-Genesis with acceptNonStandardOutput=true
+//   (mainnet default), a non-standard output script of type "scriptpubkey" (any
+//   unrecognised script) is explicitly allowed.
+//
+// Stage 2 — input standardness (AreInputsStandard equivalent):
+//   Only executed when acceptNonStandardOutput is false.
+//   FAILS when any input's scriptSig is not standard for the UTXO's era.
+//   PASSES (skipped entirely) when acceptNonStandardOutput is true.
+//
+// Summary of common mainnet scenarios (post-Genesis, requireStandard=true,
+// acceptNonStandardOutput=true by default):
+//   - Standard tx                                       → PASSES (stage 1 ok, stage 2 skipped)
+//   - Non-standard output, reason="scriptpubkey"        → PASSES (post-Genesis exception)
+//   - Non-standard output, reason!="scriptpubkey"       → FAILS  (dust, bare-multisig, etc.)
+//   - acceptNonStandardOutput=false, non-standard input → FAILS  (stage 2 triggered)
 ScriptError checkStandardness(
     const task::CCancellationToken& token,
     const ConfigScriptPolicy& policySettings,
@@ -347,16 +377,29 @@ ScriptError checkStandardness(
     int32_t blockHeight
 )
 {
-    // Check if transaction is standard (IsStandardTx)
+    // Replicate TxnValidation standardness logic from bitcoin-sv validation.cpp.
+    // acceptNonStandardOutput is era-dependent:
+    //   pre-Genesis  → !requireStandard
+    //   post-Genesis → the explicit acceptNonStandardOutput policy setting (default true)
+    const ProtocolEra era = GetProtocolEra(policySettings, blockHeight);
+    const bool acceptNonStandardOutput = policySettings.GetAcceptNonStandardOutput(era);
+
     std::string reason;
     if (!IsStandardTx(policySettings, tx, blockHeight, reason)) {
-        // Transaction is not standard
-        return SCRIPT_ERR_UNKNOWN_ERROR;
+        // Mirror the bitcoin-sv rejection condition:
+        //   always reject if acceptNonStandardOutput is false, OR
+        //   in Genesis era, reject only when requireStandard is true AND
+        //   the failure reason is not "scriptpubkey" (unrecognised output type),
+        //   because post-Genesis nodes deliberately allow arbitrary output scripts.
+        if (!acceptNonStandardOutput ||
+            (IsProtocolActive(era, ProtocolName::Genesis) && policySettings.GetRequireStandard() && reason != "scriptpubkey")) {
+            return SCRIPT_ERR_UNKNOWN_ERROR;
+        }
     }
 
-    // Check if inputs are standard (AreInputsStandard equivalent)
-    // We replicate the logic from AreInputsStandard but use embedded utxos instead of CCoinsViewCache
-    if (!tx.IsCoinBase()) {
+    // AreInputsStandard equivalent — only enforced when non-standard outputs are not accepted,
+    // mirroring the bitcoin-sv TxnValidation path (validation.cpp:1208).
+    if (!acceptNonStandardOutput && !tx.IsCoinBase()) {
         constexpr bool consensus = false;
         constexpr uint32_t flags = SCRIPT_VERIFY_NONE;
         const auto params = make_eval_script_params(policySettings, flags, consensus);
@@ -368,7 +411,6 @@ ScriptError checkStandardness(
 
             auto result = IsInputStandard(token, params, scriptSig, prevScript, utxoEra, flags);
             if (!result.has_value() || !result.value()) {
-                // Input is not standard or check was cancelled
                 return SCRIPT_ERR_UNKNOWN_ERROR;
             }
         }
@@ -407,7 +449,7 @@ ScriptError bsv::CScriptEngine::VerifyScript(std::span<const uint8_t> extendedTX
     const CTransaction ctx(eTX.mtx); // costly conversion due to hash calculation
 
     // Perform standardness checks when consensus=false
-    const bool requireStandard = chainParams->RequireStandard();
+    const bool requireStandard = policySettings.GetRequireStandard();
     if (!consensus && requireStandard) {
         ScriptError standardnessError = checkStandardness(source->GetToken(), policySettings, ctx, eTX, utxoHeights, blockHeight);
         if (standardnessError != SCRIPT_ERR_OK) {
