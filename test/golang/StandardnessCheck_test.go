@@ -27,21 +27,21 @@ func TestStandardnessCheck(t *testing.T) {
 	// condition (!acceptNonStandardOutput || (Genesis && requireStandard && reason != "scriptpubkey"))
 	// evaluates to false, so the tx passes without any explicit configuration.
 	t.Run("non-consensus with mainnet default settings passes", func(t *testing.T) {
-		se := goscript.NewScriptEngine("main")
-		result := se.VerifyScript(eTx, utxoHeights, blockHeight, false)
+		se := goscript.NewTxValidator("main")
+		result := se.CheckTransaction(eTx, utxoHeights, blockHeight, false)
 		assert.Nil(t, result)
 	})
 
 	t.Run("consensus=true passes regardless of standardness", func(t *testing.T) {
-		se := goscript.NewScriptEngine("main")
-		result := se.VerifyScript(eTx, utxoHeights, blockHeight, true)
+		se := goscript.NewTxValidator("main")
+		result := se.CheckTransaction(eTx, utxoHeights, blockHeight, true)
 		assert.Nil(t, result)
 	})
 
 	t.Run("non-consensus with RequireStandard=false passes", func(t *testing.T) {
-		se := goscript.NewScriptEngine("main")
+		se := goscript.NewTxValidator("main")
 		se.SetRequireStandard(false)
-		result := se.VerifyScript(eTx, utxoHeights, blockHeight, false)
+		result := se.CheckTransaction(eTx, utxoHeights, blockHeight, false)
 		assert.Nil(t, result)
 	})
 
@@ -49,20 +49,20 @@ func TestStandardnessCheck(t *testing.T) {
 	// bitcoin-sv allows this when acceptNonStandardOutput=true (the default), even
 	// when requireStandard=true, so the tx must pass under those default settings.
 	t.Run("non-consensus with RequireStandard=true and AcceptNonStandardOutput=true passes", func(t *testing.T) {
-		se := goscript.NewScriptEngine("main")
+		se := goscript.NewTxValidator("main")
 		se.SetRequireStandard(true)
 		se.SetAcceptNonStandardOutput(true)
-		result := se.VerifyScript(eTx, utxoHeights, blockHeight, false)
+		result := se.CheckTransaction(eTx, utxoHeights, blockHeight, false)
 		assert.Nil(t, result)
 	})
 
 	// Rejection only fires when acceptNonStandardOutput=false, which disables the
 	// post-Genesis "scriptpubkey" exception and also triggers AreInputsStandard checks.
 	t.Run("non-consensus with RequireStandard=true and AcceptNonStandardOutput=false fails", func(t *testing.T) {
-		se := goscript.NewScriptEngine("main")
+		se := goscript.NewTxValidator("main")
 		se.SetRequireStandard(true)
 		se.SetAcceptNonStandardOutput(false)
-		result := se.VerifyScript(eTx, utxoHeights, blockHeight, false)
+		result := se.CheckTransaction(eTx, utxoHeights, blockHeight, false)
 		assert.NotNil(t, result)
 	})
 }
