@@ -593,7 +593,6 @@ TxError bsv::CTxValidator::CheckTransaction(std::span<const uint8_t> extendedTX,
                 if (auto r = implCheckStandardness(ctx, eTX.vutxo, utxoHeights, blockHeight); !bsv::TxErrorIsOk(r)) return r;
             }
             if (auto r = implCheckSigOpsPolicy(ctx, eTX.vutxo, utxoHeights, blockHeight);     !bsv::TxErrorIsOk(r)) return r;
-            if (auto r = implIsFreeConsolidation(ctx, eTX.vutxo, utxoHeights, blockHeight);   !bsv::TxErrorIsOk(r)) return r;
         }
         return implVerifyScript(ctx, eTX.vutxo, utxoHeights, blockHeight, consensus);
     }
@@ -668,24 +667,6 @@ TxError bsv::CTxValidator::CheckSigOpsPolicy(std::span<const uint8_t> extendedTX
     }
 }
 
-TxError bsv::CTxValidator::IsFreeConsolidation(std::span<const uint8_t> extendedTX,
-                                                std::span<const int32_t> utxoHeights,
-                                                int32_t blockHeight) const
-{
-    try {
-        const char* begin{ reinterpret_cast<const char*>(extendedTX.data()) };
-        const char* end{ reinterpret_cast<const char*>(extendedTX.data() + extendedTX.size()) };
-        CDataStream tx_stream(begin, end, SER_NETWORK, PROTOCOL_VERSION);
-        bsv::CMutableTransactionExtended eTX;
-        tx_stream >> eTX;
-        const CTransaction ctx(eTX.mtx);
-        return implIsFreeConsolidation(ctx, eTX.vutxo, utxoHeights, blockHeight);
-    }
-    catch (const std::exception&) {
-        return bsv::TxErrorException();
-    }
-}
-
 // TODO: implement — reject inputs where prevout txid is all-zeros and index is 0xFFFFFFFF.
 TxError bsv::CTxValidator::implCheckPrevOutputs(const CTransaction& tx) const
 {
@@ -711,6 +692,24 @@ TxError bsv::CTxValidator::implCheckSigOpsPolicy(const CTransaction& tx,
                                                    int32_t blockHeight) const
 {
     return bsv::TxErrorOk();
+}
+
+TxError bsv::CTxValidator::IsFreeConsolidation(std::span<const uint8_t> extendedTX,
+                                                std::span<const int32_t> utxoHeights,
+                                                int32_t blockHeight) const
+{
+    try {
+        const char* begin{ reinterpret_cast<const char*>(extendedTX.data()) };
+        const char* end{ reinterpret_cast<const char*>(extendedTX.data() + extendedTX.size()) };
+        CDataStream tx_stream(begin, end, SER_NETWORK, PROTOCOL_VERSION);
+        bsv::CMutableTransactionExtended eTX;
+        tx_stream >> eTX;
+        const CTransaction ctx(eTX.mtx);
+        return implIsFreeConsolidation(ctx, eTX.vutxo, utxoHeights, blockHeight);
+    }
+    catch (const std::exception&) {
+        return bsv::TxErrorException();
+    }
 }
 
 // Replicates IsFreeConsolidationTxn from bitcoin-sv policy/policy.cpp.
