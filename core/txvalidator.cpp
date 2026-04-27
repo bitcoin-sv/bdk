@@ -186,7 +186,11 @@ void bsv::CTxValidator::ResetDefault()
     consolidationMaxInputScriptSize = 150;
     consolidationMinConf = 6;
     consolidationAcceptNonStd = false;
+    maxSigOpsPolicy = MAX_TX_SIGOPS_COUNT_POLICY_BEFORE_GENESIS;
 }
+
+void bsv::CTxValidator::SetMaxSigOpsPolicy(uint64_t value) { maxSigOpsPolicy = value; }
+uint64_t bsv::CTxValidator::GetMaxSigOpsPolicy() const { return maxSigOpsPolicy; }
 
 void bsv::CTxValidator::SetMinConsolidationFactor(uint64_t value) { consolidationMinFactor = value; }
 void bsv::CTxValidator::SetMaxConsolidationInputScriptSize(uint64_t value) { consolidationMaxInputScriptSize = value; }
@@ -295,18 +299,16 @@ uint64_t bsv::CTxValidator::GetSigOpCount(std::span<const uint8_t> extendedTX, s
     }
 
     const CTransaction ctx(eTX.mtx);
-    return implGetSigOpCount(ctx, eTX.vutxo, utxoHeights, blockHeight);
+    const ProtocolEra era = GetProtocolEra(policySettings, blockHeight + 1);
+    return implGetSigOpCount(ctx, eTX.vutxo, utxoHeights, era);
 }
 
 uint64_t bsv::CTxValidator::implGetSigOpCount(
     const CTransaction& ctx,
     const std::vector<CTxOut>& prevUTXO,
     std::span<const int32_t> utxoHeights,
-    int32_t blockHeight) const
+    ProtocolEra era) const
 {
-    // SigOpCount is use only in case the tx come from a peer
-    // Where the protocol era is calculated based on blockHeight + 1
-    const auto era = GetProtocolEra(policySettings, blockHeight + 1);
 
     // The part GetSigOpCountWithoutP2SH //////////////////////////////////////////////////
     bool sigOpCountError = false;
@@ -585,14 +587,15 @@ TxError bsv::CTxValidator::CheckTransaction(std::span<const uint8_t> extendedTX,
 
         const CTransaction ctx(eTX.mtx);
 
-        if (auto r = implCheckPrevOutputs(ctx);                                               !bsv::TxErrorIsOk(r)) return r;
-        if (auto r = implCheckOutputs(ctx, blockHeight);                                       !bsv::TxErrorIsOk(r)) return r;
-        if (auto r = implCheckConsensusSigops(ctx, blockHeight);                               !bsv::TxErrorIsOk(r)) return r;
+        if (auto r = implCheckPrevOutputs(ctx);      !bsv::TxErrorIsOk(r)) return r;
+        if (auto r = implCheckOutputs(ctx, blockHeight); !bsv::TxErrorIsOk(r)) return r;
         if (!consensus) {
             if (policySettings.GetRequireStandard()) {
                 if (auto r = implCheckStandardness(ctx, eTX.vutxo, utxoHeights, blockHeight); !bsv::TxErrorIsOk(r)) return r;
             }
             if (auto r = implCheckSigOpsPolicy(ctx, eTX.vutxo, utxoHeights, blockHeight);     !bsv::TxErrorIsOk(r)) return r;
+        } else {
+            if (auto r = implCheckConsensusSigops(ctx, eTX.vutxo, utxoHeights, blockHeight);   !bsv::TxErrorIsOk(r)) return r;
         }
         return implVerifyScript(ctx, eTX.vutxo, utxoHeights, blockHeight, consensus);
     }
@@ -633,7 +636,9 @@ TxError bsv::CTxValidator::CheckOutputs(std::span<const uint8_t> extendedTX, int
     }
 }
 
-TxError bsv::CTxValidator::CheckConsensusSigops(std::span<const uint8_t> extendedTX, int32_t blockHeight) const
+TxError bsv::CTxValidator::CheckConsensusSigops(std::span<const uint8_t> extendedTX,
+                                                  std::span<const int32_t> utxoHeights,
+                                                  int32_t blockHeight) const
 {
     try {
         const char* begin{ reinterpret_cast<const char*>(extendedTX.data()) };
@@ -642,7 +647,7 @@ TxError bsv::CTxValidator::CheckConsensusSigops(std::span<const uint8_t> extende
         bsv::CMutableTransactionExtended eTX;
         tx_stream >> eTX;
         const CTransaction ctx(eTX.mtx);
-        return implCheckConsensusSigops(ctx, blockHeight);
+        return implCheckConsensusSigops(ctx, eTX.vutxo, utxoHeights, blockHeight);
     }
     catch (const std::exception&) {
         return bsv::TxErrorException();
@@ -667,30 +672,65 @@ TxError bsv::CTxValidator::CheckSigOpsPolicy(std::span<const uint8_t> extendedTX
     }
 }
 
-// TODO: implement — reject inputs where prevout txid is all-zeros and index is 0xFFFFFFFF.
+// Replicates the txin.prevout.IsNull() check in CheckRegularTransaction (validation.cpp).
 TxError bsv::CTxValidator::implCheckPrevOutputs(const CTransaction& tx) const
 {
+    for (const auto& txin : tx.vin) {
+        if (txin.prevout.IsNull())
+            return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::NullPrevout));
+    }
     return bsv::TxErrorOk();
 }
 
-// TODO: implement — reject P2SH outputs after Genesis activation height.
+// Replicates the hasP2SHOutput check in CheckRegularTransaction (validation.cpp).
 TxError bsv::CTxValidator::implCheckOutputs(const CTransaction& tx, int32_t blockHeight) const
 {
+    const ProtocolEra era = GetProtocolEra(policySettings, blockHeight);
+    if (!IsProtocolActive(era, ProtocolName::Genesis))
+        return bsv::TxErrorOk();
+
+    for (const auto& txout : tx.vout) {
+        if (IsP2SH(txout.scriptPubKey))
+            return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::P2SHOutputPostGenesis));
+    }
     return bsv::TxErrorOk();
 }
 
-// TODO: implement — enforce pre-Genesis 20,000 sigop limit without P2SH.
-TxError bsv::CTxValidator::implCheckConsensusSigops(const CTransaction& tx, int32_t blockHeight) const
+// Replicates GetTransactionSigOpCount (inputs + outputs + P2SH redeem scripts) + 20,000 limit
+// as done in BlockValidateTxns (validation.cpp). Uses blockHeight era (no +1) for block context.
+TxError bsv::CTxValidator::implCheckConsensusSigops(const CTransaction& tx,
+                                                     const std::vector<CTxOut>& prevUTXO,
+                                                     std::span<const int32_t> utxoHeights,
+                                                     int32_t blockHeight) const
 {
+    const ProtocolEra era = GetProtocolEra(policySettings, blockHeight);
+    if (IsProtocolActive(era, ProtocolName::Genesis))
+        return bsv::TxErrorOk();
+
+    const uint64_t nSigOps = implGetSigOpCount(tx, prevUTXO, utxoHeights, era);
+    if (nSigOps > MAX_TX_SIGOPS_COUNT_BEFORE_GENESIS)
+        return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::SigopsConsensus));
+
     return bsv::TxErrorOk();
 }
 
-// TODO: implement — enforce configurable policy sigop limit including P2SH redeem scripts.
+// Replicates GetTransactionSigOpCount + policy limit check in AcceptToMemoryPool (validation.cpp).
+// Post-Genesis: GetMaxTxSigOpsCountPolicy returns UINT32_MAX (unlimited), so we skip the check.
+// Pre-Genesis: counts inputs + outputs + P2SH redeem scripts, checks against maxSigOpsPolicy.
 TxError bsv::CTxValidator::implCheckSigOpsPolicy(const CTransaction& tx,
                                                    const std::vector<CTxOut>& prevUTXO,
                                                    std::span<const int32_t> utxoHeights,
                                                    int32_t blockHeight) const
 {
+    const ProtocolEra era = GetProtocolEra(policySettings, blockHeight + 1);
+    if (IsProtocolActive(era, ProtocolName::Genesis))
+        return bsv::TxErrorOk(); // post-Genesis: unlimited (UINT32_MAX in bitcoin-sv)
+
+    // implGetSigOpCount replicates GetTransactionSigOpCount (inputs + outputs + P2SH redeem scripts)
+    const uint64_t nSigOps = implGetSigOpCount(tx, prevUTXO, utxoHeights, era);
+    if (nSigOps > maxSigOpsPolicy)
+        return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::SigopsPolicy));
+
     return bsv::TxErrorOk();
 }
 

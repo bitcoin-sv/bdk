@@ -148,6 +148,10 @@ add_executable(test_chronicle "${CMAKE_CURRENT_SOURCE_DIR}/test_chronicle.cpp" "
 target_link_libraries(test_chronicle PRIVATE bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono ${CMAKE_DL_LIBS})
 bdk_add_unit_test(test_chronicle)
 
+add_executable(test_sigopcount "${CMAKE_CURRENT_SOURCE_DIR}/test_sigopcount.cpp" "${BSV_APPLICATION_HDR_FILES}" "${BSV_APPLICATION_SRC_FILES}")
+target_link_libraries(test_sigopcount PRIVATE bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono ${CMAKE_DL_LIBS})
+bdk_add_unit_test(test_sigopcount)
+
 if(CMAKE_CONFIGURATION_TYPES)
   set_target_properties(test_bsv PROPERTIES FOLDER "test/core/bsv" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d
   set_target_properties(test_assembler PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d
@@ -155,6 +159,7 @@ if(CMAKE_CONFIGURATION_TYPES)
   set_target_properties(test_script_error PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d
   set_target_properties(test_txvalidator PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d
   set_target_properties(test_chronicle PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d
+  set_target_properties(test_sigopcount PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d
 else()
   set_target_properties(test_bsv PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
   set_target_properties(test_assembler PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
@@ -162,4 +167,5 @@ else()
   set_target_properties(test_script_error PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
   set_target_properties(test_txvalidator PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
   set_target_properties(test_chronicle PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
+  set_target_properties(test_sigopcount PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
 endif()

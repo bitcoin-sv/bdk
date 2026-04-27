@@ -65,6 +65,10 @@ class CTxValidator {
         void SetMinConfConsolidationInput(uint64_t value);
         void SetAcceptNonStdConsolidationInput(bool value);
 
+        // SigOps policy limit (pre-Genesis only; post-Genesis is always unlimited)
+        void SetMaxSigOpsPolicy(uint64_t value);
+        uint64_t GetMaxSigOpsPolicy() const;
+
         // Reset all policy settings to defaults
         void ResetDefault();
 
@@ -114,7 +118,6 @@ class CTxValidator {
         // CheckTransaction runs all tx-level checks then script verification.
         // consensus=false → peer context (all checks including policy)
         // consensus=true  → block context (consensus checks only)
-        // TODO: implement
         TxError CheckTransaction(std::span<const uint8_t> extendedTX,
                                  std::span<const int32_t> utxoHeights,
                                  int32_t blockHeight,
@@ -128,22 +131,20 @@ class CTxValidator {
 
         // CheckPrevOutputs rejects any input with a null prevout (all-zero txid + 0xFFFFFFFF index).
         // Both peer and block context.
-        // TODO: implement
         TxError CheckPrevOutputs(std::span<const uint8_t> extendedTX) const;
 
         // CheckOutputs rejects P2SH locking scripts in outputs after Genesis activation height.
         // Both peer and block context.
-        // TODO: implement
         TxError CheckOutputs(std::span<const uint8_t> extendedTX, int32_t blockHeight) const;
 
-        // CheckConsensusSigops enforces the pre-Genesis 20,000 sigop limit (without P2SH redeem scripts).
-        // Both peer and block context.
-        // TODO: implement
-        TxError CheckConsensusSigops(std::span<const uint8_t> extendedTX, int32_t blockHeight) const;
+        // CheckConsensusSigops enforces the pre-Genesis 20,000 sigop limit (inputs + outputs + P2SH redeem scripts).
+        // Block context. Mirrors BlockValidateTxns in bitcoin-sv validation.cpp.
+        TxError CheckConsensusSigops(std::span<const uint8_t> extendedTX,
+                                     std::span<const int32_t> utxoHeights,
+                                     int32_t blockHeight) const;
 
         // CheckSigOpsPolicy enforces the configurable sigop policy limit (with P2SH redeem scripts).
         // Peer/mempool context only.
-        // TODO: implement
         TxError CheckSigOpsPolicy(std::span<const uint8_t> extendedTX,
                                   std::span<const int32_t> utxoHeights,
                                   int32_t blockHeight) const;
@@ -151,7 +152,6 @@ class CTxValidator {
         // IsFreeConsolidation returns OK if the transaction qualifies as a fee-exempt consolidation.
         // Returns NotFreeConsolidation if it does not qualify.
         // Peer/mempool context only.
-        // TODO: implement
         TxError IsFreeConsolidation(std::span<const uint8_t> extendedTX,
                                     std::span<const int32_t> utxoHeights,
                                     int32_t blockHeight) const;
@@ -166,6 +166,10 @@ class CTxValidator {
         uint64_t consolidationMaxInputScriptSize{150};
         uint64_t consolidationMinConf{6};
         bool consolidationAcceptNonStd{false};
+
+        // SigOps policy limit (pre-Genesis only; not part of ConfigScriptPolicy)
+        // Default 4000 = MAX_TX_SIGOPS_COUNT_POLICY_BEFORE_GENESIS (20000/5)
+        uint64_t maxSigOpsPolicy{4000};
 
         // Per-input script execution — thin wrapper around the BSV core ::VerifyScript.
         TxError bsvVerifyScript(
@@ -204,6 +208,8 @@ class CTxValidator {
 
         TxError implCheckConsensusSigops(
             const CTransaction& tx,
+            const std::vector<CTxOut>& prevUTXO,
+            std::span<const int32_t> utxoHeights,
             int32_t blockHeight
         ) const;
 
@@ -225,7 +231,7 @@ class CTxValidator {
             const CTransaction& ctx,
             const std::vector<CTxOut>& prevUTXO,
             std::span<const int32_t> utxoHeights,
-            int32_t blockHeight
+            ProtocolEra era
         ) const;
 };
 
