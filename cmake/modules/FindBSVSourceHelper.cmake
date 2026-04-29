@@ -98,7 +98,6 @@ function(bdkSetMinimumListBSVSource)############################################
       "src/big_int.h"  ##  Used by [big_int.cpp], [block.cpp], [chainparams.cpp], [core_write.cpp], [interpreter.cpp], [script.cpp], [script_num.cpp], [standard.cpp]
       "src/chainparams.h"  ##  Used by [base58.cpp], [chainparams.cpp], [config.cpp], [dstencode.cpp], [interpreter.cpp]
       "src/chainparamsbase.h"  ##  Used by [base58.cpp], [chainparams.cpp], [chainparamsbase.cpp], [config.cpp], [dstencode.cpp], [interpreter.cpp], [util.cpp]
-      "src/chainparamsseeds.h"  ##  Used by [chainparams.cpp]
       "src/configscriptpolicy.h"  ##  Used by [config.cpp], [dstencode.cpp], [interpreter.cpp]
       "src/consensus/consensus.h"  ##  Used by [assembler.cpp], [base58.cpp], [block.cpp], [chainparams.cpp], [config.cpp], [core_read.cpp], [core_write.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [jsonwriter.cpp], [merkle.cpp], [random.cpp], [script.cpp], [scriptcache.cpp], [sigcache.cpp], [standard.cpp], [transaction.cpp], [arith_uint256.cpp], [util.cpp], [utilmoneystr.cpp], [utilstrencodings.cpp]
       "src/consensus/merkle.h"  ##  Used by [chainparams.cpp]
@@ -128,6 +127,7 @@ function(bdkSetMinimumListBSVSource)############################################
       "src/random.h"  ##  Used by [config.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [key.cpp], [random.cpp], [scriptcache.cpp], [sigcache.cpp], [util.cpp]
       "src/rpc/protocol.h"  ##  Used by [core_write.cpp]
       "src/script/bitcoinconsensus.h"   ##  Manually added
+      "src/script/conditional_tracker.h"  ##  Used by [interpreter.cpp]
       "src/script/int_serialization.h"  ##  Used by [interpreter.cpp], [limitedstack.cpp]
       "src/script/interpreter.h"  ##  Used by [base58.cpp], [chainparams.cpp], [config.cpp], [core_write.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [scriptcache.cpp], [sigcache.cpp], [standard.cpp]
       "src/script/limitedstack.h"  ##  Used by [limitedstack.cpp]
@@ -180,6 +180,7 @@ function(bdkSetMinimumListBSVSource)############################################
       "src/protocol_era.cpp"
       "src/pubkey.cpp"
       "src/random.cpp"
+      "src/script/conditional_tracker.cpp"
       "src/script/interpreter.cpp"
       "src/script/limitedstack.cpp"
       "src/script/opcodes.cpp"

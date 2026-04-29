@@ -10,7 +10,7 @@ import (
 func TestVersionBSV(t *testing.T) {
 	assert.Equal(t, 1, gobdk.BSV_CLIENT_VERSION_MAJOR(), "BSV Version Major")
 	assert.Equal(t, 2, gobdk.BSV_CLIENT_VERSION_MINOR(), "BSV Version Minor")
-	assert.Equal(t, 1, gobdk.BSV_CLIENT_VERSION_REVISION(), "BSV Version Patch")
+	assert.Equal(t, 2, gobdk.BSV_CLIENT_VERSION_REVISION(), "BSV Version Patch")
 }
 
 func TestVersionBDK(t *testing.T) {
