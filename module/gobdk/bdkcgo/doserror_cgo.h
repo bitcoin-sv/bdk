@@ -24,8 +24,9 @@ typedef enum {
     DOS_ERR_OUTPUT_TOO_LARGE         = 11,
     DOS_ERR_OUTPUT_TOTAL_TOO_LARGE   = 12,
     DOS_ERR_COINBASE_NOT_ALLOWED     = 13,
-    DOS_ERR_DUPLICATE_INPUTS         = 14,
-    DOS_ERR_COUNT                    = 15
+    DOS_ERR_DUPLICATE_INPUTS           = 14,
+    DOS_ERR_UNCONFIRMED_INPUT_IN_BLOCK = 15,
+    DOS_ERR_COUNT                      = 16
 } DoSError_t;
 
 /**

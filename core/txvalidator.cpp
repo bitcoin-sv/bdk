@@ -12,6 +12,22 @@
 #include <extendedTx.hpp>
 #include <txvalidator.hpp>
 
+// A UTXO height can be MEMPOOL_HEIGHT (0x7FFFFFFF) when the UTXO being spent has not yet
+// been confirmed in a block — i.e. the parent transaction is still in the mempool. The svnode
+// uses this sentinel to tell BDK "I don't have a block height for this UTXO yet."
+//
+// GetProtocolEra throws when passed MEMPOOL_HEIGHT because it cannot determine which
+// protocol era an unconfirmed UTXO belongs to. To handle this, we substitute blockHeight+1
+// (the next candidate block) for policy validation: this is the block the unconfirmed UTXO
+// would be confirmed in if mined next, so its era is correctly evaluated against that height.
+//
+// In consensus mode (block validation), a MEMPOOL_HEIGHT UTXO is conceptually invalid —
+// a block cannot spend an output that has no confirmed height — so callers return a typed
+// error (UnconfirmedInputInBlock) before this helper is reached.
+static int32_t resolveUtxoEraHeight(int32_t utxoHeight, int32_t nextBlockHeight) {
+    return (utxoHeight == MEMPOOL_HEIGHT) ? nextBlockHeight : utxoHeight;
+}
+
 bsv::CTxValidator::CTxValidator(const std::string chainName)
     : chainParams{ std::move(bsv::CreateCustomChainParams(chainName)) }
     , source{ task::CCancellationSource::Make() }
@@ -277,7 +293,7 @@ uint32_t bsv::CTxValidator::CalculateFlags(int32_t utxoHeight, int32_t blockHeig
         protocolFlags = GetScriptVerifyFlags(era, requireStandard);
     }
 
-    ProtocolEra utxoEra{ GetProtocolEra(policySettings, utxoHeight) };
+    ProtocolEra utxoEra{ GetProtocolEra(policySettings, resolveUtxoEraHeight(utxoHeight, blockHeight + 1)) };
     const uint32_t utxoFlags { InputScriptVerifyFlags(era, utxoEra) };
 
     return (protocolFlags | utxoFlags);
@@ -302,14 +318,15 @@ uint64_t bsv::CTxValidator::GetSigOpCount(std::span<const uint8_t> extendedTX, s
 
     const CTransaction ctx(eTX.mtx);
     const ProtocolEra era = GetProtocolEra(policySettings, blockHeight + 1);
-    return implGetSigOpCount(ctx, eTX.vutxo, utxoHeights, era);
+    return implGetSigOpCount(ctx, eTX.vutxo, utxoHeights, era, blockHeight + 1);
 }
 
 uint64_t bsv::CTxValidator::implGetSigOpCount(
     const CTransaction& ctx,
     const std::vector<CTxOut>& prevUTXO,
     std::span<const int32_t> utxoHeights,
-    ProtocolEra era) const
+    ProtocolEra era,
+    int32_t nextBlockHeight) const
 {
 
     // The part GetSigOpCountWithoutP2SH //////////////////////////////////////////////////
@@ -345,7 +362,7 @@ uint64_t bsv::CTxValidator::implGetSigOpCount(
 
     uint64_t nSigOpsP2SH{0};
     for (size_t index = 0; index < prevUTXO.size(); ++index) {
-        const ProtocolEra utxoEra = GetProtocolEra(policySettings, utxoHeights[index]);
+        const ProtocolEra utxoEra = GetProtocolEra(policySettings, resolveUtxoEraHeight(utxoHeights[index], nextBlockHeight));
         if (IsProtocolActive(utxoEra, ProtocolName::Genesis)) {
             continue;
         }
@@ -446,6 +463,8 @@ TxError bsv::CTxValidator::implVerifyScript(
         const CScript& uscript = ctx.vin[index].scriptSig;
 
         const int32_t utxoHeight{ utxoHeights[index] };
+        if (consensus && utxoHeight == MEMPOOL_HEIGHT)
+            return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::UnconfirmedInputInBlock));
         const uint32_t flags = !useCustomFlags ? CalculateFlags(utxoHeight, blockHeight, consensus) : customFlags[index];
 
         TxError verifyResult = bsv::TxErrorOk();
@@ -556,7 +575,7 @@ TxError bsv::CTxValidator::implCheckStandardness(
         for (size_t i = 0; i < tx.vin.size(); ++i) {
             const CScript& scriptSig = tx.vin[i].scriptSig;
             const CScript& prevScript = prevUTXO[i].scriptPubKey;
-            const ProtocolEra utxoEra = GetProtocolEra(policySettings, utxoHeights[i]);
+            const ProtocolEra utxoEra = GetProtocolEra(policySettings, resolveUtxoEraHeight(utxoHeights[i], blockHeight));
 
             auto result = IsInputStandard(source->GetToken(), params, scriptSig, prevScript, utxoEra, flags);
             if (!result.has_value() || !result.value()){
@@ -765,7 +784,12 @@ TxError bsv::CTxValidator::implCheckConsensusSigops(const CTransaction& tx,
     if (IsProtocolActive(era, ProtocolName::Genesis))
         return bsv::TxErrorOk();
 
-    const uint64_t nSigOps = implGetSigOpCount(tx, prevUTXO, utxoHeights, era);
+    for (auto h : utxoHeights) {
+        if (h == MEMPOOL_HEIGHT)
+            return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::UnconfirmedInputInBlock));
+    }
+
+    const uint64_t nSigOps = implGetSigOpCount(tx, prevUTXO, utxoHeights, era, blockHeight);
     if (nSigOps > MAX_TX_SIGOPS_COUNT_BEFORE_GENESIS)
         return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::SigopsConsensus));
 
@@ -785,7 +809,7 @@ TxError bsv::CTxValidator::implCheckSigOpsPolicy(const CTransaction& tx,
         return bsv::TxErrorOk(); // post-Genesis: unlimited (UINT32_MAX in bitcoin-sv)
 
     // implGetSigOpCount replicates GetTransactionSigOpCount (inputs + outputs + P2SH redeem scripts)
-    const uint64_t nSigOps = implGetSigOpCount(tx, prevUTXO, utxoHeights, era);
+    const uint64_t nSigOps = implGetSigOpCount(tx, prevUTXO, utxoHeights, era, blockHeight + 1);
     if (nSigOps > maxSigOpsPolicy)
         return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::SigopsPolicy));
 

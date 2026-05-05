@@ -236,7 +236,8 @@ class CTxValidator {
             const CTransaction& ctx,
             const std::vector<CTxOut>& prevUTXO,
             std::span<const int32_t> utxoHeights,
-            ProtocolEra era
+            ProtocolEra era,
+            int32_t nextBlockHeight
         ) const;
 };
 
