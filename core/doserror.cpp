@@ -15,6 +15,7 @@ std::string_view bsv::DoSErrorString(bsv::DoSError_t err) {
         case DoSError_t::OutputNegative:        return "bad-txns-vout-negative";
         case DoSError_t::OutputTooLarge:        return "bad-txns-vout-toolarge";
         case DoSError_t::OutputTotalTooLarge:   return "bad-txns-txouttotal-toolarge";
+        case DoSError_t::CoinbaseNotAllowed:    return "bad-tx-coinbase";
         default:                                return "unknown-dos-error";
     }
 }
