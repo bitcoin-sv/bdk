@@ -17,7 +17,13 @@ typedef enum {
     DOS_ERR_SIGOPS_POLICY            = 4,
     DOS_ERR_NOT_FREE_CONSOLIDATION   = 5,
     DOS_ERR_NOT_STANDARD             = 6,
-    DOS_ERR_COUNT                    = 7
+    DOS_ERR_VIN_EMPTY                = 7,
+    DOS_ERR_VOUT_EMPTY               = 8,
+    DOS_ERR_OVERSIZE                 = 9,
+    DOS_ERR_OUTPUT_NEGATIVE          = 10,
+    DOS_ERR_OUTPUT_TOO_LARGE         = 11,
+    DOS_ERR_OUTPUT_TOTAL_TOO_LARGE   = 12,
+    DOS_ERR_COUNT                    = 13
 } DoSError_t;
 
 /**

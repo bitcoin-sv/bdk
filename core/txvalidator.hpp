@@ -197,6 +197,11 @@ class CTxValidator {
             int32_t blockHeight
         ) const;
 
+        TxError implCheckTransactionCommon(
+            const CTransaction& tx,
+            int32_t blockHeight
+        ) const;
+
         TxError implCheckPrevOutputs(
             const CTransaction& tx
         ) const;

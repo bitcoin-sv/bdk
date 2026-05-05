@@ -587,6 +587,7 @@ TxError bsv::CTxValidator::CheckTransaction(std::span<const uint8_t> extendedTX,
 
         const CTransaction ctx(eTX.mtx);
 
+        if (auto r = implCheckTransactionCommon(ctx, blockHeight); !bsv::TxErrorIsOk(r)) return r;
         if (auto r = implCheckPrevOutputs(ctx);      !bsv::TxErrorIsOk(r)) return r;
         if (auto r = implCheckOutputs(ctx, blockHeight); !bsv::TxErrorIsOk(r)) return r;
         if (!consensus) {
@@ -670,6 +671,51 @@ TxError bsv::CTxValidator::CheckSigOpsPolicy(std::span<const uint8_t> extendedTX
     catch (const std::exception&) {
         return bsv::TxErrorException();
     }
+}
+
+// Replicates bitcoin-sv CheckTransactionCommon (validation.cpp:520).
+// Checks empty vin/vout, consensus serialization size, per-output money range,
+// total output overflow, and pre-Genesis non-P2SH sigops consensus limit.
+// blockHeight is the era-determining height: blockHeight for consensus,
+// blockHeight+1 for policy (callers pass the already-adjusted value).
+TxError bsv::CTxValidator::implCheckTransactionCommon(
+    const CTransaction& tx,
+    int32_t blockHeight) const
+{
+    if (tx.vin.empty())
+        return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::VinEmpty));
+
+    if (tx.vout.empty())
+        return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::VoutEmpty));
+
+    const ProtocolEra era = GetProtocolEra(policySettings, blockHeight);
+    const uint64_t maxTxSize = policySettings.GetMaxTxSize(era, true);
+    if (::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION) > maxTxSize)
+        return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::Oversize));
+
+    Amount nValueOut(0);
+    for (const auto& txout : tx.vout) {
+        if (txout.nValue < Amount(0))
+            return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::OutputNegative));
+        if (txout.nValue > MAX_MONEY)
+            return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::OutputTooLarge));
+        nValueOut += txout.nValue;
+        if (!MoneyRange(nValueOut))
+            return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::OutputTotalTooLarge));
+    }
+
+    if (!IsProtocolActive(era, ProtocolName::Genesis)) {
+        bool sigOpCountError = false;
+        uint64_t nSigOps = 0;
+        for (const auto& txin : tx.vin)
+            nSigOps += txin.scriptSig.GetSigOpCount(false, era, sigOpCountError);
+        for (const auto& txout : tx.vout)
+            nSigOps += txout.scriptPubKey.GetSigOpCount(false, era, sigOpCountError);
+        if (sigOpCountError || nSigOps > MAX_TX_SIGOPS_COUNT_BEFORE_GENESIS)
+            return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::SigopsConsensus));
+    }
+
+    return bsv::TxErrorOk();
 }
 
 // Replicates the txin.prevout.IsNull() check in CheckRegularTransaction (validation.cpp).
