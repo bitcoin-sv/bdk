@@ -24,7 +24,8 @@ const (
 	DOS_ERR_OUTPUT_TOO_LARGE         DoSErrorCode = 11
 	DOS_ERR_OUTPUT_TOTAL_TOO_LARGE   DoSErrorCode = 12
 	DOS_ERR_COINBASE_NOT_ALLOWED     DoSErrorCode = 13
-	DOS_ERR_COUNT                    DoSErrorCode = 14
+	DOS_ERR_DUPLICATE_INPUTS         DoSErrorCode = 14
+	DOS_ERR_COUNT                    DoSErrorCode = 15
 )
 
 // DoSError is the Go error type for transaction-level validation failures.
