@@ -587,6 +587,8 @@ TxError bsv::CTxValidator::CheckTransaction(std::span<const uint8_t> extendedTX,
 
         const CTransaction ctx(eTX.mtx);
 
+        if (ctx.IsCoinBase())
+            return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::CoinbaseNotAllowed));
         if (auto r = implCheckTransactionCommon(ctx, blockHeight); !bsv::TxErrorIsOk(r)) return r;
         if (auto r = implCheckPrevOutputs(ctx);      !bsv::TxErrorIsOk(r)) return r;
         if (auto r = implCheckOutputs(ctx, blockHeight); !bsv::TxErrorIsOk(r)) return r;

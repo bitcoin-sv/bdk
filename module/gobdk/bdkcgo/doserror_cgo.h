@@ -23,7 +23,8 @@ typedef enum {
     DOS_ERR_OUTPUT_NEGATIVE          = 10,
     DOS_ERR_OUTPUT_TOO_LARGE         = 11,
     DOS_ERR_OUTPUT_TOTAL_TOO_LARGE   = 12,
-    DOS_ERR_COUNT                    = 13
+    DOS_ERR_COINBASE_NOT_ALLOWED     = 13,
+    DOS_ERR_COUNT                    = 14
 } DoSError_t;
 
 /**
