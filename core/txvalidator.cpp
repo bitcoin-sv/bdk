@@ -205,10 +205,13 @@ void bsv::CTxValidator::ResetDefault()
     consolidationMinConf = 6;
     consolidationAcceptNonStd = false;
     maxSigOpsPolicy = MAX_TX_SIGOPS_COUNT_POLICY_BEFORE_GENESIS;
+    maxSigOpsPostGenesisPolicy = MAX_TX_SIGOPS_COUNT_POLICY_AFTER_GENESIS;
 }
 
 void bsv::CTxValidator::SetMaxSigOpsPolicy(uint64_t value) { maxSigOpsPolicy = value; }
 uint64_t bsv::CTxValidator::GetMaxSigOpsPolicy() const { return maxSigOpsPolicy; }
+void bsv::CTxValidator::SetMaxSigOpsPostGenesisPolicy(uint64_t value) { maxSigOpsPostGenesisPolicy = value; }
+uint64_t bsv::CTxValidator::GetMaxSigOpsPostGenesisPolicy() const { return maxSigOpsPostGenesisPolicy; }
 
 void bsv::CTxValidator::SetMinConsolidationFactor(uint64_t value) { consolidationMinFactor = value; }
 void bsv::CTxValidator::SetMaxConsolidationInputScriptSize(uint64_t value) { consolidationMaxInputScriptSize = value; }
@@ -797,20 +800,22 @@ TxError bsv::CTxValidator::implCheckConsensusSigops(const CTransaction& tx,
 }
 
 // Replicates GetTransactionSigOpCount + policy limit check in AcceptToMemoryPool (validation.cpp).
-// Post-Genesis: GetMaxTxSigOpsCountPolicy returns UINT32_MAX (unlimited), so we skip the check.
 // Pre-Genesis: counts inputs + outputs + P2SH redeem scripts, checks against maxSigOpsPolicy.
+// Post-Genesis: P2SH sigops skipped (implGetSigOpCount handles this); checks against
+//   maxSigOpsPostGenesisPolicy (mirrors GetMaxTxSigOpsCountPolicy, default UINT32_MAX).
 TxError bsv::CTxValidator::implCheckSigOpsPolicy(const CTransaction& tx,
                                                    const std::vector<CTxOut>& prevUTXO,
                                                    std::span<const int32_t> utxoHeights,
                                                    int32_t blockHeight) const
 {
     const ProtocolEra era = GetProtocolEra(policySettings, blockHeight + 1);
-    if (IsProtocolActive(era, ProtocolName::Genesis))
-        return bsv::TxErrorOk(); // post-Genesis: unlimited (UINT32_MAX in bitcoin-sv)
+    const uint64_t limit = IsProtocolActive(era, ProtocolName::Genesis)
+        ? maxSigOpsPostGenesisPolicy
+        : maxSigOpsPolicy;
 
     // implGetSigOpCount replicates GetTransactionSigOpCount (inputs + outputs + P2SH redeem scripts)
     const uint64_t nSigOps = implGetSigOpCount(tx, prevUTXO, utxoHeights, era, blockHeight + 1);
-    if (nSigOps > maxSigOpsPolicy)
+    if (nSigOps > limit)
         return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::SigopsPolicy));
 
     return bsv::TxErrorOk();
