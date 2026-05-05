@@ -33,7 +33,8 @@ enum class DoSError_t : int32_t {
     OutputTooLarge        = 11, // "bad-txns-vout-toolarge"   (DoS 100)
     OutputTotalTooLarge   = 12, // "bad-txns-txouttotal-toolarge" (DoS 100)
     CoinbaseNotAllowed    = 13, // "bad-tx-coinbase" (DoS 100) — coinbase in non-coinbase context
-    Count                 = 14  // sentinel
+    DuplicateInputs       = 14, // "bad-txns-inputs-duplicate" (DoS 100)
+    Count                 = 15  // sentinel
 };
 
 std::string_view DoSErrorString(DoSError_t err);

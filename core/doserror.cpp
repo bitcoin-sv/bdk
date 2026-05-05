@@ -16,6 +16,7 @@ std::string_view bsv::DoSErrorString(bsv::DoSError_t err) {
         case DoSError_t::OutputTooLarge:        return "bad-txns-vout-toolarge";
         case DoSError_t::OutputTotalTooLarge:   return "bad-txns-txouttotal-toolarge";
         case DoSError_t::CoinbaseNotAllowed:    return "bad-tx-coinbase";
+        case DoSError_t::DuplicateInputs:       return "bad-txns-inputs-duplicate";
         default:                                return "unknown-dos-error";
     }
 }

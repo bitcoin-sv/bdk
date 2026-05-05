@@ -1,3 +1,5 @@
+#include <set>
+
 #include <base58.h>
 #include <core_io.h>
 #include <protocol_era.h>
@@ -720,12 +722,16 @@ TxError bsv::CTxValidator::implCheckTransactionCommon(
     return bsv::TxErrorOk();
 }
 
-// Replicates the txin.prevout.IsNull() check in CheckRegularTransaction (validation.cpp).
+// Replicates CheckRegularTransaction (validation.cpp): null-prevout check and
+// duplicate-prevout detection (bad-txns-inputs-duplicate, DoS 100).
 TxError bsv::CTxValidator::implCheckPrevOutputs(const CTransaction& tx) const
 {
+    std::set<COutPoint> seen;
     for (const auto& txin : tx.vin) {
         if (txin.prevout.IsNull())
             return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::NullPrevout));
+        if (!seen.insert(txin.prevout).second)
+            return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::DuplicateInputs));
     }
     return bsv::TxErrorOk();
 }
