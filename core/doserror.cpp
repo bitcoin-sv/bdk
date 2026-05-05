@@ -9,6 +9,12 @@ std::string_view bsv::DoSErrorString(bsv::DoSError_t err) {
         case DoSError_t::SigopsPolicy:          return "bad-txns-too-many-sigops";
         case DoSError_t::NotFreeConsolidation:  return "not-free-consolidation";
         case DoSError_t::NotStandard:           return "not-standard";
+        case DoSError_t::VinEmpty:              return "bad-txns-vin-empty";
+        case DoSError_t::VoutEmpty:             return "bad-txns-vout-empty";
+        case DoSError_t::Oversize:              return "bad-txns-oversize";
+        case DoSError_t::OutputNegative:        return "bad-txns-vout-negative";
+        case DoSError_t::OutputTooLarge:        return "bad-txns-vout-toolarge";
+        case DoSError_t::OutputTotalTooLarge:   return "bad-txns-txouttotal-toolarge";
         default:                                return "unknown-dos-error";
     }
 }

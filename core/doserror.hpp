@@ -25,7 +25,14 @@ enum class DoSError_t : int32_t {
     SigopsPolicy          = 4,  // "bad-txns-too-many-sigops" (with P2SH redeem scripts)
     NotFreeConsolidation  = 5,  // underfunded tx, does not qualify as free consolidation
     NotStandard           = 6,  // tx or input fails standardness check (REJECT_NONSTANDARD)
-    Count                 = 7   // sentinel
+    // CheckTransactionCommon checks — both peer and block context
+    VinEmpty              = 7,  // "bad-txns-vin-empty"       (DoS 10)
+    VoutEmpty             = 8,  // "bad-txns-vout-empty"      (DoS 10)
+    Oversize              = 9,  // "bad-txns-oversize"        (DoS 100)
+    OutputNegative        = 10, // "bad-txns-vout-negative"   (DoS 100)
+    OutputTooLarge        = 11, // "bad-txns-vout-toolarge"   (DoS 100)
+    OutputTotalTooLarge   = 12, // "bad-txns-txouttotal-toolarge" (DoS 100)
+    Count                 = 13  // sentinel
 };
 
 std::string_view DoSErrorString(DoSError_t err);

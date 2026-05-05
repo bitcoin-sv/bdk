@@ -17,7 +17,13 @@ const (
 	DOS_ERR_SIGOPS_POLICY            DoSErrorCode = 4
 	DOS_ERR_NOT_FREE_CONSOLIDATION   DoSErrorCode = 5
 	DOS_ERR_NOT_STANDARD             DoSErrorCode = 6
-	DOS_ERR_COUNT                    DoSErrorCode = 7
+	DOS_ERR_VIN_EMPTY                DoSErrorCode = 7
+	DOS_ERR_VOUT_EMPTY               DoSErrorCode = 8
+	DOS_ERR_OVERSIZE                 DoSErrorCode = 9
+	DOS_ERR_OUTPUT_NEGATIVE          DoSErrorCode = 10
+	DOS_ERR_OUTPUT_TOO_LARGE         DoSErrorCode = 11
+	DOS_ERR_OUTPUT_TOTAL_TOO_LARGE   DoSErrorCode = 12
+	DOS_ERR_COUNT                    DoSErrorCode = 13
 )
 
 // DoSError is the Go error type for transaction-level validation failures.
