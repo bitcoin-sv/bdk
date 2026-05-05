@@ -601,9 +601,7 @@ TxError bsv::CTxValidator::CheckTransaction(std::span<const uint8_t> extendedTX,
         if (auto r = implCheckPrevOutputs(ctx);                                                 !bsv::TxErrorIsOk(r)) return r;
         if (auto r = implCheckOutputs(ctx, checkHeight);                                        !bsv::TxErrorIsOk(r)) return r;
         if (!consensus) {
-            if (policySettings.GetRequireStandard()) {
-                if (auto r = implCheckStandardness(ctx, eTX.vutxo, utxoHeights, checkHeight);  !bsv::TxErrorIsOk(r)) return r;
-            }
+            if (auto r = implCheckStandardness(ctx, eTX.vutxo, utxoHeights, checkHeight);      !bsv::TxErrorIsOk(r)) return r;
             if (auto r = implCheckSigOpsPolicy(ctx, eTX.vutxo, utxoHeights, blockHeight);      !bsv::TxErrorIsOk(r)) return r;
         } else {
             if (auto r = implCheckConsensusSigops(ctx, eTX.vutxo, utxoHeights, blockHeight);   !bsv::TxErrorIsOk(r)) return r;
