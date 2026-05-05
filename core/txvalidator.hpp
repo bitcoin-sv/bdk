@@ -65,9 +65,12 @@ class CTxValidator {
         void SetMinConfConsolidationInput(uint64_t value);
         void SetAcceptNonStdConsolidationInput(bool value);
 
-        // SigOps policy limit (pre-Genesis only; post-Genesis is always unlimited)
+        // SigOps policy limits. Pre-Genesis default: 4000 (MAX_TX_SIGOPS_COUNT_POLICY_BEFORE_GENESIS).
+        // Post-Genesis default: UINT32_MAX (MAX_TX_SIGOPS_COUNT_POLICY_AFTER_GENESIS); operators can lower it.
         void SetMaxSigOpsPolicy(uint64_t value);
         uint64_t GetMaxSigOpsPolicy() const;
+        void SetMaxSigOpsPostGenesisPolicy(uint64_t value);
+        uint64_t GetMaxSigOpsPostGenesisPolicy() const;
 
         // Reset all policy settings to defaults
         void ResetDefault();
@@ -167,9 +170,11 @@ class CTxValidator {
         uint64_t consolidationMinConf{6};
         bool consolidationAcceptNonStd{false};
 
-        // SigOps policy limit (pre-Genesis only; not part of ConfigScriptPolicy)
-        // Default 4000 = MAX_TX_SIGOPS_COUNT_POLICY_BEFORE_GENESIS (20000/5)
+        // SigOps policy limits (not part of ConfigScriptPolicy)
+        // Pre-Genesis default: 4000 = MAX_TX_SIGOPS_COUNT_POLICY_BEFORE_GENESIS (20000/5)
+        // Post-Genesis default: UINT32_MAX = MAX_TX_SIGOPS_COUNT_POLICY_AFTER_GENESIS
         uint64_t maxSigOpsPolicy{4000};
+        uint64_t maxSigOpsPostGenesisPolicy{UINT32_MAX};
 
         // Per-input script execution — thin wrapper around the BSV core ::VerifyScript.
         TxError bsvVerifyScript(
