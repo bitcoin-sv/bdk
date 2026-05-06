@@ -23,16 +23,41 @@ namespace bsv
 {
 
 /**
+ * CTxValidator holds its own GlobalConfig, ChainParams and CCancellationSource
+ * objects in order to execute the script fully.
  *
- * CTxValidator hold its own GlobalConfig, ChainParams and CCancellationSource
- * objects in order to execute the script fully
+ * It forwards config settings to its own GlobalConfig instance.
  *
- * It forward the config settings to its own GlobalConfig instance
- *
- * TODO :
+ * TODO:
  *   - Move this class to core part and use it for all other languages binding
  *   - Remove the usage of old implementation where it use implicitly global objects in bsv
  *
+ * Checks present in bitcoin-sv's TxnValidation / BlockValidateTxns that are intentionally
+ * absent here, with guidance for node implementors who need them:
+ *
+ *   nLockTime finality (IsFinalTx):
+ *     bitcoin-sv rejects or queues transactions whose nLockTime has not yet been reached,
+ *     using the chain tip's Median Time Past (MTP). BDK has no access to MTP or chain state.
+ *     A node can implement this by calling IsFinalTx(tx, blockHeight+1, nMedianTimePast)
+ *     before or after CheckTransaction.
+ *
+ *   BIP68 sequence locks (CheckSequenceLocks / SequenceLocks, pre-Genesis only):
+ *     bitcoin-sv enforces relative time locks from BIP68 using per-input UTXO confirmation
+ *     heights and MTP. BDK has UTXO heights available but not MTP. A node can implement
+ *     this by calling CalculateSequenceLocks / EvaluateSequenceLocks with the required
+ *     chain context before or after CheckTransaction.
+ *
+ *   Non-mandatory script flag retry:
+ *     bitcoin-sv retries a failed script without StandardNotMandatoryScriptVerifyFlags and
+ *     downgrades the failure to DoS 0 / REJECT_NONSTANDARD when only a non-mandatory flag
+ *     caused the rejection. BDK exposes VerifyScript with custom flags; a node can perform
+ *     this retry itself and apply whatever DoS classification it chooses.
+ *
+ *   Grace period inverse flag retry (Genesis / Chronicle activation windows):
+ *     bitcoin-sv retries with inverted per-protocol input flags during activation grace
+ *     periods and returns a soft "genesis-script-verify-flag-failed" or
+ *     "chronicle-script-verify-flag-failed" error on success. A node can implement this
+ *     using VerifyScript with custom flags and InProtocolGracePeriod / GetInverseProtocolEra.
  */
 class CTxValidator {
     public:
