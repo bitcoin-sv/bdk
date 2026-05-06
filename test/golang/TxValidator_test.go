@@ -203,7 +203,7 @@ func TestTxValidatorGetSigOpCount(t *testing.T) {
 		eTx, _ := hex.DecodeString(eTxHEX)
 
 		se := goscript.NewTxValidator("main")
-		nbSigOpos, err := se.GetSigOpCount(eTx, utxo, blockHeight)
+		nbSigOpos, err := se.GetSigOpCount(eTx, utxo, blockHeight, true)
 		assert.Nil(t, err, "GetSigOpCount should return no error")
 		assert.Equal(t, nbSigOpos, uint64(1), "GetSigOpCount should return no zero value")
 	})
