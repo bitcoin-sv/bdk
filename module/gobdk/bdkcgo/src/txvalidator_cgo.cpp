@@ -1,6 +1,6 @@
 #include <bdkcgo/txvalidator_cgo.h>
 #include <core/txvalidator.hpp>
-#include <core/verifyarg.hpp>
+#include <core/validatearg.hpp>
 
 
 int TxValidator_CPP_SCRIPT_ERR_ERROR_COUNT(){
@@ -277,11 +277,11 @@ TxError TxValidator_ValidateTransaction(TxValidatorCGO cgoEngine, const char* ex
     }
 }
 
-TxError* TxValidator_VerifyScriptBatch(TxValidatorCGO cgoEngine, VerifyBatchCGO cgoBatch, int* resultSize) {
+TxError* TxValidator_ValidateBatch(TxValidatorCGO cgoEngine, ValidateBatchCGO cgoBatch, int* resultSize) {
     bsv::CTxValidator* engine = static_cast<bsv::CTxValidator*>(cgoEngine);
-    bsv::VerifyBatch* batch = static_cast<bsv::VerifyBatch*>(cgoBatch);
+    bsv::ValidateBatch* batch = static_cast<bsv::ValidateBatch*>(cgoBatch);
 
-    std::vector<TxError> results = engine->VerifyScriptBatch(*batch);
+    std::vector<TxError> results = engine->ValidateBatch(*batch);
 
     const size_t size = results.size();
     *resultSize = static_cast<int>(size);

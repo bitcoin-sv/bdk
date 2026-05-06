@@ -134,9 +134,9 @@ func runSingleVerification(se *bdkscript.TxValidator, csvData []CsvDataRecord) t
 }
 
 func runBatchVerification(se *bdkscript.TxValidator, csvData []CsvDataRecord, batchSize int) (time.Duration, time.Duration) {
-	batch := bdkscript.NewVerifyBatch(batchSize)
+	batch := bdkscript.NewValidateBatch(batchSize)
 	if batch == nil {
-		log.Fatalf("ERROR unable to create verify batch")
+		log.Fatalf("ERROR unable to create validate batch")
 	}
 
 	var verifyScriptBatchElapsed time.Duration
@@ -147,15 +147,15 @@ func runBatchVerification(se *bdkscript.TxValidator, csvData []CsvDataRecord, ba
 	for i, record := range csvData {
 		// Add to batch
 		addStart := time.Now()
-		batch.Add(record.TxBinExtended, record.DataUTXOHeights, record.BlockHeight, true, nil)
+		batch.Add(record.TxBinExtended, record.DataUTXOHeights, record.BlockHeight, true)
 		batchAddElapsed += time.Since(addStart)
 		batchIndices = append(batchIndices, i)
 
 		// Process batch when full or at end of data
 		if batch.Size() >= batchSize || i == len(csvData)-1 {
-			// Verify batch
+			// Validate batch
 			verifyBatchStart := time.Now()
-			results := se.VerifyScriptBatch(batch)
+			results := se.ValidateBatch(batch)
 			verifyScriptBatchElapsed += time.Since(verifyBatchStart)
 
 			// Process results

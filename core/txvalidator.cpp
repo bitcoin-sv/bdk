@@ -434,18 +434,17 @@ TxError bsv::CTxValidator::VerifyScript(std::span<const uint8_t> extendedTX, std
     }
 }
 
-std::vector<TxError> bsv::CTxValidator::VerifyScriptBatch(const VerifyBatch& batch) const
+std::vector<TxError> bsv::CTxValidator::ValidateBatch(const bsv::ValidateBatch& batch) const
 {
     std::vector<TxError> results;
     results.reserve(batch.size());
 
     for (const auto& elem : batch) {
-        results.push_back(VerifyScript(
+        results.push_back(ValidateTransaction(
             elem.extendedTX,
             elem.utxoHeights,
             elem.blockHeight,
-            elem.consensus,
-            elem.customFlags
+            elem.consensus
         ));
     }
 

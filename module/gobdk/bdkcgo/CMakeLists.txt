@@ -40,7 +40,7 @@ set(_GO_MODULE_HEADER_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/txerror_cgo.h
     ${CMAKE_CURRENT_SOURCE_DIR}/doserror_cgo.h
     ${CMAKE_CURRENT_SOURCE_DIR}/txvalidator_cgo.h
-    ${CMAKE_CURRENT_SOURCE_DIR}/verifybatch_cgo.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/validatebatch_cgo.h
     ${CMAKE_CURRENT_SOURCE_DIR}/version_cgo.h
     ${CMAKE_CURRENT_SOURCE_DIR}/secp256k1_cloned.h # added here to be installed but won't be include twice as it use the same guard SECP256K1_H
      "${BSV_APPLICATION_HDR_FILES}"
@@ -51,7 +51,7 @@ set(_GO_MODULE_SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/script_error_cgo.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/doserror_cgo.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/txvalidator_cgo.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/verifybatch_cgo.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/validatebatch_cgo.cpp
 )
 
 set(_GO_MODULE_SOURCE_FILES

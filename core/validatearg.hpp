@@ -1,5 +1,5 @@
-#ifndef __VERIFYARG_HPP__
-#define __VERIFYARG_HPP__
+#ifndef __VALIDATEARG_HPP__
+#define __VALIDATEARG_HPP__
 
 #include <cstdint>
 #include <span>
@@ -9,32 +9,35 @@ namespace bsv
 {
 
 /**
- * VerifyArg holds all the arguments needed for a single script verification
+ * ValidateArg holds all the arguments needed for a single transaction validation
  */
-struct VerifyArg {
+struct ValidateArg {
     std::span<const uint8_t> extendedTX;
     std::span<const int32_t> utxoHeights;
     int32_t blockHeight;
     bool consensus;
-    std::span<const uint32_t> customFlags;
 
-    VerifyArg(
+    ValidateArg(
         std::span<const uint8_t> extendedTX_,
         std::span<const int32_t> utxoHeights_,
         int32_t blockHeight_,
-        bool consensus_,
-        std::span<const uint32_t> customFlags_ = std::span<const uint32_t>()
+        bool consensus_
     );
 };
 
 /**
- * VerifyBatch holds a collection of VerifyArg objects for batch processing
+ * ValidateBatch holds a collection of ValidateArg objects for batch processing
  *
- * This container is specifically designed for batch verification workflows where
+ * NOT THREAD-SAFE: All add() calls and the CTxValidator::ValidateBatch() call that
+ * consumes this batch must occur on the same thread. The spans stored internally
+ * point into caller-owned memory; accessing them from a different thread while the
+ * caller may be mutating or freeing that memory is a data race.
+ *
+ * This container is specifically designed for batch validation workflows where
  * operations are processed as an all-or-none unit. It provides the minimum set
  * of operations required for batch processing:
  *
- * - add(): Build up a batch of verification tasks incrementally
+ * - add(): Build up a batch of validation tasks incrementally
  * - clear(): Reset the batch for reuse or discard all tasks
  * - size()/empty(): Query batch state for validation and optimization
  * - reserve(): Pre-allocate capacity when batch size is known in advance
@@ -49,19 +52,19 @@ struct VerifyArg {
  *   until processing completes or the batch is cleared.
  *
  * This minimal interface ensures the container is used correctly for its intended
- * purpose: collecting verification tasks, processing them as a batch, and managing
+ * purpose: collecting validation tasks, processing them as a batch, and managing
  * the batch lifecycle.
  */
-class VerifyBatch {
+class ValidateBatch {
 public:
-    using const_iterator = std::vector<VerifyArg>::const_iterator;
-    using iterator = std::vector<VerifyArg>::iterator;
+    using const_iterator = std::vector<ValidateArg>::const_iterator;
+    using iterator = std::vector<ValidateArg>::iterator;
 
-    VerifyBatch() = default;
+    ValidateBatch() = default;
 
     // Add a single element to the batch
-    void add(const VerifyArg& arg);
-    void add(VerifyArg&& arg);
+    void add(const ValidateArg& arg);
+    void add(ValidateArg&& arg);
 
     // Clear all elements from the batch
     void clear();
@@ -82,9 +85,9 @@ public:
     iterator end();
 
 private:
-    std::vector<VerifyArg> batch_;
+    std::vector<ValidateArg> batch_;
 };
 
 } // namespace bsv
 
-#endif /* __VERIFYARG_HPP__ */
+#endif /* __VALIDATEARG_HPP__ */
