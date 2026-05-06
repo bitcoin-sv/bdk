@@ -35,7 +35,9 @@ enum class DoSError_t : int32_t {
     CoinbaseNotAllowed    = 13, // "bad-tx-coinbase" (DoS 100) — coinbase in non-coinbase context
     DuplicateInputs         = 14, // "bad-txns-inputs-duplicate" (DoS 100)
     UnconfirmedInputInBlock = 15, // "bad-txns-unconfirmed-input-in-block" — MEMPOOL_HEIGHT UTXO in consensus context
-    Count                   = 16  // sentinel
+    InputValuesOutOfRange   = 16, // "bad-txns-inputvalues-outofrange" (DoS 100)
+    InputsBelowOutputs      = 17, // "bad-txns-in-belowout" (DoS 100)
+    Count                   = 18  // sentinel
 };
 
 std::string_view DoSErrorString(DoSError_t err);

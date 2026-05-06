@@ -18,6 +18,8 @@ std::string_view bsv::DoSErrorString(bsv::DoSError_t err) {
         case DoSError_t::CoinbaseNotAllowed:    return "bad-tx-coinbase";
         case DoSError_t::DuplicateInputs:         return "bad-txns-inputs-duplicate";
         case DoSError_t::UnconfirmedInputInBlock: return "bad-txns-unconfirmed-input-in-block";
+        case DoSError_t::InputValuesOutOfRange:   return "bad-txns-inputvalues-outofrange";
+        case DoSError_t::InputsBelowOutputs:      return "bad-txns-in-belowout";
         default:                                  return "unknown-dos-error";
     }
 }

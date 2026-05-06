@@ -598,6 +598,30 @@ TxError bsv::CTxValidator::implCheckStandardness(
     return bsv::TxErrorOk();
 }
 
+// Replicates Consensus::CheckTxInputs (validation.cpp:2590-2655):
+//   - per-input MoneyRange check (bad-txns-inputvalues-outofrange, DoS 100)
+//   - accumulated nValueIn MoneyRange check
+//   - nValueIn >= tx.GetValueOut() (bad-txns-in-belowout, DoS 100)
+// Output values are already validated by implCheckTransactionCommon, so
+// GetValueOut() is safe to call here.
+TxError bsv::CTxValidator::implCheckInputValues(
+    const CTransaction& tx,
+    const std::vector<CTxOut>& prevUTXO
+) const
+{
+    Amount nValueIn(0);
+    for (const auto& utxo : prevUTXO) {
+        if (!MoneyRange(utxo.nValue) || !MoneyRange(nValueIn + utxo.nValue))
+            return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::InputValuesOutOfRange));
+        nValueIn += utxo.nValue;
+    }
+
+    if (nValueIn < tx.GetValueOut())
+        return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::InputsBelowOutputs));
+
+    return bsv::TxErrorOk();
+}
+
 int bsv::CPP_SCRIPT_ERR_ERROR_COUNT(){
     return SCRIPT_ERR_ERROR_COUNT;
 }
@@ -636,6 +660,7 @@ TxError bsv::CTxValidator::CheckTransaction(std::span<const uint8_t> extendedTX,
         } else {
             if (auto r = implCheckConsensusSigops(ctx, eTX.vutxo, utxoHeights, blockHeight);   !bsv::TxErrorIsOk(r)) return r;
         }
+        if (auto r = implCheckInputValues(ctx, eTX.vutxo);                                     !bsv::TxErrorIsOk(r)) return r;
         return implVerifyScript(ctx, eTX.vutxo, utxoHeights, blockHeight, consensus);
     }
     catch (const std::exception&) {
