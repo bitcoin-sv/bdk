@@ -85,7 +85,7 @@ func processVerificationSingle(se *bdkscript.TxValidator, csvData []CsvDataRecor
 		}
 
 		// Test only the hex is conformed
-		if cmdVerifyCheckHexOnly {
+		if cmdValidateCheckHexOnly {
 			txHexExtended := hex.EncodeToString(tx.ExtendedBytes())
 			if txHexExtended != record.TxHexExtended {
 				log.Printf("ERROR recovering extended tx at record %v, txID : %v", i, record.TXID)
@@ -122,9 +122,9 @@ func processVerificationSingle(se *bdkscript.TxValidator, csvData []CsvDataRecor
 }
 
 func processVerificationBatch(se *bdkscript.TxValidator, csvData []CsvDataRecord) int {
-	batch := bdkscript.NewVerifyBatch(cmdVerifyBatchSize)
+	batch := bdkscript.NewValidateBatch(cmdValidateBatchSize)
 	if batch == nil {
-		log.Fatalf("ERROR unable to create verify batch")
+		log.Fatalf("ERROR unable to create validate batch")
 	}
 
 	localStartTime := time.Now()
@@ -133,7 +133,7 @@ func processVerificationBatch(se *bdkscript.TxValidator, csvData []CsvDataRecord
 	processedCount := 0
 	processedBatchCount := 0
 	nbFailed := 0
-	batchIndices := make([]int, 0, cmdVerifyBatchSize)
+	batchIndices := make([]int, 0, cmdValidateBatchSize)
 	var verifyScriptBatchElapsed time.Duration
 
 	for i, record := range csvData {
@@ -144,7 +144,7 @@ func processVerificationBatch(se *bdkscript.TxValidator, csvData []CsvDataRecord
 		}
 
 		// Test only the hex is conformed
-		if cmdVerifyCheckHexOnly {
+		if cmdValidateCheckHexOnly {
 			txHexExtended := hex.EncodeToString(tx.ExtendedBytes())
 			if txHexExtended != record.TxHexExtended {
 				log.Printf("ERROR recovering extended tx at record %v, txID : %v", i, record.TXID)
@@ -153,15 +153,15 @@ func processVerificationBatch(se *bdkscript.TxValidator, csvData []CsvDataRecord
 		}
 
 		// Add to batch
-		batch.Add(record.TxBinExtended, record.DataUTXOHeights, record.BlockHeight, true, nil)
+		batch.Add(record.TxBinExtended, record.DataUTXOHeights, record.BlockHeight, true)
 		batchIndices = append(batchIndices, i)
 
 		// Process batch when full or at end of data
-		if batch.Size() >= cmdVerifyBatchSize || i == len(csvData)-1 {
-			// Verify batch
+		if batch.Size() >= cmdValidateBatchSize || i == len(csvData)-1 {
+			// Validate batch
 			batchSize := batch.Size()
 			verifyBatchStart := time.Now()
-			results := se.VerifyScriptBatch(batch)
+			results := se.ValidateBatch(batch)
 			verifyScriptBatchElapsed += time.Since(verifyBatchStart)
 
 			// Process results
@@ -197,7 +197,7 @@ func processVerificationBatch(se *bdkscript.TxValidator, csvData []CsvDataRecord
 		}
 	}
 
-	log.Printf("VerifyScriptBatch Time: %.4f seconds", verifyScriptBatchElapsed.Seconds())
+	log.Printf("ValidateBatch Time: %.4f seconds", verifyScriptBatchElapsed.Seconds())
 	return nbFailed
 }
 

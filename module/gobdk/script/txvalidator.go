@@ -398,16 +398,19 @@ func (se *TxValidator) GetPermitBareMultisig() bool {
 	return bool(result)
 }
 
-// VerifyScriptBatch processes a batch of script verifications.
+// ValidateBatch processes a batch of transaction validations.
 // Returns a slice of errors, one per batch entry, in the same order.
 // Each element may be nil (success), a ScriptError, a DoSError, or a generic exception error.
-func (se *TxValidator) VerifyScriptBatch(batch *VerifyBatch) []error {
+//
+// NOT CONCURRENT-SAFE: Must be called from the same goroutine that built the batch
+// via ValidateBatch.Add (or externally serialized). See ValidateBatch for details.
+func (se *TxValidator) ValidateBatch(batch *ValidateBatch) []error {
 	if batch == nil || batch.cBatchPtr == nil {
 		return nil
 	}
 
 	var resultSize C.int
-	resultsPtr := C.TxValidator_VerifyScriptBatch(se.cSEPtr, batch.cBatchPtr, &resultSize)
+	resultsPtr := C.TxValidator_ValidateBatch(se.cSEPtr, batch.cBatchPtr, &resultSize)
 	runtime.KeepAlive(se)
 	runtime.KeepAlive(batch)
 

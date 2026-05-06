@@ -1,4 +1,4 @@
-/// Benchmark program for se.VerifyScript and se.VerifyScriptBatch with hardcoded transaction data
+/// Benchmark program for se.ValidateTransaction and se.ValidateBatch with hardcoded transaction data
 
 #include <cassert>
 #include <iostream>
@@ -14,7 +14,7 @@
 #include "assembler.h"
 #include "utilstrencodings.h"
 #include "txvalidator.hpp"
-#include "verifyarg.hpp"
+#include "validatearg.hpp"
 
 namespace po = boost::program_options;
 
@@ -88,19 +88,19 @@ int main(int argc, char* argv[])
     if (benchBatch) {
         // Warmup for batch mode
         for (int i = 0; i < 10; ++i) {
-            bsv::VerifyBatch batch;
+            bsv::ValidateBatch batch;
             batch.reserve(batchSize);
             for (int j = 0; j < batchSize; ++j) {
-                batch.add(bsv::VerifyArg(txBinExtended, utxoHeights, BLOCK_HEIGHT, consensus));
+                batch.add(bsv::ValidateArg(txBinExtended, utxoHeights, BLOCK_HEIGHT, consensus));
             }
-            const auto results = se.VerifyScriptBatch(batch);
+            const auto results = se.ValidateBatch(batch);
             if (results.size() != static_cast<size_t>(batchSize)) {
-                std::cerr << "ERROR: VerifyScriptBatch returned wrong number of results during warmup" << std::endl;
+                std::cerr << "ERROR: ValidateBatch returned wrong number of results during warmup" << std::endl;
                 return 1;
             }
             for (const auto& ret : results) {
                 if (!bsv::TxErrorIsOk(ret)) {
-                    std::cerr << "ERROR: VerifyScriptBatch failed during warmup" << std::endl;
+                    std::cerr << "ERROR: ValidateBatch failed during warmup" << std::endl;
                     return 1;
                 }
             }
@@ -126,24 +126,24 @@ int main(int argc, char* argv[])
     if (benchBatch) {
         // Benchmark batch mode
         for (int i = 0; i < iterations; ++i) {
-            bsv::VerifyBatch batch;
+            bsv::ValidateBatch batch;
             batch.reserve(batchSize);
             for (int j = 0; j < batchSize; ++j) {
-                batch.add(bsv::VerifyArg(txBinExtended, utxoHeights, BLOCK_HEIGHT, consensus));
+                batch.add(bsv::ValidateArg(txBinExtended, utxoHeights, BLOCK_HEIGHT, consensus));
             }
 
             auto start = std::chrono::high_resolution_clock::now();
-            const auto results = se.VerifyScriptBatch(batch);
+            const auto results = se.ValidateBatch(batch);
             auto end = std::chrono::high_resolution_clock::now();
 
             if (results.size() != static_cast<size_t>(batchSize)) {
-                std::cerr << "ERROR: VerifyScriptBatch returned wrong number of results at iteration " << i << std::endl;
+                std::cerr << "ERROR: ValidateBatch returned wrong number of results at iteration " << i << std::endl;
                 return 1;
             }
 
             for (size_t j = 0; j < results.size(); ++j) {
                 if (!bsv::TxErrorIsOk(results[j])) {
-                    std::cerr << "ERROR: VerifyScriptBatch failed at iteration " << i << ", item " << j << std::endl;
+                    std::cerr << "ERROR: ValidateBatch failed at iteration " << i << ", item " << j << std::endl;
                     return 1;
                 }
             }

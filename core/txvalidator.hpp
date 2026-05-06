@@ -14,7 +14,7 @@
 #include <taskcancellation.h>
 #include <script/script.h>
 #include <script/interpreter.h>
-#include <verifyarg.hpp>
+#include <validatearg.hpp>
 #include <txerror.h>
 #include <doserror.hpp>
 #include <extendedTx.hpp>
@@ -23,14 +23,9 @@ namespace bsv
 {
 
 /**
- * CTxValidator holds its own GlobalConfig, ChainParams and CCancellationSource
- * objects in order to execute the script fully.
- *
- * It forwards config settings to its own GlobalConfig instance.
- *
- * TODO:
- *   - Move this class to core part and use it for all other languages binding
- *   - Remove the usage of old implementation where it use implicitly global objects in bsv
+ * CTxValidator holds its own ConfigScriptPolicy, ChainParams and CCancellationSource
+ * objects in order to execute the script fully. It forwards the node's settings to its
+ * own ConfigScriptPolicy instance through all setters.
  *
  * Checks present in bitcoin-sv's TxnValidation / BlockValidateTxns that are intentionally
  * absent here, with guidance for node implementors who need them:
@@ -162,9 +157,13 @@ class CTxValidator {
         // instead of the implicitly calculated flags
         TxError VerifyScript(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool consensus, std::span<const uint32_t> customFlags = std::span<const uint32_t>()) const;
 
-        // VerifyScriptBatch processes multiple script verifications in a batch
-        // Returns a vector of TxError results, one for each VerifyArg in the input
-        std::vector<TxError> VerifyScriptBatch(const VerifyBatch& batch) const;
+        // ValidateBatch processes multiple transaction validations in a batch.
+        // Returns a vector of TxError results, one for each ValidateArg in the input.
+        //
+        // NOT THREAD-SAFE: The caller must build the batch and call ValidateBatch on
+        // the same thread. ValidateArg entries hold non-owning spans into caller memory;
+        // concurrent access from another thread is a data race.
+        std::vector<TxError> ValidateBatch(const ValidateBatch& batch) const;
 
         // ValidateTransaction runs all tx-level checks then script verification.
         // consensus=false → peer/mempool context (all checks including policy)

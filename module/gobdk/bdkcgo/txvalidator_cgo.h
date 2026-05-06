@@ -24,9 +24,9 @@ int TxValidator_CPP_SCRIPT_ERR_ERROR_COUNT();
 typedef void* TxValidatorCGO;
 
 /**
- * Forward declaration for VerifyBatchCGO (defined in verifybatch_cgo.h)
+ * Forward declaration for ValidateBatchCGO (defined in validatebatch_cgo.h)
  */
-typedef void* VerifyBatchCGO;
+typedef void* ValidateBatchCGO;
 
 /**
  * Handle constructor and destructor
@@ -129,13 +129,13 @@ TxError TxValidator_VerifyScriptWithCustomFlags(TxValidatorCGO cgoEngine,
 );
 
 /*
- * VerifyScriptBatch processes a batch of script verifications.
+ * TxValidator_ValidateBatch processes a batch of transaction validations.
  *
  * Returns a pointer to a malloc'd array of TxError structs, one per batch entry.
  * The caller must free the returned array using free().
  * resultSize is set to the number of elements.
  */
-TxError* TxValidator_VerifyScriptBatch(TxValidatorCGO cgoEngine, VerifyBatchCGO cgoBatch, int* resultSize);
+TxError* TxValidator_ValidateBatch(TxValidatorCGO cgoEngine, ValidateBatchCGO cgoBatch, int* resultSize);
 
 /*
  * TxValidator_ValidateTransaction runs all tx-level checks then script verification.
