@@ -777,7 +777,7 @@ static bool RunCase(const OpcodeCase&               tc,
     const std::vector<uint8_t> etxBin(out.begin(), out.end());
 
     // Verify in post-Chronicle consensus context
-    const TxError ret = se.VerifyScript(
+    const TxError ret = se.ValidateTransaction(
         etxBin,
         std::span<const int32_t>(utxoHeights),
         BLOCK_HEIGHT,

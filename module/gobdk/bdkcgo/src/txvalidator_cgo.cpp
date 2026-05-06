@@ -262,7 +262,7 @@ TxError TxValidator_VerifyScriptWithCustomFlags(TxValidatorCGO cgoEngine, const 
     return static_cast<bsv::CTxValidator*>(cgoEngine)->VerifyScript(extendedTx, hUTXOs, blockHeight, consensus, cFlags);
 }
 
-TxError TxValidator_CheckTransaction(TxValidatorCGO cgoEngine, const char* extendedTxPtr, int extendedTxLen, const int32_t* hUTXOsPtr, int hUTXOsLen, int32_t blockHeight, bool consensus) {
+TxError TxValidator_ValidateTransaction(TxValidatorCGO cgoEngine, const char* extendedTxPtr, int extendedTxLen, const int32_t* hUTXOsPtr, int hUTXOsLen, int32_t blockHeight, bool consensus) {
     try {
         std::span<const uint8_t> extendedTx;
         if (extendedTxPtr != nullptr && extendedTxLen > 0) {
@@ -270,7 +270,7 @@ TxError TxValidator_CheckTransaction(TxValidatorCGO cgoEngine, const char* exten
             extendedTx = std::span<const uint8_t>(pTX, extendedTxLen);
         }
         std::span<const int32_t> hUTXOs{ hUTXOsPtr, (size_t)hUTXOsLen };
-        return static_cast<bsv::CTxValidator*>(cgoEngine)->CheckTransaction(extendedTx, hUTXOs, blockHeight, consensus);
+        return static_cast<bsv::CTxValidator*>(cgoEngine)->ValidateTransaction(extendedTx, hUTXOs, blockHeight, consensus);
     }
     catch (const std::exception&) {
         return bsv::TxErrorException();

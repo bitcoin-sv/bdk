@@ -219,7 +219,7 @@ func TestTxValidatorScriptVerify(t *testing.T) {
 		eTx, _ := hex.DecodeString(eTxHEX)
 
 		se := goscript.NewTxValidator("main")
-		err := se.VerifyScript(eTx, utxo, blockHeight, true)
+		err := se.ValidateTransaction(eTx, utxo, blockHeight, true)
 		assert.Nil(t, err, "VerifyExtend should return no error")
 	})
 
@@ -237,10 +237,10 @@ func TestTxValidatorScriptVerify(t *testing.T) {
 		eTxHEX := hex.EncodeToString(tx.ExtendedBytes())
 		eTx, _ := hex.DecodeString(eTxHEX)
 
-		// VerifyExtendFull the transaction with empty inputs, expect error
+		// ValidateTransaction the transaction with empty inputs, expect error
 		se := goscript.NewTxValidator("main")
-		err := se.VerifyScript(eTx, utxo, blockHeight, true)
-		assert.NotNil(t, err, "VerifyScript should return error for zero utxo")
+		err := se.ValidateTransaction(eTx, utxo, blockHeight, true)
+		assert.NotNil(t, err, "ValidateTransaction should return error for zero utxo")
 	})
 }
 

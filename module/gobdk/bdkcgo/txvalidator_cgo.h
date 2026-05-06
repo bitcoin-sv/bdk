@@ -138,14 +138,14 @@ TxError TxValidator_VerifyScriptWithCustomFlags(TxValidatorCGO cgoEngine,
 TxError* TxValidator_VerifyScriptBatch(TxValidatorCGO cgoEngine, VerifyBatchCGO cgoBatch, int* resultSize);
 
 /*
- * TxValidator_CheckTransaction runs all tx-level checks then script verification.
+ * TxValidator_ValidateTransaction runs all tx-level checks then script verification.
  * consensus=false → peer context (policy + consensus checks)
  * consensus=true  → block context (consensus checks only)
  *
  * Returns a TxError struct: { domain, code }.
  * domain=TX_ERR_DOMAIN_OK on success.
  */
-TxError TxValidator_CheckTransaction(TxValidatorCGO cgoEngine,
+TxError TxValidator_ValidateTransaction(TxValidatorCGO cgoEngine,
     const char* extendedTxPtr, int extendedTxLen,
     const int32_t* hUTXOsPtr, int hUTXOsLen,
     int32_t blockHeight, bool consensus);

@@ -241,11 +241,11 @@ static BenchResult RunBenchmark(const bsv::CTxValidator&   se,
 
     for (int i = 0; i < iterations; ++i) {
         const auto start = std::chrono::steady_clock::now();
-        const TxError ret = se.VerifyScript(txBin, utxoHeights, blockHeight, consensus);
+        const TxError ret = se.ValidateTransaction(txBin, utxoHeights, blockHeight, consensus);
         const auto end   = std::chrono::steady_clock::now();
 
         if (!bsv::TxErrorIsOk(ret))
-            throw std::runtime_error("VerifyScript failed at iteration " + std::to_string(i));
+            throw std::runtime_error("ValidateTransaction failed at iteration " + std::to_string(i));
 
         const int64_t ns =
             std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
@@ -348,10 +348,10 @@ int main(int argc, char* argv[])
 
     // ---- Pre-flight: verify both are valid ----
     std::cout << "Pre-flight verification...\n";
-    if (!bsv::TxErrorIsOk(se.VerifyScript(standardBin, utxoSpan, BLOCK_HEIGHT, CONSENSUS)))
+    if (!bsv::TxErrorIsOk(se.ValidateTransaction(standardBin, utxoSpan, BLOCK_HEIGHT, CONSENSUS)))
         throw std::runtime_error("Standard tx: pre-flight failed");
     std::cout << "  Standard tx : SCRIPT_ERR_OK\n";
-    if (!bsv::TxErrorIsOk(se.VerifyScript(attackBin,   utxoSpan, BLOCK_HEIGHT, CONSENSUS)))
+    if (!bsv::TxErrorIsOk(se.ValidateTransaction(attackBin,   utxoSpan, BLOCK_HEIGHT, CONSENSUS)))
         throw std::runtime_error("Attack tx: pre-flight failed");
     std::cout << "  Attack  tx  : SCRIPT_ERR_OK  (attack succeeds silently)\n";
     std::cout << "\n";
@@ -364,14 +364,14 @@ int main(int argc, char* argv[])
         constexpr int WARMUP_STD = 50;
         std::cout << "  Standard tx (" << WARMUP_STD << " iterations)... " << std::flush;
         for (int i = 0; i < WARMUP_STD; ++i)
-            se.VerifyScript(standardBin, utxoSpan, BLOCK_HEIGHT, CONSENSUS);
+            se.ValidateTransaction(standardBin, utxoSpan, BLOCK_HEIGHT, CONSENSUS);
         std::cout << "done.\n";
     }
     {
         constexpr int WARMUP_ATK = 3;
         std::cout << "  Attack  tx  (" << WARMUP_ATK << " iterations)... " << std::flush;
         for (int i = 0; i < WARMUP_ATK; ++i)
-            se.VerifyScript(attackBin, utxoSpan, BLOCK_HEIGHT, CONSENSUS);
+            se.ValidateTransaction(attackBin, utxoSpan, BLOCK_HEIGHT, CONSENSUS);
         std::cout << "done.\n";
     }
     std::cout << "\n";

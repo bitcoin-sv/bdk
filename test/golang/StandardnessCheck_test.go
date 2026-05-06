@@ -28,20 +28,20 @@ func TestStandardnessCheck(t *testing.T) {
 	// evaluates to false, so the tx passes without any explicit configuration.
 	t.Run("non-consensus with mainnet default settings passes", func(t *testing.T) {
 		se := goscript.NewTxValidator("main")
-		result := se.CheckTransaction(eTx, utxoHeights, blockHeight, false)
+		result := se.ValidateTransaction(eTx, utxoHeights, blockHeight, false)
 		assert.Nil(t, result)
 	})
 
 	t.Run("consensus=true passes regardless of standardness", func(t *testing.T) {
 		se := goscript.NewTxValidator("main")
-		result := se.CheckTransaction(eTx, utxoHeights, blockHeight, true)
+		result := se.ValidateTransaction(eTx, utxoHeights, blockHeight, true)
 		assert.Nil(t, result)
 	})
 
 	t.Run("non-consensus with RequireStandard=false passes", func(t *testing.T) {
 		se := goscript.NewTxValidator("main")
 		se.SetRequireStandard(false)
-		result := se.CheckTransaction(eTx, utxoHeights, blockHeight, false)
+		result := se.ValidateTransaction(eTx, utxoHeights, blockHeight, false)
 		assert.Nil(t, result)
 	})
 
@@ -52,7 +52,7 @@ func TestStandardnessCheck(t *testing.T) {
 		se := goscript.NewTxValidator("main")
 		se.SetRequireStandard(true)
 		se.SetAcceptNonStandardOutput(true)
-		result := se.CheckTransaction(eTx, utxoHeights, blockHeight, false)
+		result := se.ValidateTransaction(eTx, utxoHeights, blockHeight, false)
 		assert.Nil(t, result)
 	})
 
@@ -62,7 +62,7 @@ func TestStandardnessCheck(t *testing.T) {
 		se := goscript.NewTxValidator("main")
 		se.SetRequireStandard(true)
 		se.SetAcceptNonStandardOutput(false)
-		result := se.CheckTransaction(eTx, utxoHeights, blockHeight, false)
+		result := se.ValidateTransaction(eTx, utxoHeights, blockHeight, false)
 		assert.NotNil(t, result)
 	})
 }
