@@ -210,7 +210,7 @@ int main(int argc, char* argv[])
     const int32_t blockHeight = 720540;
     const bool consensus {true};
 
-    const TxError ret = se.VerifyScript(etxBin, std::span<const int32_t>(utxoArray) , blockHeight, consensus);
+    const TxError ret = se.ValidateTransaction(etxBin, std::span<const int32_t>(utxoArray) , blockHeight, consensus);
 
     const std::string etxHex = bsv::Bin2Hex(etxBin);
     std::cout << std::endl << std::endl << "ExtendedTX Hex" << std::endl << std::endl << etxHex << std::endl << std::endl;

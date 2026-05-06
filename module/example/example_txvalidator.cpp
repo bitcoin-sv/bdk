@@ -34,7 +34,7 @@ struct CsvDataRecord {
     std::vector<uint8_t> txBinExtended;
 };
 
-std::chrono::nanoseconds doVerifyScript(const bsv::CTxValidator& se, const CsvDataRecord& record, const bool consensus) {
+std::chrono::nanoseconds doValidateTransaction(const bsv::CTxValidator& se, const CsvDataRecord& record, const bool consensus) {
     const std::span<const uint8_t> etx(record.txBinExtended.data(), record.txBinExtended.size());
 
     const char* begin{ reinterpret_cast<const char*>(etx.data()) };
@@ -58,7 +58,7 @@ std::chrono::nanoseconds doVerifyScript(const bsv::CTxValidator& se, const CsvDa
 
     std::span<const int32_t> utxoHeights(record.dataUTXOHeights);
     auto verifyStart = std::chrono::high_resolution_clock::now();
-    const TxError ret = se.VerifyScript(record.txBinExtended, utxoHeights, record.blockHeight, consensus);
+    const TxError ret = se.ValidateTransaction(record.txBinExtended, utxoHeights, record.blockHeight, consensus);
     auto verifyEnd = std::chrono::high_resolution_clock::now();
 
     if (!bsv::TxErrorIsOk(ret)) {
@@ -250,7 +250,7 @@ int main(int argc, char* argv[])
 
         try {
             auto start = std::chrono::high_resolution_clock::now();
-            auto verifyDuration = doVerifyScript(se, record, consensus);
+            auto verifyDuration = doValidateTransaction(se, record, consensus);
             auto end = std::chrono::high_resolution_clock::now();
             elapsed += (end - start);
             verifyScriptElapsed += verifyDuration;
@@ -264,6 +264,6 @@ int main(int argc, char* argv[])
     std::cout << "End Of Program, total csv " << csvData.size() << " lines" << std::endl;
     std::cout << "Nb Txs " << nbTx << std::endl;
     std::cout << "Processed Time " << elapsed.count() << std::endl;
-    std::cout << "VerifyScript Time " << std::fixed << std::setprecision(4) << verifyScriptElapsed.count() / 1e9 << " seconds" << std::endl;
+    std::cout << "ValidateTransaction Time " << std::fixed << std::setprecision(4) << verifyScriptElapsed.count() / 1e9 << " seconds" << std::endl;
     return 0;
 }

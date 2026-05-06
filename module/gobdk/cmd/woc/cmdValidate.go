@@ -10,41 +10,41 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var cmdVerifyFilePath string
-var cmdVerifyCheckHexOnly = false
-var cmdVerifyBatchSize = 0
+var cmdValidateFilePath string
+var cmdValidateCheckHexOnly = false
+var cmdValidateBatchSize = 0
 
-// cmdVerify represents the test command
-var cmdVerify = &cobra.Command{
-	Use:   "verify",
+// cmdValidate represents the validate command
+var cmdValidate = &cobra.Command{
+	Use:   "validate",
 	Short: "Run a test based on a file",
 	Long:  `Use this command to run tests from a specific file.`,
-	Run:   execVerify,
+	Run:   execValidate,
 }
 
 func init() {
-	// Define the --csv-file flag for the test command
-	cmdVerify.Flags().StringVarP(&cmdVerifyFilePath, "csv-file", "f", "", "Path to the test csv file (required)")
+	// Define the --csv-file flag for the validate command
+	cmdValidate.Flags().StringVarP(&cmdValidateFilePath, "csv-file", "f", "", "Path to the test csv file (required)")
 
 	// Make the --csv-file flag required
-	if err := cmdVerify.MarkFlagRequired("csv-file"); err != nil {
+	if err := cmdValidate.MarkFlagRequired("csv-file"); err != nil {
 		panic(err)
 	}
 
-	cmdVerify.Flags().BoolVarP(&cmdVerifyCheckHexOnly, "check-only", "t", false, "Check parsing the extended hex only")
+	cmdValidate.Flags().BoolVarP(&cmdValidateCheckHexOnly, "check-only", "t", false, "Check parsing the extended hex only")
 
-	cmdVerify.Flags().IntVarP(&cmdVerifyBatchSize, "batch-size", "b", 0, "Batch size for verification (0 = no batching, default)")
+	cmdValidate.Flags().IntVarP(&cmdValidateBatchSize, "batch-size", "b", 0, "Batch size for verification (0 = no batching, default)")
 
-	cmdRoot.AddCommand(cmdVerify)
+	cmdRoot.AddCommand(cmdValidate)
 }
 
-func execVerify(cmd *cobra.Command, args []string) {
+func execValidate(cmd *cobra.Command, args []string) {
 	se := bdkscript.NewTxValidator(network)
 	if se == nil {
 		log.Fatalf("ERROR unable to create script engine")
 	}
 
-	csvData, err := ReadCSVFile(cmdVerifyFilePath)
+	csvData, err := ReadCSVFile(cmdValidateFilePath)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -59,7 +59,7 @@ func execVerify(cmd *cobra.Command, args []string) {
 	startTime := time.Now()
 	var nbFailed int
 
-	if cmdVerifyBatchSize > 0 {
+	if cmdValidateBatchSize > 0 {
 		nbFailed = processVerificationBatch(se, csvData)
 	} else {
 		nbFailed = processVerificationSingle(se, csvData)
@@ -93,9 +93,9 @@ func processVerificationSingle(se *bdkscript.TxValidator, csvData []CsvDataRecor
 			continue
 		}
 
-		// Verify script
+		// Validate transaction
 		verifyStart := time.Now()
-		err = se.VerifyScript(record.TxBinExtended, record.DataUTXOHeights, record.BlockHeight, true)
+		err = se.ValidateTransaction(record.TxBinExtended, record.DataUTXOHeights, record.BlockHeight, true)
 		verifyScriptElapsed += time.Since(verifyStart)
 		if err != nil {
 			log.Printf("ERROR verifying record at %v, txID : %v, error \n\n%v\n\n", i, record.TXID, err)
@@ -117,7 +117,7 @@ func processVerificationSingle(se *bdkscript.TxValidator, csvData []CsvDataRecor
 		}
 	}
 
-	log.Printf("VerifyScript Time: %.4f seconds", verifyScriptElapsed.Seconds())
+	log.Printf("ValidateTransaction Time: %.4f seconds", verifyScriptElapsed.Seconds())
 	return nbFailed
 }
 

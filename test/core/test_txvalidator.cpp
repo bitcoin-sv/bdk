@@ -163,7 +163,7 @@ BOOST_AUTO_TEST_CASE(test_verify_script)
     const std::span<const uint8_t> etx(etxBin.data(), etxBin.size());
     std::span<const int32_t> utxo(utxoArray);
     bsv::CTxValidator se("main");
-    const auto status = se.VerifyScript(etx, utxo, blockHeight, true);
+    const auto status = se.ValidateTransaction(etx, utxo, blockHeight, true);
     BOOST_CHECK(bsv::TxErrorIsOk(status));
 }
 
@@ -181,7 +181,7 @@ BOOST_AUTO_TEST_CASE(test_verify_script_custom_flags)
     std::span<const int32_t> utxo(utxoArray);
     std::span<const uint32_t> customFlags(customFlagsArray);
     bsv::CTxValidator se("main");
-    const auto status = se.VerifyScript(etx, utxo, blockHeight, true, customFlags);
+    const auto status = se.VerifyScript(etx, utxo, blockHeight, true, customFlags);  // VerifyScript with custom flags stays as-is
     BOOST_CHECK(bsv::TxErrorIsOk(status));
 }
 
@@ -216,7 +216,7 @@ BOOST_AUTO_TEST_CASE(test_verify_empty_utxos)
     const std::span<const uint8_t> emptyUtxoEtx(emptyUtxoEtxBin.data(), emptyUtxoEtxBin.size());
 
     bsv::CTxValidator se("main");
-    const auto status = se.VerifyScript(emptyUtxoEtx, utxo, blockHeight, true);
+    const auto status = se.ValidateTransaction(emptyUtxoEtx, utxo, blockHeight, true);
     BOOST_CHECK(!bsv::TxErrorIsOk(status));
 }
 

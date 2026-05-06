@@ -138,7 +138,7 @@ class CTxValidator {
         //   false (policy) → era at blockHeight+1 (next candidate block)
         //   true (block)   → era at blockHeight (the block being validated)
         // Callers must not pass MEMPOOL_HEIGHT utxo heights when consensus=true; this method
-        // throws std::runtime_error on that sentinel value. CheckTransaction guards this via
+        // throws std::runtime_error on that sentinel value. ValidateTransaction guards this via
         // UnconfirmedInputInBlock before reaching sigop counting, so that path is safe; direct
         // callers are responsible for filtering out unconfirmed UTXOs beforehand.
         // It might throw an exception if any issue to calculate the number of sigops.
@@ -148,7 +148,7 @@ class CTxValidator {
         // consensus controls which protocol era and flag set are used (block vs policy).
         // Note: if utxoHeight == MEMPOOL_HEIGHT and consensus=true, the UTXO era is silently
         // mapped to blockHeight+1 rather than returning an error, because this helper returns
-        // uint32_t and cannot signal a typed failure. CheckTransaction rejects this case with
+        // uint32_t and cannot signal a typed failure. ValidateTransaction rejects this case with
         // UnconfirmedInputInBlock before CalculateFlags is ever reached; callers invoking
         // CalculateFlags directly with consensus=true and MEMPOOL_HEIGHT are responsible for
         // guarding against this invalid combination beforehand.
@@ -166,16 +166,16 @@ class CTxValidator {
         // Returns a vector of TxError results, one for each VerifyArg in the input
         std::vector<TxError> VerifyScriptBatch(const VerifyBatch& batch) const;
 
-        // CheckTransaction runs all tx-level checks then script verification.
+        // ValidateTransaction runs all tx-level checks then script verification.
         // consensus=false → peer/mempool context (all checks including policy)
         // consensus=true  → block context (consensus checks only)
         //
         // This method is for non-coinbase transactions only. Coinbase transactions
         // are rejected with CoinbaseNotAllowed in both modes. In block validation,
         // the node must validate the coinbase transaction separately (bitcoin-sv uses
-        // CheckCoinbase); CheckTransaction should be called only for the remaining
+        // CheckCoinbase); ValidateTransaction should be called only for the remaining
         // non-coinbase transactions in the block.
-        TxError CheckTransaction(std::span<const uint8_t> extendedTX,
+        TxError ValidateTransaction(std::span<const uint8_t> extendedTX,
                                  std::span<const int32_t> utxoHeights,
                                  int32_t blockHeight,
                                  bool consensus) const;

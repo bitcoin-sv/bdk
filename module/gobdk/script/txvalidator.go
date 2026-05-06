@@ -428,11 +428,11 @@ func (se *TxValidator) VerifyScriptBatch(batch *VerifyBatch) []error {
 	return results
 }
 
-// CheckTransaction runs all tx-level checks then script verification.
+// ValidateTransaction runs all tx-level checks then script verification.
 // consensus=false → peer context (policy + consensus checks)
 // consensus=true  → block context (consensus checks only)
 // Returns nil on success, DoSError or ScriptError on failure.
-func (se *TxValidator) CheckTransaction(extendedTX []byte, utxoHeights []int32, blockHeight int32, consensus bool) error {
+func (se *TxValidator) ValidateTransaction(extendedTX []byte, utxoHeights []int32, blockHeight int32, consensus bool) error {
 	lenTx := len(extendedTX)
 	var txPtr *C.char
 	if lenTx > 0 {
@@ -445,7 +445,7 @@ func (se *TxValidator) CheckTransaction(extendedTX []byte, utxoHeights []int32, 
 		utxoPtr = (*C.int32_t)(unsafe.Pointer(&utxoHeights[0]))
 	}
 
-	result := C.TxValidator_CheckTransaction(se.cSEPtr, txPtr, C.int(lenTx), utxoPtr, C.int(lenUtxo), C.int32_t(blockHeight), C.bool(consensus))
+	result := C.TxValidator_ValidateTransaction(se.cSEPtr, txPtr, C.int(lenTx), utxoPtr, C.int(lenUtxo), C.int32_t(blockHeight), C.bool(consensus))
 	runtime.KeepAlive(se)
 	return translateTxError(result)
 }

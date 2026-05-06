@@ -15,7 +15,7 @@ func TestExceptionBadTransaction(t *testing.T) {
 
 	t.Run("Bad tx serialization", func(t *testing.T) {
 		se := goscript.NewTxValidator("main")
-		err := se.VerifyScript([]byte{0}, []int32{0}, int32(0), true)
+		err := se.ValidateTransaction([]byte{0}, []int32{0}, int32(0), true)
 		assert.NotNil(t, err, "Expect error")
 		scriptErr, ok := err.(goscript.ScriptError)
 		assert.True(t, ok, "Expect ScriptError type")

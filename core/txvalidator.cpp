@@ -651,7 +651,7 @@ int bsv::CPP_SCRIPT_ERR_ERROR_COUNT(){
     return SCRIPT_ERR_ERROR_COUNT;
 }
 
-TxError bsv::CTxValidator::CheckTransaction(std::span<const uint8_t> extendedTX,
+TxError bsv::CTxValidator::ValidateTransaction(std::span<const uint8_t> extendedTX,
                                              std::span<const int32_t> utxoHeights,
                                              int32_t blockHeight,
                                              bool consensus) const

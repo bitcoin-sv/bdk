@@ -214,8 +214,8 @@ int main(int argc, char* argv[])
     const std::array<int32_t, 1> utxoArray = {UTXO_HEIGHT};
     const bsv::CTxValidator se(network);
 
-    std::cout << "Calling VerifyScript (consensus=true)... " << std::flush;
-    const TxError ret = se.VerifyScript(
+    std::cout << "Calling ValidateTransaction (consensus=true)... " << std::flush;
+    const TxError ret = se.ValidateTransaction(
         etxBin, std::span<const int32_t>(utxoArray), BLOCK_HEIGHT, CONSENSUS);
     std::cout << "done\n\n";
 

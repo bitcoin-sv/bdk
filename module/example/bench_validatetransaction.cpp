@@ -108,9 +108,9 @@ int main(int argc, char* argv[])
     } else {
         // Warmup for single mode
         for (int i = 0; i < 100; ++i) {
-            const TxError ret = se.VerifyScript(txBinExtended, utxoHeights, BLOCK_HEIGHT, consensus);
+            const TxError ret = se.ValidateTransaction(txBinExtended, utxoHeights, BLOCK_HEIGHT, consensus);
             if (!bsv::TxErrorIsOk(ret)) {
-                std::cerr << "ERROR: VerifyScript failed during warmup" << std::endl;
+                std::cerr << "ERROR: ValidateTransaction failed during warmup" << std::endl;
                 return 1;
             }
         }
@@ -162,11 +162,11 @@ int main(int argc, char* argv[])
         // Benchmark single mode
         for (int i = 0; i < iterations; ++i) {
             auto start = std::chrono::high_resolution_clock::now();
-            const TxError ret = se.VerifyScript(txBinExtended, utxoHeights, BLOCK_HEIGHT, consensus);
+            const TxError ret = se.ValidateTransaction(txBinExtended, utxoHeights, BLOCK_HEIGHT, consensus);
             auto end = std::chrono::high_resolution_clock::now();
 
             if (!bsv::TxErrorIsOk(ret)) {
-                std::cerr << "ERROR: VerifyScript failed at iteration " << i << std::endl;
+                std::cerr << "ERROR: ValidateTransaction failed at iteration " << i << std::endl;
                 return 1;
             }
 
