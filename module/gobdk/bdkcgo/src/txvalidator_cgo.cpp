@@ -211,7 +211,7 @@ bool TxValidator_GetPermitBareMultisig(TxValidatorCGO cgoEngine)
     return static_cast<bsv::CTxValidator*>(cgoEngine)->GetPermitBareMultisig();
 }
 
-uint64_t TxValidator_GetSigOpCount(TxValidatorCGO cgoEngine, const char* extendedTxPtr, int extendedTxLen, const int32_t* hUTXOsPtr, int hUTXOsLen, int32_t blockHeight, char** errStr) {
+uint64_t TxValidator_GetSigOpCount(TxValidatorCGO cgoEngine, const char* extendedTxPtr, int extendedTxLen, const int32_t* hUTXOsPtr, int hUTXOsLen, int32_t blockHeight, bool countP2SHSigOps, char** errStr) {
     try {
         std::span<const uint8_t> extendedTx;
         if (extendedTxPtr != nullptr && extendedTxLen > 0) {
@@ -221,7 +221,7 @@ uint64_t TxValidator_GetSigOpCount(TxValidatorCGO cgoEngine, const char* extende
 
         std::span<const int32_t> hUTXOs{ hUTXOsPtr, (size_t)hUTXOsLen };
 
-        return static_cast<bsv::CTxValidator*>(cgoEngine)->GetSigOpCount(extendedTx, hUTXOs, blockHeight);
+        return static_cast<bsv::CTxValidator*>(cgoEngine)->GetSigOpCount(extendedTx, hUTXOs, blockHeight, countP2SHSigOps);
     }
     catch (const std::exception& e) {
         *errStr = strdup(e.what());

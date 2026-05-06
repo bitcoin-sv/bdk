@@ -308,7 +308,7 @@ uint32_t bsv::CTxValidator::CalculateFlags(int32_t utxoHeight, int32_t blockHeig
 // of the huge dependencies
 //
 // So we replicate them here
-uint64_t bsv::CTxValidator::GetSigOpCount(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight) const {
+uint64_t bsv::CTxValidator::GetSigOpCount(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool countP2SHSigOps) const {
     const char* begin{ reinterpret_cast<const char*>(extendedTX.data()) };
     const char* end{ reinterpret_cast<const char*>(extendedTX.data() + extendedTX.size()) };
     CDataStream tx_stream(begin, end, SER_NETWORK, PROTOCOL_VERSION);
@@ -321,7 +321,7 @@ uint64_t bsv::CTxValidator::GetSigOpCount(std::span<const uint8_t> extendedTX, s
 
     const CTransaction ctx(eTX.mtx);
     const ProtocolEra era = GetProtocolEra(policySettings, blockHeight + 1);
-    return implGetSigOpCount(ctx, eTX.vutxo, utxoHeights, era, blockHeight + 1);
+    return implGetSigOpCount(ctx, eTX.vutxo, utxoHeights, era, blockHeight + 1, countP2SHSigOps);
 }
 
 uint64_t bsv::CTxValidator::implGetSigOpCount(
@@ -329,7 +329,8 @@ uint64_t bsv::CTxValidator::implGetSigOpCount(
     const std::vector<CTxOut>& prevUTXO,
     std::span<const int32_t> utxoHeights,
     ProtocolEra era,
-    int32_t nextBlockHeight) const
+    int32_t nextBlockHeight,
+    bool countP2SHSigOps) const
 {
 
     // The part GetSigOpCountWithoutP2SH //////////////////////////////////////////////////
@@ -356,6 +357,13 @@ uint64_t bsv::CTxValidator::implGetSigOpCount(
     }
 
     // The part GetP2SHSigOpCount //////////////////////////////////////////////////
+    // countP2SHSigOps mirrors the bitcoin-sv fP2SH parameter in GetTransactionSigOpCount:
+    // in the consensus path it is derived from the block's SCRIPT_VERIFY_P2SH flag
+    // (GetBlockScriptFlags), not from the UTXO era. In the policy path it is always true
+    // and the per-UTXO era check below handles the genesis cutoff.
+    if (!countP2SHSigOps)
+        return nSigOpsWithoutP2SH;
+
     if (prevUTXO.size() != ctx.vin.size()) {
         throw std::runtime_error("inconsistent inputs size");
     }
@@ -778,6 +786,13 @@ TxError bsv::CTxValidator::implCheckOutputs(const CTransaction& tx, int32_t bloc
 
 // Replicates GetTransactionSigOpCount (inputs + outputs + P2SH redeem scripts) + 20,000 limit
 // as done in BlockValidateTxns (validation.cpp). Uses blockHeight era (no +1) for block context.
+//
+// NOTE — block-level aggregate sigops (M13 sub-problem 1) is NOT implemented here.
+// Bitcoin-sv accumulates sigops across all transactions in the block and checks against
+// config.GetMaxBlockSigOpsConsensusBeforeGenesis(currentBlockSize), which is proportional
+// to the current block size. BDK validates one transaction at a time and has no access to
+// the block size or a cross-transaction accumulator, so this check must be performed by the
+// node caller: sum GetSigOpCount() results per transaction and compare against the block limit.
 TxError bsv::CTxValidator::implCheckConsensusSigops(const CTransaction& tx,
                                                      const std::vector<CTxOut>& prevUTXO,
                                                      std::span<const int32_t> utxoHeights,
@@ -792,7 +807,15 @@ TxError bsv::CTxValidator::implCheckConsensusSigops(const CTransaction& tx,
             return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::UnconfirmedInputInBlock));
     }
 
-    const uint64_t nSigOps = implGetSigOpCount(tx, prevUTXO, utxoHeights, era, blockHeight);
+    // Gate P2SH sigop counting on the block's active SCRIPT_VERIFY_P2SH flag, mirroring
+    // bitcoin-sv's BlockValidateTxns which passes (flags & SCRIPT_VERIFY_P2SH) to
+    // GetTransactionSigOpCount. BDK previously gated on UTXO era, which is wrong at
+    // historical pre-P2SH heights where P2SH was not yet enforced by the block flags.
+    const Consensus::Params& consensusparams = chainParams->GetConsensus();
+    const uint32_t blockFlags = GetBlockScriptFlags(consensusparams, blockHeight - 1, era);
+    const bool countP2SHSigOps = (blockFlags & SCRIPT_VERIFY_P2SH) != 0;
+
+    const uint64_t nSigOps = implGetSigOpCount(tx, prevUTXO, utxoHeights, era, blockHeight, countP2SHSigOps);
     if (nSigOps > MAX_TX_SIGOPS_COUNT_BEFORE_GENESIS)
         return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::SigopsConsensus));
 
@@ -814,7 +837,7 @@ TxError bsv::CTxValidator::implCheckSigOpsPolicy(const CTransaction& tx,
         : maxSigOpsPolicy;
 
     // implGetSigOpCount replicates GetTransactionSigOpCount (inputs + outputs + P2SH redeem scripts)
-    const uint64_t nSigOps = implGetSigOpCount(tx, prevUTXO, utxoHeights, era, blockHeight + 1);
+    const uint64_t nSigOps = implGetSigOpCount(tx, prevUTXO, utxoHeights, era, blockHeight + 1, /*countP2SHSigOps=*/true);
     if (nSigOps > limit)
         return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::SigopsPolicy));
 

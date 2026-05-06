@@ -48,8 +48,10 @@ func NewTxValidator(netName string) *TxValidator {
 	return goSE
 }
 
-// CalculateFlags calculates the flags to be used to verify the script
-func (se *TxValidator) GetSigOpCount(extendedTX []byte, utxoHeights []int32, blockHeight int32) (uint64, error) {
+// GetSigOpCount returns the number of sigops in an extended transaction.
+// countP2SHSigOps should be (blockFlags & SCRIPT_VERIFY_P2SH) != 0 for block-level
+// aggregate counting, or true for policy/mempool use.
+func (se *TxValidator) GetSigOpCount(extendedTX []byte, utxoHeights []int32, blockHeight int32, countP2SHSigOps bool) (uint64, error) {
 	lenTx := len(extendedTX)
 	var txPtr *C.char
 
@@ -65,7 +67,7 @@ func (se *TxValidator) GetSigOpCount(extendedTX []byte, utxoHeights []int32, blo
 	}
 
 	var errMsg *C.char
-	sigOpCount := C.TxValidator_GetSigOpCount(se.cSEPtr, txPtr, C.int(lenTx), utxoPtr, C.int(lenUtxo), C.int32_t(blockHeight), &errMsg)
+	sigOpCount := C.TxValidator_GetSigOpCount(se.cSEPtr, txPtr, C.int(lenTx), utxoPtr, C.int(lenUtxo), C.int32_t(blockHeight), C.bool(countP2SHSigOps), &errMsg)
 
 	if errMsg != nil {
 		defer C.free(unsafe.Pointer(errMsg))

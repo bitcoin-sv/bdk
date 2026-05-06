@@ -81,13 +81,16 @@ uint64_t TxValidator_GetChronicleGracefulPeriod(TxValidatorCGO cgoEngine);
  *   - Extended Transaction binary
  *   - Array of utxo heights
  *   - Block Height
- * 
+ *   - countP2SHSigOps: pass (blockFlags & SCRIPT_VERIFY_P2SH) != 0 for block-level
+ *     aggregate counting; pass true for policy/mempool use.
+ *
  * Caller must free errStr
  */
 uint64_t TxValidator_GetSigOpCount(TxValidatorCGO cgoEngine,
 	const char* extendedTxPtr, int extendedTxLen,
 	const int32_t* hUTXOsPtr, int hUTXOsLen,
 	int32_t blockHeight,
+	bool countP2SHSigOps,
 	char** errStr
 );
 

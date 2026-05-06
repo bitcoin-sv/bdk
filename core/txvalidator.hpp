@@ -98,9 +98,12 @@ class CTxValidator {
         uint64_t GetMinConfConsolidationInput() const;
         bool GetAcceptNonStdConsolidationInput() const;
 
-        // GetSigOpCount returns the number of sig ops in a extended transactions
-        // It might throw an exception if any issue to calculate the number of sigops
-        uint64_t GetSigOpCount(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight) const;
+        // GetSigOpCount returns the number of sig ops in an extended transaction.
+        // countP2SHSigOps mirrors the fP2SH parameter in bitcoin-sv's GetTransactionSigOpCount:
+        // the node should pass (blockFlags & SCRIPT_VERIFY_P2SH) != 0, where blockFlags comes
+        // from GetBlockScriptFlags, so that P2SH sigops are only counted when the block enforces P2SH.
+        // It might throw an exception if any issue to calculate the number of sigops.
+        uint64_t GetSigOpCount(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool countP2SHSigOps) const;
 
         // CalculateFlags forward to bitcoin-sv call
         // consensus define what flags set are being used
@@ -242,7 +245,8 @@ class CTxValidator {
             const std::vector<CTxOut>& prevUTXO,
             std::span<const int32_t> utxoHeights,
             ProtocolEra era,
-            int32_t nextBlockHeight
+            int32_t nextBlockHeight,
+            bool countP2SHSigOps
         ) const;
 };
 
