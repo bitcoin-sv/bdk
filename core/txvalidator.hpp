@@ -188,6 +188,11 @@ class CTxValidator {
             BaseSignatureChecker& sig_checker
         ) const;
 
+        TxError implCheckInputValues(
+            const CTransaction& tx,
+            const std::vector<CTxOut>& prevUTXO
+        ) const;
+
         // Whole-tx script verification loop (no deserialization; can throw).
         TxError implVerifyScript(
             const CTransaction& ctx,
