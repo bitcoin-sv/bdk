@@ -22,8 +22,9 @@ type VerifyBatch struct {
 // NewVerifyBatch creates a new VerifyBatch and sets the Finalizer to call C++ destructor
 // Takes an optional capacity parameter to pre-allocate space for batch elements
 // Usage:
-//   batch := NewVerifyBatch()         // Create batch without pre-allocation
-//   batch := NewVerifyBatch(100)      // Create batch with capacity for 100 elements
+//
+//	batch := NewVerifyBatch()         // Create batch without pre-allocation
+//	batch := NewVerifyBatch(100)      // Create batch with capacity for 100 elements
 func NewVerifyBatch(capacity ...int) *VerifyBatch {
 	// Create a new C++ VerifyBatch and bind it to the go struct
 	goBatch := &VerifyBatch{
@@ -88,23 +89,29 @@ func (vb *VerifyBatch) Add(extendedTX []byte, utxoHeights []int32, blockHeight i
 		C.bool(consensus),
 		flagsPtr, C.int(lenFlags),
 	)
+	runtime.KeepAlive(vb)
 }
 
 // Clear removes all elements from the batch
 // The batch can be reused after clearing for a new batch operation
 func (vb *VerifyBatch) Clear() {
 	C.VerifyBatch_Clear(vb.cBatchPtr)
+	runtime.KeepAlive(vb)
 }
 
 // Size returns the number of elements in the batch
 func (vb *VerifyBatch) Size() int {
-	return int(C.VerifyBatch_Size(vb.cBatchPtr))
+	result := C.VerifyBatch_Size(vb.cBatchPtr)
+	runtime.KeepAlive(vb)
+	return int(result)
 }
 
 // Empty checks if the batch is empty
 // Returns true if the batch contains no elements
 func (vb *VerifyBatch) Empty() bool {
-	return bool(C.VerifyBatch_Empty(vb.cBatchPtr))
+	result := C.VerifyBatch_Empty(vb.cBatchPtr)
+	runtime.KeepAlive(vb)
+	return bool(result)
 }
 
 // Reserve pre-allocates capacity for the specified number of elements
@@ -112,5 +119,6 @@ func (vb *VerifyBatch) Empty() bool {
 func (vb *VerifyBatch) Reserve(capacity int) {
 	if capacity > 0 {
 		C.VerifyBatch_Reserve(vb.cBatchPtr, C.int(capacity))
+		runtime.KeepAlive(vb)
 	}
 }

@@ -35,11 +35,16 @@ namespace bsv
  * Checks present in bitcoin-sv's TxnValidation / BlockValidateTxns that are intentionally
  * absent here, with guidance for node implementors who need them:
  *
+ *   Promiscuous mempool script flags:
+ *     bitcoin-sv's policy path can replace standard script verify flags with an
+ *     operator-configured set via -promiscuousmempool. The new node architecture has
+ *     no mempool, so this operator feature does not exist and is intentionally absent.
+ *
  *   nLockTime finality (IsFinalTx):
  *     bitcoin-sv rejects or queues transactions whose nLockTime has not yet been reached,
  *     using the chain tip's Median Time Past (MTP). BDK has no access to MTP or chain state.
- *     A node can implement this by calling IsFinalTx(tx, blockHeight+1, nMedianTimePast)
- *     before or after CheckTransaction.
+ *     Policy path: IsFinalTx(tx, tipHeight + 1, tipMedianTimePast).
+ *     Consensus path: IsFinalTx(tx, blockHeight, previousBlockMedianTimePast).
  *
  *   BIP68 sequence locks (CheckSequenceLocks / SequenceLocks, pre-Genesis only):
  *     bitcoin-sv enforces relative time locks from BIP68 using per-input UTXO confirmation
@@ -92,9 +97,11 @@ class CTxValidator {
 
         // SigOps policy limits. Pre-Genesis default: 4000 (MAX_TX_SIGOPS_COUNT_POLICY_BEFORE_GENESIS).
         // Post-Genesis default: UINT32_MAX (MAX_TX_SIGOPS_COUNT_POLICY_AFTER_GENESIS); operators can lower it.
+        // SetMaxSigOpsPostGenesisPolicy mirrors bitcoin-sv SetMaxTxSigOpsCountPolicy semantics:
+        //   0 → reset to default (UINT32_MAX); negative or > UINT32_MAX → rejected with error.
         void SetMaxSigOpsPolicy(uint64_t value);
         uint64_t GetMaxSigOpsPolicy() const;
-        void SetMaxSigOpsPostGenesisPolicy(uint64_t value);
+        bool SetMaxSigOpsPostGenesisPolicy(int64_t value, std::string* err = nullptr);
         uint64_t GetMaxSigOpsPostGenesisPolicy() const;
 
         // Reset all policy settings to defaults
@@ -125,15 +132,28 @@ class CTxValidator {
 
         // GetSigOpCount returns the number of sig ops in an extended transaction.
         // countP2SHSigOps mirrors the fP2SH parameter in bitcoin-sv's GetTransactionSigOpCount:
-        // the node should pass (blockFlags & SCRIPT_VERIFY_P2SH) != 0, where blockFlags comes
-        // from GetBlockScriptFlags, so that P2SH sigops are only counted when the block enforces P2SH.
+        //   pass (blockFlags & SCRIPT_VERIFY_P2SH) != 0 for block-level aggregate counting
+        //   (blockFlags from GetBlockScriptFlags); pass true for policy/mempool use.
+        // consensus controls the era used to determine the sigops rules:
+        //   false (policy) → era at blockHeight+1 (next candidate block)
+        //   true (block)   → era at blockHeight (the block being validated)
+        // Callers must not pass MEMPOOL_HEIGHT utxo heights when consensus=true; this method
+        // throws std::runtime_error on that sentinel value. CheckTransaction guards this via
+        // UnconfirmedInputInBlock before reaching sigop counting, so that path is safe; direct
+        // callers are responsible for filtering out unconfirmed UTXOs beforehand.
         // It might throw an exception if any issue to calculate the number of sigops.
-        uint64_t GetSigOpCount(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool countP2SHSigOps) const;
+        uint64_t GetSigOpCount(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool countP2SHSigOps, bool consensus = false) const;
 
-        // CalculateFlags forward to bitcoin-sv call
-        // consensus define what flags set are being used
-        //   - consensus=true  --> flags to check a tx coming from a peer  (enforce policies check)
-        //   - consensus=false --> flags to check a tx coming from a block (   skip policies check)
+        // CalculateFlags computes the script verify flags for a single input.
+        // consensus controls which protocol era and flag set are used (block vs policy).
+        // Note: if utxoHeight == MEMPOOL_HEIGHT and consensus=true, the UTXO era is silently
+        // mapped to blockHeight+1 rather than returning an error, because this helper returns
+        // uint32_t and cannot signal a typed failure. CheckTransaction rejects this case with
+        // UnconfirmedInputInBlock before CalculateFlags is ever reached; callers invoking
+        // CalculateFlags directly with consensus=true and MEMPOOL_HEIGHT are responsible for
+        // guarding against this invalid combination beforehand.
+        //   - consensus=false --> flags to check a tx coming from a peer  (policy path:    enforce policy checks)
+        //   - consensus=true  --> flags to check a tx coming from a block (consensus path: skip   policy checks)
         uint32_t CalculateFlags(int32_t utxoHeight, int32_t blockHeight, bool consensus) const;
 
         // VerifyScript extract the extended transaction, then forward to bsv call
@@ -147,8 +167,14 @@ class CTxValidator {
         std::vector<TxError> VerifyScriptBatch(const VerifyBatch& batch) const;
 
         // CheckTransaction runs all tx-level checks then script verification.
-        // consensus=false → peer context (all checks including policy)
+        // consensus=false → peer/mempool context (all checks including policy)
         // consensus=true  → block context (consensus checks only)
+        //
+        // This method is for non-coinbase transactions only. Coinbase transactions
+        // are rejected with CoinbaseNotAllowed in both modes. In block validation,
+        // the node must validate the coinbase transaction separately (bitcoin-sv uses
+        // CheckCoinbase); CheckTransaction should be called only for the remaining
+        // non-coinbase transactions in the block.
         TxError CheckTransaction(std::span<const uint8_t> extendedTX,
                                  std::span<const int32_t> utxoHeights,
                                  int32_t blockHeight,
