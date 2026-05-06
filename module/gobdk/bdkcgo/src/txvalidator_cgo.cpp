@@ -151,6 +151,13 @@ const char* TxValidator_SetMaxTxSizePolicy(TxValidatorCGO cgoEngine, int64_t val
     return _helper_string2char(err);
 }
 
+const char* TxValidator_SetMaxSigOpsPostGenesisPolicy(TxValidatorCGO cgoEngine, int64_t value)
+{
+    std::string err;
+    static_cast<bsv::CTxValidator*>(cgoEngine)->SetMaxSigOpsPostGenesisPolicy(value, &err);
+    return _helper_string2char(err);
+}
+
 void TxValidator_SetDataCarrierSize(TxValidatorCGO cgoEngine, uint64_t dataCarrierSize)
 {
     static_cast<bsv::CTxValidator*>(cgoEngine)->SetDataCarrierSize(dataCarrierSize);
@@ -211,7 +218,7 @@ bool TxValidator_GetPermitBareMultisig(TxValidatorCGO cgoEngine)
     return static_cast<bsv::CTxValidator*>(cgoEngine)->GetPermitBareMultisig();
 }
 
-uint64_t TxValidator_GetSigOpCount(TxValidatorCGO cgoEngine, const char* extendedTxPtr, int extendedTxLen, const int32_t* hUTXOsPtr, int hUTXOsLen, int32_t blockHeight, bool countP2SHSigOps, char** errStr) {
+uint64_t TxValidator_GetSigOpCount(TxValidatorCGO cgoEngine, const char* extendedTxPtr, int extendedTxLen, const int32_t* hUTXOsPtr, int hUTXOsLen, int32_t blockHeight, bool countP2SHSigOps, bool consensus, char** errStr) {
     try {
         std::span<const uint8_t> extendedTx;
         if (extendedTxPtr != nullptr && extendedTxLen > 0) {
@@ -221,7 +228,7 @@ uint64_t TxValidator_GetSigOpCount(TxValidatorCGO cgoEngine, const char* extende
 
         std::span<const int32_t> hUTXOs{ hUTXOsPtr, (size_t)hUTXOsLen };
 
-        return static_cast<bsv::CTxValidator*>(cgoEngine)->GetSigOpCount(extendedTx, hUTXOs, blockHeight, countP2SHSigOps);
+        return static_cast<bsv::CTxValidator*>(cgoEngine)->GetSigOpCount(extendedTx, hUTXOs, blockHeight, countP2SHSigOps, consensus);
     }
     catch (const std::exception& e) {
         *errStr = strdup(e.what());

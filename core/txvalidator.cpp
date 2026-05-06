@@ -210,7 +210,21 @@ void bsv::CTxValidator::ResetDefault()
 
 void bsv::CTxValidator::SetMaxSigOpsPolicy(uint64_t value) { maxSigOpsPolicy = value; }
 uint64_t bsv::CTxValidator::GetMaxSigOpsPolicy() const { return maxSigOpsPolicy; }
-void bsv::CTxValidator::SetMaxSigOpsPostGenesisPolicy(uint64_t value) { maxSigOpsPostGenesisPolicy = value; }
+bool bsv::CTxValidator::SetMaxSigOpsPostGenesisPolicy(int64_t value, std::string* err)
+{
+    if (value < 0) {
+        if (err) *err = "Post-Genesis sigops policy limit cannot be negative";
+        return false;
+    }
+    if (static_cast<uint64_t>(value) > MAX_TX_SIGOPS_COUNT_POLICY_AFTER_GENESIS) {
+        if (err) *err = "Post-Genesis sigops policy limit exceeds maximum (" + std::to_string(MAX_TX_SIGOPS_COUNT_POLICY_AFTER_GENESIS) + ")";
+        return false;
+    }
+    // 0 means reset to default (UINT32_MAX), mirroring bitcoin-sv SetMaxTxSigOpsCountPolicy.
+    maxSigOpsPostGenesisPolicy = (value == 0) ? MAX_TX_SIGOPS_COUNT_POLICY_AFTER_GENESIS
+                                              : static_cast<uint64_t>(value);
+    return true;
+}
 uint64_t bsv::CTxValidator::GetMaxSigOpsPostGenesisPolicy() const { return maxSigOpsPostGenesisPolicy; }
 
 void bsv::CTxValidator::SetMinConsolidationFactor(uint64_t value) { consolidationMinFactor = value; }
@@ -308,7 +322,14 @@ uint32_t bsv::CTxValidator::CalculateFlags(int32_t utxoHeight, int32_t blockHeig
 // of the huge dependencies
 //
 // So we replicate them here
-uint64_t bsv::CTxValidator::GetSigOpCount(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool countP2SHSigOps) const {
+uint64_t bsv::CTxValidator::GetSigOpCount(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool countP2SHSigOps, bool consensus) const {
+    if (consensus) {
+        for (auto h : utxoHeights) {
+            if (h == MEMPOOL_HEIGHT)
+                throw std::runtime_error("MEMPOOL_HEIGHT UTXO is invalid in consensus sigop counting");
+        }
+    }
+
     const char* begin{ reinterpret_cast<const char*>(extendedTX.data()) };
     const char* end{ reinterpret_cast<const char*>(extendedTX.data() + extendedTX.size()) };
     CDataStream tx_stream(begin, end, SER_NETWORK, PROTOCOL_VERSION);
@@ -320,8 +341,9 @@ uint64_t bsv::CTxValidator::GetSigOpCount(std::span<const uint8_t> extendedTX, s
     }
 
     const CTransaction ctx(eTX.mtx);
-    const ProtocolEra era = GetProtocolEra(policySettings, blockHeight + 1);
-    return implGetSigOpCount(ctx, eTX.vutxo, utxoHeights, era, blockHeight + 1, countP2SHSigOps);
+    const int32_t eraHeight = consensus ? blockHeight : blockHeight + 1;
+    const ProtocolEra era = GetProtocolEra(policySettings, eraHeight);
+    return implGetSigOpCount(ctx, eTX.vutxo, utxoHeights, era, eraHeight, countP2SHSigOps);
 }
 
 uint64_t bsv::CTxValidator::implGetSigOpCount(
@@ -609,6 +631,9 @@ TxError bsv::CTxValidator::implCheckInputValues(
     const std::vector<CTxOut>& prevUTXO
 ) const
 {
+    if (prevUTXO.size() != tx.vin.size())
+        throw std::runtime_error("implCheckInputValues: inconsistent inputs size");
+
     Amount nValueIn(0);
     for (const auto& utxo : prevUTXO) {
         if (!MoneyRange(utxo.nValue) || !MoneyRange(nValueIn + utxo.nValue))
@@ -645,6 +670,12 @@ TxError bsv::CTxValidator::CheckTransaction(std::span<const uint8_t> extendedTX,
 
         if (ctx.IsCoinBase())
             return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::CoinbaseNotAllowed));
+
+        // Guard against malformed extended-tx metadata before any method indexes prevUTXO or utxoHeights.
+        if (eTX.vutxo.size() != ctx.vin.size())
+            throw std::runtime_error("inconsistent utxo and input count in extended transaction");
+        if (utxoHeights.size() != ctx.vin.size())
+            throw std::runtime_error("inconsistent utxo heights and input count");
 
         // Policy era is computed at blockHeight+1 (next block), consensus at blockHeight.
         // implCheckSigOpsPolicy and CalculateFlags already apply +1 internally; all other

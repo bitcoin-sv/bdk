@@ -51,7 +51,8 @@ func NewTxValidator(netName string) *TxValidator {
 // GetSigOpCount returns the number of sigops in an extended transaction.
 // countP2SHSigOps should be (blockFlags & SCRIPT_VERIFY_P2SH) != 0 for block-level
 // aggregate counting, or true for policy/mempool use.
-func (se *TxValidator) GetSigOpCount(extendedTX []byte, utxoHeights []int32, blockHeight int32, countP2SHSigOps bool) (uint64, error) {
+// consensus=false uses blockHeight+1 era (policy); consensus=true uses blockHeight era (block validation).
+func (se *TxValidator) GetSigOpCount(extendedTX []byte, utxoHeights []int32, blockHeight int32, countP2SHSigOps bool, consensus bool) (uint64, error) {
 	lenTx := len(extendedTX)
 	var txPtr *C.char
 
@@ -67,7 +68,8 @@ func (se *TxValidator) GetSigOpCount(extendedTX []byte, utxoHeights []int32, blo
 	}
 
 	var errMsg *C.char
-	sigOpCount := C.TxValidator_GetSigOpCount(se.cSEPtr, txPtr, C.int(lenTx), utxoPtr, C.int(lenUtxo), C.int32_t(blockHeight), C.bool(countP2SHSigOps), &errMsg)
+	sigOpCount := C.TxValidator_GetSigOpCount(se.cSEPtr, txPtr, C.int(lenTx), utxoPtr, C.int(lenUtxo), C.int32_t(blockHeight), C.bool(countP2SHSigOps), C.bool(consensus), &errMsg)
+	runtime.KeepAlive(se)
 
 	if errMsg != nil {
 		defer C.free(unsafe.Pointer(errMsg))
@@ -79,7 +81,9 @@ func (se *TxValidator) GetSigOpCount(extendedTX []byte, utxoHeights []int32, blo
 
 // CalculateFlags calculates the flags to be used to verify the script
 func (se *TxValidator) CalculateFlags(utxoHeight int32, blockHeight int32, consensus bool) uint32 {
-	return uint32(C.TxValidator_CalculateFlags(se.cSEPtr, C.int32_t(utxoHeight), C.int32_t(blockHeight), C.bool(consensus)))
+	result := C.TxValidator_CalculateFlags(se.cSEPtr, C.int32_t(utxoHeight), C.int32_t(blockHeight), C.bool(consensus))
+	runtime.KeepAlive(se)
+	return uint32(result)
 }
 
 // VerifyScript verifies the script by providing
@@ -101,6 +105,7 @@ func (se *TxValidator) VerifyScript(extendedTX []byte, utxoHeights []int32, bloc
 	}
 
 	result := C.TxValidator_VerifyScript(se.cSEPtr, txPtr, C.int(lenTx), utxoPtr, C.int(lenUtxo), C.int32_t(blockHeight), C.bool(consensus))
+	runtime.KeepAlive(se)
 	return translateTxError(result)
 }
 
@@ -126,17 +131,17 @@ func (se *TxValidator) VerifyScriptWithCustomFlags(extendedTX []byte, utxoHeight
 	}
 
 	result := C.TxValidator_VerifyScriptWithCustomFlags(se.cSEPtr, txPtr, C.int(lenTx), utxoPtr, C.int(lenUtxo), C.int32_t(blockHeight), C.bool(consensus), flagsPtr, C.int(lenFlags))
+	runtime.KeepAlive(se)
 	return translateTxError(result)
 }
 
 // SetMaxOpsPerScriptPolicy set the MaxOpsPerScriptPolicy in the C++ TxValidator
 func (se *TxValidator) SetMaxOpsPerScriptPolicy(maxOpsPerScriptPolicyIn int64) error {
 	errCStr := C.TxValidator_SetMaxOpsPerScriptPolicy(se.cSEPtr, C.int64_t(maxOpsPerScriptPolicyIn))
-
+	runtime.KeepAlive(se)
 	if errCStr == nil {
 		return nil
 	}
-
 	defer C.free(unsafe.Pointer(errCStr))
 	return errors.New(C.GoString(errCStr))
 }
@@ -144,11 +149,10 @@ func (se *TxValidator) SetMaxOpsPerScriptPolicy(maxOpsPerScriptPolicyIn int64) e
 // SetMaxScriptNumLengthPolicy set the MaxScriptNumLengthPolicy in the C++ TxValidator
 func (se *TxValidator) SetMaxScriptNumLengthPolicy(maxScriptNumLengthIn int64) error {
 	errCStr := C.TxValidator_SetMaxScriptNumLengthPolicy(se.cSEPtr, C.int64_t(maxScriptNumLengthIn))
-
+	runtime.KeepAlive(se)
 	if errCStr == nil {
 		return nil
 	}
-
 	defer C.free(unsafe.Pointer(errCStr))
 	return errors.New(C.GoString(errCStr))
 }
@@ -156,116 +160,125 @@ func (se *TxValidator) SetMaxScriptNumLengthPolicy(maxScriptNumLengthIn int64) e
 // SetMaxScriptSizePolicy set the MaxScriptSizePolicy in the C++ TxValidator
 func (se *TxValidator) SetMaxScriptSizePolicy(maxScriptSizePolicyIn int64) error {
 	errCStr := C.TxValidator_SetMaxScriptSizePolicy(se.cSEPtr, C.int64_t(maxScriptSizePolicyIn))
-
+	runtime.KeepAlive(se)
 	if errCStr == nil {
 		return nil
 	}
-
 	defer C.free(unsafe.Pointer(errCStr))
-
 	return errors.New(C.GoString(errCStr))
 }
 
 // SetMaxPubKeysPerMultiSigPolicy set the MaxPubKeysPerMultiSigPolicy in the C++ TxValidator
 func (se *TxValidator) SetMaxPubKeysPerMultiSigPolicy(maxPubKeysPerMultiSigIn int64) error {
 	errCStr := C.TxValidator_SetMaxPubKeysPerMultiSigPolicy(se.cSEPtr, C.int64_t(maxPubKeysPerMultiSigIn))
-
+	runtime.KeepAlive(se)
 	if errCStr == nil {
 		return nil
 	}
-
 	defer C.free(unsafe.Pointer(errCStr))
-
 	return errors.New(C.GoString(errCStr))
 }
 
 // SetMaxStackMemoryUsage set the MaxStackMemoryUsage in the C++ TxValidator
 func (se *TxValidator) SetMaxStackMemoryUsage(maxStackMemoryUsageConsensusIn int64, maxStackMemoryUsagePolicyIn int64) error {
 	errCStr := C.TxValidator_SetMaxStackMemoryUsage(se.cSEPtr, C.int64_t(maxStackMemoryUsageConsensusIn), C.int64_t(maxStackMemoryUsagePolicyIn))
-
+	runtime.KeepAlive(se)
 	if errCStr == nil {
 		return nil
 	}
-
 	defer C.free(unsafe.Pointer(errCStr))
-
 	return errors.New(C.GoString(errCStr))
 }
 
 // SetGenesisActivationHeight set the GenesisActivationHeight in the C++ TxValidator
 func (se *TxValidator) SetGenesisActivationHeight(genesisActivationHeightIn int32) error {
 	errCStr := C.TxValidator_SetGenesisActivationHeight(se.cSEPtr, C.int32_t(genesisActivationHeightIn))
-
+	runtime.KeepAlive(se)
 	if errCStr == nil {
 		return nil
 	}
-
 	defer C.free(unsafe.Pointer(errCStr))
-
 	return errors.New(C.GoString(errCStr))
 }
 
 // SetChronicleActivationHeight set the ChronicleActivationHeight in the C++ TxValidator
 func (se *TxValidator) SetChronicleActivationHeight(chronicleActivationHeightIn int32) error {
 	errCStr := C.TxValidator_SetChronicleActivationHeight(se.cSEPtr, C.int32_t(chronicleActivationHeightIn))
-
+	runtime.KeepAlive(se)
 	if errCStr == nil {
 		return nil
 	}
-
 	defer C.free(unsafe.Pointer(errCStr))
-
 	return errors.New(C.GoString(errCStr))
 }
 
 // GetMaxOpsPerScript get the MaxOpsPerScript being set
 func (se *TxValidator) GetMaxOpsPerScript(isGenesisEnabled, isConsensus bool) uint64 {
-	return uint64(C.TxValidator_GetMaxOpsPerScript(se.cSEPtr, C.bool(isGenesisEnabled), C.bool(isConsensus)))
+	result := C.TxValidator_GetMaxOpsPerScript(se.cSEPtr, C.bool(isGenesisEnabled), C.bool(isConsensus))
+	runtime.KeepAlive(se)
+	return uint64(result)
 }
 
 // GetMaxScriptNumLength get the MaxScriptNumLength being set
 func (se *TxValidator) GetMaxScriptNumLength(isGenesisEnabled, isChronicleEnabled, isConsensus bool) uint64 {
-	return uint64(C.TxValidator_GetMaxScriptNumLength(se.cSEPtr, C.bool(isGenesisEnabled), C.bool(isChronicleEnabled), C.bool(isConsensus)))
+	result := C.TxValidator_GetMaxScriptNumLength(se.cSEPtr, C.bool(isGenesisEnabled), C.bool(isChronicleEnabled), C.bool(isConsensus))
+	runtime.KeepAlive(se)
+	return uint64(result)
 }
 
 // GetMaxScriptSize get the MaxScriptSize being set
 func (se *TxValidator) GetMaxScriptSize(isGenesisEnabled, isConsensus bool) uint64 {
-	return uint64(C.TxValidator_GetMaxScriptSize(se.cSEPtr, C.bool(isGenesisEnabled), C.bool(isConsensus)))
+	result := C.TxValidator_GetMaxScriptSize(se.cSEPtr, C.bool(isGenesisEnabled), C.bool(isConsensus))
+	runtime.KeepAlive(se)
+	return uint64(result)
 }
 
 // GetMaxPubKeysPerMultiSig get the MaxPubKeysPerMultiSig being set
 func (se *TxValidator) GetMaxPubKeysPerMultiSig(isGenesisEnabled, isConsensus bool) uint64 {
-	return uint64(C.TxValidator_GetMaxPubKeysPerMultiSig(se.cSEPtr, C.bool(isGenesisEnabled), C.bool(isConsensus)))
+	result := C.TxValidator_GetMaxPubKeysPerMultiSig(se.cSEPtr, C.bool(isGenesisEnabled), C.bool(isConsensus))
+	runtime.KeepAlive(se)
+	return uint64(result)
 }
 
 // GetMaxStackMemoryUsage get the MaxStackMemoryUsage being set
 func (se *TxValidator) GetMaxStackMemoryUsage(isGenesisEnabled, isConsensus bool) uint64 {
-	return uint64(C.TxValidator_GetMaxStackMemoryUsage(se.cSEPtr, C.bool(isGenesisEnabled), C.bool(isConsensus)))
+	result := C.TxValidator_GetMaxStackMemoryUsage(se.cSEPtr, C.bool(isGenesisEnabled), C.bool(isConsensus))
+	runtime.KeepAlive(se)
+	return uint64(result)
 }
 
 // GetGenesisActivationHeight get the genesis height being set
 func (se *TxValidator) GetGenesisActivationHeight() int32 {
-	return int32(C.TxValidator_GetGenesisActivationHeight(se.cSEPtr))
+	result := C.TxValidator_GetGenesisActivationHeight(se.cSEPtr)
+	runtime.KeepAlive(se)
+	return int32(result)
 }
 
 // GetChronicleActivationHeight get the chronicle height being set
 func (se *TxValidator) GetChronicleActivationHeight() int32 {
-	return int32(C.TxValidator_GetChronicleActivationHeight(se.cSEPtr))
+	result := C.TxValidator_GetChronicleActivationHeight(se.cSEPtr)
+	runtime.KeepAlive(se)
+	return int32(result)
 }
 
 // GetGenesisGracefulPeriod get the genesis graceful period being set
 func (se *TxValidator) GetGenesisGracefulPeriod() uint64 {
-	return uint64(C.TxValidator_GetGenesisGracefulPeriod(se.cSEPtr))
+	result := C.TxValidator_GetGenesisGracefulPeriod(se.cSEPtr)
+	runtime.KeepAlive(se)
+	return uint64(result)
 }
 
 // GetChronicleGracefulPeriod get the chronicle graceful period being set
 func (se *TxValidator) GetChronicleGracefulPeriod() uint64 {
-	return uint64(C.TxValidator_GetChronicleGracefulPeriod(se.cSEPtr))
+	result := C.TxValidator_GetChronicleGracefulPeriod(se.cSEPtr)
+	runtime.KeepAlive(se)
+	return uint64(result)
 }
 
 // SetGenesisGracefulPeriod set the GenesisGracefulPeriod in the C++ TxValidator
 func (se *TxValidator) SetGenesisGracefulPeriod(genesisGracefulPeriodIn int64) error {
 	errCStr := C.TxValidator_SetGenesisGracefulPeriod(se.cSEPtr, C.int64_t(genesisGracefulPeriodIn))
+	runtime.KeepAlive(se)
 	if errCStr == nil {
 		return nil
 	}
@@ -276,6 +289,7 @@ func (se *TxValidator) SetGenesisGracefulPeriod(genesisGracefulPeriodIn int64) e
 // SetChronicleGracefulPeriod set the ChronicleGracefulPeriod in the C++ TxValidator
 func (se *TxValidator) SetChronicleGracefulPeriod(chronicleGracefulPeriodIn int64) error {
 	errCStr := C.TxValidator_SetChronicleGracefulPeriod(se.cSEPtr, C.int64_t(chronicleGracefulPeriodIn))
+	runtime.KeepAlive(se)
 	if errCStr == nil {
 		return nil
 	}
@@ -286,6 +300,19 @@ func (se *TxValidator) SetChronicleGracefulPeriod(chronicleGracefulPeriodIn int6
 // SetMaxTxSizePolicy set the MaxTxSizePolicy in the C++ TxValidator
 func (se *TxValidator) SetMaxTxSizePolicy(value int64) error {
 	errCStr := C.TxValidator_SetMaxTxSizePolicy(se.cSEPtr, C.int64_t(value))
+	runtime.KeepAlive(se)
+	if errCStr == nil {
+		return nil
+	}
+	defer C.free(unsafe.Pointer(errCStr))
+	return errors.New(C.GoString(errCStr))
+}
+
+// SetMaxSigOpsPostGenesisPolicy sets the post-Genesis sigops policy limit.
+// 0 resets to the default (UINT32_MAX / unlimited). Negative or > UINT32_MAX returns an error.
+func (se *TxValidator) SetMaxSigOpsPostGenesisPolicy(value int64) error {
+	errCStr := C.TxValidator_SetMaxSigOpsPostGenesisPolicy(se.cSEPtr, C.int64_t(value))
+	runtime.KeepAlive(se)
 	if errCStr == nil {
 		return nil
 	}
@@ -296,61 +323,79 @@ func (se *TxValidator) SetMaxTxSizePolicy(value int64) error {
 // SetDataCarrierSize set the DataCarrierSize in the C++ TxValidator
 func (se *TxValidator) SetDataCarrierSize(dataCarrierSize uint64) {
 	C.TxValidator_SetDataCarrierSize(se.cSEPtr, C.uint64_t(dataCarrierSize))
+	runtime.KeepAlive(se)
 }
 
 // SetDataCarrier set the DataCarrier flag in the C++ TxValidator
 func (se *TxValidator) SetDataCarrier(dataCarrier bool) {
 	C.TxValidator_SetDataCarrier(se.cSEPtr, C.bool(dataCarrier))
+	runtime.KeepAlive(se)
 }
 
 // SetAcceptNonStandardOutput set the AcceptNonStandardOutput flag in the C++ TxValidator
 func (se *TxValidator) SetAcceptNonStandardOutput(accept bool) {
 	C.TxValidator_SetAcceptNonStandardOutput(se.cSEPtr, C.bool(accept))
+	runtime.KeepAlive(se)
 }
 
 // SetRequireStandard set the RequireStandard flag in the C++ TxValidator
 func (se *TxValidator) SetRequireStandard(require bool) {
 	C.TxValidator_SetRequireStandard(se.cSEPtr, C.bool(require))
+	runtime.KeepAlive(se)
 }
 
 // SetPermitBareMultisig set the PermitBareMultisig flag in the C++ TxValidator
 func (se *TxValidator) SetPermitBareMultisig(permit bool) {
 	C.TxValidator_SetPermitBareMultisig(se.cSEPtr, C.bool(permit))
+	runtime.KeepAlive(se)
 }
 
 // ResetDefault resets all policy settings to their default values
 func (se *TxValidator) ResetDefault() {
 	C.TxValidator_ResetDefault(se.cSEPtr)
+	runtime.KeepAlive(se)
 }
 
 // GetMaxTxSize get the MaxTxSize for the given protocol era
 func (se *TxValidator) GetMaxTxSize(isGenesisEnabled, isChronicleEnabled, isConsensus bool) uint64 {
-	return uint64(C.TxValidator_GetMaxTxSize(se.cSEPtr, C.bool(isGenesisEnabled), C.bool(isChronicleEnabled), C.bool(isConsensus)))
+	result := C.TxValidator_GetMaxTxSize(se.cSEPtr, C.bool(isGenesisEnabled), C.bool(isChronicleEnabled), C.bool(isConsensus))
+	runtime.KeepAlive(se)
+	return uint64(result)
 }
 
 // GetDataCarrierSize get the DataCarrierSize being set
 func (se *TxValidator) GetDataCarrierSize() uint64 {
-	return uint64(C.TxValidator_GetDataCarrierSize(se.cSEPtr))
+	result := C.TxValidator_GetDataCarrierSize(se.cSEPtr)
+	runtime.KeepAlive(se)
+	return uint64(result)
 }
 
 // GetDataCarrier get the DataCarrier flag being set
 func (se *TxValidator) GetDataCarrier() bool {
-	return bool(C.TxValidator_GetDataCarrier(se.cSEPtr))
+	result := C.TxValidator_GetDataCarrier(se.cSEPtr)
+	runtime.KeepAlive(se)
+	return bool(result)
 }
 
 // GetAcceptNonStandardOutput get the AcceptNonStandardOutput flag for the given protocol era
 func (se *TxValidator) GetAcceptNonStandardOutput(isGenesisEnabled, isChronicleEnabled bool) bool {
-	return bool(C.TxValidator_GetAcceptNonStandardOutput(se.cSEPtr, C.bool(isGenesisEnabled), C.bool(isChronicleEnabled)))
+	result := C.TxValidator_GetAcceptNonStandardOutput(se.cSEPtr, C.bool(isGenesisEnabled), C.bool(isChronicleEnabled))
+	runtime.KeepAlive(se)
+	return bool(result)
 }
 
 // GetRequireStandard get the RequireStandard flag being set
 func (se *TxValidator) GetRequireStandard() bool {
-	return bool(C.TxValidator_GetRequireStandard(se.cSEPtr))
+	result := C.TxValidator_GetRequireStandard(se.cSEPtr)
+	runtime.KeepAlive(se)
+	return bool(result)
 }
 
 // GetPermitBareMultisig get the PermitBareMultisig flag being set
 func (se *TxValidator) GetPermitBareMultisig() bool {
-	return bool(C.TxValidator_GetPermitBareMultisig(se.cSEPtr))
+	result := C.TxValidator_GetPermitBareMultisig(se.cSEPtr)
+	runtime.KeepAlive(se)
+	return bool(result)
 }
 
 // VerifyScriptBatch processes a batch of script verifications.
@@ -363,6 +408,8 @@ func (se *TxValidator) VerifyScriptBatch(batch *VerifyBatch) []error {
 
 	var resultSize C.int
 	resultsPtr := C.TxValidator_VerifyScriptBatch(se.cSEPtr, batch.cBatchPtr, &resultSize)
+	runtime.KeepAlive(se)
+	runtime.KeepAlive(batch)
 
 	if resultsPtr == nil || resultSize == 0 {
 		return nil
@@ -399,6 +446,7 @@ func (se *TxValidator) CheckTransaction(extendedTX []byte, utxoHeights []int32, 
 	}
 
 	result := C.TxValidator_CheckTransaction(se.cSEPtr, txPtr, C.int(lenTx), utxoPtr, C.int(lenUtxo), C.int32_t(blockHeight), C.bool(consensus))
+	runtime.KeepAlive(se)
 	return translateTxError(result)
 }
 

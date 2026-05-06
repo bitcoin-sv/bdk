@@ -50,6 +50,7 @@ const char* TxValidator_SetChronicleActivationHeight(TxValidatorCGO cgoEngine, i
 const char* TxValidator_SetGenesisGracefulPeriod(TxValidatorCGO cgoEngine, int64_t genesisGracefulPeriodIn);
 const char* TxValidator_SetChronicleGracefulPeriod(TxValidatorCGO cgoEngine, int64_t chronicleGracefulPeriodIn);
 const char* TxValidator_SetMaxTxSizePolicy(TxValidatorCGO cgoEngine, int64_t value);
+const char* TxValidator_SetMaxSigOpsPostGenesisPolicy(TxValidatorCGO cgoEngine, int64_t value);
 void TxValidator_SetDataCarrierSize(TxValidatorCGO cgoEngine, uint64_t dataCarrierSize);
 void TxValidator_SetDataCarrier(TxValidatorCGO cgoEngine, bool dataCarrier);
 void TxValidator_SetAcceptNonStandardOutput(TxValidatorCGO cgoEngine, bool accept);
@@ -91,6 +92,7 @@ uint64_t TxValidator_GetSigOpCount(TxValidatorCGO cgoEngine,
 	const int32_t* hUTXOsPtr, int hUTXOsLen,
 	int32_t blockHeight,
 	bool countP2SHSigOps,
+	bool consensus,
 	char** errStr
 );
 
