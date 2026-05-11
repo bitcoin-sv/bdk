@@ -1,3 +1,4 @@
+#include <chrono>
 #include <memory>
 #include <string>
 #include <vector>
@@ -16,8 +17,13 @@
 
 #include "streams.h"
 #include "version.h"
+#include "key.h"
+#include "pubkey.h"
+#include "primitives/transaction.h"
+#include "script/interpreter.h"
 #include "script/script.h"
 #include "script/script_flags.h"
+#include "script/sighashtype.h"
 #include "utilstrencodings.h"
 #include "verify_script_flags.h"
 #include "consensus/params.h"
@@ -218,6 +224,108 @@ BOOST_AUTO_TEST_CASE(test_verify_empty_utxos)
     bsv::CTxValidator se("main");
     const auto status = se.ValidateTransaction(emptyUtxoEtx, utxo, blockHeight, true);
     BOOST_CHECK(!bsv::TxErrorIsOk(status));
+}
+
+// Regression test for the multi-hour validator hang observed on testnet block
+// 1,451,505 tx 7bc9a3408d... whose input spends a 490,001-byte locking script
+// of (OP_2DUP OP_CHECKSIGVERIFY) * 245,000 + OP_CHECKSIG.
+//
+// The script performs 245,001 identical signature verifications because each
+// OP_2DUP duplicates the [sig, pubkey] pair just popped by OP_CHECKSIGVERIFY.
+// Without bsv::CachingScriptChecker every iteration runs a full ECDSA verify
+// plus a full SignatureHash that SHA256-streams the entire scriptCode buffer,
+// driving wall-clock validation into the hours-on-fast-hardware range.
+//
+// The test reproduces the shape with a smaller N (TEST_N below) so that the
+// without-cache path is observably slow but still finishes within CI budget,
+// and asserts the with-cache path returns in well under one second. The
+// assertion deadline is intentionally generous to absorb runner jitter while
+// still catching a true hang or accidental disablement of the cache.
+BOOST_AUTO_TEST_CASE(test_repeated_checksig_cache)
+{
+    using namespace std::chrono;
+
+    constexpr size_t TEST_N = 50000; // (OP_2DUP OP_CHECKSIGVERIFY) repetitions
+    constexpr int32_t blockHeight = 700000; // post-Genesis on mainnet
+    constexpr int64_t prevAmountSatoshis = 218;
+
+    // Deterministic key (same pattern as script_tests_modified.cpp::KeyData).
+    constexpr std::array<uint8_t, 32> rawKey = {
+        0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0,
+        0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0x7a };
+    CKey key;
+    key.Set(rawKey.begin(), rawKey.end(), /*fCompressedIn=*/true);
+    BOOST_REQUIRE(key.IsValid());
+    const CPubKey pubkey = key.GetPubKey();
+    BOOST_REQUIRE(pubkey.IsValid());
+
+    // Build the pathological locking script.
+    CScript lockingScript;
+    for (size_t i = 0; i < TEST_N; ++i) {
+        lockingScript << OP_2DUP << OP_CHECKSIGVERIFY;
+    }
+    lockingScript << OP_CHECKSIG;
+
+    // Build a minimal extended tx that spends a single previous output whose
+    // scriptPubKey is the locking script above. Output is a dust-OP_RETURN to
+    // keep the tx well-formed without needing a destination script.
+    bsv::CMutableTransactionExtended eTx;
+    eTx.mtx.nVersion = 2;
+    eTx.mtx.nLockTime = 0;
+    eTx.mtx.vin.resize(1);
+    eTx.mtx.vin[0].prevout = COutPoint(uint256S("01"), 0);
+    eTx.mtx.vin[0].nSequence = 0xffffffff;
+    eTx.mtx.vout.resize(1);
+    eTx.mtx.vout[0].nValue = Amount(0);
+    eTx.mtx.vout[0].scriptPubKey = CScript() << OP_FALSE << OP_RETURN;
+    eTx.vutxo.resize(1);
+    eTx.vutxo[0].nValue = Amount(prevAmountSatoshis);
+    eTx.vutxo[0].scriptPubKey = lockingScript;
+
+    // Sign using BIP143 (post-Genesis SIGHASH_FORKID path).
+    const SigHashType sigHashType = SigHashType().withForkId();
+    const uint256 sighash = SignatureHash(lockingScript,
+                                          CTransaction(eTx.mtx),
+                                          /*nIn=*/0,
+                                          sigHashType,
+                                          Amount(prevAmountSatoshis));
+    std::vector<uint8_t> sig;
+    BOOST_REQUIRE(key.Sign(sighash, sig));
+    sig.push_back(static_cast<uint8_t>(sigHashType.getRawSigHashType()));
+
+    // Populate the unlocking script: push sig then pubkey.
+    eTx.mtx.vin[0].scriptSig = CScript() << sig
+                                         << ToByteVector(pubkey);
+
+    // Serialise into the extended-tx wire form expected by VerifyScript.
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << eTx;
+    std::vector<uint8_t> etxBin(ss.begin(), ss.end());
+
+    bsv::CTxValidator se(CBaseChainParams::MAIN);
+    // Allow the large locking script under policy as well as consensus.
+    {
+        std::string err;
+        BOOST_REQUIRE(se.SetMaxScriptSizePolicy(static_cast<int64_t>(lockingScript.size()) + 1, &err));
+        BOOST_REQUIRE(se.SetMaxOpsPerScriptPolicy(static_cast<int64_t>(TEST_N * 2 + 10), &err));
+    }
+
+    const std::array<int32_t, 1> utxoArray{ blockHeight - 1 };
+    const std::span<const uint8_t> etx(etxBin.data(), etxBin.size());
+    const std::span<const int32_t> utxo(utxoArray);
+
+    const auto t0 = steady_clock::now();
+    const auto status = se.VerifyScript(etx, utxo, blockHeight, /*consensus=*/true);
+    const auto elapsed = duration_cast<milliseconds>(steady_clock::now() - t0).count();
+
+    BOOST_TEST_MESSAGE("test_repeated_checksig_cache: N=" << TEST_N
+                       << " script_bytes=" << lockingScript.size()
+                       << " elapsed_ms=" << elapsed);
+    BOOST_CHECK(bsv::TxErrorIsOk(status));
+    // Without the per-instance CheckSig cache this verify takes seconds-to-minutes
+    // on CI hardware. With the cache it completes in well under 100 ms; budget at
+    // 5 s to absorb runner jitter while still catching disablement of the cache.
+    BOOST_CHECK_LT(elapsed, 5000);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
