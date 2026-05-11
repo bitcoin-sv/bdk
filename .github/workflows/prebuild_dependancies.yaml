@@ -11,7 +11,6 @@ jobs:
           - os: ubuntu-22.04-arm
           - os: ubuntu-22.04
           - os: macos-15
-          - os: macos-15-intel
       fail-fast: false
     runs-on: ${{ matrix.os }}
 
@@ -55,17 +54,7 @@ jobs:
         wget -q $BOOST_URL -O "boost-$BOOST_VERSION-cmake.tar.gz"
         tar -xzf "boost-$BOOST_VERSION-cmake.tar.gz"
         mkdir -p "boost-$BOOST_VERSION/build"
-        if [[ "${{ matrix.os }}" == "macos-15-intel" ]]; then
-          echo "Force to build boost with arch x86_64 for macos-15 (which is an arm machine) ..."
-
-          ## Build x86_64 on macos-15 requires to skip the Boost:context. There are 2 ways
-          ##   - exclude context and all related dependencies
-          ##   - include only boost modules that are required by bsv (search for AX_BOOST_* in bsv source)
-          #cmake -B "./boost-$BOOST_VERSION/build" -S "./boost-$BOOST_VERSION" -DBUILD_SHARED_LIBS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX="$BOOST_ROOT" -DBOOST_EXCLUDE_LIBRARIES="context;asio;cobalt;coroutine;coroutine2;fiber;fiber_numa;log;log_setup" -DCMAKE_OSX_ARCHITECTURES="x86_64"
-          cmake -B "./boost-$BOOST_VERSION/build" -S "./boost-$BOOST_VERSION" -DBUILD_SHARED_LIBS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX="$BOOST_ROOT" -DBOOST_INCLUDE_LIBRARIES="chrono;filesystem;program_options;system;test;thread;circular_buffer;multi_index;property_tree;signals2;uuid;variant" -DCMAKE_OSX_ARCHITECTURES="x86_64"
-        else
-          cmake -B "./boost-$BOOST_VERSION/build" -S "./boost-$BOOST_VERSION" -DBUILD_SHARED_LIBS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX="$BOOST_ROOT" -DBOOST_INCLUDE_LIBRARIES="chrono;filesystem;program_options;system;test;thread;circular_buffer;multi_index;property_tree;signals2;uuid;variant"
-        fi
+        cmake -B "./boost-$BOOST_VERSION/build" -S "./boost-$BOOST_VERSION" -DBUILD_SHARED_LIBS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX="$BOOST_ROOT" -DBOOST_INCLUDE_LIBRARIES="chrono;filesystem;program_options;system;test;thread;circular_buffer;multi_index;property_tree;signals2;uuid;variant"
         cmake --build "./boost-$BOOST_VERSION/build" -j$(nproc) --target install
 
     - name: Build OpenSSL
@@ -74,15 +63,7 @@ jobs:
         tar -xzf "openssl-$OPENSSL_VERSION.tar.gz"
         cd "openssl-$OPENSSL_VERSION"
 
-        if [[ "${{ matrix.os }}" == "macos-15-intel" ]]; then
-          echo "Force to build boost with arch x86_64 for macos-15 (which is an arm machine) ..."
-          export KERNEL_BITS=64
-          export CFLAGS="-arch x86_64"
-          export LDFLAGS="-arch x86_64"
-          ./config darwin64-x86_64-cc no-shared no-tests no-docs no-dso no-engine --prefix="$OPENSSL_ROOT_DIR" --openssldir="$OPENSSL_ROOT_DIR"
-        else
-          ./config no-shared no-tests no-docs no-dso no-engine --prefix="$OPENSSL_ROOT_DIR" --openssldir="$OPENSSL_ROOT_DIR"
-        fi
+        ./config no-shared no-tests no-docs no-dso no-engine --prefix="$OPENSSL_ROOT_DIR" --openssldir="$OPENSSL_ROOT_DIR"
         make -j$(nproc)
         make install_sw
 
