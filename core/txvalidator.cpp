@@ -9,6 +9,7 @@
 #include <script/standard.h>
 
 #include <chainparams_bdk.hpp>
+#include <checker_cache.hpp>
 #include <extendedTx.hpp>
 #include <txvalidator.hpp>
 
@@ -502,7 +503,7 @@ TxError bsv::CTxValidator::implVerifyScript(
         TxError verifyResult = bsv::TxErrorOk();
         if (!ctx.vin.empty() && !ctx.vout.empty()) {
             const Amount amt{ amount };
-            TransactionSignatureChecker sig_checker(&ctx, index, amt);
+            bsv::CachingScriptChecker sig_checker(&ctx, index, amt);
             verifyResult = bsvVerifyScript(uscript, lscript, consensus, flags, sig_checker);
         } else {
             BaseSignatureChecker sig_checker;
