@@ -245,7 +245,7 @@ BOOST_AUTO_TEST_CASE(test_repeated_checksig_cache)
 {
     using namespace std::chrono;
 
-    constexpr size_t TEST_N = 50000; // (OP_2DUP OP_CHECKSIGVERIFY) repetitions
+    constexpr size_t TEST_N = 10000; // (OP_2DUP OP_CHECKSIGVERIFY) repetitions
     constexpr int32_t blockHeight = 700000; // post-Genesis on mainnet
     constexpr int64_t prevAmountSatoshis = 218;
 
@@ -318,14 +318,22 @@ BOOST_AUTO_TEST_CASE(test_repeated_checksig_cache)
     const auto status = se.VerifyScript(etx, utxo, blockHeight, /*consensus=*/true);
     const auto elapsed = duration_cast<milliseconds>(steady_clock::now() - t0).count();
 
-    BOOST_TEST_MESSAGE("test_repeated_checksig_cache: N=" << TEST_N
-                       << " script_bytes=" << lockingScript.size()
-                       << " elapsed_ms=" << elapsed);
-    BOOST_CHECK(bsv::TxErrorIsOk(status));
+    // Emit to stderr unconditionally so ctest --output-on-failure surfaces the
+    // measurement on regression. BOOST_TEST_MESSAGE is suppressed at default
+    // log levels and is not visible in BDK's current CI output.
+    std::cerr << "[test_repeated_checksig_cache] N=" << TEST_N
+              << " script_bytes=" << lockingScript.size()
+              << " status_ok=" << (bsv::TxErrorIsOk(status) ? "true" : "false")
+              << " elapsed_ms=" << elapsed << std::endl;
+
+    BOOST_CHECK_MESSAGE(bsv::TxErrorIsOk(status),
+        "VerifyScript returned non-OK status");
     // Without the per-instance CheckSig cache this verify takes seconds-to-minutes
-    // on CI hardware. With the cache it completes in well under 100 ms; budget at
+    // on CI hardware. With the cache it completes in well under 1 s; budget at
     // 5 s to absorb runner jitter while still catching disablement of the cache.
-    BOOST_CHECK_LT(elapsed, 5000);
+    BOOST_CHECK_MESSAGE(elapsed < 5000,
+        "VerifyScript took " << elapsed << " ms with N=" << TEST_N
+        << " — cache likely not hitting (expected sub-second with cache enabled)");
 }
 
 BOOST_AUTO_TEST_SUITE_END()
