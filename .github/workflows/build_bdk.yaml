@@ -29,7 +29,6 @@ jobs:
           - os: ubuntu-22.04-arm
           - os: ubuntu-22.04
           - os: macos-15
-          - os: macos-15-intel
       fail-fast: false
     outputs:
       modified: ${{ steps.gobdk_change.outputs.modified }}
@@ -114,13 +113,6 @@ jobs:
             echo "DEPENDENCIES_DIR=${{ github.workspace }}/dependancies_darwin_arm64" >> $GITHUB_ENV
             echo "BOOST_ROOT=${{ github.workspace }}/dependancies_darwin_arm64/boost_1.85.0" >> $GITHUB_ENV
             echo "OPENSSL_ROOT_DIR=${{ github.workspace }}/dependancies_darwin_arm64/openssl_3.4.0" >> $GITHUB_ENV
-          fi
-          if [[ "${{ matrix.os }}" == "macos-15-intel" ]]; then
-            wget https://github.com/bitcoin-sv/bdk/releases/download/depcy/dependancies_darwin_x86_64.tar.gz
-            tar -xzf dependancies_darwin_x86_64.tar.gz
-            echo "DEPENDENCIES_DIR=${{ github.workspace }}/dependancies_darwin_x86_64" >> $GITHUB_ENV
-            echo "BOOST_ROOT=${{ github.workspace }}/dependancies_darwin_x86_64/boost_1.85.0" >> $GITHUB_ENV
-            echo "OPENSSL_ROOT_DIR=${{ github.workspace }}/dependancies_darwin_x86_64/openssl_3.4.0" >> $GITHUB_ENV
           fi
 
       - name: Build and Test BDK Unix (all linux and mac arm)

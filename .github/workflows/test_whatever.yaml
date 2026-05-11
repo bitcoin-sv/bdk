@@ -11,7 +11,6 @@ jobs:
           - os: ubuntu-22.04-arm
           - os: ubuntu-22.04
           - os: macos-15
-          - os: macos-15-intel
       fail-fast: false
     runs-on: ${{ matrix.os }}
 
