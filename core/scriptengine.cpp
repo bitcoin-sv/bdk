@@ -7,6 +7,7 @@
 #include <script/standard.h>
 
 #include <chainparams_bdk.hpp>
+#include <checker_cache.hpp>
 #include <extendedTx.hpp>
 #include <scriptengine.hpp>
 
@@ -470,7 +471,7 @@ ScriptError bsv::CScriptEngine::VerifyScript(std::span<const uint8_t> extendedTX
         if (!ctx.vin.empty() && !ctx.vout.empty())
         {
             const Amount amt{ amount };
-            TransactionSignatureChecker sig_checker(&ctx, index, amt);
+            bsv::CachingScriptChecker sig_checker(&ctx, index, amt);
             verifyError = verifyImpl(uscript,
                 lscript,
                 consensus,
