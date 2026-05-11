@@ -38,25 +38,33 @@
  * single CheckSig call site (i.e. within one `VerifyScript` invocation on
  * one input). Strategy:
  *
- *   1. Track the scriptCode identity using its data pointer and length.
- *      Within a single EvalScript run on a script that does not contain
- *      `OP_CODESEPARATOR`, the scriptCode reference passed into CheckSig is
- *      stable, so pointer+length equality is sufficient to detect identity
- *      and avoids the cost of hashing scriptCode for the cache key.
+ *   1. Track scriptCode identity by COPY + memcmp of its raw bytes. The
+ *      BSV interpreter (`script/interpreter.cpp`) reconstructs scriptCode as
+ *      `CScript scriptCode {pbegincodehash, pend};` on every OP_CHECKSIG /
+ *      OP_CHECKSIGVERIFY iteration, so the scriptCode object handed to
+ *      CheckSig is freshly allocated each call and its `data()` pointer is
+ *      not stable across iterations. Pointer-identity caching does not
+ *      work; memcmp of the underlying bytes is the cheapest correct test.
  *
  *   2. Maintain a tiny per-instance map `(sigHash, pkHash) -> bool` (where
  *      sigHash/pkHash are 64-bit hashes of the sig and pubkey blobs). For
  *      the pathological tx this map ends up with exactly one entry.
  *
- *   3. When `OP_CODESEPARATOR` is hit (scriptCode changes), the map is
- *      cleared and the new scriptCode pointer is recorded. Correctness is
- *      preserved at the cost of losing the cache, but `OP_CODESEPARATOR`
- *      is essentially never seen in modern BSV scripts.
+ *   3. When the bytewise scriptCode comparison fails (a different scriptCode
+ *      is being verified — typically after `OP_CODESEPARATOR`) the map is
+ *      cleared and the new scriptCode bytes are stashed. Correctness is
+ *      preserved at the cost of losing the cache.
  *
  * On the pathological tx, the first CheckSig call performs one full sighash
- * (~490 KB SHA256) + one ECDSA verify (~50 us), populates the cache, and
- * the remaining ~245,000 calls hit the cache directly (~ns each). Total
- * verify time collapses from hours to ~1 ms.
+ * (~490 KB SHA256) + one ECDSA verify (~50 us) and populates the cache.
+ * Subsequent calls do one memcmp over the scriptCode bytes (~40 us per
+ * 490 KB on commodity x86 — SSE-accelerated memcmp at ~12 GB/s) and a
+ * 64-bit hashmap lookup. Total verify time for the production
+ * `(OP_2DUP OP_CHECKSIGVERIFY) * 245,000` case collapses from hours of
+ * SHA256 + ECDSA work to roughly `N * memcmp(scriptCode)` — order tens of
+ * seconds at worst on slow runners, single-digit seconds on a fast x86.
+ * That is a >50x improvement, takes the validator out of "looks hung"
+ * territory and keeps the cgo goroutine bounded.
  *
  * Cache scope is per-`CachingScriptChecker` instance (one input), so there
  * is no global mutable state, no init function, and no thread safety
@@ -68,6 +76,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <unordered_map>
 #include <vector>
 
@@ -83,15 +92,18 @@ public:
                   const CScript& scriptCode,
                   bool enabledSighashForkid) const override
     {
-        // Detect scriptCode identity by pointer+size. If the scriptCode pointer
-        // (or length) changed since the last CheckSig call, OP_CODESEPARATOR
-        // (or a different invocation altogether) is in play — drop the cache.
-        const uint8_t* code_ptr = scriptCode.data();
+        // EvalScript builds scriptCode = `CScript{pbegincodehash, pend}` afresh
+        // on every CheckSig invocation, so its data() pointer is NOT stable
+        // across iterations. Detect identity by bytewise comparison; reset the
+        // cache when content differs (typically after OP_CODESEPARATOR).
         const size_t code_len = scriptCode.size();
-        if (code_ptr != last_code_ptr_ || code_len != last_code_len_) {
+        const bool same_code =
+            code_len == last_code_bytes_.size() &&
+            (code_len == 0 ||
+             std::memcmp(scriptCode.data(), last_code_bytes_.data(), code_len) == 0);
+        if (!same_code) {
             cache_.clear();
-            last_code_ptr_ = code_ptr;
-            last_code_len_ = code_len;
+            last_code_bytes_.assign(scriptCode.begin(), scriptCode.end());
         }
 
         const Key key{hashBlob(scriptSig), hashBlob(vchPubKey)};
@@ -137,8 +149,7 @@ private:
     }
 
     mutable std::unordered_map<Key, bool, KeyHash> cache_;
-    mutable const uint8_t* last_code_ptr_{nullptr};
-    mutable size_t last_code_len_{0};
+    mutable std::vector<uint8_t> last_code_bytes_;
 };
 
 } // namespace bsv
