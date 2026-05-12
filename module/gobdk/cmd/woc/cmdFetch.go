@@ -260,7 +260,7 @@ func (d *csvDataWriter) fetchBlock(blockHeight int32, nbTx int) error {
 
 	aggregatedErrStr := ""
 	for _, txID := range txToFetch {
-		txHexExtended, utxoHeights, errTxHexExtended := woc.GetTxHexExtended(d.api, txID)
+		txHexExtended, utxoHeights, _, errTxHexExtended := woc.GetTxHexExtended(d.api, txID)
 		if errTxHexExtended != nil {
 			aggregatedErrStr += fmt.Sprintf("Failed to fetch Tx : %v, Block : %v, Network %v. Error \n%v\n\n", txID, blockHeight, network, errTxHexExtended)
 		}

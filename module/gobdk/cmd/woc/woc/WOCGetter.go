@@ -162,28 +162,33 @@ func GetBulkTx(api *APIClient, TxIDs []string) ([]TxData, error) {
 	return txs, nil
 }
 
-// GetTxHexExtended given the txID, return the extended tx hex
-// And the list of utxo heights
-// See  tx ExtendedBytes()
+// GetTxHexExtended given the txID, returns:
+//   - the extended tx hex (with each input enriched by its previous UTXO,
+//     matching go-bt's tx.ExtendedBytes() format),
+//   - the list of utxo heights aligned with the tx inputs,
+//   - the block height at which the requested tx was mined, as reported by
+//     WhatsOnChain (TxData.BlockHeight). This is 0 when the tx is unconfirmed
+//     or otherwise not yet associated with a block.
 //
-//	https://github.com/ordishs/go-bt/blob/master/tx.go#L342
-func GetTxHexExtended(api *APIClient, txID string) (string, []int32, error) {
+// See tx.ExtendedBytes(): https://github.com/ordishs/go-bt/blob/master/tx.go#L342
+func GetTxHexExtended(api *APIClient, txID string) (string, []int32, int32, error) {
 
 	// Get the standard tx from woc
 	txsMain, err := GetBulkTx(api, []string{txID})
 	if err != nil {
-		return "", []int32{}, fmt.Errorf("failed to get tx hex from with id %v, error %w", txID, err)
+		return "", []int32{}, 0, fmt.Errorf("failed to get tx hex from with id %v, error %w", txID, err)
 	}
 
 	if len(txsMain) != 1 {
-		return "", []int32{}, fmt.Errorf("error returned list of transaction len=%v while expect to be 1", len(txsMain))
+		return "", []int32{}, 0, fmt.Errorf("error returned list of transaction len=%v while expect to be 1", len(txsMain))
 	}
 
 	txHex := txsMain[0].Hex
+	txBlockHeight := txsMain[0].BlockHeight
 
 	tx, err := bt.NewTxFromString(txHex)
 	if err != nil {
-		return "", []int32{}, fmt.Errorf("failed to parse tx hex %v, error %w", txHex, err)
+		return "", []int32{}, 0, fmt.Errorf("failed to parse tx hex %v, error %w", txHex, err)
 	}
 
 	// enrich the extended tx by fetching the UTXOs
@@ -200,18 +205,18 @@ func GetTxHexExtended(api *APIClient, txID string) (string, []int32, error) {
 			// Get the standard tx from woc
 			txs, err := GetBulkTx(api, []string{parentTxID})
 			if err != nil {
-				return "", []int32{}, fmt.Errorf("failed to get parent tx with id %v, error %w", parentTxID, err)
+				return "", []int32{}, 0, fmt.Errorf("failed to get parent tx with id %v, error %w", parentTxID, err)
 			}
 
 			if len(txs) != 1 {
-				return "", []int32{}, fmt.Errorf("error returned list of transaction len=%v while expect to be 1", len(txs))
+				return "", []int32{}, 0, fmt.Errorf("error returned list of transaction len=%v while expect to be 1", len(txs))
 			}
 
 			parentTxHex := txs[0].Hex
 
 			parentTx, err = bt.NewTxFromString(parentTxHex)
 			if err != nil {
-				return "", []int32{}, fmt.Errorf("failed to parse parent tx for input %v, hex %v , error %w", i, parentTxHex, err)
+				return "", []int32{}, 0, fmt.Errorf("failed to parse parent tx for input %v, hex %v , error %w", i, parentTxHex, err)
 			}
 
 			parentTxs[parentTxID] = parentTx
@@ -221,7 +226,7 @@ func GetTxHexExtended(api *APIClient, txID string) (string, []int32, error) {
 		// add the parent tx output to the input
 		previousScript, err := hex.DecodeString(parentTx.Outputs[input.PreviousTxOutIndex].LockingScript.String())
 		if err != nil {
-			return "", []int32{}, fmt.Errorf("failed to the utxo for the input %v, error %w", i, err)
+			return "", []int32{}, 0, fmt.Errorf("failed to the utxo for the input %v, error %w", i, err)
 		}
 
 		utxoHeights[i] = parentTxsHeight[parentTxID]
@@ -229,7 +234,7 @@ func GetTxHexExtended(api *APIClient, txID string) (string, []int32, error) {
 		tx.Inputs[i].PreviousTxSatoshis = parentTx.Outputs[input.PreviousTxOutIndex].Satoshis
 	}
 
-	return hex.EncodeToString(tx.ExtendedBytes()), utxoHeights, nil
+	return hex.EncodeToString(tx.ExtendedBytes()), utxoHeights, txBlockHeight, nil
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////////////

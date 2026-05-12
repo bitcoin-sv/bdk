@@ -70,7 +70,7 @@ func getLargeTxData() {
 
 	for h, txID := range txs {
 		slog.Info("Fetching ...", "Block", h, "TxID", txID)
-		txHex, utxoHeights, err := woc.GetTxHexExtended(api, txID)
+		txHex, utxoHeights, _, err := woc.GetTxHexExtended(api, txID)
 		if err != nil {
 			panic(err)
 		}
