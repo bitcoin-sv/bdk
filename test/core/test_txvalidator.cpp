@@ -226,15 +226,18 @@ BOOST_AUTO_TEST_CASE(test_verify_empty_utxos)
     BOOST_CHECK(!bsv::TxErrorIsOk(status));
 }
 
-// Regression test for the multi-hour validator hang observed on testnet block
-// 1,451,505 tx 7bc9a3408d... whose input spends a 490,001-byte locking script
-// of (OP_2DUP OP_CHECKSIGVERIFY) * 245,000 + OP_CHECKSIG.
+// Regression test for the multi-hour validator hang observed on BSV testnet
+// tx 7bc9a3408dd0c87b835c887a0bce22c20788fc3c4b953929d4367656d80acab5, whose
+// input spends a 490,001-byte locking script of
+// (OP_2DUP OP_CHECKSIGVERIFY) * 245,000 + OP_CHECKSIG. With the cache, the
+// production tx validates in a few minutes instead of multiple hours.
 //
 // The script performs 245,001 identical signature verifications because each
 // OP_2DUP duplicates the [sig, pubkey] pair just popped by OP_CHECKSIGVERIFY.
-// Without bsv::CachingScriptChecker every iteration runs a full ECDSA verify
-// plus a full SignatureHash that SHA256-streams the entire scriptCode buffer,
-// driving wall-clock validation into the hours-on-fast-hardware range.
+// Without the per-input CachingScriptChecker (file-local helper in
+// core/txvalidator.cpp) every iteration runs a full ECDSA verify plus a full
+// SignatureHash that SHA256-streams the entire scriptCode buffer, driving
+// wall-clock validation into the hours-on-fast-hardware range.
 //
 // The test reproduces the shape with a smaller N (TEST_N below) so that the
 // without-cache path is observably slow but still finishes within CI budget,
