@@ -158,6 +158,11 @@ const char* TxValidator_SetMaxSigOpsPostGenesisPolicy(TxValidatorCGO cgoEngine, 
     return _helper_string2char(err);
 }
 
+void TxValidator_SetMaxSigOpsPolicy(TxValidatorCGO cgoEngine, uint64_t value)
+{
+    static_cast<bsv::CTxValidator*>(cgoEngine)->SetMaxSigOpsPolicy(value);
+}
+
 void TxValidator_SetDataCarrierSize(TxValidatorCGO cgoEngine, uint64_t dataCarrierSize)
 {
     static_cast<bsv::CTxValidator*>(cgoEngine)->SetDataCarrierSize(dataCarrierSize);
