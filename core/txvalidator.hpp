@@ -28,36 +28,45 @@ namespace bsv
  * own ConfigScriptPolicy instance through all setters.
  *
  * Checks present in bitcoin-sv's TxnValidation / BlockValidateTxns that are intentionally
- * absent here, with guidance for node implementors who need them:
+ * absent here. In every case BDK is missing the chain / mempool / node-state context the
+ * check needs, so the work is delegated to the node implementation. Brief guidance:
  *
- *   Promiscuous mempool script flags:
- *     bitcoin-sv's policy path can replace standard script verify flags with an
- *     operator-configured set via -promiscuousmempool. The new node architecture has
- *     no mempool, so this operator feature does not exist and is intentionally absent.
+ *   Promiscuous mempool script flags (-promiscuousmempoolflags):
+ *     Operator option in bitcoin-sv that replaces standard script-verify flags with a
+ *     custom set at the mempool layer. BDK has no mempool concept; intentionally absent.
  *
  *   nLockTime finality (IsFinalTx):
- *     bitcoin-sv rejects or queues transactions whose nLockTime has not yet been reached,
- *     using the chain tip's Median Time Past (MTP). BDK has no access to MTP or chain state.
- *     Policy path: IsFinalTx(tx, tipHeight + 1, tipMedianTimePast).
- *     Consensus path: IsFinalTx(tx, blockHeight, previousBlockMedianTimePast).
+ *     Requires chain-tip MTP, candidate block header time, or candidate-parent MTP
+ *     depending on validation path. BDK has no chain-tip, block-time, or MTP state. The
+ *     node implementation must compute finality itself before or after CheckTransaction.
+ *     Source of truth per context:
+ *       policy / next-tip:     IsFinalTx(tx, tipHeight + 1, tipMedianTimePast).
+ *       block-validation:      IsFinalTx(tx, blockHeight, candidateParentMedianTimePast)
+ *                              at/after CSVHeight, candidate block time before CSV.
  *
  *   BIP68 sequence locks (CheckSequenceLocks / SequenceLocks, pre-Genesis only):
- *     bitcoin-sv enforces relative time locks from BIP68 using per-input UTXO confirmation
- *     heights and MTP. BDK has UTXO heights available but not MTP. A node can implement
- *     this by calling CalculateSequenceLocks / EvaluateSequenceLocks with the required
- *     chain context before or after CheckTransaction.
+ *     Needs per-input UTXO MTP from chain state. BDK has UTXO heights but not MTP. The
+ *     node implementation should call CalculateSequenceLocks / EvaluateSequenceLocks with
+ *     the required chain context before or after CheckTransaction.
  *
- *   Non-mandatory script flag retry:
- *     bitcoin-sv retries a failed script without StandardNotMandatoryScriptVerifyFlags and
+ *   Non-mandatory script flag retry (DoS-0 downgrade):
+ *     bitcoin-sv re-runs a failed script without StandardNotMandatoryScriptVerifyFlags and
  *     downgrades the failure to DoS 0 / REJECT_NONSTANDARD when only a non-mandatory flag
- *     caused the rejection. BDK exposes VerifyScript with custom flags; a node can perform
- *     this retry itself and apply whatever DoS classification it chooses.
+ *     caused the rejection. BDK does not classify failures by peer-DoS impact; it exposes
+ *     VerifyScript with custom flags so the node implementation can perform the retry and
+ *     apply its own DoS classification.
  *
- *   Grace period inverse flag retry (Genesis / Chronicle activation windows):
- *     bitcoin-sv retries with inverted per-protocol input flags during activation grace
- *     periods and returns a soft "genesis-script-verify-flag-failed" or
- *     "chronicle-script-verify-flag-failed" error on success. A node can implement this
- *     using VerifyScript with custom flags and InProtocolGracePeriod / GetInverseProtocolEra.
+ *   Grace-period retries (Genesis / Chronicle activation windows):
+ *     bitcoin-sv has two distinct retries inside the activation window, both intentionally
+ *     left to the node implementation:
+ *       (a) per-input inverse-flag retry inside CheckInputs, returning a soft
+ *           "genesis-script-verify-flag-failed" or "chronicle-script-verify-flag-failed"
+ *           error on success;
+ *       (b) whole-transaction re-check with the previous-era rules inside TxnValidation,
+ *           returning errors prefixed "flexible-..." at DoS 0 when only the previous-era
+ *           rules pass.
+ *     BDK exposes VerifyScript with custom flags and grace-period settings, so the
+ *     node implementation can compute the era / grace-window logic and build both paths.
  */
 class CTxValidator {
     public:
