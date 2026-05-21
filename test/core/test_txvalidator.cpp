@@ -145,6 +145,74 @@ BOOST_AUTO_TEST_CASE(get_block_script_flags)
     }
 }
 
+// T22c: verify that the TeraTestNet / TeraScalingTestNet constructors wire
+// p2sh / BIP65 / BIP66 / CSV into Consensus::Params so that GetBlockScriptFlags
+// computes the right activation transitions at the custom-network boundaries.
+//
+// Flag bits (from script_flags.h):
+//   P2SH=0x1, STRICTENC=0x2, DERSIG=0x4, LOW_S=0x8, BIP65=0x200, CSV=0x400,
+//   NULLFAIL=0x4000, SIGHASH_FORKID=0x10000.
+BOOST_AUTO_TEST_CASE(custom_chainparams_script_flag_boundaries)
+{
+    using namespace std;
+    using test_data_type = tuple<int32_t,   // block height
+                                 uint32_t>; // expected flags (PreGenesis era)
+
+    // TeraTestNetParams (mirrors svnode CTestNetParams):
+    //   p2shHeight = 519, BIP66Height = 330776, BIP65Height = 581885,
+    //   CSVHeight = 770112, uahfHeight = 0, daaHeight = 0.
+    // Below all activation boundaries:
+    //   STRICTENC | LOW_S | NULLFAIL | SIGHASH_FORKID = 0x1'400A.
+    {
+        const auto params = bsv::CreateCustomChainParams(CustomChainParams::TERATESTNET);
+        BOOST_REQUIRE(params != nullptr);
+        const auto& consensus = params->GetConsensus();
+
+        constexpr uint32_t kBase{ 0x1'400A }; // P2SH/BIP65/BIP66/CSV all off
+        const vector<test_data_type> test_data{
+            {      0, kBase },                                   // pre-everything
+            {    518, kBase },                                   // one below P2SH boundary
+            {    519, kBase | 0x1 },                             // at P2SH boundary
+            { 330774, kBase | 0x1 },                             // P2SH on; BIP66 off (330775 < 330776)
+            { 330775, kBase | 0x1 | 0x4 },                       // at BIP66 boundary
+            { 581883, kBase | 0x1 | 0x4 },                       // BIP65 off (581884 < 581885)
+            { 581884, kBase | 0x1 | 0x4 | 0x200 },               // at BIP65 boundary
+            { 770110, kBase | 0x1 | 0x4 | 0x200 },               // CSV off (770111 < 770112)
+            { 770111, kBase | 0x1 | 0x4 | 0x200 | 0x400 },       // at CSV boundary; everything on
+            {1000000, kBase | 0x1 | 0x4 | 0x200 | 0x400 },       // well past all boundaries
+        };
+        for (const auto& [block_height, expected] : test_data)
+        {
+            const auto flags = GetBlockScriptFlags(consensus, block_height, ProtocolEra::PreGenesis);
+            BOOST_CHECK_EQUAL(expected, flags);
+        }
+    }
+
+    // TeraScalingTestNetParams (mirrors svnode CStnParams' "fast activation" intent):
+    //   p2shHeight = 1, BIP66Height = 1, BIP65Height = 1, CSVHeight = 1,
+    //   uahfHeight = 0, daaHeight = 0.
+    // BIP65/BIP66/CSV = 1 with the `(height + 1) >= ` check are already active at height 0,
+    // so the only visible boundary is P2SH at height 1.
+    //   Below P2SH: STRICTENC | DERSIG | LOW_S | BIP65 | CSV | NULLFAIL | SIGHASH_FORKID
+    //             = 0x1'460E. At/above P2SH: 0x1'460F.
+    {
+        const auto params = bsv::CreateCustomChainParams(CustomChainParams::TERASCALINGTESTNET);
+        BOOST_REQUIRE(params != nullptr);
+        const auto& consensus = params->GetConsensus();
+
+        const vector<test_data_type> test_data{
+            { 0, 0x1'460E },   // pre-P2SH (height 0 < p2shHeight 1)
+            { 1, 0x1'460F },   // at P2SH boundary
+            { 2, 0x1'460F },   // past P2SH
+        };
+        for (const auto& [block_height, expected] : test_data)
+        {
+            const auto flags = GetBlockScriptFlags(consensus, block_height, ProtocolEra::PreGenesis);
+            BOOST_CHECK_EQUAL(expected, flags);
+        }
+    }
+}
+
 BOOST_AUTO_TEST_CASE(custom_genesis_height)
 {
     const int32_t h{ 1000 };
