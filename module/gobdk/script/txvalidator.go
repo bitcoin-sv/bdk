@@ -320,6 +320,12 @@ func (se *TxValidator) SetMaxSigOpsPostGenesisPolicy(value int64) error {
 	return errors.New(C.GoString(errCStr))
 }
 
+// SetMaxSigOpsPolicy sets the pre-Genesis sigops policy limit in the C++ TxValidator.
+func (se *TxValidator) SetMaxSigOpsPolicy(value uint64) {
+	C.TxValidator_SetMaxSigOpsPolicy(se.cSEPtr, C.uint64_t(value))
+	runtime.KeepAlive(se)
+}
+
 // SetDataCarrierSize set the DataCarrierSize in the C++ TxValidator
 func (se *TxValidator) SetDataCarrierSize(dataCarrierSize uint64) {
 	C.TxValidator_SetDataCarrierSize(se.cSEPtr, C.uint64_t(dataCarrierSize))
