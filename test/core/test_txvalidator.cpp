@@ -397,4 +397,249 @@ BOOST_AUTO_TEST_CASE(test_repeated_checksig_cache)
         << " — cache likely not hitting (expected sub-second with cache enabled)");
 }
 
+// Consolidation-policy setters: verify svnode-faithful validation
+// (reject negative; 0 → DEFAULT for MaxConsolidationInputScriptSize and
+// MinConfConsolidationInput; literal 0 for MinConsolidationFactor).
+BOOST_AUTO_TEST_CASE(consolidation_setters_svnode_faithful_validation)
+{
+    bsv::CTxValidator se("main");
+    std::string err;
+
+    // MinConsolidationFactor: 0 stored literally (disables consolidation);
+    // positive stored verbatim; negative rejected.
+    err.clear();
+    BOOST_CHECK(se.SetMinConsolidationFactor(0, &err));
+    BOOST_CHECK_EQUAL(uint64_t{0}, se.GetMinConsolidationFactor());
+    BOOST_CHECK(err.empty());
+
+    err.clear();
+    BOOST_CHECK(se.SetMinConsolidationFactor(50, &err));
+    BOOST_CHECK_EQUAL(uint64_t{50}, se.GetMinConsolidationFactor());
+    BOOST_CHECK(err.empty());
+
+    err.clear();
+    BOOST_CHECK(!se.SetMinConsolidationFactor(-1, &err));
+    BOOST_CHECK(!err.empty());
+    BOOST_CHECK_EQUAL(uint64_t{50}, se.GetMinConsolidationFactor()); // unchanged
+
+    // MaxConsolidationInputScriptSize: 0 → 150 (svnode default); positive verbatim;
+    // negative rejected.
+    err.clear();
+    BOOST_CHECK(se.SetMaxConsolidationInputScriptSize(0, &err));
+    BOOST_CHECK_EQUAL(uint64_t{150}, se.GetMaxConsolidationInputScriptSize());
+    BOOST_CHECK(err.empty());
+
+    err.clear();
+    BOOST_CHECK(se.SetMaxConsolidationInputScriptSize(500, &err));
+    BOOST_CHECK_EQUAL(uint64_t{500}, se.GetMaxConsolidationInputScriptSize());
+    BOOST_CHECK(err.empty());
+
+    err.clear();
+    BOOST_CHECK(!se.SetMaxConsolidationInputScriptSize(-1, &err));
+    BOOST_CHECK(!err.empty());
+    BOOST_CHECK_EQUAL(uint64_t{500}, se.GetMaxConsolidationInputScriptSize()); // unchanged
+
+    // MinConfConsolidationInput: 0 → 6 (svnode default); positive verbatim;
+    // negative rejected.
+    err.clear();
+    BOOST_CHECK(se.SetMinConfConsolidationInput(0, &err));
+    BOOST_CHECK_EQUAL(uint64_t{6}, se.GetMinConfConsolidationInput());
+    BOOST_CHECK(err.empty());
+
+    err.clear();
+    BOOST_CHECK(se.SetMinConfConsolidationInput(100, &err));
+    BOOST_CHECK_EQUAL(uint64_t{100}, se.GetMinConfConsolidationInput());
+    BOOST_CHECK(err.empty());
+
+    err.clear();
+    BOOST_CHECK(!se.SetMinConfConsolidationInput(-1, &err));
+    BOOST_CHECK(!err.empty());
+    BOOST_CHECK_EQUAL(uint64_t{100}, se.GetMinConfConsolidationInput()); // unchanged
+
+    // AcceptNonStdConsolidationInput: bool toggle, no error channel.
+    se.SetAcceptNonStdConsolidationInput(true);
+    BOOST_CHECK(se.GetAcceptNonStdConsolidationInput());
+    se.SetAcceptNonStdConsolidationInput(false);
+    BOOST_CHECK(!se.GetAcceptNonStdConsolidationInput());
+}
+
+// SetMinMiningTxFee setter: validate negative rejection + value storage.
+BOOST_AUTO_TEST_CASE(min_mining_tx_fee_setter_validation)
+{
+    bsv::CTxValidator se("main");
+    std::string err;
+
+    // Default is 0 (no fee policy).
+    BOOST_CHECK_EQUAL(int64_t{0}, se.GetMinMiningTxFee());
+
+    // Positive accepted.
+    err.clear();
+    BOOST_CHECK(se.SetMinMiningTxFee(500, &err));
+    BOOST_CHECK_EQUAL(int64_t{500}, se.GetMinMiningTxFee());
+    BOOST_CHECK(err.empty());
+
+    // Zero accepted (means "no fee policy").
+    err.clear();
+    BOOST_CHECK(se.SetMinMiningTxFee(0, &err));
+    BOOST_CHECK_EQUAL(int64_t{0}, se.GetMinMiningTxFee());
+    BOOST_CHECK(err.empty());
+
+    // Negative rejected; previous value preserved.
+    err.clear();
+    BOOST_CHECK(se.SetMinMiningTxFee(1000, &err));
+    BOOST_CHECK_EQUAL(int64_t{1000}, se.GetMinMiningTxFee());
+
+    err.clear();
+    BOOST_CHECK(!se.SetMinMiningTxFee(-1, &err));
+    BOOST_CHECK(!err.empty());
+    BOOST_CHECK_EQUAL(int64_t{1000}, se.GetMinMiningTxFee()); // unchanged
+}
+
+// Fee-path inside ValidateTransaction (policy mode).
+// Uses a real mainnet whitelisted tx (the same fixture as test_verify_script).
+// Its actual fee = inputs(622,674,087 + 3,127,348) - output(625,132,423) = 669,012 sats.
+// Wire size is small (~370 B), so fee-rate sensitivity tests below select rates that
+// cleanly straddle the implied minimum.
+BOOST_AUTO_TEST_CASE(check_fee_policy_path)
+{
+    const std::string TxHexExtended = "020000000000000000ef023f6c667203b47ce2fed8c8bcc78d764c39da9c0094f1a49074e05f66910e9c44000000006b4c69522102401d5481712745cf7ada12b7251c85ca5f1b8b6c859c7e81b8002a85b0f36d3c21039d8b1e461715ddd4d10806125be8592e6f48fb69e4c31699ce6750da1c9eaeb32103af3b35d4ad547fd1ce102bbd5cce36de2277723796f1b4001ec0ea6a1db6474053aeffffffffa73018250000000017a91413402e079464ec2a85e5a613732c78b0613fcc65873f6c667203b47ce2fed8c8bcc78d764c39da9c0094f1a49074e05f66910e9c44010000006b4c69522102401d5481712745cf7ada12b7251c85ca5f1b8b6c859c7e81b8002a85b0f36d3c21039d8b1e461715ddd4d10806125be8592e6f48fb69e4c31699ce6750da1c9eaeb32103af3b35d4ad547fd1ce102bbd5cce36de2277723796f1b4001ec0ea6a1db6474053aeffffffff34b82f000000000017a91413402e079464ec2a85e5a613732c78b0613fcc65870187e74725000000001976a9141be3d23725148a90807ee6df191bcdfcf083a3b288ac00000000";
+    const std::array<int32_t, 2> utxoArray = { 631924, 631924 };
+    const int32_t blockHeight = 632099;
+
+    const std::vector<uint8_t> etxBin = ParseHex(TxHexExtended);
+    const std::span<const uint8_t> etx(etxBin.data(), etxBin.size());
+    const std::span<const int32_t> utxo(utxoArray);
+
+    // Consensus mode never runs the fee check — even with an extreme rate set, accept.
+    {
+        bsv::CTxValidator se("main");
+        std::string err;
+        BOOST_REQUIRE(se.SetMinMiningTxFee(1'000'000'000'000LL, &err));
+        const auto status = se.ValidateTransaction(etx, utxo, blockHeight, /*consensus=*/true);
+        BOOST_CHECK(bsv::TxErrorIsOk(status));
+    }
+
+    // Policy mode, fee rate = 0 (no policy) — accept regardless of tx fees.
+    {
+        bsv::CTxValidator se("main");
+        const auto status = se.ValidateTransaction(etx, utxo, blockHeight, /*consensus=*/false);
+        BOOST_CHECK(bsv::TxErrorIsOk(status));
+    }
+
+    // Policy mode, low fee rate — well below the tx's actual 669,012 sat fee → accept.
+    {
+        bsv::CTxValidator se("main");
+        std::string err;
+        BOOST_REQUIRE(se.SetMinMiningTxFee(500, &err));  // 0.5 sat/byte
+        const auto status = se.ValidateTransaction(etx, utxo, blockHeight, /*consensus=*/false);
+        BOOST_CHECK(bsv::TxErrorIsOk(status));
+    }
+
+    // Policy mode, extreme fee rate — tx's actual fee is far below the implied floor,
+    // and the tx is not a free consolidation → reject with InsufficientFee.
+    {
+        bsv::CTxValidator se("main");
+        std::string err;
+        BOOST_REQUIRE(se.SetMinMiningTxFee(1'000'000'000'000LL, &err));
+        const auto status = se.ValidateTransaction(etx, utxo, blockHeight, /*consensus=*/false);
+        BOOST_CHECK(!bsv::TxErrorIsOk(status));
+        BOOST_CHECK_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_DOS), status.domain);
+        BOOST_CHECK_EQUAL(static_cast<int32_t>(bsv::DoSError_t::InsufficientFee), status.code);
+    }
+}
+
+// Bypass path: under the fee floor but qualifies as a dust-return (donation)
+// free consolidation → fee check does NOT reject.
+//
+// Construction: take the same mainnet fixture, replace its outputs with a single
+// IsDustReturnScript output (the 7-byte sequence OP_FALSE OP_RETURN OP_PUSHDATA4
+// 'dust'). This makes implIsFreeConsolidation's isDonation branch trigger:
+//   factor   = tx.vin.size() (= 2)         → vin.size() >= factor*vout.size(): 2 >= 2*1 ✓
+//   minConf  = 0                            → confirmation checks skipped
+//   ratio    = sumInputScriptPubKey (46 B) >= factor*sumOutputScriptPubKey (2*7=14 B) ✓
+//
+// Caveat: the fixture's prev outputs are P2SH and the test runs at post-Genesis
+// height (632099 > GENESIS_ACTIVATION_MAIN = 620538). Post-Genesis, P2SH is no
+// longer a standard output type, so IsStandardOutput on the prev UTXOs would
+// reject them inside IsFreeConsolidation. We sidestep that by setting
+// AcceptNonStdConsolidationInput = true (matches bitcoin-sv
+// `-acceptnonstdconsolidationinput=1`). The point of this test is the fee-floor
+// gate, not the standardness sub-check (that is exercised elsewhere).
+//
+// Same-fixture control to isolate the gate as the cause of the outcome
+// difference (defends against the "validation fails earlier" false-pass):
+//   (A) SetMinConsolidationFactor(0)  → IsFreeConsolidation short-circuits to
+//       NotFreeConsolidation at the very first line, so the fee-floor reject path
+//       runs → expect status == InsufficientFee.
+//   (B) Default minFactor (20, > 0)   → the dust-return donation branch qualifies,
+//       gate opens → expect status != InsufficientFee (later script verify fails
+//       because the scriptSigs no longer match the modified outputs, but that
+//       surfaces in a different domain).
+// Only the consolidation-gate setting differs between the two runs, so whatever
+// makes (A) and (B) diverge is the gate logic.
+BOOST_AUTO_TEST_CASE(check_fee_free_consolidation_bypass)
+{
+    const std::string TxHexExtended = "020000000000000000ef023f6c667203b47ce2fed8c8bcc78d764c39da9c0094f1a49074e05f66910e9c44000000006b4c69522102401d5481712745cf7ada12b7251c85ca5f1b8b6c859c7e81b8002a85b0f36d3c21039d8b1e461715ddd4d10806125be8592e6f48fb69e4c31699ce6750da1c9eaeb32103af3b35d4ad547fd1ce102bbd5cce36de2277723796f1b4001ec0ea6a1db6474053aeffffffffa73018250000000017a91413402e079464ec2a85e5a613732c78b0613fcc65873f6c667203b47ce2fed8c8bcc78d764c39da9c0094f1a49074e05f66910e9c44010000006b4c69522102401d5481712745cf7ada12b7251c85ca5f1b8b6c859c7e81b8002a85b0f36d3c21039d8b1e461715ddd4d10806125be8592e6f48fb69e4c31699ce6750da1c9eaeb32103af3b35d4ad547fd1ce102bbd5cce36de2277723796f1b4001ec0ea6a1db6474053aeffffffff34b82f000000000017a91413402e079464ec2a85e5a613732c78b0613fcc65870187e74725000000001976a9141be3d23725148a90807ee6df191bcdfcf083a3b288ac00000000";
+    const std::array<int32_t, 2> utxoArray = { 631924, 631924 };
+    const int32_t blockHeight = 632099;
+
+    const std::vector<uint8_t> etxBin = ParseHex(TxHexExtended);
+
+    // Deserialize, swap the output for an IsDustReturnScript donation, re-serialize.
+    CMutableTransactionExtended eTX;
+    {
+        const char* beginEtx{ reinterpret_cast<const char*>(etxBin.data()) };
+        const char* endEtx{ reinterpret_cast<const char*>(etxBin.data() + etxBin.size()) };
+        CDataStream tx_stream(beginEtx, endEtx, SER_NETWORK, PROTOCOL_VERSION);
+        tx_stream >> eTX;
+    }
+
+    // IsDustReturnScript-recognised 7-byte sequence: OP_FALSE OP_RETURN OP_PUSHDATA(4) 'dust'.
+    CScript dustReturnScript;
+    dustReturnScript << OP_FALSE << OP_RETURN;
+    dustReturnScript.push_back(0x04);
+    dustReturnScript.push_back('d');
+    dustReturnScript.push_back('u');
+    dustReturnScript.push_back('s');
+    dustReturnScript.push_back('t');
+
+    eTX.mtx.vout.clear();
+    eTX.mtx.vout.emplace_back(Amount(0), dustReturnScript);
+
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << eTX;
+    const std::vector<uint8_t> donationBin(ss.begin(), ss.end());
+    const std::span<const uint8_t> donationEtx(donationBin.data(), donationBin.size());
+    const std::span<const int32_t> utxo(utxoArray);
+
+    auto runOnce = [&](uint64_t minConsolidationFactor) {
+        bsv::CTxValidator se("main");
+        std::string err;
+        BOOST_REQUIRE(se.SetMinMiningTxFee(1'000'000'000'000LL, &err));
+        se.SetAcceptNonStdConsolidationInput(true);  // see test comment re: P2SH post-Genesis
+        BOOST_REQUIRE(se.SetMinConsolidationFactor(static_cast<int64_t>(minConsolidationFactor), &err));
+        return se.ValidateTransaction(donationEtx, utxo, blockHeight, /*consensus=*/false);
+    };
+
+    const auto isInsufficientFee = [](TxError s) {
+        return (s.domain == static_cast<int32_t>(TX_ERR_DOMAIN_DOS))
+            && (s.code   == static_cast<int32_t>(bsv::DoSError_t::InsufficientFee));
+    };
+
+    // (A) Gate disabled: same tx, same rate, but consolidationMinFactor=0 short-circuits
+    // implIsFreeConsolidation to NotFreeConsolidation → fee floor reject must fire.
+    const auto disabled = runOnce(/*minConsolidationFactor=*/0);
+    BOOST_CHECK_MESSAGE(isInsufficientFee(disabled),
+        "Control case failed: with consolidation disabled (factor=0) the tx should hit "
+        "the fee-floor reject, but did not return InsufficientFee.");
+
+    // (B) Gate enabled (default factor=20): dust-return donation qualifies, fee floor
+    // bypassed → must NOT see InsufficientFee. Any later validation failure is fine; it
+    // just must not be the fee-floor reject from this code path.
+    const auto enabled = runOnce(/*minConsolidationFactor=*/20);
+    BOOST_CHECK_MESSAGE(!isInsufficientFee(enabled),
+        "Free-consolidation bypass failed: tx returned InsufficientFee despite "
+        "qualifying as a dust-return donation.");
+}
+
 BOOST_AUTO_TEST_SUITE_END()

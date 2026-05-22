@@ -28,7 +28,8 @@ const (
 	DOS_ERR_UNCONFIRMED_INPUT_IN_BLOCK DoSErrorCode = 15
 	DOS_ERR_INPUT_VALUES_OUT_OF_RANGE  DoSErrorCode = 16
 	DOS_ERR_INPUTS_BELOW_OUTPUTS       DoSErrorCode = 17
-	DOS_ERR_COUNT                      DoSErrorCode = 18
+	DOS_ERR_INSUFFICIENT_FEE           DoSErrorCode = 18
+	DOS_ERR_COUNT                      DoSErrorCode = 19
 )
 
 // DoSError is the Go error type for transaction-level validation failures.

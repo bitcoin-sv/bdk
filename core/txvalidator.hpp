@@ -67,6 +67,30 @@ namespace bsv
  *           rules pass.
  *     BDK exposes VerifyScript with custom flags and grace-period settings, so the
  *     node implementation can compute the era / grace-window logic and build both paths.
+ *
+ * Fee-check limitations vs bitcoin-sv:
+ *
+ *   BDK's static-fee-path floor (implCheckFee, invoked from ValidateTransaction in policy
+ *   mode) is a faithful port of bitcoin-sv's TxnValidation fee check under the simplifying
+ *   assumption that the caller has no mempool state. The following bitcoin-sv mempool-fee
+ *   features are NOT reproduced here, because BDK has no mempool to read from:
+ *
+ *     - Dynamic eviction-driven reject fee:
+ *         bitcoin-sv's mempoolRejectFee = pool.GetMinFee(maxmempool) can rise above the
+ *         static -minminingtxfee rate under eviction pressure. BDK uses a single static
+ *         rate (SetMinMiningTxFee) for both the floor and the implied minimum credit, so
+ *         under mempool pressure bitcoin-sv may reject txs BDK accepts.
+ *
+ *     - Separate blockMinTxFee vs mempoolRejectFee quantities:
+ *         bitcoin-sv tracks them independently. BDK collapses to one. Behaviourally
+ *         equivalent only when the two are equal (the static case).
+ *
+ *     - PrioritiseTransaction operator API:
+ *         bitcoin-sv supports per-tx fee deltas injected by the operator. BDK has no
+ *         per-tx delta state and no equivalent API.
+ *
+ *   For free-consolidation classification itself (the gate that bypasses the floor),
+ *   BDK runs the same rules as bitcoin-sv IsFreeConsolidationTxn — see implIsFreeConsolidation.
  */
 class CTxValidator {
     public:
@@ -93,11 +117,22 @@ class CTxValidator {
         void SetRequireStandard(bool require);
         void SetPermitBareMultisig(bool permit);
 
-        // Consolidation policy settings
-        void SetMinConsolidationFactor(uint64_t value);
-        void SetMaxConsolidationInputScriptSize(uint64_t value);
-        void SetMinConfConsolidationInput(uint64_t value);
+        // Consolidation policy settings — signatures mirror bitcoin-sv's
+        // GlobalConfig setters (signed input, error on negative). Zero handling
+        // also mirrors bitcoin-sv:
+        //   SetMinConsolidationFactor:        0 stored literally (disables consolidation entirely)
+        //   SetMaxConsolidationInputScriptSize: 0 → reset to default (150)
+        //   SetMinConfConsolidationInput:      0 → reset to default (6)
+        bool SetMinConsolidationFactor(int64_t value, std::string* err = nullptr);
+        bool SetMaxConsolidationInputScriptSize(int64_t value, std::string* err = nullptr);
+        bool SetMinConfConsolidationInput(int64_t value, std::string* err = nullptr);
         void SetAcceptNonStdConsolidationInput(bool value);
+
+        // Static-fee-path policy setting. Stored as integer satoshis/kB to match
+        // bitcoin-sv CFeeRate::GetFee bitwise. 0 means "no fee policy" (every tx
+        // passes the fee floor); negative is rejected via the error channel.
+        bool SetMinMiningTxFee(int64_t satoshisPerKB, std::string* err = nullptr);
+        int64_t GetMinMiningTxFee() const;
 
         // SigOps policy limits. Pre-Genesis default: 4000 (MAX_TX_SIGOPS_COUNT_POLICY_BEFORE_GENESIS).
         // Post-Genesis default: UINT32_MAX (MAX_TX_SIGOPS_COUNT_POLICY_AFTER_GENESIS); operators can lower it.
@@ -226,11 +261,18 @@ class CTxValidator {
         std::unique_ptr<CChainParams> chainParams;
         std::shared_ptr<task::CCancellationSource> source;
 
-        // Consolidation policy settings (not part of ConfigScriptPolicy)
+        // Consolidation policy settings (not part of ConfigScriptPolicy).
+        // Defaults mirror bitcoin-sv DEFAULT_MIN_CONSOLIDATION_FACTOR (20),
+        // DEFAULT_MAX_CONSOLIDATION_INPUT_SCRIPT_SIZE (150),
+        // DEFAULT_MIN_CONF_CONSOLIDATION_INPUT (6), DEFAULT_ACCEPT_NON_STD_CONSOLIDATION_INPUT (false).
         uint64_t consolidationMinFactor{20};
         uint64_t consolidationMaxInputScriptSize{150};
         uint64_t consolidationMinConf{6};
         bool consolidationAcceptNonStd{false};
+
+        // Static-fee-path policy setting (not part of ConfigScriptPolicy).
+        // 0 means "no fee policy" — every tx passes the fee floor.
+        int64_t minMiningTxFeeSatPerKB{0};
 
         // SigOps policy limits (not part of ConfigScriptPolicy)
         // Pre-Genesis default: 4000 = MAX_TX_SIGOPS_COUNT_POLICY_BEFORE_GENESIS (20000/5)
@@ -298,6 +340,13 @@ class CTxValidator {
         ) const;
 
         TxError implIsFreeConsolidation(
+            const CTransaction& tx,
+            const std::vector<CTxOut>& prevUTXO,
+            std::span<const int32_t> utxoHeights,
+            int32_t blockHeight
+        ) const;
+
+        TxError implCheckFee(
             const CTransaction& tx,
             const std::vector<CTxOut>& prevUTXO,
             std::span<const int32_t> utxoHeights,

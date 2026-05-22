@@ -52,6 +52,11 @@ const char* TxValidator_SetChronicleGracefulPeriod(TxValidatorCGO cgoEngine, int
 const char* TxValidator_SetMaxTxSizePolicy(TxValidatorCGO cgoEngine, int64_t value);
 const char* TxValidator_SetMaxSigOpsPostGenesisPolicy(TxValidatorCGO cgoEngine, int64_t value);
 void TxValidator_SetMaxSigOpsPolicy(TxValidatorCGO cgoEngine, uint64_t value);
+const char* TxValidator_SetMinConsolidationFactor(TxValidatorCGO cgoEngine, int64_t value);
+const char* TxValidator_SetMaxConsolidationInputScriptSize(TxValidatorCGO cgoEngine, int64_t value);
+const char* TxValidator_SetMinConfConsolidationInput(TxValidatorCGO cgoEngine, int64_t value);
+void TxValidator_SetAcceptNonStdConsolidationInput(TxValidatorCGO cgoEngine, bool value);
+const char* TxValidator_SetMinMiningTxFee(TxValidatorCGO cgoEngine, int64_t satoshisPerKB);
 void TxValidator_SetDataCarrierSize(TxValidatorCGO cgoEngine, uint64_t dataCarrierSize);
 void TxValidator_SetDataCarrier(TxValidatorCGO cgoEngine, bool dataCarrier);
 void TxValidator_SetAcceptNonStandardOutput(TxValidatorCGO cgoEngine, bool accept);

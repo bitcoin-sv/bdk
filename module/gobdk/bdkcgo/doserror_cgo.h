@@ -28,7 +28,8 @@ typedef enum {
     DOS_ERR_UNCONFIRMED_INPUT_IN_BLOCK = 15,
     DOS_ERR_INPUT_VALUES_OUT_OF_RANGE  = 16,
     DOS_ERR_INPUTS_BELOW_OUTPUTS       = 17,
-    DOS_ERR_COUNT                      = 18
+    DOS_ERR_INSUFFICIENT_FEE           = 18,
+    DOS_ERR_COUNT                      = 19
 } DoSError_t;
 
 /**

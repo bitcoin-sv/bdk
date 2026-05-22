@@ -326,6 +326,62 @@ func (se *TxValidator) SetMaxSigOpsPolicy(value uint64) {
 	runtime.KeepAlive(se)
 }
 
+// SetMinConsolidationFactor sets the minimum consolidation factor.
+// Negative values return an error. 0 stored literally (disables consolidation).
+func (se *TxValidator) SetMinConsolidationFactor(value int64) error {
+	errCStr := C.TxValidator_SetMinConsolidationFactor(se.cSEPtr, C.int64_t(value))
+	runtime.KeepAlive(se)
+	if errCStr == nil {
+		return nil
+	}
+	defer C.free(unsafe.Pointer(errCStr))
+	return errors.New(C.GoString(errCStr))
+}
+
+// SetMaxConsolidationInputScriptSize sets the per-input scriptSig size cap for free
+// consolidations. Negative values return an error. 0 resets to the bitcoin-sv default (150).
+func (se *TxValidator) SetMaxConsolidationInputScriptSize(value int64) error {
+	errCStr := C.TxValidator_SetMaxConsolidationInputScriptSize(se.cSEPtr, C.int64_t(value))
+	runtime.KeepAlive(se)
+	if errCStr == nil {
+		return nil
+	}
+	defer C.free(unsafe.Pointer(errCStr))
+	return errors.New(C.GoString(errCStr))
+}
+
+// SetMinConfConsolidationInput sets the minimum confirmation count for consolidation inputs.
+// Negative values return an error. 0 resets to the bitcoin-sv default (6).
+func (se *TxValidator) SetMinConfConsolidationInput(value int64) error {
+	errCStr := C.TxValidator_SetMinConfConsolidationInput(se.cSEPtr, C.int64_t(value))
+	runtime.KeepAlive(se)
+	if errCStr == nil {
+		return nil
+	}
+	defer C.free(unsafe.Pointer(errCStr))
+	return errors.New(C.GoString(errCStr))
+}
+
+// SetAcceptNonStdConsolidationInput toggles acceptance of non-standard inputs in consolidations.
+func (se *TxValidator) SetAcceptNonStdConsolidationInput(value bool) {
+	C.TxValidator_SetAcceptNonStdConsolidationInput(se.cSEPtr, C.bool(value))
+	runtime.KeepAlive(se)
+}
+
+// SetMinMiningTxFee sets the static fee floor in integer satoshis/kB.
+// 0 means "no fee policy" (every tx passes the floor). Negative returns an error.
+// Callers converting from float BSV/kB should use math.Round(rate * 1e8) (not truncation)
+// because IEEE-754 representations of decimal values can drop one satoshi.
+func (se *TxValidator) SetMinMiningTxFee(satoshisPerKB int64) error {
+	errCStr := C.TxValidator_SetMinMiningTxFee(se.cSEPtr, C.int64_t(satoshisPerKB))
+	runtime.KeepAlive(se)
+	if errCStr == nil {
+		return nil
+	}
+	defer C.free(unsafe.Pointer(errCStr))
+	return errors.New(C.GoString(errCStr))
+}
+
 // SetDataCarrierSize set the DataCarrierSize in the C++ TxValidator
 func (se *TxValidator) SetDataCarrierSize(dataCarrierSize uint64) {
 	C.TxValidator_SetDataCarrierSize(se.cSEPtr, C.uint64_t(dataCarrierSize))
