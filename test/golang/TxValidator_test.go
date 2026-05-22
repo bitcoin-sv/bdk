@@ -42,14 +42,14 @@ func TestNewTxValidator(t *testing.T) {
 		se := goscript.NewTxValidator("teratestnet")
 		assert.NotNil(t, se, "Expect non nil script engine")
 		assert.Equal(t, se.GetGenesisActivationHeight(), int32(1))
-		assert.Equal(t, se.GetChronicleActivationHeight(), int32(1))
+		assert.Equal(t, se.GetChronicleActivationHeight(), int32(2))
 	})
 
 	t.Run("tera scaling testnet", func(t *testing.T) {
 		se := goscript.NewTxValidator("tstn")
 		assert.NotNil(t, se, "Expect non nil script engine")
 		assert.Equal(t, se.GetGenesisActivationHeight(), int32(1))
-		assert.Equal(t, se.GetChronicleActivationHeight(), int32(1))
+		assert.Equal(t, se.GetChronicleActivationHeight(), int32(2))
 	})
 
 	t.Run("wrong network", func(t *testing.T) {

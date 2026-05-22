@@ -163,6 +163,39 @@ void TxValidator_SetMaxSigOpsPolicy(TxValidatorCGO cgoEngine, uint64_t value)
     static_cast<bsv::CTxValidator*>(cgoEngine)->SetMaxSigOpsPolicy(value);
 }
 
+const char* TxValidator_SetMinConsolidationFactor(TxValidatorCGO cgoEngine, int64_t value)
+{
+    std::string err;
+    static_cast<bsv::CTxValidator*>(cgoEngine)->SetMinConsolidationFactor(value, &err);
+    return _helper_string2char(err);
+}
+
+const char* TxValidator_SetMaxConsolidationInputScriptSize(TxValidatorCGO cgoEngine, int64_t value)
+{
+    std::string err;
+    static_cast<bsv::CTxValidator*>(cgoEngine)->SetMaxConsolidationInputScriptSize(value, &err);
+    return _helper_string2char(err);
+}
+
+const char* TxValidator_SetMinConfConsolidationInput(TxValidatorCGO cgoEngine, int64_t value)
+{
+    std::string err;
+    static_cast<bsv::CTxValidator*>(cgoEngine)->SetMinConfConsolidationInput(value, &err);
+    return _helper_string2char(err);
+}
+
+void TxValidator_SetAcceptNonStdConsolidationInput(TxValidatorCGO cgoEngine, bool value)
+{
+    static_cast<bsv::CTxValidator*>(cgoEngine)->SetAcceptNonStdConsolidationInput(value);
+}
+
+const char* TxValidator_SetMinMiningTxFee(TxValidatorCGO cgoEngine, int64_t satoshisPerKB)
+{
+    std::string err;
+    static_cast<bsv::CTxValidator*>(cgoEngine)->SetMinMiningTxFee(satoshisPerKB, &err);
+    return _helper_string2char(err);
+}
+
 void TxValidator_SetDataCarrierSize(TxValidatorCGO cgoEngine, uint64_t dataCarrierSize)
 {
     static_cast<bsv::CTxValidator*>(cgoEngine)->SetDataCarrierSize(dataCarrierSize);

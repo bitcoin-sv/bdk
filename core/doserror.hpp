@@ -37,7 +37,8 @@ enum class DoSError_t : int32_t {
     UnconfirmedInputInBlock = 15, // "bad-txns-unconfirmed-input-in-block" — MEMPOOL_HEIGHT UTXO in consensus context
     InputValuesOutOfRange   = 16, // "bad-txns-inputvalues-outofrange" (DoS 100)
     InputsBelowOutputs      = 17, // "bad-txns-in-belowout" (DoS 100)
-    Count                   = 18  // sentinel
+    InsufficientFee         = 18, // "insufficient-fee" (DoS 0, policy) — under static fee floor and not free-consolidation
+    Count                   = 19  // sentinel
 };
 
 std::string_view DoSErrorString(DoSError_t err);

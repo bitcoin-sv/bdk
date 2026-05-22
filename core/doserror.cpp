@@ -20,6 +20,7 @@ std::string_view bsv::DoSErrorString(bsv::DoSError_t err) {
         case DoSError_t::UnconfirmedInputInBlock: return "bad-txns-unconfirmed-input-in-block";
         case DoSError_t::InputValuesOutOfRange:   return "bad-txns-inputvalues-outofrange";
         case DoSError_t::InputsBelowOutputs:      return "bad-txns-in-belowout";
+        case DoSError_t::InsufficientFee:         return "insufficient-fee";
         default:                                  return "unknown-dos-error";
     }
 }

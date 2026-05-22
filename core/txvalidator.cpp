@@ -445,6 +445,7 @@ void bsv::CTxValidator::ResetDefault()
     consolidationAcceptNonStd = false;
     maxSigOpsPolicy = MAX_TX_SIGOPS_COUNT_POLICY_BEFORE_GENESIS;
     maxSigOpsPostGenesisPolicy = MAX_TX_SIGOPS_COUNT_POLICY_AFTER_GENESIS;
+    minMiningTxFeeSatPerKB = 0;
 }
 
 void bsv::CTxValidator::SetMaxSigOpsPolicy(uint64_t value) { maxSigOpsPolicy = value; }
@@ -466,10 +467,51 @@ bool bsv::CTxValidator::SetMaxSigOpsPostGenesisPolicy(int64_t value, std::string
 }
 uint64_t bsv::CTxValidator::GetMaxSigOpsPostGenesisPolicy() const { return maxSigOpsPostGenesisPolicy; }
 
-void bsv::CTxValidator::SetMinConsolidationFactor(uint64_t value) { consolidationMinFactor = value; }
-void bsv::CTxValidator::SetMaxConsolidationInputScriptSize(uint64_t value) { consolidationMaxInputScriptSize = value; }
-void bsv::CTxValidator::SetMinConfConsolidationInput(uint64_t value) { consolidationMinConf = value; }
+// Consolidation setters mirror bitcoin-sv GlobalConfig::Set* (config.cpp:318/333/352):
+// signed int64 input, reject negatives via error channel. Zero handling matches:
+// MinConsolidationFactor stores 0 literally (disables consolidation; see implIsFreeConsolidation),
+// while MaxConsolidationInputScriptSize and MinConfConsolidationInput map 0 → svnode default.
+bool bsv::CTxValidator::SetMinConsolidationFactor(int64_t value, std::string* err)
+{
+    if (value < 0) {
+        if (err) *err = "Minimum consolidation factor cannot be less than zero.";
+        return false;
+    }
+    consolidationMinFactor = static_cast<uint64_t>(value);
+    return true;
+}
+bool bsv::CTxValidator::SetMaxConsolidationInputScriptSize(int64_t value, std::string* err)
+{
+    if (value < 0) {
+        if (err) *err = "Maximum length for a scriptSig input in a consolidation txn cannot be less than zero.";
+        return false;
+    }
+    consolidationMaxInputScriptSize = (value == 0) ? uint64_t{150} : static_cast<uint64_t>(value);
+    return true;
+}
+bool bsv::CTxValidator::SetMinConfConsolidationInput(int64_t value, std::string* err)
+{
+    if (value < 0) {
+        if (err) *err = "Minimum number of confirmations of inputs spent by consolidation transactions cannot be less than 0";
+        return false;
+    }
+    consolidationMinConf = (value == 0) ? uint64_t{6} : static_cast<uint64_t>(value);
+    return true;
+}
 void bsv::CTxValidator::SetAcceptNonStdConsolidationInput(bool value) { consolidationAcceptNonStd = value; }
+
+// Static-fee-path policy setter. 0 = no fee policy (every tx passes the fee floor),
+// matching teranode's Policy.MinMiningTxFee = 0 sentinel. Negative is rejected.
+bool bsv::CTxValidator::SetMinMiningTxFee(int64_t satoshisPerKB, std::string* err)
+{
+    if (satoshisPerKB < 0) {
+        if (err) *err = "Minimum mining transaction fee rate (satoshis/kB) cannot be negative.";
+        return false;
+    }
+    minMiningTxFeeSatPerKB = satoshisPerKB;
+    return true;
+}
+int64_t bsv::CTxValidator::GetMinMiningTxFee() const { return minMiningTxFeeSatPerKB; }
 
 uint64_t bsv::CTxValidator::GetMinConsolidationFactor() const { return consolidationMinFactor; }
 uint64_t bsv::CTxValidator::GetMaxConsolidationInputScriptSize() const { return consolidationMaxInputScriptSize; }
@@ -930,6 +972,11 @@ TxError bsv::CTxValidator::ValidateTransaction(std::span<const uint8_t> extended
             if (auto r = implCheckConsensusSigops(ctx, eTX.vutxo, utxoHeights, blockHeight);   !bsv::TxErrorIsOk(r)) return r;
         }
         if (auto r = implCheckInputValues(ctx, eTX.vutxo);                                     !bsv::TxErrorIsOk(r)) return r;
+        // Fee check runs only in policy mode and only after implCheckInputValues, so MoneyRange
+        // holds and the inputs - outputs subtraction inside implCheckFee is well-defined.
+        if (!consensus) {
+            if (auto r = implCheckFee(ctx, eTX.vutxo, utxoHeights, blockHeight);               !bsv::TxErrorIsOk(r)) return r;
+        }
         return implVerifyScript(ctx, eTX.vutxo, utxoHeights, blockHeight, consensus);
     }
     catch (const std::exception&) {
@@ -1215,5 +1262,75 @@ TxError bsv::CTxValidator::implIsFreeConsolidation(const CTransaction& tx,
     if (sumInputScriptPubKeySize < factor * sumOutputScriptPubKeySize)
         return notFree();
 
+    return bsv::TxErrorOk();
+}
+
+/*
+ * implCheckFee — static-fee-path floor with free-consolidation bypass (policy mode only).
+ *
+ * Deltas from bitcoin-sv TxnValidation fee path (validation.cpp:1255-1296). Read
+ * before changing — any new delta must be added to this list.
+ *
+ *   (a) Single static rate. bitcoin-sv tracks two distinct fee quantities:
+ *         blockMinTxFee    = pool.GetBlockMinTxFee()      // static, from -minminingtxfee
+ *         mempoolRejectFee = GetMempoolRejectFee(...)     // eviction-driven, can rise above
+ *                                                         // blockMinTxFee under mempool pressure
+ *       BDK collapses both into one static minMiningTxFeeSatPerKB. Under mempool
+ *       pressure bitcoin-sv may reject txs BDK accepts — out of scope (no mempool
+ *       state exists at this layer to read from).
+ *
+ *   (b) No PrioritiseTransaction credit synthesis. bitcoin-sv implements the
+ *       free-consolidation bypass by injecting a per-tx fee delta via
+ *       pool.PrioritiseTransaction(...) when isFree is true. BDK has no per-tx
+ *       delta state; the bypass is expressed directly as a control-flow gate
+ *       (`if (under floor && !isFree) reject`). Net accept/reject is the same.
+ *
+ *   (c) Policy-only. Caller (ValidateTransaction) gates on `!consensus` before
+ *       invoking this helper. Mirrors bitcoin-sv: TxnValidation runs the fee
+ *       check; block validation does not.
+ *
+ *   (d) Wire tx size, not extended-tx size. Uses CTransaction::GetTotalSize() —
+ *       the bare wire transaction, matching bitcoin-sv's ptx->GetTotalSize() at
+ *       validation.cpp:1262. The extended-tx byte length would inflate minFee
+ *       by the prepended UTXO metadata and falsely reject txs bitcoin-sv would
+ *       accept.
+ *
+ *   (e) Special-zero rate. minMiningTxFeeSatPerKB == 0 short-circuits to accept
+ *       (every tx passes the floor). Matches teranode's existing semantics on
+ *       Policy.MinMiningTxFee == 0 and avoids triggering CFeeRate's round-up-
+ *       to-1-sat rule on a disabled policy.
+ *
+ *   (f) Integer math, matches CFeeRate::GetFee bitwise (amount.cpp:28-44),
+ *       including the round-up-to-1 rule for small non-zero txs.
+ *
+ * Precondition: implCheckInputValues has run successfully, so MoneyRange holds
+ * on inputs/outputs and inputSats >= outputSats — the subtraction below is safe.
+ */
+TxError bsv::CTxValidator::implCheckFee(const CTransaction& tx,
+                                         const std::vector<CTxOut>& prevUTXO,
+                                         std::span<const int32_t> utxoHeights,
+                                         int32_t blockHeight) const
+{
+    if (minMiningTxFeeSatPerKB == 0) {
+        return bsv::TxErrorOk();  // delta (e)
+    }
+
+    Amount nValueIn(0);
+    for (const auto& utxo : prevUTXO)
+        nValueIn += utxo.nValue;
+    const Amount nFees = nValueIn - tx.GetValueOut();
+
+    const int64_t txSize = static_cast<int64_t>(tx.GetTotalSize());  // delta (d)
+    int64_t minFeeSats = (txSize * minMiningTxFeeSatPerKB) / 1000;   // delta (f)
+    if (minFeeSats == 0 && txSize > 0 && minMiningTxFeeSatPerKB > 0)
+        minFeeSats = 1;
+
+    if (nFees < Amount(minFeeSats)) {
+        // Free-consolidation gate is the only escape (delta (b)). NotFreeConsolidation
+        // is not itself a rejection — only its presence here escalates the shortfall.
+        const TxError isFree = implIsFreeConsolidation(tx, prevUTXO, utxoHeights, blockHeight);
+        if (!bsv::TxErrorIsOk(isFree))
+            return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::InsufficientFee));
+    }
     return bsv::TxErrorOk();
 }
