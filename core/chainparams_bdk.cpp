@@ -51,73 +51,59 @@ namespace bsv
 const std::string CustomChainParams::TERATESTNET = "teratestnet";
 const std::string CustomChainParams::TERASCALINGTESTNET = "tstn";
 
-// P2SH activation heights for the custom networks, mirroring bitcoin-sv's
+// p2shHeight is not defined in teranode chaincfg; values mirror svnode
 // P2SH_ACTIVATION_TESTNET / P2SH_ACTIVATION_STN for the analogous networks.
 constexpr int32_t P2SH_ACTIVATION_TERATESTNET{519};
 constexpr int32_t P2SH_ACTIVATION_TERASCALINGTESTNET{1};
 
 /**
  * TeraTestNetParams
- * 
- * Definitions here are copied from teratestnet in teranode code
- * Fields marked ND means they are Not Defined in teratestnet
+ *
+ * Each field's trailing comment indicates its source:
+ *   "from teranode ..."           → copied verbatim from teranode TeraTestNetParams.
+ *   "from svnode CTestNetParams"  → field not defined in teranode; inspired by svnode testnet.
  */
 class TeraTestNetParams : public CChainParams {
     public:
         TeraTestNetParams() {
             strNetworkID = CustomChainParams::TERATESTNET;
-            consensus.BIP34Height = 100000000;
-            consensus.BIP34Hash = uint256S("0000000023b3a96d3484e5abb3755c413e7d41500f8e2a5c3f0dd01299cd8ef8"); // ND
-            consensus.BIP65Height = 581885;  // mirrors svnode CTestNetParams
-            consensus.BIP66Height = 330776;  // mirrors svnode CTestNetParams
-            consensus.CSVHeight = 770112;    // mirrors svnode CTestNetParams
-            consensus.p2shHeight = P2SH_ACTIVATION_TERATESTNET;
 
-            // August 1, 2017 hard fork
-            consensus.uahfHeight = 0;
-
-            // November 13, 2017 hard fork
-            consensus.daaHeight = 0;
-
-            // February 2020, Genesis Upgrade
-            consensus.genesisHeight = 1;
-
-            // TBD, Chronicle Upgrade
-            consensus.chronicleHeight = 1; // ND
+            consensus.BIP34Height = 0;                                       // from teranode
+            consensus.BIP34Hash = uint256S(
+                "0000000023b3a96d3484e5abb3755c413e7d41500f8e2a5c3f0dd01299cd8ef8");  // from svnode CTestNetParams
+            consensus.BIP65Height = 0;                                       // from teranode
+            consensus.BIP66Height = 0;                                       // from teranode
+            consensus.CSVHeight = 0;                                         // from teranode
+            consensus.p2shHeight = P2SH_ACTIVATION_TERATESTNET;              // from svnode CTestNetParams (519)
+            consensus.uahfHeight = 0;                                        // from teranode UahfForkHeight
+            consensus.daaHeight = 0;                                         // from teranode DaaForkHeight
+            consensus.genesisHeight = 1;                                     // from teranode GenesisActivationHeight
+            consensus.chronicleHeight = 2;                                   // from teranode ChronicleActivationHeight
         }
 };
 
 /**
  * TeraScalingTestNetParams
- * 
- * Definitions here are copied from teratestnet in teranode code
- * Fields marked ND means they are Not Defined in teratestnet
+ *
+ * Each field's trailing comment indicates its source:
+ *   "from teranode ..."        → copied verbatim from teranode TeraScalingTestNetParams.
+ *   "from svnode CStnParams"   → field not defined in teranode; inspired by svnode STN.
  */
 class TeraScalingTestNetParams : public CChainParams {
     public:
     TeraScalingTestNetParams() {
             strNetworkID = CustomChainParams::TERASCALINGTESTNET;
-            consensus.BIP34Height = 100000000;
-            consensus.BIP34Hash = uint256S("0000000023b3a96d3484e5abb3755c413e7d41500f8e2a5c3f0dd01299cd8ef8"); // ND
-            // svnode CStnParams leaves BIP65/BIP66/CSV unset; mirror its
-            // "fast activation" intent (same as p2shHeight = 1 below) by
-            // setting all three to 1.
-            consensus.BIP65Height = 1;
-            consensus.BIP66Height = 1;
-            consensus.CSVHeight = 1;
-            consensus.p2shHeight = P2SH_ACTIVATION_TERASCALINGTESTNET;
 
-            // August 1, 2017 hard fork
-            consensus.uahfHeight = 0;
-
-            // November 13, 2017 hard fork
-            consensus.daaHeight = 0;
-
-            // February 2020, Genesis Upgrade
-            consensus.genesisHeight = 1;
-
-            // TBD, Chronicle Upgrade
-            consensus.chronicleHeight = 1; // ND
+            consensus.BIP34Height = 0;                                       // from teranode
+            consensus.BIP34Hash = uint256();                                 // from svnode CStnParams (zero hash)
+            consensus.BIP65Height = 0;                                       // from teranode
+            consensus.BIP66Height = 0;                                       // from teranode
+            consensus.CSVHeight = 0;                                         // from teranode
+            consensus.p2shHeight = P2SH_ACTIVATION_TERASCALINGTESTNET;       // from svnode CStnParams (1)
+            consensus.uahfHeight = 0;                                        // from teranode UahfForkHeight
+            consensus.daaHeight = 0;                                         // from teranode DaaForkHeight
+            consensus.genesisHeight = 1;                                     // from teranode GenesisActivationHeight
+            consensus.chronicleHeight = 2;                                   // from teranode ChronicleActivationHeight
         }
 };
 
