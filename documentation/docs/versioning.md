@@ -1,44 +1,60 @@
 # Bitcoin Development Kit Versioning
 
-This document contains a description of the proposed versioning strategy for the Bitcoin Development Kit.
+This page describes both the **versioning scheme as currently implemented** in the code and the
+**semver policy** the project follows.
 
-The BDK consists of a number of components
-* The BDK "core" which contains core code taken over from SV, and common code used by lnaguage bindings.
-* Language bindings. 
+## Current implementation
 
-The object model can be found in documentation/docs/ObjectModel.md
+BDK carries several distinct version numbers:
 
-For the purpose of this document, we assume that bindings are present for Golang.
+- **Overall BDK version — `1.2.2`.** Hard-coded in the root `CMakeLists.txt:60-62` as
+  `BDK_VERSION_MAJOR` (`1`), `BDK_VERSION_MINOR` (`2`), `BDK_VERSION_PATCH` (`2`). This is the
+  package version used by CPack.
+- **Go-binding version — `1.2.4`.** A separate `BDK_GOLANG_VERSION_{MAJOR,MINOR,PATCH}`, exposed
+  from Go via `module/gobdk/version.go` (`BDK_GOLANG_VERSION_STRING()` and friends). It is
+  **derived** from the overall version in `module/gobdk/bdkcgo/CMakeLists.txt:19-22`: major and
+  minor are taken as-is (`1`, `2`) and the patch is the overall patch **plus 2**
+  (`createIncrementVersion(BDK_GOLANG_VERSION_PATCH ${BDK_VERSION_PATCH} 2 …)`), i.e. `2 + 2 = 4` —
+  giving `1.2.4` for the current overall `1.2.2`.
+- **Captured bitcoin-sv (BSV) version / commit.** The exact BSV source BDK was built against is
+  captured at build time: `core/BDKVersion.h` is the static declaration of the version symbols, and
+  their concrete values are generated into `BDKVersion.cpp` from `core/BDKVersion.cpp.in`. They are
+  re-exported in Go through `module/gobdk/version.go` — `BSV_VERSION_STRING()`,
+  `BSV_GIT_COMMIT_HASH()`, `BSV_GIT_COMMIT_TAG_OR_BRANCH()`, `BSV_GIT_COMMIT_DATETIME()`, plus the
+  BDK source's own `SOURCE_GIT_COMMIT_HASH()` / `SOURCE_GIT_COMMIT_DATETIME()` and
+  `BDK_BUILD_DATETIME_UTC()`.
 
-## Proposal
-* Each language binding (module) will be assigned a version number, following sematic versioning rules (https://semver.org/)
-* The SDK "core" will be assigned a version number, following sematic versioning rules.
-* The SDK will be assigned an overall version number.
+### Relationship to the bitcoin-sv version
 
-"Bumping" a version means incrementing the patch, minor or major version, and reseting the lesser versions to 0.
+BDK is built against a **pinned bitcoin-sv commit** — CI pins
+`879fc8b42168dd0e608dafd51b39c6dabad37d4d` (`build_bdk.yaml:22`; see
+[Dependencies & pinned versions](build.md#dependencies-pinned-versions)). That commit does **not**
+mechanically determine the BDK version number, but it is **captured into the generated version
+header** at build time, so any built artifact records exactly which BSV source produced it. When the
+pinned BSV commit changes, update the table in [build.md](build.md) accordingly.
 
-The following rules will apply to the assignment of versions, and is consistent with semantic versioning rules.
-* If the version number of a language binding is "bumped", then the version number of the SDK itself is bumped in a similar manner.
-* If the version number of core is bumped, then the version number of the language bindings is also "bumped". To avoid detailed dependency analysis, the language binding version may be bumped even if the change to core does not directly effect the language binding.
-* Only a single "most significant" bump is ever applied to the SDK. 
+## Versioning policy (semver)
 
-The SDK version is always greater than the versions of any of its components.
+The project follows [semantic versioning](https://semver.org/) with the following intent. (This is
+the *policy*; the *current* numbers are listed above.)
 
-### Examples
-If the patch versions of 2 modules (bindings or core) are incremented, then the SDK patch version is incremented. If the minor version of a module is incremented, and the patch version of another is incremented, then the SDK minor version is incremented and the patch version is reset.
+BDK consists of a "core" (code taken from SV plus common code shared by bindings) and the language
+bindings. Each binding (module) and the core may be assigned a semver number, and the SDK as a whole
+carries an overall version.
 
-If the Golang binding version is bumped from "1.2.3" to "1.3.0", the SDK minor version is incremented and the patch number reset, say, from "1.4.3" to "1.5.0".
+"Bumping" a version means incrementing the patch, minor, or major number and resetting the lesser
+numbers to 0. The rules:
 
-## Dependency on SV
+- If a language binding's version is bumped, the SDK's overall version is bumped in the same manner.
+- If core's version is bumped, the language bindings are also bumped (to avoid detailed dependency
+  analysis, a binding may be bumped even when a core change does not directly affect it).
+- Only a single "most significant" bump is ever applied to the SDK.
+- The SDK version is always greater than or equal to the versions of any of its components.
 
-The Bitcoin Development Kit is built against an instance of the SV source, however that instance of the SV source does not need to keep pace with SV releases or SV development branches.
-The build process pulls in a version of the SV source (release or development branches), and that code is labelled with the SDK version.
-I.e. The version of the SV source used does not directly affect the SDK version.
+Internal builds against development branches may append `-develop` or `-RC<n>` to the version, e.g.
+`1.5.6-RC2` is the 2nd release candidate for `1.5.6`.
 
-Internal use: SDK instances built against development branches may have the strings "develop" or "RC"+integer appended to their versions. E.g. The SDK version "1.5.6-RC2" would be 2nd release candidate for "1.5.6".
+## When should I upgrade?
 
-## When should I upgrade the SDK?
-
-Generally you should consult README.md to determine if the changes to the SDK will affect you.
-
-* If the versions of core and the language binding you are using has not changed, then you do not need to upgrade.
+If the versions of core and the language binding you use have not changed, you do not need to
+upgrade. Consult the release notes / commit history to determine whether a change affects you.

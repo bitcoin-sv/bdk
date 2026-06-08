@@ -1,6 +1,13 @@
 # Verify Script
 
-[![](https://mermaid.ink/img/pako:eNrNVV1v2jAU_SuRn0AC2jBKm2hU6ujHeECqBOrDlgmZxBCrwY5sp6Mr_e9zYkjsJE3Z1ochIcX2veee--HjF-DTAAEXrCL60w8hE9b82iOW_D0ghlfPM5_hWHz3gL78vGQnly2fEo4IT3jHWkVwzdse-OER5TxWhuMQ-Y_SWV-6Lo0Rg4KyVrsJKIWZ4TW5IoGKLXGMdcVZonasRGzpDYMFxjQRUKD5NvWVEJz5J0ssfIpJV2x7fhxnOLpVy8gk5TwhcSJUDnyP8QQjHECBKckxKqYNmRW2RwHyxmrPt-Qh934bzjBrFVy-RNR_3J_IEpAGRhXT1tt53TK6maJNTGkkezaGfoiOSrXGrxzFT63f7YduZfSUyyYz-FMwSDj0taKxWP6Ngxys6qNV8DYhgeSaDs8UE8QmZEXnWw10g4lAbIHlforo1jtoiE_ZiC_44fqlQGpxmN58IHKKho8q2YQUkIe2XdNkGaFZjEiwBw6ynQVPt04CDoWQ5ReLEJIgQizHrwHQGH94USc8LY2ZO-aykigroTpuZThGc5PlmsE4tMaUIUu137oha2msDMr6ZFnd7uWuuF9Z4XaG_hWOhgJljh4oX01rZM2ErB1kgXJX1rfpWUuKVNvaWZpMlE51CSuz0BIoa02JiuSQf09IQWw_FX_AQC9VXXxeqUIWI3Mtkyz8DS0qAYxWMOJIwYzuUD3Jthngb6CnaY_kO_T87wFyrplAKjyFJB9VTOY4LsPVqFwRoSKzxoSOBEvQYUxrGTbHaahJJecCU1fTbu-drJfpxleE16Ho2lnqlZQUstSQQxD9CS7PlEr5iOt1JVXkCd00XrLcpumq1TIy-exMNWh6CurzuWdUUJ9GkoHr3lMu7hBBHPM3D1KaNTGrMlob7w1vJaTHetQ8T7W5qdnIh6pa3Crp_6LnNY-c9QH6lAvgoYKgA9YMB8DNsgQbxDYwXYKX9NwDIkQbWX9XfgZoBZNIeMAjr9IthuQbpZuDJ6PJOgSu4gSSOCOPoXwDCxOZBGJjmhABXCdDAO4L2AL302mvfzqwnf6w3-8PB2dnHfAMXNvu9_r2-cW5Lbec4Zljv3bAryzmac8ZDqTlxdAZXjjOwB68_gbKe1fU?type=png)](https://mermaid.live/edit#pako:eNrNVV1v2jAU_SuRn0AC2jBKm2hU6ujHeECqBOrDlgmZxBCrwY5sp6Mr_e9zYkjsJE3Z1ochIcX2veee--HjF-DTAAEXrCL60w8hE9b82iOW_D0ghlfPM5_hWHz3gL78vGQnly2fEo4IT3jHWkVwzdse-OER5TxWhuMQ-Y_SWV-6Lo0Rg4KyVrsJKIWZ4TW5IoGKLXGMdcVZonasRGzpDYMFxjQRUKD5NvWVEJz5J0ssfIpJV2x7fhxnOLpVy8gk5TwhcSJUDnyP8QQjHECBKckxKqYNmRW2RwHyxmrPt-Qh934bzjBrFVy-RNR_3J_IEpAGRhXT1tt53TK6maJNTGkkezaGfoiOSrXGrxzFT63f7YduZfSUyyYz-FMwSDj0taKxWP6Ngxys6qNV8DYhgeSaDs8UE8QmZEXnWw10g4lAbIHlforo1jtoiE_ZiC_44fqlQGpxmN58IHKKho8q2YQUkIe2XdNkGaFZjEiwBw6ynQVPt04CDoWQ5ReLEJIgQizHrwHQGH94USc8LY2ZO-aykigroTpuZThGc5PlmsE4tMaUIUu137oha2msDMr6ZFnd7uWuuF9Z4XaG_hWOhgJljh4oX01rZM2ErB1kgXJX1rfpWUuKVNvaWZpMlE51CSuz0BIoa02JiuSQf09IQWw_FX_AQC9VXXxeqUIWI3Mtkyz8DS0qAYxWMOJIwYzuUD3Jthngb6CnaY_kO_T87wFyrplAKjyFJB9VTOY4LsPVqFwRoSKzxoSOBEvQYUxrGTbHaahJJecCU1fTbu-drJfpxleE16Ho2lnqlZQUstSQQxD9CS7PlEr5iOt1JVXkCd00XrLcpumq1TIy-exMNWh6CurzuWdUUJ9GkoHr3lMu7hBBHPM3D1KaNTGrMlob7w1vJaTHetQ8T7W5qdnIh6pa3Crp_6LnNY-c9QH6lAvgoYKgA9YMB8DNsgQbxDYwXYKX9NwDIkQbWX9XfgZoBZNIeMAjr9IthuQbpZuDJ6PJOgSu4gSSOCOPoXwDCxOZBGJjmhABXCdDAO4L2AL302mvfzqwnf6w3-8PB2dnHfAMXNvu9_r2-cW5Lbec4Zljv3bAryzmac8ZDqTlxdAZXjjOwB68_gbKe1fU)
+```mermaid
+graph TD
+    A[Transaction to validate] --> B{Origin?}
+    B -->|From a peer<br/>mempool admission| C[GetScriptVerifyFlags era]
+    B -->|From a block<br/>block connection| D[GetBlockScriptFlags blockHeight]
+    C --> E[VerifyScript consensus=false<br/>policy + consensus rules]
+    D --> F[VerifyScript consensus=true<br/>consensus rules only]
+```
 
 In Bitcoin SV the `VerifyScript` function is called in many places with different context and argument. It can be confusing if we don't have a clear picture of how it works. This document section is for `bdk` developers to understand how it works in `bitcoin-sv`.
 
@@ -13,8 +20,8 @@ When a transaction comes from a block, we verify the script with `consensus=true
 
 As there are two different contexts, there are two different ways of calculating flags to used as input for `VerifyScript` function.
 
-- [GetScriptVerifyFlags](https://github.com/teranode-group/bitcoin-sv-staging/blob/develop/src/verify_script_flags.h#L9) is to be used when verify a transaction coming from a peer
-- [GetBlockScriptFlags](https://github.com/teranode-group/bitcoin-sv-staging/blob/develop/src/verify_script_flags.h#L19) is to be used when verify a transaction coming from a block
+- [GetScriptVerifyFlags](https://github.com/bitcoin-sv/bitcoin-sv/blob/879fc8b42168dd0e608dafd51b39c6dabad37d4d/src/verify_script_flags.h#L9) is to be used when verify a transaction coming from a peer
+- [GetBlockScriptFlags](https://github.com/bitcoin-sv/bitcoin-sv/blob/879fc8b42168dd0e608dafd51b39c6dabad37d4d/src/verify_script_flags.h#L19) is to be used when verify a transaction coming from a block
 
 ## Flags calculations
 

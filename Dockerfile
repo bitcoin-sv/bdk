@@ -1,4 +1,4 @@
-FROM golang:1.21.0-bullseye
+FROM golang:1.24-bookworm
 
 # This docker file prepare environment to build the full bdk inside a docker
 #
@@ -9,14 +9,21 @@ FROM golang:1.21.0-bullseye
 #      docker buildx build --platform linux/arm64 -t bdkbuilder:arm . # uname -m
 #      docker buildx build --platform linux/amd64,linux/arm64 -t bdkbuilder:cross .
 #
-# To run and test it, assuming there are the bitcoin-sv source code along side with bdk
+# To run and test it, assuming bitcoin-sv and bdk are checked out side by side, e.g.
 #
-#      # $PWD is the parent/parent directory containing source code of both bitcoin-sv and bdk
+#      <workspace>/
+#         |-- bitcoin-sv   # pinned to the CI commit (see documentation/docs/build.md)
+#         |-- bdk
+#
+#      # $PWD is that <workspace> directory containing both bitcoin-sv and bdk
 #      docker run -it --name buildbdk --rm --mount type=bind,source="${PWD}",target=/development bdk:dev /bin/bash
 #
-# Then inside the docker
+# Then inside the docker, build out-of-tree with CI-style flags (point BSV_ROOT at the sibling
+# bitcoin-sv checkout, matching .github/workflows/build_bdk.yaml):
 #
-#      cd /development && mkdir dockerbuild && cd dockerbuild && cmake ../bitcoin-sv/bdk/ -DCUSTOM_SYSTEM_OS_NAME=docker && make -j8 && make install && make test && cpack -G TGZ
+#      cd /development && mkdir -p dockerbuild && cd dockerbuild \
+#        && cmake ../bdk -DBSV_ROOT=../bitcoin-sv -DBUILD_MODULE_GOLANG_INSTALL_INSOURCE=ON -DCUSTOM_SYSTEM_OS_NAME=docker \
+#        && make -j8 && ctest --output-on-failure && make install && cpack -G TGZ
 #
 #
 
@@ -44,19 +51,18 @@ RUN wget https://github.com/Kitware/CMake/releases/download/v3.30.3/cmake-3.30.3
 
 ENV PATH="/usr/local/cmake-3.30.3/bin:$PATH"
 
-# Build from source OpenSSL 3.0.9 - static only
-RUN wget https://www.openssl.org/source/openssl-3.0.9.tar.gz \
-    && tar -xvzf openssl-3.0.9.tar.gz                        \
-    && cd openssl-3.0.9                                      \
-    && ./config no-shared --prefix=/usr/local/openssl-3.0.9  \
+# Build from source OpenSSL 3.4.0 - static only (matches CI: prebuild_dependancies.yaml:19)
+RUN wget https://www.openssl.org/source/openssl-3.4.0.tar.gz \
+    && tar -xvzf openssl-3.4.0.tar.gz                        \
+    && cd openssl-3.4.0                                      \
+    && ./config no-shared --prefix=/usr/local/openssl-3.4.0  \
     && make -j$(nproc)                                       \
     && make install_sw
 
-ENV OPENSSL_ROOT_DIR=/usr/local/openssl-3.0.9
+ENV OPENSSL_ROOT_DIR=/usr/local/openssl-3.4.0
 
-# Build from source Boost 1.85.0 - static only
-# We still have to build with ./b2 (instead of cmake) because bullseye only have g++10
-# Which make issue when compiling boost with cmake
+# Build from source Boost 1.85.0 - static only (matches CI: prebuild_dependancies.yaml:18)
+# Boost is built with ./b2 here for simplicity; CI builds it via cmake.
 RUN wget https://boostorg.jfrog.io/artifactory/main/release/1.85.0/source/boost_1_85_0.tar.gz  \
     && tar -xvzf boost_1_85_0.tar.gz && cd boost_1_85_0                                        \
     && ./bootstrap.sh --prefix="/usr/local/boost_1_85_0" && ./b2 link=static cxxflags="-fPIC" cflags="-fPIC" --without-stacktrace -j$(nproc) --prefix="/usr/local/boost_1_85_0" install

@@ -1,68 +1,65 @@
-## Script engine object model
+# Object Model
 
-Plant UML description
+This page describes the real public API of the BDK core validation engine, `bsv::CTxValidator`
+(`core/txvalidator.hpp`, `core/txvalidator.cpp`), and the Go type that wraps it.
 
-@startuml
-class Status 
-{ 
-	+unsigned long code;
-	+string message;
-}
-class Config 
-{
-	+Config(boolean isGenesisEnabled, boolean isConsensus)
+`CTxValidator` is the single entry point for transaction and script validation. Its public **C++**
+API exposes:
 
-    +void load(String filename);
+- **validation**: `ValidateTransaction`, `VerifyScript` (which takes an **optional `customFlags`**
+  span — `core/txvalidator.hpp:202`), and `ValidateBatch`;
+- **helpers**: `GetSigOpCount`, `CalculateFlags`;
+- a large family of **policy accessors** (`Set*` / `Get*`), e.g. `SetMaxOpsPerScriptPolicy`,
+  `SetMaxScriptNumLengthPolicy`, `SetMaxScriptSizePolicy`, `SetMaxPubKeysPerMultiSigPolicy`,
+  `SetMaxStackMemoryUsage`, `SetGenesisActivationHeight`, `SetChronicleActivationHeight`,
+  `SetMaxTxSizePolicy`, `SetMaxSigOpsPolicy`, `SetMaxSigOpsPostGenesisPolicy`,
+  `SetMinMiningTxFee`, `SetDataCarrier(Size)`, `SetRequireStandard`, `SetPermitBareMultisig`,
+  the consolidation-policy setters, `ResetDefault`, and their `Get*` counterparts.
 
-    +uint64 getMaxOpsPerScript();
-    +uint64 getMaxScriptNumLength();
-    +uint64 getMaxScriptSize();
-    +uint64 getMaxPubKeysPerMultiSig();
-    +uint64 getMaxStackMemoryUsage();
+> **Note:** there is **no** separate `VerifyScriptWithCustomFlags` method in C++ — the C++
+> `VerifyScript` already accepts an optional `customFlags` argument. The Go binding
+> (`module/gobdk/script/txvalidator.go`) splits that single C++ method into two convenience
+> functions, `VerifyScript` and `VerifyScriptWithCustomFlags`.
 
-    +void setMaxOpsPerScriptPolicy(uint64 v);
-    +void setMaxScriptnumLengthPolicy(uint64 v);
-    +void setMaxScriptSizePolicy(uint64 v);
-    +void setMaxPubkeysPerMultisigPolicy(uint64 v);
-    +void setMaxStackMemoryUsage(uint64 v1, uint64 v2);
+Both `ValidateTransaction` and `VerifyScript` take a `consensus` boolean that selects the
+policy (peer/mempool) vs. consensus (block) path — see
+[Architecture overview](architecture.md#the-validation-engine-a-single-validatetransaction-entry-point)
+and [VerifyScript](verify_script.md).
 
-    +bool isGenesisEnabled;
-    +bool isConsensus;
-}
-class Assembler
-{
-    +byte[] fromAsm(String script);
-    +string toAsm(byte[] script);
-}
-class ScriptIterator
-{
-	+ScriptIterator(byte[])
-	
-	+bool next();
-	+readonly int opcode;
-	+readonly byte[] data;
-}
-class CancellationToken
-{
-	+void cancel();
-}
-class Stack
-{
-    +int64 size();
-    +byte[] at(int pos);
-}
-class TxValidator 
-{
-	+TxValidator(Config config, uint64 Flags);
-	
-	+Status execute(byte[] script, CancellationToken token, String txHex, int index, int amount);
-    +Status execute(String script, CancellationToken token, String txHex, int index, int amount);
-	+reset(Config config, uint64 Flags);
-	
-	+boolean[] getExecState();
-	+boolean[] getElseState();
-}
-TxValidator --> Stack : stack
-TxValidator --> Stack : alt-stack
-@enduml
+```mermaid
+classDiagram
+    class CTxValidator {
+        +ValidateTransaction(extendedTX, utxoHeights, blockHeight, consensus) TxError
+        +VerifyScript(extendedTX, utxoHeights, blockHeight, consensus, customFlags) TxError
+        +GetSigOpCount(extendedTX, utxoHeights, blockHeight, countP2SHSigOps, consensus) uint64
+        +CalculateFlags(utxoHeight, blockHeight, consensus) uint32
+        +ValidateBatch(batch) vector~TxError~
+        +SetMaxOpsPerScriptPolicy(value)
+        +SetGenesisActivationHeight(height)
+        +SetChronicleActivationHeight(height)
+        +SetRequireStandard(flag)
+        +SetPermitBareMultisig(flag)
+        +ResetDefault()
+        +otherSetAndGetPolicyAccessors()
+    }
+    class TxError {
+        +TxErrorDomain domain
+        +int32 code
+    }
+    class ValidateBatch {
+        +Add(extendedTX, utxoHeights, blockHeight, consensus)
+    }
+    CTxValidator ..> TxError : returns
+    CTxValidator ..> ValidateBatch : consumes
+```
 
+`TxError.domain` is one of `OK`, `SCRIPT`, `DOS`, or `EXCEPTION`; on the Go side it is translated to
+`nil` (success) or a `ScriptError` / `DoSError`.
+
+## Go binding
+
+The Go type `script.TxValidator` (`module/gobdk/script/txvalidator.go`) is a thin cgo wrapper that
+holds an opaque pointer to a C++ `CTxValidator`, mirrors the methods above (exposing both
+`VerifyScript` and `VerifyScriptWithCustomFlags` over the single C++ `VerifyScript`), and translates
+the returned `TxError` into a Go `error` (`nil` on success, otherwise a `ScriptError` or
+`DoSError`). A finalizer calls the C++ destructor when the Go object is garbage-collected.

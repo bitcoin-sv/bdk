@@ -1,14 +1,18 @@
 ## To build this documentation using mkdocs :
 ##    python -m pip install mkdocs pymdown-extensions plantuml_markdown
-## On linux, go to this directory, then
-##    chmod +x plantuml
-##    export PATH=$LD_LIBRARY_PATH:/path/to/directory/containing/plantuml
-## On windows, go to this directory, then
-##    set PATH=%PATH%;%C:\path\to\directory\containing\plantuml%
-## Then build & run the doc using mkdocs 
-##    mkdocs build ; mkdocs serve
-##    # Open the browsers http://localhost:8000
+##    mkdocs build --clean --strict ; mkdocs serve
+##    # Open the browser at http://localhost:8000
 ##
+## Diagrams: the current pages use Mermaid, which renders client-side and needs no extra tooling.
+## The plantuml_markdown extension is enabled and the CMake core_doc target stages plantuml.jar,
+## so a Java runtime is needed ONLY if you add PlantUML (@startuml) diagrams. To enable that, put
+## the plantuml launcher (cmake/doc_tools/) on PATH:
+##    Linux  : chmod +x plantuml ; export PATH=$PATH:/path/to/dir/containing/plantuml
+##    Windows: set PATH=%PATH%;C:\path\to\dir\containing\plantuml
+##
+## Note: if the python doc packages (mkdocs / pymdown-extensions / plantuml_markdown) are missing
+## when building via CMake, the `core_doc` target is silently skipped with only a warning
+## (see documentation/CMakeLists.txt).
 ##
 site_name: Bitcoin Development Kit
 
@@ -16,6 +20,7 @@ nav:
     - About : index.md
     - Directory Structure : directories.md
     - Development Build : build.md
+    - Architecture : architecture.md
     - VerifyScript : verify_script.md
     - Versioning strategy : versioning.md
     - Object Model : ObjectModel.md
@@ -34,21 +39,4 @@ extra_javascript:
   - 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.0/MathJax.js?config=TeX-MML-AM_CHTML' # mathjax
   - 'https://unpkg.com/mermaid@8.4.6/dist/mermaid.min.js'
 
-extra_css:
-
 theme: readthedocs
-
-extra_css:
-    - css/theme_extra.css
-
-## To build this documentation using mkdocs :
-## python -m pip install --upgrade pip setuptools
-## python -m pip install WeasyPrint
-## python -m pip install mkpdfs-mkdocs
-## python -m weasyprint C:\path\to\index.html mypage.pdf
-## or 
-## python -m http.server&
-## python -m weasyprint http://127.0.0.1:8000 mypage.pdf
-#plugins:
-#  - search
-#  - mkpdfs
