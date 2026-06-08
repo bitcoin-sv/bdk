@@ -1,56 +1,81 @@
 ## Getting started
 
-Bitcoin Development Kit provides a facilities to work with Bitcoin SV scripts with different languages. It has the core part building all fundamental script's functionalities as a C++ library and different modules imlementing extras features. Those modules can be language binding (Golang ...) allowing developers from these programming background to develop scripts. Users are able to extend the functionalities by implementing their own modules.
+The Bitcoin Development Kit (BDK) provides facilities to work with Bitcoin SV scripts and
+transactions from different languages. Its **core** is a C++ library (`bdk_core`) built from a
+curated subset of the Bitcoin SV sources, and additional **modules** add features — notably language
+bindings (e.g. the Go binding under `module/gobdk`). Users can extend the functionality by writing
+their own modules.
 
-- [Directories Structure](directories.md)
+- [Directory Structure](directories.md)
 - [Development build](build.md)
+- [Architecture overview](architecture.md)
 - [VerifyScript](verify_script.md)
+- [Versioning](versioning.md)
 - [Object Model](ObjectModel.md)
 
 ---
 
-After unpacking the Bitcoin Development Kit installer to the local machine, the content of the installation directory looks as below
+## Install layout
+
+After installing/unpacking a BDK package, the layout looks like this (rooted at the install prefix):
 
 ```
-|-- bdk_install
-|       |-- include
-|              |-- bitcoin-sv header files
-|              |-- core
-|              |-- secp256k1
-|              |-- univalue
-|       |-- lib
-|       |-- Documentation
-|               |-- core_doc
+|-- include
+|       |-- <bsv headers>          # bitcoin-sv headers, kept in their src/ subdirectory structure
+|       |                          #   (e.g. crypto/, script/, primitives/, consensus/, ...)
+|       |-- config                 # generated bitcoin config header
+|       |-- core                   # extra BDK core headers + the single-include umbrella header `bdk`
+|       |-- secp256k1
+|       |       |-- include        # secp256k1 public headers
+|       |-- univalue               # univalue public headers
+|-- lib                            # static/shared libraries: bdk_core, secp256k1, univalue
+|-- Documentation
+|       |-- core_doc               # this documentation, built as HTML
 ```
 
-- File `include/core/BDKVersion.h` contains full version's information of how and when the installer was built.
-- `include` directory contains all `*.h` and `*.hpp` files from bsv source code.
-- `include/core` directory contains all extra `*.h` and `*.hpp` files declaring additional functionalities in Bitcoin Development Kit core.
-- lib directory contains all archives (static) and runtime (shared) libraries.
-- Documentation directory contains html documents.
+- `include/core/BDKVersion.h` declares the version symbols recording how and when the package was
+  built (values generated at build time; see [Versioning](versioning.md)).
+- `lib/` contains the static (and any shared) libraries.
+- `Documentation/core_doc/` contains the HTML documentation.
 
-## Usages
-Bitcoin Development Kit is a multi languages library, it allows users to work with `C++` and `Golang`.
+(These paths are taken from the install rules in `core/CMakeLists.txt`, `core/setting-secp256k1.cmake`
+and `core/setting-univalue.cmake`, and the components packaged by `cmake/BDKCPackConfig.cpack.in`.)
 
-#### C++
-To build a C++ program using Bitcoin Development Kit, it needs to link with the installed Bitcoin Development Kit:
+## Usage
 
-- Let compiler know additional include directories are
-    - `/path/to/bdk_install/include`
-    - `/path/to/bdk_install/include/secp256k1`
-    - `/path/to/bdk_install/include/univalue`
-    - `/path/to/bdk_install/include/core`
-- Let the compiler know additional library directory is `/path/to/bdk_install/lib`
+BDK is a multi-language library; it supports `C++` and `Golang`.
 
-To simplify for C++ code there are only one single file to include
+### C++
+
+To build a C++ program against an installed BDK, add these include directories:
+
+- `/path/to/bdk_install/include`
+- `/path/to/bdk_install/include/core`
+- `/path/to/bdk_install/include/secp256k1/include`
+- `/path/to/bdk_install/include/univalue`
+
+and link against the libraries in `/path/to/bdk_install/lib`.
+
+For convenience there is a single umbrella header (installed at `include/core/bdk`):
+
 ```c++
 #include <bdk>
 ```
-This will include all header files delivered by the package. Note that it is simplified, but not optimal for compilation time.
 
-#### Documentation
-Documentations are build and delivered as html contents. To visualize it:
-```
+This pulls in every header delivered by the package. It is simple but not optimal for compilation
+time.
+
+### Golang
+
+See [Consuming the GoBDK module (cgo)](build.md#consuming-the-gobdk-module-cgo) for the cgo
+environment setup.
+
+### Viewing the documentation
+
+The docs are delivered as HTML. To view them:
+
+```console
 python -m http.server -d /path/to/bdk_install/Documentation/core_doc
 ```
-Then use a web browser to open the address `localhost:8000`
+
+then open `http://localhost:8000` in a browser.
