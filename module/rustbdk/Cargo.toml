@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "bdk-sys",
+    # Stage 4 adds the safe crate: rust-bdk.
+]
+resolver = "3"
