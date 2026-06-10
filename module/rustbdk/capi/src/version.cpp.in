@@ -1,0 +1,53 @@
+#include <bdkffi/version.h>
+
+namespace {
+
+constexpr int kBsvClientVersionMajor = @BSV_CLIENT_VERSION_MAJOR@;
+constexpr int kBsvClientVersionMinor = @BSV_CLIENT_VERSION_MINOR@;
+constexpr int kBsvClientVersionRevision = @BSV_CLIENT_VERSION_REVISION@;
+constexpr const char* kBsvVersionString = "@BSV_VERSION_STRING@";
+
+constexpr const char* kBsvGitCommitTagOrBranch = "@BSV_GIT_COMMIT_TAG_OR_BRANCH@";
+constexpr const char* kBsvGitCommitHash = "@BSV_GIT_COMMIT_HASH@";
+constexpr const char* kBsvGitCommitDatetime = "@BSV_GIT_COMMIT_DATETIME@";
+
+constexpr int kBdkVersionMajor = @BDK_VERSION_MAJOR@;
+constexpr int kBdkVersionMinor = @BDK_VERSION_MINOR@;
+constexpr int kBdkVersionPatch = @BDK_VERSION_PATCH@;
+constexpr const char* kBdkVersionString = "@BDK_VERSION_STRING@";
+
+constexpr const char* kSourceGitCommitTagOrBranch = "@SOURCE_GIT_COMMIT_TAG_OR_BRANCH@";
+constexpr const char* kSourceGitCommitHash = "@SOURCE_GIT_COMMIT_HASH@";
+constexpr const char* kSourceGitCommitDatetime = "@SOURCE_GIT_COMMIT_DATETIME@";
+constexpr const char* kBdkBuildDatetimeUtc = "@BDK_BUILD_DATETIME_UTC@";
+
+constexpr int kBdkRustVersionMajor = @BDK_RUST_VERSION_MAJOR@;
+constexpr int kBdkRustVersionMinor = @BDK_RUST_VERSION_MINOR@;
+constexpr int kBdkRustVersionPatch = @BDK_RUST_VERSION_PATCH@;
+constexpr const char* kBdkRustVersionString = "@BDK_RUST_VERSION_STRING@";
+
+} // namespace
+
+extern "C" int bdkffi_bsv_client_version_major(void) { try { return kBsvClientVersionMajor; } catch (...) { return 0; } }
+extern "C" int bdkffi_bsv_client_version_minor(void) { try { return kBsvClientVersionMinor; } catch (...) { return 0; } }
+extern "C" int bdkffi_bsv_client_version_revision(void) { try { return kBsvClientVersionRevision; } catch (...) { return 0; } }
+extern "C" const char* bdkffi_bsv_version_string(void) { try { return kBsvVersionString; } catch (...) { return ""; } }
+
+extern "C" const char* bdkffi_bsv_git_commit_tag_or_branch(void) { try { return kBsvGitCommitTagOrBranch; } catch (...) { return ""; } }
+extern "C" const char* bdkffi_bsv_git_commit_hash(void) { try { return kBsvGitCommitHash; } catch (...) { return ""; } }
+extern "C" const char* bdkffi_bsv_git_commit_datetime(void) { try { return kBsvGitCommitDatetime; } catch (...) { return ""; } }
+
+extern "C" int bdkffi_bdk_version_major(void) { try { return kBdkVersionMajor; } catch (...) { return 0; } }
+extern "C" int bdkffi_bdk_version_minor(void) { try { return kBdkVersionMinor; } catch (...) { return 0; } }
+extern "C" int bdkffi_bdk_version_patch(void) { try { return kBdkVersionPatch; } catch (...) { return 0; } }
+extern "C" const char* bdkffi_bdk_version_string(void) { try { return kBdkVersionString; } catch (...) { return ""; } }
+
+extern "C" const char* bdkffi_source_git_commit_tag_or_branch(void) { try { return kSourceGitCommitTagOrBranch; } catch (...) { return ""; } }
+extern "C" const char* bdkffi_source_git_commit_hash(void) { try { return kSourceGitCommitHash; } catch (...) { return ""; } }
+extern "C" const char* bdkffi_source_git_commit_datetime(void) { try { return kSourceGitCommitDatetime; } catch (...) { return ""; } }
+extern "C" const char* bdkffi_bdk_build_datetime_utc(void) { try { return kBdkBuildDatetimeUtc; } catch (...) { return ""; } }
+
+extern "C" int bdkffi_bdk_rust_version_major(void) { try { return kBdkRustVersionMajor; } catch (...) { return 0; } }
+extern "C" int bdkffi_bdk_rust_version_minor(void) { try { return kBdkRustVersionMinor; } catch (...) { return 0; } }
+extern "C" int bdkffi_bdk_rust_version_patch(void) { try { return kBdkRustVersionPatch; } catch (...) { return 0; } }
+extern "C" const char* bdkffi_bdk_rust_version_string(void) { try { return kBdkRustVersionString; } catch (...) { return ""; } }
