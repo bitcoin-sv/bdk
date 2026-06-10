@@ -42,6 +42,13 @@ option(BDK_BUILD_CORE_TESTS "Activate the build of core tests" ON)
 # Language binding modules are all built by default. Activate one will deactivate other
 option(BUILD_MODULE_GOLANG "Build and test the Golang module" ON)
 option(BUILD_MODULE_GOLANG_INSTALL_INSOURCE "Install the static stand alone GoBDK in source directory (module/gobdk)" ON)
+option(BUILD_MODULE_RUST "Build and test the Rust module" ON)
+option(BUILD_MODULE_RUST_INSTALL_INSOURCE "Install the merged standalone libbdkffi in source directory (module/rustbdk/bdk-sys/lib)" ON)
+
+find_program(CARGO_EXECUTABLE cargo)
+if(BUILD_MODULE_RUST AND NOT CARGO_EXECUTABLE)
+  message(STATUS "cargo not found: will build libbdkffi but skip cargo test/install-insource")
+endif()
 
 
 if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin")
@@ -100,6 +107,14 @@ else ()
 
   if(BUILD_MODULE_GOLANG_INSTALL_INSOURCE)
     message(WARNING "BUILD_MODULE_GOLANG_INSTALL_INSOURCE was set while using BDK_BUILD_CORE_ONLY. This is conflictual")
+  endif()
+
+  if(BUILD_MODULE_RUST)
+    message(WARNING "BUILD_MODULE_RUST was set while using BDK_BUILD_CORE_ONLY. This is conflictual")
+  endif()
+
+  if(BUILD_MODULE_RUST_INSTALL_INSOURCE)
+    message(WARNING "BUILD_MODULE_RUST_INSTALL_INSOURCE was set while using BDK_BUILD_CORE_ONLY. This is conflictual")
   endif()
 endif()
 
