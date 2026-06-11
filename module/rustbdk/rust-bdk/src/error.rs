@@ -62,6 +62,10 @@ pub enum ScriptError {
 impl ScriptError {
     pub const COUNT: i32 = 47;
 
+    pub fn cpp_error_count() -> i32 {
+        unsafe { bdk_sys::bdkffi_cpp_script_err_error_count() as i32 }
+    }
+
     pub fn from_code(code: i32) -> Self {
         match code {
             0 => Self::Ok,
@@ -340,9 +344,8 @@ mod tests {
     // the shared data-vector harness is introduced.
     #[test]
     fn script_error_enum_count_matches_cpp() {
-        assert_eq!(
-            ScriptError::COUNT as i32,
-            unsafe { bdk_sys::bdkffi_cpp_script_err_error_count() }
-        );
+        // Count-only parity matches the Go guard. It catches added/removed
+        // variants, but not same-count enum reordering.
+        assert_eq!(ScriptError::COUNT, ScriptError::cpp_error_count());
     }
 }

@@ -9,3 +9,26 @@ path = "src/lib.rs"
 
 [dependencies]
 bdk-sys = { path = "../bdk-sys" }
+
+# Tests and examples link the local `libbdkffi` archive. Run `cmake --build`
+# first so `module/rustbdk/bdk-sys/lib/libbdkffi_*.a` exists.
+
+[[test]]
+name = "behavior"
+path = "tests/behavior.rs"
+
+[[example]]
+name = "txvalidator"
+path = "examples/txvalidator.rs"
+
+[[example]]
+name = "create_validate"
+path = "examples/create_validate.rs"
+
+[[example]]
+name = "special_opcode"
+path = "examples/special_opcode.rs"
+
+[[example]]
+name = "num2bin_memory_attack"
+path = "examples/num2bin_memory_attack.rs"
