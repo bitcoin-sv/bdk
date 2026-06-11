@@ -7,45 +7,110 @@ crate `rust-bdk` (imported as `rust_bdk` in Rust code).
 This is not the similarly named Bitcoin Dev Kit project. If this crate is ever
 published outside this repository, it should use a less ambiguous package name.
 
-## Build precondition
+## Quickstart: a Rust app from scratch
 
-`rust-bdk` links a local CMake-built static archive. **A CMake build of
-`BUILD_MODULE_RUST` must run before `cargo build`, `cargo test`, or
-`cargo bench`.** Source-build is the only v1 mode; rustbdk does not commit or
-download prebuilt `libbdkffi` archives yet.
+`rust-bdk` links a local CMake-built static archive. **A prior CMake build of
+`BUILD_MODULE_RUST` is mandatory before any `cargo` command**, including
+`cargo build`, `cargo run`, `cargo test`, and `cargo bench`. Source-build is the
+only v1 mode; rustbdk does not commit or download prebuilt `libbdkffi` archives
+yet.
 
-From the BDK repository root:
+For compiler, Boost, OpenSSL, and other BDK build prerequisites, use the main
+[BDK build documentation](../../documentation/docs/build.md). The steps below
+only cover the rustbdk-specific flow.
+
+1. Clone BDK and build the Rust FFI archive:
 
 ```console
+git clone https://github.com/bitcoin-sv/bdk.git && cd bdk
 cmake -B build -S . -DBUILD_MODULE_RUST=ON -DBUILD_MODULE_RUST_INSTALL_INSOURCE=ON
 cmake --build build --target MergeBDKFFI
-cargo build --manifest-path module/rustbdk/Cargo.toml -p rust-bdk
 ```
 
-## Install
+`-DBUILD_MODULE_RUST_INSTALL_INSOURCE=ON` is required for this copy-paste flow
+because it installs `libbdkffi` into `module/rustbdk/bdk-sys/lib/`, where
+`bdk-sys/build.rs` finds it when an external app links `rust-bdk` by path. If
+you do not install in-source, set `BDK_LIB_DIR` to the directory containing the
+`libbdkffi_<os_arch>.a` archive before running Cargo.
+
+2. Create a new Cargo app outside the BDK repository:
+
+```console
+cd ..
+cargo new my-bdk-app && cd my-bdk-app
+```
+
+3. Add `rust-bdk` as a path dependency in `Cargo.toml`:
+
+```toml
+[dependencies]
+rust-bdk = { path = "/absolute/path/to/bdk/module/rustbdk/rust-bdk" }
+```
+
+Use the absolute path to the BDK checkout you built in step 1. `rust-bdk` uses
+Rust edition 2024, so use a recent Rust toolchain with edition 2024 support.
+
+4. Replace `src/main.rs` with this complete program:
+
+```rust
+use rust_bdk::{
+    TxValidator, bdk_rust_version_string, bsv_version_string, from_asm, to_asm,
+};
+
+fn main() {
+    let network = "main";
+    let validator = TxValidator::new(network).expect("known BDK network");
+
+    let input_asm = "4 5 ADD 9 EQUAL";
+    let script = from_asm(input_asm);
+    let output_asm = to_asm(&script);
+    assert_eq!(from_asm(&output_asm), script);
+
+    println!("rust-bdk version: {}", bdk_rust_version_string());
+    println!("bsv version: {}", bsv_version_string());
+    println!("network: {network}");
+    println!(
+        "genesis activation height: {}",
+        validator.genesis_activation_height()
+    );
+    println!("asm round-trip: {output_asm}");
+}
+```
+
+5. Build and run the app:
+
+```console
+cargo run
+```
+
+Expected output, with version strings shown as illustrative placeholders:
+
+```text
+rust-bdk version: <rust-bdk-generated-version>
+bsv version: <bsv-version>
+network: main
+genesis activation height: 620538
+asm round-trip: 4 5 ADD 9 EQUAL
+```
+
+`rust-bdk`'s version string is generated independently from the linked BSV
+version. The network, Genesis activation height, and asm round-trip lines are
+deterministic for this program.
+
+Even faster, after the archive is built in step 1, run the bundled validator
+example from the BDK checkout:
+
+```console
+cd /absolute/path/to/bdk && cargo run --manifest-path module/rustbdk/Cargo.toml -p rust-bdk --example txvalidator
+```
+
+It prints `validation: ok` when validation succeeds.
 
 For an in-repository consumer, depend on the safe crate by path:
 
 ```toml
 [dependencies]
 rust-bdk = { path = "module/rustbdk/rust-bdk" }
-```
-
-For a consumer in another repository, use a BDK git checkout and point Cargo at
-that checkout:
-
-```console
-git clone https://github.com/bitcoin-sv/bdk.git
-cd bdk
-cmake -B build -S . -DBUILD_MODULE_RUST=ON -DBUILD_MODULE_RUST_INSTALL_INSOURCE=ON
-cmake --build build --target MergeBDKFFI
-```
-
-Then in the consuming crate:
-
-```toml
-[dependencies]
-rust-bdk = { path = "/path/to/bdk/module/rustbdk/rust-bdk" }
 ```
 
 Direct Cargo `git = "..."` consumption is deferred until the repository has a

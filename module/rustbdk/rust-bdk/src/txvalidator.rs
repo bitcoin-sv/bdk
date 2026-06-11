@@ -1,7 +1,7 @@
 use std::os::raw::{c_char, c_int};
 use std::ptr;
 
-use crate::error::{take_owned_c_string, translate, TxError};
+use crate::error::{TxError, take_owned_c_string, translate};
 use crate::validatebatch::ValidateBatch;
 
 /// Protocol era selector for policy getters.
@@ -55,9 +55,7 @@ pub struct TxValidator {
 impl TxValidator {
     pub fn new(net_name: &str) -> Option<Self> {
         let net_len = len_to_c_int(net_name.len()).ok()?;
-        let ptr = unsafe {
-            bdk_sys::bdkffi_txvalidator_create(net_name.as_ptr().cast(), net_len)
-        };
+        let ptr = unsafe { bdk_sys::bdkffi_txvalidator_create(net_name.as_ptr().cast(), net_len) };
 
         if ptr.is_null() {
             None
@@ -151,11 +149,7 @@ impl TxValidator {
 
         let mut result_len: c_int = 0;
         let raw_results = unsafe {
-            bdk_sys::bdkffi_txvalidator_validate_batch(
-                self.ptr,
-                batch.as_raw(),
-                &mut result_len,
-            )
+            bdk_sys::bdkffi_txvalidator_validate_batch(self.ptr, batch.as_raw(), &mut result_len)
         };
 
         copy_batch_results(raw_results, result_len, expected_len)
@@ -478,9 +472,7 @@ impl TxValidator {
     }
 
     pub fn max_consolidation_input_script_size(&self) -> u64 {
-        unsafe {
-            bdk_sys::bdkffi_txvalidator_get_max_consolidation_input_script_size(self.ptr)
-        }
+        unsafe { bdk_sys::bdkffi_txvalidator_get_max_consolidation_input_script_size(self.ptr) }
     }
 
     pub fn min_conf_consolidation_input(&self) -> u64 {
@@ -488,9 +480,7 @@ impl TxValidator {
     }
 
     pub fn accept_non_std_consolidation_input(&self) -> bool {
-        unsafe {
-            bdk_sys::bdkffi_txvalidator_get_accept_non_std_consolidation_input(self.ptr)
-        }
+        unsafe { bdk_sys::bdkffi_txvalidator_get_accept_non_std_consolidation_input(self.ptr) }
     }
 
     pub fn min_mining_tx_fee(&self) -> i64 {

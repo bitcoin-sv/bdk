@@ -46,12 +46,11 @@ fn attack_script_asm(chains: usize) -> String {
         words.push("OP_TOALTSTACK");
     }
     words.push("OP_NUM2BIN");
-    for _ in 0..chains.saturating_sub(1) {
-        words.push("OP_FROMALTSTACK");
-    }
-    for _ in 0..chains.saturating_sub(1) {
-        words.push("OP_DROP");
-    }
+    words.extend(std::iter::repeat_n(
+        "OP_FROMALTSTACK",
+        chains.saturating_sub(1),
+    ));
+    words.extend(std::iter::repeat_n("OP_DROP", chains.saturating_sub(1)));
     words.push("OP_SIZE");
     words.push("OP_NIP");
     words.join(" ")
@@ -64,12 +63,8 @@ fn attack_script_bytes(chains: usize) -> Vec<u8> {
         bytes.push(0x6b);
     }
     bytes.push(0x80);
-    for _ in 0..chains.saturating_sub(1) {
-        bytes.push(0x6c);
-    }
-    for _ in 0..chains.saturating_sub(1) {
-        bytes.push(0x75);
-    }
+    bytes.extend(std::iter::repeat_n(0x6cu8, chains.saturating_sub(1)));
+    bytes.extend(std::iter::repeat_n(0x75u8, chains.saturating_sub(1)));
     bytes.push(0x82);
     bytes.push(0x77);
     bytes

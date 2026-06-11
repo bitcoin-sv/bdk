@@ -120,10 +120,10 @@ fn parse_selection() -> Result<Option<String>, Box<dyn Error>> {
         }
     }
 
-    if let Some(key) = selection.as_deref() {
-        if !CASES.iter().any(|case| case.key == key) {
-            return Err(support::invalid_data(format!("unknown opcode key {key}")));
-        }
+    if let Some(key) = selection.as_deref()
+        && !CASES.iter().any(|case| case.key == key)
+    {
+        return Err(support::invalid_data(format!("unknown opcode key {key}")));
     }
 
     Ok(selection)

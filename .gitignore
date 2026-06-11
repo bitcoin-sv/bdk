@@ -1,2 +1,9 @@
-# Local rustbdk CMake archive output. Archives are generated, not committed.
-/module/rustbdk/bdk-sys/lib/
+# Rust build output / intermediates (not committed)
+/module/rustbdk/target/
+/test/rust/target/
+/test/rust/Cargo.lock
+
+# NOTE: the in-source merged archive (module/rustbdk/bdk-sys/lib/libbdkffi_<os_arch>.a)
+# is intentionally NOT ignored. It is a generated artifact that is not checked in
+# during the experimental stage, but it stays visible in `git status` (untracked)
+# and is expected to be committed in-source later, like module/gobdk's libGoBDK_*.a.

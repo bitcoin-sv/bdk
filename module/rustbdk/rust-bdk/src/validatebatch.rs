@@ -79,8 +79,8 @@ impl ValidateBatch {
         block_height: i32,
         consensus: bool,
     ) {
-        let tx_len =
-            len_to_c_int(extended_tx.len()).expect("extended transaction length exceeds C ABI limit");
+        let tx_len = len_to_c_int(extended_tx.len())
+            .expect("extended transaction length exceeds C ABI limit");
         let utxo_len =
             len_to_c_int(utxo_heights.len()).expect("utxo heights length exceeds C ABI limit");
         if self.txs.len() == c_int::MAX as usize {

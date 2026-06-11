@@ -46,9 +46,9 @@ option(BUILD_MODULE_RUST "Build and test the Rust module" ON)
 option(BUILD_MODULE_RUST_INSTALL_INSOURCE "Install the merged standalone libbdkffi in source directory (module/rustbdk/bdk-sys/lib)" ON)
 
 find_program(CARGO_EXECUTABLE cargo)
-if(BUILD_MODULE_RUST AND NOT CARGO_EXECUTABLE)
-  message(STATUS "cargo not found: will build libbdkffi but skip cargo test/install-insource")
-endif()
+find_program(RUSTC_EXECUTABLE rustc)
+# A missing Rust toolchain is enforced as a hard error at the Rust module entry
+# (module/CMakeLists.txt) when BUILD_MODULE_RUST=ON, rather than silently skipped.
 
 
 if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Darwin")

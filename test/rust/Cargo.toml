@@ -1,0 +1,14 @@
+[package]
+name = "rustbdk-linkage-test"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# Standalone workspace: this consumer is intentionally independent of the
+# module/rustbdk workspace, mirroring how test/golang is a separate Go module
+# that consumes the built gobdk. It depends on the in-repo rust-bdk crate by
+# path, exactly as an external application would.
+[workspace]
+
+[dependencies]
+rust-bdk = { path = "../../module/rustbdk/rust-bdk" }

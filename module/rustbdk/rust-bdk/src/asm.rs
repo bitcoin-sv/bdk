@@ -25,9 +25,8 @@ pub fn from_asm(asm: &str) -> Vec<u8> {
         return Vec::new();
     }
 
-    let script = unsafe {
-        std::slice::from_raw_parts(ptr.cast::<u8>(), script_len as usize).to_vec()
-    };
+    let script =
+        unsafe { std::slice::from_raw_parts(ptr.cast::<u8>(), script_len as usize).to_vec() };
     unsafe { bdk_sys::bdkffi_free(ptr.cast()) };
     script
 }
