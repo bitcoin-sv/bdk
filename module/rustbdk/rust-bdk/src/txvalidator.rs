@@ -2,6 +2,7 @@ use std::os::raw::{c_char, c_int};
 use std::ptr;
 
 use crate::error::{take_owned_c_string, translate, TxError};
+use crate::validatebatch::ValidateBatch;
 
 /// Protocol era selector for policy getters.
 ///
@@ -133,6 +134,31 @@ impl TxValidator {
             )
         };
         translate(raw)
+    }
+
+    /// Validates every entry currently owned by `batch`.
+    ///
+    /// If a previous `ValidateBatch::add` left the shim-side batch shorter than
+    /// the Rust-owned batch, this returns `Exception` for every Rust-owned
+    /// entry. If the shim returns a result length different from the Rust-owned
+    /// length, including the documented single `{EXCEPTION, 0}` fallback, this
+    /// also treats every entry as `Exception`.
+    pub fn validate_batch(&self, batch: &ValidateBatch) -> Vec<Result<(), TxError>> {
+        let expected_len = batch.len();
+        if batch.has_shim_mismatch() {
+            return exception_results(expected_len);
+        }
+
+        let mut result_len: c_int = 0;
+        let raw_results = unsafe {
+            bdk_sys::bdkffi_txvalidator_validate_batch(
+                self.ptr,
+                batch.as_raw(),
+                &mut result_len,
+            )
+        };
+
+        copy_batch_results(raw_results, result_len, expected_len)
     }
 
     pub fn get_sig_op_count(
@@ -527,4 +553,38 @@ fn len_to_c_int(len: usize) -> Result<c_int, ()> {
     } else {
         Ok(len as c_int)
     }
+}
+
+fn copy_batch_results(
+    raw_results: *mut bdk_sys::TxError,
+    result_len: c_int,
+    expected_len: usize,
+) -> Vec<Result<(), TxError>> {
+    if result_len < 0 || result_len as usize != expected_len {
+        if !raw_results.is_null() {
+            unsafe { bdk_sys::bdkffi_free(raw_results.cast()) };
+        }
+        return exception_results(expected_len);
+    }
+
+    if expected_len == 0 {
+        if !raw_results.is_null() {
+            unsafe { bdk_sys::bdkffi_free(raw_results.cast()) };
+        }
+        return Vec::new();
+    }
+
+    if raw_results.is_null() {
+        return exception_results(expected_len);
+    }
+
+    let raw = unsafe { std::slice::from_raw_parts(raw_results, expected_len) }.to_vec();
+    unsafe { bdk_sys::bdkffi_free(raw_results.cast()) };
+    raw.into_iter().map(translate).collect()
+}
+
+fn exception_results(len: usize) -> Vec<Result<(), TxError>> {
+    std::iter::repeat_with(|| Err(TxError::Exception))
+        .take(len)
+        .collect()
 }

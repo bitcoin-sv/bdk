@@ -16,7 +16,8 @@ void bdkffi_validatebatch_destroy(bdkffi_validatebatch_t batch);
 /*
  * Adds a validation argument using non-owning spans over caller-provided memory.
  * The caller must keep extended_tx and utxo_heights alive until the batch is
- * cleared, destroyed, or consumed by bdkffi_txvalidator_validate_batch.
+ * cleared or destroyed. bdkffi_txvalidator_validate_batch borrows the batch
+ * and does not clear it, so the batch may be reused.
  */
 void bdkffi_validatebatch_add(
     bdkffi_validatebatch_t batch,
