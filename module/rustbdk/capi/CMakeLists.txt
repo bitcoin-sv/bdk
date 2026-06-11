@@ -69,6 +69,22 @@ if(NOT DEFINED BUILD_TESTING OR BUILD_TESTING)
     target_include_directories(bdkffi_smoke PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
     set_target_properties(bdkffi_smoke PROPERTIES FOLDER "module/rustbdk/test" DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})
     add_test(NAME bdkffi_smoke COMMAND bdkffi_smoke)
+
+    if(CARGO_EXECUTABLE)
+        # Precondition: a prior cmake --build of BUILD_MODULE_RUST must produce libbdkffi, otherwise build.rs link discovery fails; README coverage is Stage 8.
+        add_test(
+            NAME rustbdk_cargo_test
+            COMMAND "${CARGO_EXECUTABLE}" test --manifest-path module/rustbdk/Cargo.toml
+            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
+        set_tests_properties(rustbdk_cargo_test PROPERTIES
+            ENVIRONMENT "CMAKE_BINARY_DIR=${CMAKE_BINARY_DIR};BDK_BUILD_DIR=${CMAKE_BINARY_DIR}")
+    else()
+        add_test(
+            NAME rustbdk_cargo_test
+            COMMAND ${CMAKE_COMMAND} -E echo "cargo not found: skipping rustbdk cargo tests")
+        set_tests_properties(rustbdk_cargo_test PROPERTIES
+            SKIP_REGULAR_EXPRESSION "cargo not found")
+    endif()
 endif()
 
 install(TARGETS static-bdkffi DESTINATION "lib" COMPONENT RustModules)
