@@ -172,10 +172,7 @@ unsafe extern "C" {
         value: i64,
     ) -> *mut c_char;
 
-    pub fn bdkffi_txvalidator_set_max_sig_ops_policy(
-        validator: TxValidatorHandle,
-        value: u64,
-    );
+    pub fn bdkffi_txvalidator_set_max_sig_ops_policy(validator: TxValidatorHandle, value: u64);
 
     pub fn bdkffi_txvalidator_set_min_consolidation_factor(
         validator: TxValidatorHandle,
@@ -261,21 +258,16 @@ unsafe extern "C" {
 
     pub fn bdkffi_txvalidator_get_require_standard(validator: TxValidatorHandle) -> bool;
     pub fn bdkffi_txvalidator_get_permit_bare_multisig(validator: TxValidatorHandle) -> bool;
-    pub fn bdkffi_txvalidator_get_genesis_activation_height(
-        validator: TxValidatorHandle,
-    ) -> i32;
-    pub fn bdkffi_txvalidator_get_chronicle_activation_height(
-        validator: TxValidatorHandle,
-    ) -> i32;
+    pub fn bdkffi_txvalidator_get_genesis_activation_height(validator: TxValidatorHandle) -> i32;
+    pub fn bdkffi_txvalidator_get_chronicle_activation_height(validator: TxValidatorHandle) -> i32;
     pub fn bdkffi_txvalidator_get_genesis_graceful_period(validator: TxValidatorHandle) -> u64;
     pub fn bdkffi_txvalidator_get_chronicle_graceful_period(validator: TxValidatorHandle) -> u64;
     pub fn bdkffi_txvalidator_get_min_consolidation_factor(validator: TxValidatorHandle) -> u64;
     pub fn bdkffi_txvalidator_get_max_consolidation_input_script_size(
         validator: TxValidatorHandle,
     ) -> u64;
-    pub fn bdkffi_txvalidator_get_min_conf_consolidation_input(
-        validator: TxValidatorHandle,
-    ) -> u64;
+    pub fn bdkffi_txvalidator_get_min_conf_consolidation_input(validator: TxValidatorHandle)
+    -> u64;
     pub fn bdkffi_txvalidator_get_accept_non_std_consolidation_input(
         validator: TxValidatorHandle,
     ) -> bool;

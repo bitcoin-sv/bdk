@@ -19,7 +19,7 @@ pub const BENCH_UTXO_HEIGHTS: &[i32] = &[574_441];
 
 pub fn decode_hex(hex: &str) -> Result<Vec<u8>, Box<dyn Error>> {
     let trimmed = hex.trim();
-    if trimmed.len() % 2 != 0 {
+    if !trimmed.len().is_multiple_of(2) {
         return Err(invalid_data(format!(
             "hex string has odd length: {}",
             trimmed.len()

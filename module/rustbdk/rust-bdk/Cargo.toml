@@ -17,12 +17,10 @@ bdk-sys = { path = "../bdk-sys" }
 [dev-dependencies]
 criterion = "0.5"
 
-# Tests and examples link the local `libbdkffi` archive. Run `cmake --build`
+# Examples and benches link the local `libbdkffi` archive. Run `cmake --build`
 # first so `module/rustbdk/bdk-sys/lib/libbdkffi_*.a` exists.
-
-[[test]]
-name = "behavior"
-path = "tests/behavior.rs"
+# The integration test suite lives in test/rust (an independent external
+# consumer, mirroring test/golang), not in this crate.
 
 [[example]]
 name = "txvalidator"

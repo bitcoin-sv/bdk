@@ -334,18 +334,3 @@ fn message_from_ffi(ffi: unsafe extern "C" fn(c_int) -> *mut c_char, code: i32) 
     let ptr = unsafe { ffi(code as c_int) };
     take_owned_c_string(ptr)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::ScriptError;
-
-    // Stage 4 authors the enum drift guard only. Full validate/verify
-    // happy/failing data-vector behaviour tests are deferred to Stage 7, where
-    // the shared data-vector harness is introduced.
-    #[test]
-    fn script_error_enum_count_matches_cpp() {
-        // Count-only parity matches the Go guard. It catches added/removed
-        // variants, but not same-count enum reordering.
-        assert_eq!(ScriptError::COUNT, ScriptError::cpp_error_count());
-    }
-}

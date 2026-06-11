@@ -38,9 +38,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 impl Args {
     fn parse() -> Result<Self, Box<dyn Error>> {
         let mut consensus = true;
-        let mut args = env::args().skip(1);
+        let args = env::args().skip(1);
 
-        while let Some(arg) = args.next() {
+        for arg in args {
             match arg.as_str() {
                 "-c" | "--disable-consensus" => consensus = false,
                 "-h" | "--help" => {

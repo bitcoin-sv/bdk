@@ -47,7 +47,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         input.block_height,
         input.consensus,
     );
-    assert!(validator.validate_batch(&batch).into_iter().all(|r| r.is_ok()));
+    assert!(
+        validator
+            .validate_batch(&batch)
+            .into_iter()
+            .all(|r| r.is_ok())
+    );
 
     println!("created validation input for {}", input.txid);
     println!("network: {}", input.network);

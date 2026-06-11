@@ -24,6 +24,13 @@ fn main() {
 
     println!("cargo:rustc-link-search=native={}", lib_dir.display());
     println!("cargo:rustc-link-lib=static={lib_name}");
+    // Relink when the resolved archive itself changes (e.g. a fresh cmake --build /
+    // MergeBDKFFI re-merge or a refreshed CI-published archive); without this cargo
+    // reuses a stale link of a previously-built archive.
+    println!(
+        "cargo:rerun-if-changed={}",
+        lib_dir.join(&archive_name).display()
+    );
 
     let cxx_runtime = env::var("BDK_CXX_RUNTIME").unwrap_or_else(|_| match os.as_str() {
         "macos" => "c++".to_owned(),

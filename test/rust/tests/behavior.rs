@@ -3,11 +3,10 @@ mod common;
 use std::sync::{Mutex, MutexGuard};
 
 use rust_bdk::{
-    bdk_rust_version_major, bdk_rust_version_minor, bdk_rust_version_patch,
-    bdk_rust_version_string, bdk_version_major, bdk_version_minor, bdk_version_patch,
-    bdk_version_string, bsv_client_version_major, bsv_client_version_minor,
-    bsv_client_version_revision, bsv_version_string, ProtocolEra, ScriptError, TxError, TxValidator,
-    ValidateBatch,
+    ProtocolEra, ScriptError, TxError, TxValidator, ValidateBatch, bdk_rust_version_major,
+    bdk_rust_version_minor, bdk_rust_version_patch, bdk_rust_version_string, bdk_version_major,
+    bdk_version_minor, bdk_version_patch, bdk_version_string, bsv_client_version_major,
+    bsv_client_version_minor, bsv_client_version_revision, bsv_version_string,
 };
 
 // These integration tests link the local `libbdkffi` archive. Run
@@ -41,7 +40,11 @@ fn txvalidator_networks_match_go_activation_heights() {
     for (network, genesis, chronicle) in cases {
         let validator = validator(network);
         assert_eq!(validator.genesis_activation_height(), genesis, "{network}");
-        assert_eq!(validator.chronicle_activation_height(), chronicle, "{network}");
+        assert_eq!(
+            validator.chronicle_activation_height(),
+            chronicle,
+            "{network}"
+        );
     }
 
     assert!(TxValidator::new("foo").is_none());
@@ -70,7 +73,9 @@ fn txvalidator_policy_settings_match_go_wrappers() {
         1_000
     );
 
-    validator.set_max_pub_keys_per_multisig_policy(1_000).unwrap();
+    validator
+        .set_max_pub_keys_per_multisig_policy(1_000)
+        .unwrap();
     assert_eq!(
         validator.max_pub_keys_per_multisig(ProtocolEra::PostGenesis, false),
         1_000
@@ -169,10 +174,20 @@ fn txvalidator_validates_tracked_vectors() {
     let validator = validator("main");
 
     validator
-        .validate_transaction(&tx, common::MAINNET_UTXO_HEIGHTS, common::MAINNET_BLOCK_HEIGHT, true)
+        .validate_transaction(
+            &tx,
+            common::MAINNET_UTXO_HEIGHTS,
+            common::MAINNET_BLOCK_HEIGHT,
+            true,
+        )
         .unwrap();
     validator
-        .verify_script(&tx, common::MAINNET_UTXO_HEIGHTS, common::MAINNET_BLOCK_HEIGHT, true)
+        .verify_script(
+            &tx,
+            common::MAINNET_UTXO_HEIGHTS,
+            common::MAINNET_BLOCK_HEIGHT,
+            true,
+        )
         .unwrap();
     validator
         .verify_script_with_custom_flags(
@@ -223,14 +238,34 @@ fn validate_batch_matches_individual_validation() {
     let validator = validator("main");
     let mut batch = ValidateBatch::with_capacity(2);
 
-    batch.add(&tx, common::MAINNET_UTXO_HEIGHTS, common::MAINNET_BLOCK_HEIGHT, true);
-    batch.add(&tx, common::MAINNET_UTXO_HEIGHTS, common::MAINNET_BLOCK_HEIGHT, true);
+    batch.add(
+        &tx,
+        common::MAINNET_UTXO_HEIGHTS,
+        common::MAINNET_BLOCK_HEIGHT,
+        true,
+    );
+    batch.add(
+        &tx,
+        common::MAINNET_UTXO_HEIGHTS,
+        common::MAINNET_BLOCK_HEIGHT,
+        true,
+    );
 
     assert_eq!(batch.len(), 2);
     validator
-        .validate_transaction(&tx, common::MAINNET_UTXO_HEIGHTS, common::MAINNET_BLOCK_HEIGHT, true)
+        .validate_transaction(
+            &tx,
+            common::MAINNET_UTXO_HEIGHTS,
+            common::MAINNET_BLOCK_HEIGHT,
+            true,
+        )
         .unwrap();
-    assert!(validator.validate_batch(&batch).into_iter().all(|r| r.is_ok()));
+    assert!(
+        validator
+            .validate_batch(&batch)
+            .into_iter()
+            .all(|r| r.is_ok())
+    );
 
     batch.clear();
     assert!(batch.is_empty());
@@ -325,7 +360,5 @@ fn policy_guard() -> MutexGuard<'static, ()> {
 
 fn restore_mainnet_activation_heights(validator: &TxValidator) {
     validator.set_genesis_activation_height(620_538).unwrap();
-    validator
-        .set_chronicle_activation_height(943_816)
-        .unwrap();
+    validator.set_chronicle_activation_height(943_816).unwrap();
 }

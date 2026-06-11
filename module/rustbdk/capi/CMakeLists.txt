@@ -76,29 +76,11 @@ endif()
 set_target_properties(static-bdkffi PROPERTIES FOLDER "module/rustbdk" DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})
 source_group("_generated" FILES "${BDK_VERSION_RUST_CPP}")
 
-if(NOT DEFINED BUILD_TESTING OR BUILD_TESTING)
-    add_executable(bdkffi_smoke ${CMAKE_CURRENT_SOURCE_DIR}/test/smoke.cpp)
-    target_link_libraries(bdkffi_smoke PRIVATE static-bdkffi)
-    target_include_directories(bdkffi_smoke PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
-    set_target_properties(bdkffi_smoke PROPERTIES FOLDER "module/rustbdk/test" DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})
-    add_test(NAME bdkffi_smoke COMMAND bdkffi_smoke)
-
-    if(CARGO_EXECUTABLE)
-        # Precondition: a prior cmake --build of BUILD_MODULE_RUST must produce libbdkffi, otherwise build.rs link discovery fails; README coverage is Stage 8.
-        add_test(
-            NAME rustbdk_cargo_test
-            COMMAND "${CARGO_EXECUTABLE}" test --manifest-path module/rustbdk/Cargo.toml
-            WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}")
-        set_tests_properties(rustbdk_cargo_test PROPERTIES
-            ENVIRONMENT "CMAKE_BINARY_DIR=${CMAKE_BINARY_DIR};BDK_BUILD_DIR=${CMAKE_BINARY_DIR}")
-    else()
-        add_test(
-            NAME rustbdk_cargo_test
-            COMMAND ${CMAKE_COMMAND} -E echo "cargo not found: skipping rustbdk cargo tests")
-        set_tests_properties(rustbdk_cargo_test PROPERTIES
-            SKIP_REGULAR_EXPRESSION "cargo not found")
-    endif()
-endif()
+# This module builds the core Rust artifact (the merged libbdkffi archive) only;
+# it ships no application-level executables or tests. All consumers — the C++
+# smoke and the Rust suite — live in test/rust and link only the merged archive.
+# The merged archive path is exported below as the BDKFFI_MERGED_ARCHIVE cache
+# variable for those consumers.
 
 install(TARGETS static-bdkffi DESTINATION "lib" COMPONENT RustModules)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/bdkffi DESTINATION "include" COMPONENT RustModules FILES_MATCHING PATTERN "*.h")
@@ -154,8 +136,19 @@ if(UNIX)
     string(TOLOWER ${OsArch} os_arch)
     set(mergedArchive "libbdkffi_${os_arch}.a")
 
+    # Export the merged archive path so application-level consumers (test/rust)
+    # can link it directly. Linking this single self-contained archive resolves
+    # the bdk_core <-> BSV-application references within one archive, so no
+    # link-group / per-linker special-casing is needed on any platform.
+    set(BDKFFI_MERGED_ARCHIVE "${buildDir}/${mergedArchive}" CACHE INTERNAL "Path to the merged libbdkffi archive")
+
+    # Plain 'ar rcs' (create + symbol index), matching module/gobdk's MergeGoBDK.
+    # This previously used the GNU-only 'D' (deterministic) modifier, which Apple's
+    # cctools ar rejects ("illegal option -- D"). Archive byte-reproducibility is
+    # not relied on anywhere (the refresh bot gates on a source hash and the archive
+    # is never committed), so plain 'rcs' is both portable and sufficient.
     add_custom_target(MergeBDKFFI ALL
-        COMMAND ${CMAKE_AR} rcsD "${mergedArchive}" "${buildDir}/merge_bdkffi/*/*.o"
+        COMMAND ${CMAKE_AR} rcs "${mergedArchive}" "${buildDir}/merge_bdkffi/*/*.o"
         DEPENDS static-bdkffi
         WORKING_DIRECTORY ${buildDir}
         COMMENT "Merge all in one ${mergedArchive}")

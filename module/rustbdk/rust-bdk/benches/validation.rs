@@ -1,4 +1,4 @@
-use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion, Throughput};
+use criterion::{BatchSize, Criterion, Throughput, black_box, criterion_group, criterion_main};
 use rust_bdk::ValidateBatch;
 
 mod support;
@@ -15,14 +15,12 @@ pub fn bench_validate_transaction_single(c: &mut Criterion) {
     // this and should fail fast rather than record panic-tainted timings.
     c.bench_function("bench_validate_transaction_single", |b| {
         b.iter(|| {
-            black_box(
-                validator.validate_transaction(
-                    black_box(&tx),
-                    black_box(support::UTXO_HEIGHTS),
-                    black_box(support::BLOCK_HEIGHT),
-                    black_box(true),
-                ),
-            )
+            black_box(validator.validate_transaction(
+                black_box(&tx),
+                black_box(support::UTXO_HEIGHTS),
+                black_box(support::BLOCK_HEIGHT),
+                black_box(true),
+            ))
             .unwrap();
         });
     });
