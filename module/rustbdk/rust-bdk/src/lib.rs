@@ -1,6 +1,9 @@
 //! Safe Rust wrappers over the `bdkffi_` C ABI.
 
 pub mod asm;
+#[cfg(feature = "bench")]
+#[doc(hidden)]
+pub mod bench_support;
 pub mod error;
 pub mod txvalidator;
 pub mod validatebatch;

@@ -11,6 +11,7 @@ building the whole node.
 graph TD
     BSV[bitcoin-sv source<br/>pinned commit] -->|curated subset| CORE
     CORE[core / bdk_core<br/>C++ library] --> GO[module/gobdk<br/>Go cgo binding]
+    CORE --> RUST[module/rustbdk<br/>experimental Rust binding]
     CORE --> EX[module/example<br/>C++ examples & benchmarks]
     CORE --> TESTS[test/core<br/>C++ ctest]
     GO --> GOTESTS[test/golang<br/>Go tests]
@@ -20,10 +21,11 @@ graph TD
 - **`core/`** builds `bdk_core`, the C++ library. It is assembled from BDK's own sources
   (`core/*.cpp`) plus a **curated subset of the bitcoin-sv sources** (see below).
 - **`module/`** holds extension applications and language bindings that build on top of core and
-  are independent of each other: the Go (cgo) binding, the C++ examples/benchmarks, and the
-  experimental WASM/TypeScript binding. They link `bdk_core`; note that the C++ examples and the
-  GoBDK cgo library additionally **compile in** the 15 "application" BSV sources directly (see the
-  source-subset table below), so they are not purely linking core.
+  are independent of each other: the Go (cgo) binding, the experimental Rust binding, the C++
+  examples/benchmarks, and the experimental WASM/TypeScript binding. They link `bdk_core`; note
+  that the C++ examples, the GoBDK cgo library, and the Rust `bdkffi` library additionally
+  **compile in** the 15 "application" BSV sources directly (see the source-subset table below), so
+  they are not purely linking core.
 - **`test/`** holds the C++ (`test/core`, via `ctest`) and Go (`test/golang`) test suites.
 
 The CMake build (root `CMakeLists.txt`, minimum version 3.16) assembles `bdk_core`, builds the
@@ -39,7 +41,7 @@ compilation targets differ:
 | Set | Function | `.cpp` files | Compiles into |
 |-----|----------|-------------:|---------------|
 | **Minimal** | `bdkSetMinimumListBSVSource` (`FindBSVSourceHelper.cmake:85-201`) | **36** | the `bdk_core` library |
-| **Application** | `bdkSetApplicationListBSVSource` (`FindBSVSourceHelper.cmake:204-296`) | **15** | examples, the GoBDK cgo lib, and the core tests — **not** `bdk_core` |
+| **Application** | `bdkSetApplicationListBSVSource` (`FindBSVSourceHelper.cmake:204-296`) | **15** | examples, the GoBDK cgo lib, the Rust `bdkffi` lib, and the core tests — **not** `bdk_core` |
 
 That is **36 + 15 = 51** BSV `.cpp` files in total (plus their headers).
 
@@ -51,7 +53,8 @@ That is **36 + 15 = 51** BSV `.cpp` files in total (plus their headers).
 - The **application** set (`BSV_APPLICATION_SRC_FILES`) is **not** linked into `bdk_core`. It is
   compiled directly into the consumer targets instead: the C++ examples
   (`module/example/CMakeLists.txt`), the **GoBDK** cgo static library
-  (`module/gobdk/bdkcgo/CMakeLists.txt`), and the `test/core` executables
+  (`module/gobdk/bdkcgo/CMakeLists.txt`), the Rust `bdkffi` static library
+  (`module/rustbdk/capi/CMakeLists.txt`), and the `test/core` executables
   (`test/core/CMakeLists.txt`).
 
 ## The validation engine: a single `ValidateTransaction` entry point

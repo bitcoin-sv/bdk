@@ -3,6 +3,7 @@
 
 #include <bdkffi/alloc.h>
 #include <bdkffi/asm.h>
+#include <bdkffi/bench.h>
 #include <bdkffi/error_strings.h>
 #include <bdkffi/txerror.h>
 #include <bdkffi/txvalidator.h>

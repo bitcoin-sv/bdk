@@ -9,6 +9,7 @@ their own modules.
 - [Directory Structure](directories.md)
 - [Development build](build.md)
 - [Architecture overview](architecture.md)
+- [Rust Binding](rust_binding.md)
 - [VerifyScript](verify_script.md)
 - [Versioning](versioning.md)
 - [Object Model](ObjectModel.md)

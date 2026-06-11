@@ -7,8 +7,15 @@ publish = false
 [lib]
 path = "src/lib.rs"
 
+[features]
+default = []
+bench = ["bdk-sys/bench"]
+
 [dependencies]
 bdk-sys = { path = "../bdk-sys" }
+
+[dev-dependencies]
+criterion = "0.5"
 
 # Tests and examples link the local `libbdkffi` archive. Run `cmake --build`
 # first so `module/rustbdk/bdk-sys/lib/libbdkffi_*.a` exists.
@@ -32,3 +39,15 @@ path = "examples/special_opcode.rs"
 [[example]]
 name = "num2bin_memory_attack"
 path = "examples/num2bin_memory_attack.rs"
+
+[[bench]]
+name = "ffi"
+path = "benches/ffi.rs"
+harness = false
+required-features = ["bench"]
+
+[[bench]]
+name = "validation"
+path = "benches/validation.rs"
+harness = false
+required-features = ["bench"]
