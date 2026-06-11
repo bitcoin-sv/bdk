@@ -155,7 +155,7 @@ if(UNIX)
     set(mergedArchive "libbdkffi_${os_arch}.a")
 
     add_custom_target(MergeBDKFFI ALL
-        COMMAND ${CMAKE_AR} rcs "${mergedArchive}" "${buildDir}/merge_bdkffi/*/*.o"
+        COMMAND ${CMAKE_AR} rcsD "${mergedArchive}" "${buildDir}/merge_bdkffi/*/*.o"
         DEPENDS static-bdkffi
         WORKING_DIRECTORY ${buildDir}
         COMMENT "Merge all in one ${mergedArchive}")

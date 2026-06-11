@@ -1,0 +1,260 @@
+name: Rust BDK Archive Refresh
+
+on:
+  workflow_dispatch:
+    inputs:
+      bitcoin-sv-commit:
+        description: 'Custom bitcoin-sv commit to be used to build bdk'
+        required: false
+        default: 879fc8b42168dd0e608dafd51b39c6dabad37d4d
+      publish-built-archives:
+        description: 'Enable/Disable github workflow to publish the archives built by the workflow'
+        required: true
+        default: 'true'
+        type: boolean
+  schedule:
+    - cron: '17 2 * * 1'
+
+permissions:
+  contents: write
+
+env:
+  DEFAULT_BITCOIN_SV_COMMIT: 879fc8b42168dd0e608dafd51b39c6dabad37d4d
+  RUSTBDK_RELEASE_TAG: rustbdk-prebuilt
+
+jobs:
+  detect-rustbdk-archive-inputs:
+    runs-on: ubuntu-latest
+    outputs:
+      bitcoin-sv-commit: ${{ steps.define-bitcoin-sv-commit.outputs.bsvcommit }}
+      changed: ${{ steps.compare.outputs.changed }}
+      source-hash: ${{ steps.hash.outputs.source_hash }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+          fetch-depth: 0
+
+      - name: Define dependant bitcoin-sv commit
+        id: define-bitcoin-sv-commit
+        shell: bash
+        run: |
+          # Use dispatch input if present, otherwise default from env
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            bsvcommit="${{ github.event.inputs.bitcoin-sv-commit }}"
+          else
+            bsvcommit="${{ env.DEFAULT_BITCOIN_SV_COMMIT }}"
+          fi
+          echo "Build using bsvcommit=$bsvcommit ..."
+          echo "bsvcommit=$bsvcommit" >> "$GITHUB_OUTPUT"
+
+      - name: Compute rustbdk archive input hash
+        id: hash
+        shell: bash
+        run: |
+          {
+            echo "bitcoin-sv-commit=${{ steps.define-bitcoin-sv-commit.outputs.bsvcommit }}"
+            git ls-files \
+              CMakeLists.txt \
+              cmake \
+              core \
+              module/CMakeLists.txt \
+              module/rustbdk/capi |
+              sort |
+              while IFS= read -r file; do
+                sha256sum "$file"
+              done
+          } > rustbdk-archive-inputs.manifest
+          source_hash="$(sha256sum rustbdk-archive-inputs.manifest | awk '{print $1}')"
+          echo "source_hash=$source_hash" >> "$GITHUB_OUTPUT"
+          cat rustbdk-archive-inputs.manifest
+          echo "source_hash=$source_hash"
+
+      - name: Compare with published release hash
+        id: compare
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          mkdir -p /tmp/rustbdk-release
+          previous_hash=""
+          assets_complete=false
+          if gh release view "${{ env.RUSTBDK_RELEASE_TAG }}" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release download "${{ env.RUSTBDK_RELEASE_TAG }}" \
+              --repo "${{ github.repository }}" \
+              --pattern rustbdk-source.sha256 \
+              --dir /tmp/rustbdk-release || true
+            if [ -f /tmp/rustbdk-release/rustbdk-source.sha256 ]; then
+              previous_hash="$(awk '{print $1}' /tmp/rustbdk-release/rustbdk-source.sha256)"
+            fi
+            published_assets="$(gh release view "${{ env.RUSTBDK_RELEASE_TAG }}" \
+              --repo "${{ github.repository }}" \
+              --json assets \
+              --jq '.assets[].name')"
+            assets_complete=true
+            for expected in \
+              libbdkffi_linux_x86_64.a \
+              libbdkffi_linux_aarch64.a \
+              libbdkffi_darwin_arm64.a \
+              rustbdk-archives.sha256 \
+              rustbdk-source-manifest.txt \
+              rustbdk-source.sha256; do
+              if ! printf '%s\n' "$published_assets" | grep -qx "$expected"; then
+                assets_complete=false
+              fi
+            done
+          fi
+
+          if [ "${{ steps.hash.outputs.source_hash }}" = "$previous_hash" ] && [ "$assets_complete" = true ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "rustbdk archive inputs unchanged; skipping publish."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "rustbdk archive inputs changed or no published hash exists."
+          fi
+
+  build-rustbdk-archives:
+    needs: detect-rustbdk-archive-inputs
+    if: ${{ needs.detect-rustbdk-archive-inputs.outputs.changed == 'true' }}
+    strategy:
+      # Matches build_bdk.yaml: linux_x86_64, linux_aarch64, darwin_arm64.
+      # darwin_x86_64 is buildable by build.rs, but is intentionally not in CI
+      # because the existing GoBDK matrix does not cover it.
+      matrix:
+        include:
+          - os: ubuntu-22.04-arm
+          - os: ubuntu-22.04
+          - os: macos-15
+      fail-fast: false
+    runs-on: ${{ matrix.os }}
+
+    env:
+      BDK_LIB_DIR: ${{ github.workspace }}/module/rustbdk/bdk-sys/lib
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+          fetch-depth: 0
+
+      - name: Set up Python 3
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Set up Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Define dependant bitcoin-sv commit
+        id: define-bitcoin-sv-commit
+        shell: bash
+        run: |
+          bsvcommit="${{ needs.detect-rustbdk-archive-inputs.outputs.bitcoin-sv-commit }}"
+          echo "Build using bsvcommit=$bsvcommit ..."
+          echo "bsvcommit=$bsvcommit" >> "$GITHUB_OUTPUT"
+
+      - name: Check out bitcoin-sv
+        shell: bash
+        run: |
+          echo "Checking out bitcoin-sv at commit ${{ steps.define-bitcoin-sv-commit.outputs.bsvcommit }} ..."
+          git clone https://github.com/bitcoin-sv/bitcoin-sv.git bitcoin-sv
+          cd bitcoin-sv && git checkout ${{ steps.define-bitcoin-sv-commit.outputs.bsvcommit }} && git log -3 && pwd && cd ..
+          echo "Successfully checked out bitcoin-sv commit ${{ steps.define-bitcoin-sv-commit.outputs.bsvcommit }} to bitcoin-sv"
+
+      - name: Prepare Environment and Dependencies Unix
+        if: runner.os != 'Windows'
+        run: |
+          echo "BSV_ROOT=${{ github.workspace }}/bitcoin-sv" >> $GITHUB_ENV
+          echo "OS_ARCH=$(uname -s | tr 'A-Z' 'a-z')_$(uname -m)" >> $GITHUB_ENV
+          if [[ "${{ matrix.os }}" == "ubuntu-22.04" ]]; then
+            sudo apt-get update
+            sudo apt-get install -y build-essential g++ wget
+            wget https://github.com/bitcoin-sv/bdk/releases/download/depcy/dependancies_linux_x86_64.tar.gz
+            tar -xzf dependancies_linux_x86_64.tar.gz
+            echo "DEPENDENCIES_DIR=${{ github.workspace }}/dependancies_linux_x86_64" >> $GITHUB_ENV
+            echo "BOOST_ROOT=${{ github.workspace }}/dependancies_linux_x86_64/boost_1.85.0" >> $GITHUB_ENV
+            echo "OPENSSL_ROOT_DIR=${{ github.workspace }}/dependancies_linux_x86_64/openssl_3.4.0" >> $GITHUB_ENV
+          fi
+          if [[ "${{ matrix.os }}" == "ubuntu-22.04-arm" ]]; then
+            sudo apt-get update
+            sudo apt-get install -y build-essential g++ wget
+            wget https://github.com/bitcoin-sv/bdk/releases/download/depcy/dependancies_linux_aarch64.tar.gz
+            tar -xzf dependancies_linux_aarch64.tar.gz
+            echo "DEPENDENCIES_DIR=${{ github.workspace }}/dependancies_linux_aarch64" >> $GITHUB_ENV
+            echo "BOOST_ROOT=${{ github.workspace }}/dependancies_linux_aarch64/boost_1.85.0" >> $GITHUB_ENV
+            echo "OPENSSL_ROOT_DIR=${{ github.workspace }}/dependancies_linux_aarch64/openssl_3.4.0" >> $GITHUB_ENV
+          fi
+          if [[ "${{ matrix.os }}" == "macos-15" ]]; then
+            wget https://github.com/bitcoin-sv/bdk/releases/download/depcy/dependancies_darwin_arm64.tar.gz
+            tar -xzf dependancies_darwin_arm64.tar.gz
+            echo "DEPENDENCIES_DIR=${{ github.workspace }}/dependancies_darwin_arm64" >> $GITHUB_ENV
+            echo "BOOST_ROOT=${{ github.workspace }}/dependancies_darwin_arm64/boost_1.85.0" >> $GITHUB_ENV
+            echo "OPENSSL_ROOT_DIR=${{ github.workspace }}/dependancies_darwin_arm64/openssl_3.4.0" >> $GITHUB_ENV
+          fi
+
+      - name: Check rustbdk independence
+        run: python3 scripts/check_rustbdk_independence.py
+
+      - name: Build libbdkffi Unix
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p "build"
+          rm -fR ./build/* && rm -fR ./module/rustbdk/bdk-sys/lib/*
+
+          cmake -B build -S "." -DBUILD_MODULE_GOLANG=OFF -DBUILD_MODULE_RUST=ON -DBUILD_MODULE_RUST_INSTALL_INSOURCE=ON
+          cmake --build build --parallel 4 --target MergeBDKFFI
+          ls -l "$BDK_LIB_DIR"
+          test -f "$BDK_LIB_DIR/libbdkffi_${OS_ARCH}.a"
+
+      - name: Upload rustbdk static library artifact
+        if: runner.os != 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: libbdkffi_${{ env.OS_ARCH }}.a
+          path: ./module/rustbdk/bdk-sys/lib/libbdkffi_${{ env.OS_ARCH }}.a
+          retention-days: 1
+          overwrite: true
+
+  publish-rustbdk-archives:
+    runs-on: ubuntu-latest
+    needs:
+      - detect-rustbdk-archive-inputs
+      - build-rustbdk-archives
+    if: ${{ success() && needs.detect-rustbdk-archive-inputs.outputs.changed == 'true' && (github.event_name != 'workflow_dispatch' || github.event.inputs.publish-built-archives == 'true') }}
+    steps:
+      - name: Download all rustbdk static library artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: ./tmp_artifact
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p ./release_assets
+          find ./tmp_artifact -type f -name 'libbdkffi_*_*.a' -exec mv {} ./release_assets/ \;
+          printf '%s  rustbdk-archive-inputs\n' "${{ needs.detect-rustbdk-archive-inputs.outputs.source-hash }}" > ./release_assets/rustbdk-source.sha256
+          {
+            echo "source_hash=${{ needs.detect-rustbdk-archive-inputs.outputs.source-hash }}"
+            echo "bitcoin_sv_commit=${{ needs.detect-rustbdk-archive-inputs.outputs.bitcoin-sv-commit }}"
+            echo "workflow_run=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo "created_utc=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > ./release_assets/rustbdk-source-manifest.txt
+          sha256sum ./release_assets/libbdkffi_*_*.a > ./release_assets/rustbdk-archives.sha256
+          ls -l ./release_assets
+
+      - name: Publish rustbdk release assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if ! gh release view "${{ env.RUSTBDK_RELEASE_TAG }}" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            gh release create "${{ env.RUSTBDK_RELEASE_TAG }}" \
+              --repo "${{ github.repository }}" \
+              --target "${{ github.sha }}" \
+              --title "rustbdk prebuilt archives" \
+              --notes "Durable CI-published libbdkffi archives for rustbdk."
+          fi
+
+          gh release upload "${{ env.RUSTBDK_RELEASE_TAG }}" ./release_assets/* \
+            --repo "${{ github.repository }}" \
+            --clobber
