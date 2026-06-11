@@ -9,6 +9,11 @@ find_package(Threads)
 include(FindBoostHelper)
 HelpFindBoost(thread filesystem program_options chrono)
 
+# Keep this in sync with rust-bdk's Cargo "bench" feature. CMake controls
+# which symbols enter libbdkffi, while Cargo controls which bench targets build;
+# the two build systems cannot enforce this coupling mechanically.
+option(BDKFFI_ENABLE_BENCH "Build benchmark-only bdkffi C ABI helpers" OFF)
+
 foreach(comp IN ITEMS thread filesystem program_options chrono)
     if(NOT TARGET Boost::${comp})
         message(FATAL_ERROR "Boost::${comp} is required but not found")
@@ -48,6 +53,11 @@ set(_BDKFFI_SOURCE_FILES
     "${BSV_APPLICATION_SRC_FILES}"
 )
 
+if(BDKFFI_ENABLE_BENCH)
+    list(APPEND _BDKFFI_HEADER_FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/bdkffi/bench.h)
+    list(APPEND _BDKFFI_SOURCE_FILES ${CMAKE_CURRENT_SOURCE_DIR}/src/bench.cpp)
+endif()
+
 set(_BDKFFI_UNIVALUE_LIB)
 if(BDK_BUILD_UNIVALUE)
     set(_BDKFFI_UNIVALUE_LIB univalue)
@@ -60,6 +70,9 @@ target_link_libraries(static-bdkffi PUBLIC
     Boost::thread Boost::filesystem Boost::program_options Boost::chrono
     ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT})
 target_include_directories(static-bdkffi PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR})
+if(BDKFFI_ENABLE_BENCH)
+    target_compile_definitions(static-bdkffi PRIVATE BDKFFI_ENABLE_BENCH)
+endif()
 set_target_properties(static-bdkffi PROPERTIES FOLDER "module/rustbdk" DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})
 source_group("_generated" FILES "${BDK_VERSION_RUST_CPP}")
 

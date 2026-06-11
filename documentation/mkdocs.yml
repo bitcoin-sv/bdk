@@ -21,6 +21,7 @@ nav:
     - Directory Structure : directories.md
     - Development Build : build.md
     - Architecture : architecture.md
+    - Rust Binding : rust_binding.md
     - VerifyScript : verify_script.md
     - Versioning strategy : versioning.md
     - Object Model : ObjectModel.md

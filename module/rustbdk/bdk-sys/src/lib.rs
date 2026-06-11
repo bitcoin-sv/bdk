@@ -48,6 +48,13 @@ unsafe extern "C" {
     pub fn bdkffi_free(p: *mut c_void);
 }
 
+// bdkffi/bench.h
+#[cfg(feature = "bench")]
+unsafe extern "C" {
+    pub fn bdkffi_bench_noop();
+    pub fn bdkffi_bench_sum_bytes(data: *const u8, data_len: c_int) -> u64;
+}
+
 // bdkffi/asm.h
 unsafe extern "C" {
     pub fn bdkffi_from_asm(
