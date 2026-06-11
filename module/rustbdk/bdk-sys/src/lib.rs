@@ -61,8 +61,11 @@ unsafe extern "C" {
 
 // bdkffi/error_strings.h
 unsafe extern "C" {
-    pub fn bdkffi_script_error_string(code: c_int) -> *const c_char;
-    pub fn bdkffi_dos_error_string(code: c_int) -> *const c_char;
+    /*
+     * Return malloc-owned null-terminated strings. Free with bdkffi_free.
+     */
+    pub fn bdkffi_script_error_string(code: c_int) -> *mut c_char;
+    pub fn bdkffi_dos_error_string(code: c_int) -> *mut c_char;
     pub fn bdkffi_cpp_script_err_error_count() -> c_int;
 }
 
