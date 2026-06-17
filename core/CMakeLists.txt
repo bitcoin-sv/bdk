@@ -87,50 +87,54 @@ target_compile_definitions(bdk_core PRIVATE BOOST_ALL_NO_LIB BOOST_SP_USE_STD_AT
 set_property(TARGET bdk_core PROPERTY FOLDER "core")
 
 ## Install the binary library
-install(TARGETS bdk_core DESTINATION "lib" COMPONENT bdk_core)
+if(BDK_INSTALL_CORE_ARCHIVE)
+  install(TARGETS bdk_core DESTINATION "lib" COMPONENT bdk_core)
+endif()
 
-## Install bitcoin config file
-install(FILES ${BITCOIN_CONFIG_FILE} DESTINATION "include/config" COMPONENT bdk_core)
- 
-## Install bdk_core : the *.h header files should be kept as bsv structure
-set(UNIFIED_INSTALL_HEADERS_STR "${UNIFIED_INSTALL_HEADERS_STR}\n// Include files in bsv\n")
-## Calculate the relative path for include file in installer
-get_filename_component(__f ${BITCOIN_CONFIG_FILE} NAME)
-set(__include_rl "config/${__f}")
-set(UNIFIED_INSTALL_HEADERS_STR "${UNIFIED_INSTALL_HEADERS_STR}#include \"${__include_rl}\"\n")
-set(default_install_include_core_dir "include")
-# Install bsv header files
-foreach(_bsv_hdr ${BSV_MINIMAL_HDR_FILES})
-  set(_relative_dir "")#clear
-  get_filename_component(_dir ${_bsv_hdr} DIRECTORY)
-  if("${_dir}" STRGREATER "${BDK_BSV_ROOT_DIR}/src")
-    string(REPLACE "${BDK_BSV_ROOT_DIR}/src/" "" _relative_dir "${_dir}")
-    set(_install_dest "${default_install_include_core_dir}/${_relative_dir}")
-  else()
-    set(_install_dest "${default_install_include_core_dir}")
-  endif()
-  #message("install file [${_bsv_hdr}]  _install_dest[${_install_dest}]")
-  install(FILES ${_bsv_hdr} DESTINATION "${_install_dest}" COMPONENT bdk_core)
+if(BDK_INSTALL_BSV_HEADERS)
+  ## Install bitcoin config file
+  install(FILES ${BITCOIN_CONFIG_FILE} DESTINATION "include/config" COMPONENT bdk_core)
 
+  ## Install bdk_core : the *.h header files should be kept as bsv structure
+  set(UNIFIED_INSTALL_HEADERS_STR "${UNIFIED_INSTALL_HEADERS_STR}\n// Include files in bsv\n")
   ## Calculate the relative path for include file in installer
-  get_filename_component(_f ${_bsv_hdr} NAME)
-  set(_include_rl "${_f}")
-  if(NOT "${_relative_dir}" STREQUAL "")
-    set(_include_rl "${_relative_dir}/${_f}")
-  endif()
-  set(UNIFIED_INSTALL_HEADERS_STR "${UNIFIED_INSTALL_HEADERS_STR}#include \"${_include_rl}\"\n")
-endforeach()
-# Install extra core header files
-set(UNIFIED_INSTALL_HEADERS_STR "${UNIFIED_INSTALL_HEADERS_STR}\n// Include extra BDK files in core\n")
-foreach(_extra_hdr ${BDK_CORE_EXTRA_HDR_FILES})
-  install(FILES ${_extra_hdr} DESTINATION "${default_install_include_core_dir}" COMPONENT bdk_core)
+  get_filename_component(__f ${BITCOIN_CONFIG_FILE} NAME)
+  set(__include_rl "config/${__f}")
+  set(UNIFIED_INSTALL_HEADERS_STR "${UNIFIED_INSTALL_HEADERS_STR}#include \"${__include_rl}\"\n")
+  set(default_install_include_core_dir "include")
+  # Install bsv header files
+  foreach(_bsv_hdr ${BSV_MINIMAL_HDR_FILES})
+    set(_relative_dir "")#clear
+    get_filename_component(_dir ${_bsv_hdr} DIRECTORY)
+    if("${_dir}" STRGREATER "${BDK_BSV_ROOT_DIR}/src")
+      string(REPLACE "${BDK_BSV_ROOT_DIR}/src/" "" _relative_dir "${_dir}")
+      set(_install_dest "${default_install_include_core_dir}/${_relative_dir}")
+    else()
+      set(_install_dest "${default_install_include_core_dir}")
+    endif()
+    #message("install file [${_bsv_hdr}]  _install_dest[${_install_dest}]")
+    install(FILES ${_bsv_hdr} DESTINATION "${_install_dest}" COMPONENT bdk_core)
 
-  ## Calculate the relative path for include file in installer
-  get_filename_component(_f ${_extra_hdr} NAME)
-  set(_include_rl "core/${_f}")
-  set(UNIFIED_INSTALL_HEADERS_STR "${UNIFIED_INSTALL_HEADERS_STR}#include \"${_include_rl}\"\n")
-endforeach()
+    ## Calculate the relative path for include file in installer
+    get_filename_component(_f ${_bsv_hdr} NAME)
+    set(_include_rl "${_f}")
+    if(NOT "${_relative_dir}" STREQUAL "")
+      set(_include_rl "${_relative_dir}/${_f}")
+    endif()
+    set(UNIFIED_INSTALL_HEADERS_STR "${UNIFIED_INSTALL_HEADERS_STR}#include \"${_include_rl}\"\n")
+  endforeach()
+  # Install extra core header files
+  set(UNIFIED_INSTALL_HEADERS_STR "${UNIFIED_INSTALL_HEADERS_STR}\n// Include extra BDK files in core\n")
+  foreach(_extra_hdr ${BDK_CORE_EXTRA_HDR_FILES})
+    install(FILES ${_extra_hdr} DESTINATION "${default_install_include_core_dir}" COMPONENT bdk_core)
 
-set(BDK_UNIFIED_HEADER_FILE "${BDK_GENERATED_TOOLS_DIR}/bdk")
-configure_file("${CMAKE_CURRENT_SOURCE_DIR}/bdk.in" ${BDK_UNIFIED_HEADER_FILE})
-install(FILES ${BDK_UNIFIED_HEADER_FILE} DESTINATION "include/core" COMPONENT bdk_core)
+    ## Calculate the relative path for include file in installer
+    get_filename_component(_f ${_extra_hdr} NAME)
+    set(_include_rl "core/${_f}")
+    set(UNIFIED_INSTALL_HEADERS_STR "${UNIFIED_INSTALL_HEADERS_STR}#include \"${_include_rl}\"\n")
+  endforeach()
+
+  set(BDK_UNIFIED_HEADER_FILE "${BDK_GENERATED_TOOLS_DIR}/bdk")
+  configure_file("${CMAKE_CURRENT_SOURCE_DIR}/bdk.in" ${BDK_UNIFIED_HEADER_FILE})
+  install(FILES ${BDK_UNIFIED_HEADER_FILE} DESTINATION "include/core" COMPONENT bdk_core)
+endif()

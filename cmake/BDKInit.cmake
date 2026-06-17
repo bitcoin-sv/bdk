@@ -13,6 +13,9 @@ set(BDKInit_Include TRUE)
 #### Initialize everything related to cmake here ####
 #
 
+# Ports/packagers should pass -DBDK_KEEP_INSTALL_PREFIX=ON so cmake --install honors PREFIX/DESTDIR.
+option(BDK_KEEP_INSTALL_PREFIX "Keep the caller-provided CMAKE_INSTALL_PREFIX" OFF)
+
 #### Hold the directory containing this current script ####
 set(BDK_ROOT_CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}" CACHE PATH "Root directory of cmake modules")
 
@@ -97,8 +100,10 @@ endmacro()
 
 #### Force CMAKE_INSTALL_PREFIX if not defined
 macro(bdkForceInstallDir)
-  set(CMAKE_INSTALL_PREFIX "${CMAKE_BINARY_DIR}/INSTALLATION" CACHE PATH "Cmake prefix" FORCE)
-  message(STATUS "BDK WARNING: Forced CMAKE_INSTALL_PREFIX[${CMAKE_INSTALL_PREFIX}]")
+  if(NOT BDK_KEEP_INSTALL_PREFIX)
+    set(CMAKE_INSTALL_PREFIX "${CMAKE_BINARY_DIR}/INSTALLATION" CACHE PATH "Cmake prefix" FORCE)
+    message(STATUS "BDK WARNING: Forced CMAKE_INSTALL_PREFIX[${CMAKE_INSTALL_PREFIX}]")
+  endif()
 endmacro()
 
 #### Initialize all setting for using CMake
