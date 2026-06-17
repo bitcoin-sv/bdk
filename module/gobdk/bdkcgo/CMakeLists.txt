@@ -33,7 +33,7 @@ set(BDK_VERSION_GOLANG_CPP ${BDK_GENERATED_CPP_DIR}/bdkcgo/src/version_cgo.cpp C
 configure_file(${BDK_VERSION_GOLANG_CPP_IN} ${BDK_VERSION_GOLANG_CPP})
 
 set(_GO_MODULE_NAME GoBDK)
-set(_GO_MODULE_HEADER_FILES
+set(_GO_MODULE_CGO_PUBLIC_HEADER_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/asm_cgo.h
     ${CMAKE_CURRENT_SOURCE_DIR}/gobdk.h
     ${CMAKE_CURRENT_SOURCE_DIR}/script_error_cgo.h
@@ -43,7 +43,10 @@ set(_GO_MODULE_HEADER_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/validatebatch_cgo.h
     ${CMAKE_CURRENT_SOURCE_DIR}/version_cgo.h
     ${CMAKE_CURRENT_SOURCE_DIR}/secp256k1_cloned.h # added here to be installed but won't be include twice as it use the same guard SECP256K1_H
-     "${BSV_APPLICATION_HDR_FILES}"
+)
+set(_GO_MODULE_HEADER_FILES
+    ${_GO_MODULE_CGO_PUBLIC_HEADER_FILES}
+    "${BSV_APPLICATION_HDR_FILES}"
 )
 
 set(_GO_MODULE_SOURCE_FILES
@@ -60,10 +63,12 @@ set(_GO_MODULE_SOURCE_FILES
 )
 
 # The shared libraries is not to be used in a normal situation. But we keep building this target
-# just in case we might use it sometime later.
-add_library(${_GO_MODULE_NAME} SHARED ${_GO_MODULE_HEADER_FILES} ${_GO_MODULE_SOURCE_FILES} ${BDK_VERSION_GOLANG_CPP})
-target_link_libraries(${_GO_MODULE_NAME} PUBLIC bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT})
-target_include_directories(${_GO_MODULE_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/.. ${CMAKE_SOURCE_DIR})
+# just in case we might use it sometime later on non-FreeBSD systems.
+if(NOT "${CMAKE_SYSTEM_NAME}" STREQUAL "FreeBSD")
+  add_library(${_GO_MODULE_NAME} SHARED ${_GO_MODULE_HEADER_FILES} ${_GO_MODULE_SOURCE_FILES} ${BDK_VERSION_GOLANG_CPP})
+  target_link_libraries(${_GO_MODULE_NAME} PUBLIC bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT})
+  target_include_directories(${_GO_MODULE_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/.. ${CMAKE_SOURCE_DIR})
+endif()
 
 # The static libraries is built and to be merge will all of its dependant archives
 # to make a all-in-one standalone static library, ready to be linked in cgo
@@ -74,15 +79,27 @@ target_include_directories(static-${_GO_MODULE_NAME} PRIVATE ${CMAKE_CURRENT_SOU
 source_group("_generated" FILES "${BDK_VERSION_GOLANG_CPP}")
 
 if(CMAKE_CONFIGURATION_TYPES)
-  set_target_properties(${_GO_MODULE_NAME} PROPERTIES FOLDER "module/golang" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d
+  if(NOT "${CMAKE_SYSTEM_NAME}" STREQUAL "FreeBSD")
+    set_target_properties(${_GO_MODULE_NAME} PROPERTIES FOLDER "module/golang" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d
+  endif()
   set_target_properties(static-${_GO_MODULE_NAME} PROPERTIES FOLDER "module/golang" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d
 else()
-  set_target_properties(${_GO_MODULE_NAME} PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
+  if(NOT "${CMAKE_SYSTEM_NAME}" STREQUAL "FreeBSD")
+    set_target_properties(${_GO_MODULE_NAME} PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
+  endif()
 endif()
 
-install(TARGETS ${_GO_MODULE_NAME} DESTINATION "bin/bdkcgo" COMPONENT GoModules)
-install(TARGETS static-${_GO_MODULE_NAME} DESTINATION "lib" COMPONENT GoModules)
-install(FILES ${_GO_MODULE_HEADER_FILES} DESTINATION "include/bdkcgo" COMPONENT GoModules)
+if(NOT "${CMAKE_SYSTEM_NAME}" STREQUAL "FreeBSD" AND BDK_INSTALL_BSV_HEADERS)
+  install(TARGETS ${_GO_MODULE_NAME} DESTINATION "bin/bdkcgo" COMPONENT GoModules)
+endif()
+if(BDK_INSTALL_BSV_HEADERS)
+  install(TARGETS static-${_GO_MODULE_NAME} DESTINATION "lib" COMPONENT GoModules)
+  set(_GO_MODULE_INSTALL_HEADER_FILES ${_GO_MODULE_HEADER_FILES})
+else()
+  # Gobdk-only packagers install the cgo public header closure without flattened BSV headers.
+  set(_GO_MODULE_INSTALL_HEADER_FILES ${_GO_MODULE_CGO_PUBLIC_HEADER_FILES})
+endif()
+install(FILES ${_GO_MODULE_INSTALL_HEADER_FILES} DESTINATION "include/bdkcgo" COMPONENT GoModules)
 
 ## Merge the gobdk only for unix base system
 if(UNIX)
