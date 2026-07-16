@@ -15,14 +15,14 @@ graph TD
     CORE --> EX[module/example<br/>C++ examples & benchmarks]
     CORE --> TESTS[test/core<br/>C++ ctest]
     GO --> GOTESTS[test/golang<br/>Go tests]
-    CORE --> WASM[module/typesbdk<br/>experimental WASM/TS]
+    CORE --> WASM[module/typesbdk<br/>validated WASM verifier]
 ```
 
 - **`core/`** builds `bdk_core`, the C++ library. It is assembled from BDK's own sources
   (`core/*.cpp`) plus a **curated subset of the bitcoin-sv sources** (see below).
 - **`module/`** holds extension applications and language bindings that build on top of core and
   are independent of each other: the Go (cgo) binding, the experimental Rust binding, the C++
-  examples/benchmarks, and the experimental WASM/TypeScript binding. They link `bdk_core`; note
+  examples/benchmarks, and the opt-in WASM/TypeScript verifier. They link `bdk_core`; note
   that the C++ examples, the GoBDK cgo library, and the Rust `bdkffi` library additionally
   **compile in** the 15 "application" BSV sources directly (see the source-subset table below), so
   they are not purely linking core.
@@ -144,9 +144,11 @@ a specific gate — **not** on every build. All of the following must hold
 
 When all conditions are met, the bot commits the refreshed archives with a `[GoBDKUpdate]` message.
 
-## The typesbdk module (experimental)
+## The typesbdk WASM verifier
 
-`module/typesbdk` is a **highly experimental** WASM / TypeScript binding (it contains a
-`wasm/bdk-core.wasm`, a `txvalidator_wasm.cpp`, and JS examples). It is **not wired into the main
-CMake build** — `module/CMakeLists.txt` builds only `example` and `gobdk/bdkcgo`. It is retained in
-the tree but is not a supported deliverable; treat it as a prototype.
+`module/typesbdk` provides the JavaScript/WebAssembly binding for `CTxValidator::VerifyScript`.
+It is an opt-in root CMake target (`BDK_BUILD_WASM=ON`) rather than part of the default native
+build. The pinned `wasm/build.sh` performs a clean Emscripten build, runs standalone
+libsecp256k1 tests and real positive/negative transaction vectors, and installs the validated
+`bdk-core.mjs` and `bdk-core.wasm` artifacts. See `module/typesbdk/examples/README.md` for the
+reproducible build, ABI, and native/WASM benchmark controls.

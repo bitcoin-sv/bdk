@@ -37,7 +37,7 @@ jobs:
           "$RUNNER_TEMP/emsdk/emsdk" install 4.0.23
           "$RUNNER_TEMP/emsdk/emsdk" activate 4.0.23
 
-      - name: Build and run real transaction vectors
+      - name: Build and run curve tests and real transaction vectors
         run: |
           source "$RUNNER_TEMP/emsdk/emsdk_env.sh"
           module/typesbdk/wasm/build.sh
