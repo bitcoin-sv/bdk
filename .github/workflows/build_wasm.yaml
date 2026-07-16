@@ -1,0 +1,52 @@
+name: Build BDK WASM
+
+on:
+  pull_request:
+    paths:
+      - 'CMakeLists.txt'
+      - 'cmake/**'
+      - 'core/**'
+      - 'module/typesbdk/wasm/**'
+      - '.github/workflows/build_wasm.yaml'
+  push:
+    branches: [master]
+    paths:
+      - 'CMakeLists.txt'
+      - 'cmake/**'
+      - 'core/**'
+      - 'module/typesbdk/wasm/**'
+      - '.github/workflows/build_wasm.yaml'
+  workflow_dispatch:
+
+jobs:
+  wasm:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache pinned WASM dependencies
+        uses: actions/cache@v4
+        with:
+          path: build-wasm-deps
+          key: bdk-wasm-deps-v1-boost-1.85.0-openssl-3.4.0-bsv-879fc8b
+
+      - name: Install Emscripten 4.0.23
+        run: |
+          git clone --depth 1 --branch 4.0.23 https://github.com/emscripten-core/emsdk.git "$RUNNER_TEMP/emsdk"
+          "$RUNNER_TEMP/emsdk/emsdk" install 4.0.23
+          "$RUNNER_TEMP/emsdk/emsdk" activate 4.0.23
+
+      - name: Build and run real transaction vectors
+        run: |
+          source "$RUNNER_TEMP/emsdk/emsdk_env.sh"
+          module/typesbdk/wasm/build.sh
+
+      - name: Upload validated module
+        uses: actions/upload-artifact@v4
+        with:
+          name: bdk-wasm
+          path: |
+            module/typesbdk/wasm/bdk-core.mjs
+            module/typesbdk/wasm/bdk-core.wasm
+          if-no-files-found: error

@@ -1,15 +1,30 @@
-## To build wasm
+## Build and validate the WASM module
 
-The Wasm module is built using core-only components. This ensures the engine includes a minimal set of files, effectively avoiding dependency explosion issues.
+Use Emscripten 4.0.23, then run the pinned build script from the BDK root:
 
-
-```
-set -e ; export EM_CONFIG=/path/to/emsdk/installation/.emscripten ; source /path/to/emsdk/installation/emsdk_env.sh ; export CROSS_COMPILE="" ; export CXX=em++ ; export CC=emcc ; export AR=emar ; export RANLIB=emranlib ; export PAGER=cat ; export LESS=F ; export MORE=cat ; export MANPAGER=cat ; export EMCC_FORCE_STDIN_INPUT=0
-rm -fR /path/to/build/directory/build/* && cd /path/to/build/directory/build
-cmake ../bdk/ -DCMAKE_BUILD_TYPE=Release -DBDK_BUILD_CORE_ONLY=ON -DBOOST_ROOT=/path/to/dependancies_wasm/boost-1.85 -DOPENSSL_ROOT_DIR=/path/to/dependancies_wasm/openssl_3.4.0 && make -j6
+```bash
+source /path/to/emsdk/emsdk_env.sh
+module/typesbdk/wasm/build.sh
 ```
 
-After building, the provided examples may be executed to test both backend and frontend environments. Please note that these tests are designed solely to confirm that the Wasm module loads correctly and that VerifyScript is callable. Validation of the function's logic using real data is out of scope for this iteration and will be addressed in the next phase.
+The script downloads and verifies Boost 1.85.0 and OpenSSL 3.4.0, checks out the
+same `bitcoin-sv` commit used by BDK CI, builds OpenSSL for WASM, performs a clean
+core-only BDK build, and runs real positive and negative transaction vectors.
+Dependencies and build output default to `build-wasm-deps/` and `build-wasm/`.
+Set `BDK_WASM_DEPS_DIR`, `BDK_WASM_BUILD_DIR`, or `BDK_WASM_JOBS` to override
+those locations. Existing `BSV_ROOT`, `BOOST_ROOT`, and `OPENSSL_ROOT_DIR`
+installations are honored.
+
+Successful output includes:
+
+```text
+ok - mainnet-p2pkh-block-620940: domain=0 code=0
+ok - mainnet-p2pkh-corrupt-signature: domain=1 code=39
+```
+
+The validated `bdk-core.mjs` and `bdk-core.wasm` are installed beside the build
+script. `VerifyScript` returns a structured `{ domain, code }` result; domain `0`
+is success, domain `1` is a script failure, and domain `3` indicates an exception.
 
 ### To run example backend
 

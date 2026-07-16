@@ -190,6 +190,7 @@ function(bdkSetMinimumListBSVSource)############################################
       "src/script/script_num.cpp"
       "src/script/sign.cpp"     ##  Manual fix the build
       "src/script/standard.cpp"
+      "src/support/cleanse.cpp"
       "src/taskcancellation.cpp"
       "src/verify_script_flags.cpp"  ## Manual add
       "src/utilstrencodings.cpp"

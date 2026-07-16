@@ -2,6 +2,8 @@
 /module/rustbdk/target/
 /test/rust/target/
 /test/rust/Cargo.lock
+/build-wasm/
+/build-wasm-deps/
 
 # NOTE: the in-source merged archive (module/rustbdk/bdk-sys/lib/libbdkffi_<os_arch>.a)
 # is intentionally NOT ignored. It is a generated artifact that is not checked in
