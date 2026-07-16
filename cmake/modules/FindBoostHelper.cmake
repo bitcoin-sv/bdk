@@ -143,6 +143,24 @@ macro(HelpFindBoost)############################################################
 
   message(STATUS "Try to find Boost in [${BOOST_ROOT}]")
 
+  # The WASM core only consumes Boost headers. A Boost source archive prepared
+  # with `b2 headers` is therefore sufficient and avoids cross-compiling
+  # unrelated Boost libraries merely to obtain an imported CMake target.
+  if(EMSCRIPTEN AND NOT TARGET Boost::boost)
+    find_path(BDK_BOOST_INCLUDE_DIR boost/version.hpp
+      PATHS "${BOOST_ROOT}" "${BOOST_ROOT}/include"
+      NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH)
+    if(NOT BDK_BOOST_INCLUDE_DIR)
+      message(FATAL_ERROR
+        "Unable to find boost/version.hpp below BOOST_ROOT=[${BOOST_ROOT}]. "
+        "Run ./bootstrap.sh && ./b2 headers in the Boost source tree first.")
+    endif()
+    add_library(Boost::boost INTERFACE IMPORTED GLOBAL)
+    set_target_properties(Boost::boost PROPERTIES
+      INTERFACE_INCLUDE_DIRECTORIES "${BDK_BOOST_INCLUDE_DIR}")
+    set(Boost_FOUND TRUE)
+  endif()
+
   list(LENGTH list_components nb_comps)
   if(nb_comps LESS 1)
     if(TARGET Boost::boost)

@@ -71,7 +71,10 @@ endforeach()
 add_library(bdk_core ${BITCOIN_CONFIG_FILE} ${BDK_VERSION_CPP} ${BDK_CORE_HDR_FILES} ${BDK_CORE_SRC_FILES})
 #set_target_properties(bdk_core PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS 1)
 target_include_directories(bdk_core PUBLIC ${BSV_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(bdk_core PRIVATE secp256k1 ${UNIVALUE_LIB} OpenSSL::Crypto OpenSSL::SSL Boost::boost)
+target_link_libraries(bdk_core PRIVATE secp256k1 ${UNIVALUE_LIB} OpenSSL::Crypto OpenSSL::SSL)
+# Public BDK headers include Boost headers, so consumers need the header-only
+# target in their usage requirements as well.
+target_link_libraries(bdk_core PUBLIC Boost::boost)
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU") # remove warning on linux
     # Add the warning suppression flag to a specific source file
@@ -83,6 +86,14 @@ if(WIN32)
 endif()
 target_compile_definitions(bdk_core PUBLIC HAVE_CONFIG_H)
 target_compile_definitions(bdk_core PRIVATE BOOST_ALL_NO_LIB BOOST_SP_USE_STD_ATOMIC BOOST_AC_USE_STD_ATOMIC)
+
+# Emscripten's single-threaded target provides the POSIX thread headers used by
+# Boost.Thread, but Boost cannot auto-detect them unless `-pthread` is enabled.
+# BDK core only needs these declarations transitively; forcing the pthread
+# header backend avoids requiring SharedArrayBuffer or a browser worker pool.
+if(EMSCRIPTEN)
+  target_compile_definitions(bdk_core PUBLIC BOOST_HAS_PTHREADS)
+endif()
 
 set_property(TARGET bdk_core PROPERTY FOLDER "core")
 
