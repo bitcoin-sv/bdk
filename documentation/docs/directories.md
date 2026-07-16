@@ -12,7 +12,7 @@ out-of-tree `build` directory:
      |-- module           # language-binding / extension modules (link bdk_core; examples & gobdk also compile the BSV "application" sources)
      |    |-- gobdk       # Go (cgo) binding: github.com/bitcoin-sv/bdk/module/gobdk
      |    |-- example     # C++ examples & benchmarks
-     |    |-- typesbdk    # experimental WASM/TypeScript binding (not built by the main CMake flow)
+     |    |-- typesbdk    # opt-in, validated WASM transaction-script verifier
      |-- test
      |    |-- core        # C++ (ctest) tests
      |    |-- golang      # Go tests

@@ -27,6 +27,18 @@ for command in cmake emcmake emcc em++ emar emranlib git curl make node; do
   }
 done
 
+wasm_opt="${WASM_OPT:-}"
+if [[ -z "$wasm_opt" ]]; then
+  if command -v wasm-opt >/dev/null; then
+    wasm_opt="$(command -v wasm-opt)"
+  elif [[ -n "${EMSDK:-}" && -x "$EMSDK/upstream/bin/wasm-opt" ]]; then
+    wasm_opt="$EMSDK/upstream/bin/wasm-opt"
+  else
+    echo "Missing wasm-opt; activate the pinned Emscripten SDK or set WASM_OPT." >&2
+    exit 1
+  fi
+fi
+
 sha256_file () {
   local expected="$1"
   local file="$2"
@@ -137,11 +149,56 @@ EMSDK_QUIET=1 emcmake cmake -S "$repo_root" -B "$build_dir" \
   -DOPENSSL_INCLUDE_DIR="$OPENSSL_ROOT_DIR/include" \
   -DOPENSSL_CRYPTO_LIBRARY="$OPENSSL_ROOT_DIR/lib/libcrypto.a" \
   -DOPENSSL_SSL_LIBRARY="$OPENSSL_ROOT_DIR/lib/libssl.a" \
-  -DOPENSSL_USE_STATIC_LIBS=TRUE
+  -DOPENSSL_USE_STATIC_LIBS=TRUE \
+  -DSECP256K1_ASM=OFF \
+  -DSECP256K1_BUILD_BENCHMARK=OFF \
+  -DSECP256K1_ECMULT_WINDOW_SIZE=15 \
+  -DSECP256K1_TEST_OVERRIDE_WIDE_MULTIPLY=int64
 
 cmake --build "$build_dir" --target bdk_wasm --parallel "$jobs"
 
 dist_dir="$build_dir/module/typesbdk/wasm/dist"
+# Emscripten's -O3 link performs one Binaryen optimization pass. A converged
+# -O4 pass is measurably faster for this integer-heavy verifier while retaining
+# the same WebAssembly feature set emitted by Emscripten.
+"$wasm_opt" "$dist_dir/bdk-core.wasm" \
+  -O4 --converge \
+  --enable-bulk-memory \
+  --enable-bulk-memory-opt \
+  --enable-nontrapping-float-to-int \
+  --enable-sign-ext \
+  --enable-mutable-globals \
+  -o "$dist_dir/bdk-core.optimized.wasm"
+mv "$dist_dir/bdk-core.optimized.wasm" "$dist_dir/bdk-core.wasm"
+
+if [[ "${BDK_WASM_RUN_SECP_TESTS:-1}" == 1 ]]; then
+  secp_test_dir="$build_dir/secp256k1-tests"
+  EMSDK_QUIET=1 emcmake cmake \
+    -S "$BSV_ROOT/src/secp256k1" \
+    -B "$secp_test_dir" \
+    -DCMAKE_BUILD_TYPE=Release \
+    "-DCMAKE_EXE_LINKER_FLAGS=-sSTACK_SIZE=8388608 -sALLOW_MEMORY_GROWTH=1" \
+    -DSECP256K1_ASM=OFF \
+    -DSECP256K1_BUILD_BENCHMARK=OFF \
+    -DSECP256K1_BUILD_CTIME_TESTS=OFF \
+    -DSECP256K1_BUILD_EXAMPLES=OFF \
+    -DSECP256K1_BUILD_EXHAUSTIVE_TESTS=ON \
+    -DSECP256K1_BUILD_TESTS=ON \
+    -DSECP256K1_ECMULT_WINDOW_SIZE=15 \
+    -DSECP256K1_ENABLE_MODULE_ECDH=ON \
+    -DSECP256K1_ENABLE_MODULE_RECOVERY=ON \
+    -DSECP256K1_TEST_OVERRIDE_WIDE_MULTIPLY=int64
+  cmake --build "$secp_test_dir" \
+    --target tests noverify_tests exhaustive_tests \
+    --parallel "$jobs"
+  # 35 is the smallest scaling count that exercises every test, including
+  # test_ecmult_constants_2bit, without making the cross-compiled CI run
+  # unnecessarily long.
+  node "$secp_test_dir/src/tests.js" 35 35010203040506070809000102030405
+  node "$secp_test_dir/src/noverify_tests.js" 35 45010203040506070809000102030405
+  node "$secp_test_dir/src/exhaustive_tests.js" 2 20010203040506070809000102030405
+fi
+
 install -m 0644 "$dist_dir/bdk-core.mjs" "$script_dir/bdk-core.mjs"
 install -m 0644 "$dist_dir/bdk-core.wasm" "$script_dir/bdk-core.wasm"
 node "$script_dir/test.mjs"
