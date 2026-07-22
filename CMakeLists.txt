@@ -40,6 +40,7 @@ option(BDK_BUILD_MODULES "Activate the build of modules" ON)
 option(BDK_BUILD_CORE_TESTS "Activate the build of core tests" ON)
 option(BDK_BUILD_WASM "Build the TypeScript/JavaScript WebAssembly module" OFF)
 option(BDK_BUILD_NATIVE_VERIFY_BENCHMARK "Build the native VerifyScript benchmark" OFF)
+option(BDK_CORE_DISABLE_LOGGING "Compile bdk_core without node logging calls" OFF)
 # Independent install gates: FreeBSD/gobdk-only packages set both OFF.
 option(BDK_INSTALL_CORE_ARCHIVE "Install the bdk_core static archive" ON)
 option(BDK_INSTALL_BSV_HEADERS "Install Bitcoin SV headers and bundled support files" ON)

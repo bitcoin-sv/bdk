@@ -14,7 +14,9 @@ WASM test binaries, and runs real positive and negative transaction vectors.
 Dependencies and build output default to `build-wasm-deps/` and `build-wasm/`.
 Set `BDK_WASM_DEPS_DIR`, `BDK_WASM_BUILD_DIR`, or `BDK_WASM_JOBS` to override
 those locations. Existing `BSV_ROOT`, `BOOST_ROOT`, and `OPENSSL_ROOT_DIR`
-installations are honored.
+installations are honored after their pinned versions are verified. In
+particular, an existing `BSV_ROOT` must be a git checkout at the exact commit
+used by the reproducible build.
 
 The production artifact uses libsecp256k1's 32-bit-limb arithmetic backend
 (`int64` in libsecp terminology), the maximum bundled verification precompute
@@ -30,12 +32,29 @@ ok - mainnet-p2pkh-block-620940: domain=0 code=0
 ok - mainnet-p2pkh-corrupt-signature: domain=1 code=39
 ```
 
-The validated `bdk-core.mjs` and `bdk-core.wasm` are installed beside the build
-script. `VerifyScript` returns a structured `{ domain, code }` result; domain `0`
-is success, domain `1` is a script failure, and domain `3` indicates an exception.
-`VerifyScriptArray` is the preferred ABI: it bulk-copies normal JavaScript
-number arrays into WASM memory. `VerifyScript` remains available for existing
-callers that use Embind vectors.
+The validated Node (`bdk-core.mjs`, `bdk-core.wasm`) and browser/worker
+(`bdk-core.browser.mjs`, `bdk-core.browser.wasm`) artifacts are installed beside
+the build script, together with a classic-script/UMD loader
+(`bdk-core.umd.js`, `bdk-core.umd.wasm`). The split keeps Node loader imports
+out of browser bundler graphs while preserving an identical verification ABI.
+
+Verifier calls return a structured `{ domain, code }` result: domain `0` is
+success, domain `1` is a script failure, domain `2` is a transaction-validation
+or DoS-class failure, and domain `3` indicates a caught exception. Callers must
+not treat an unrecognized domain as success.
+
+`VerifyScriptArray` is the preferred single-transaction ABI: it bulk-copies
+typed arrays into WASM memory. `VerifyScriptArrayNetwork` additionally accepts
+an explicit network (`0` mainnet, `1` testnet, `2` STN, `3` regtest,
+`4` TeraTestNet/`teratestnet`, and `5` Tera Scaling Test Network/`tstn`;
+SDKs may also expose `ttn` and `terratestnet` as aliases for network `4`).
+`VerifyScriptBatchArray` accepts concatenated EF/height buffers plus offset
+tables and returns a flat `Int32Array` of domain/code pairs in one JS/WASM call.
+`VerifySpendArray` and `VerifySpendBatchArray` validate one input from ordinary
+transaction bytes with its source script and satoshis supplied separately.
+The batch APIs are intended for callers that already retain serialized bytes;
+chunk very large workloads rather than constructing an unbounded packed buffer.
+`VerifyScript` remains available for existing callers that use Embind vectors.
 
 ## Native and direct WASM benchmark controls
 
@@ -54,6 +73,7 @@ cmake -S . -B build-native-benchmark \
   -DBDK_BUILD_CORE_ONLY=ON \
   -DBDK_BUILD_MODULES=OFF \
   -DBDK_BUILD_CORE_TESTS=OFF \
+  -DBDK_CORE_DISABLE_LOGGING=ON \
   -DBUILD_MODULE_GOLANG=OFF \
   -DBUILD_MODULE_GOLANG_INSTALL_INSOURCE=OFF \
   -DBUILD_MODULE_RUST=OFF \

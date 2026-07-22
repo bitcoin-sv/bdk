@@ -715,6 +715,47 @@ TxError bsv::CTxValidator::VerifyScript(std::span<const uint8_t> extendedTX, std
     }
 }
 
+TxError bsv::CTxValidator::VerifySpend(
+    std::span<const uint8_t> transaction,
+    uint32_t inputIndex,
+    std::span<const uint8_t> lockingScript,
+    int64_t sourceSatoshis,
+    int32_t utxoHeight,
+    int32_t blockHeight,
+    bool consensus,
+    std::optional<uint32_t> customFlags
+) const
+{
+    try {
+        if (sourceSatoshis < 0)
+            throw std::runtime_error("source satoshis cannot be negative");
+
+        const char* begin{ reinterpret_cast<const char*>(transaction.data()) };
+        const char* end{ reinterpret_cast<const char*>(transaction.data() + transaction.size()) };
+        CDataStream tx_stream(begin, end, SER_NETWORK, PROTOCOL_VERSION);
+        CMutableTransaction mutableTx;
+        tx_stream >> mutableTx;
+
+        if (!tx_stream.empty())
+            throw std::runtime_error("error serializing transaction");
+
+        const CTransaction tx(std::move(mutableTx));
+        if (inputIndex >= tx.vin.size())
+            throw std::runtime_error("input index is out of range");
+        if (consensus && utxoHeight == MEMPOOL_HEIGHT)
+            return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::UnconfirmedInputInBlock));
+
+        const uint32_t flags = customFlags.value_or(CalculateFlags(utxoHeight, blockHeight, consensus));
+        const CScript script(lockingScript.begin(), lockingScript.end());
+        const Amount amount{ sourceSatoshis };
+        CachingScriptChecker checker(&tx, inputIndex, amount);
+        return bsvVerifyScript(tx.vin[inputIndex].scriptSig, script, consensus, flags, checker);
+    }
+    catch (const std::exception&) {
+        return bsv::TxErrorException();
+    }
+}
+
 std::vector<TxError> bsv::CTxValidator::ValidateBatch(const bsv::ValidateBatch& batch) const
 {
     std::vector<TxError> results;

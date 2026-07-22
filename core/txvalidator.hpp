@@ -201,6 +201,21 @@ class CTxValidator {
         // instead of the implicitly calculated flags
         TxError VerifyScript(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool consensus, std::span<const uint32_t> customFlags = std::span<const uint32_t>()) const;
 
+        // VerifySpend executes one input against an explicitly supplied source
+        // output. This avoids constructing an extended transaction when a caller
+        // already has the ordinary transaction bytes and is validating a single
+        // Spend-shaped object.
+        TxError VerifySpend(
+            std::span<const uint8_t> transaction,
+            uint32_t inputIndex,
+            std::span<const uint8_t> lockingScript,
+            int64_t sourceSatoshis,
+            int32_t utxoHeight,
+            int32_t blockHeight,
+            bool consensus,
+            std::optional<uint32_t> customFlags = std::nullopt
+        ) const;
+
         // ValidateBatch processes multiple transaction validations in a batch.
         // Returns a vector of TxError results, one for each ValidateArg in the input.
         //

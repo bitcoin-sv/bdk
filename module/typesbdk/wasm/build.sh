@@ -76,6 +76,16 @@ if [[ -z "${BSV_ROOT:-}" ]]; then
   fi
 fi
 
+if [[ ! -d "$BSV_ROOT/.git" ]]; then
+  echo "BSV_ROOT must be a git checkout pinned to $bsv_commit: $BSV_ROOT" >&2
+  exit 1
+fi
+bsv_actual_commit="$(git -C "$BSV_ROOT" rev-parse HEAD)"
+if [[ "$bsv_actual_commit" != "$bsv_commit" ]]; then
+  echo "BSV_ROOT is at $bsv_actual_commit; the reproducible WASM build requires $bsv_commit" >&2
+  exit 1
+fi
+
 if [[ -z "${BOOST_ROOT:-}" ]]; then
   boost_source="$deps_dir/boost-$boost_version"
   download "$boost_url" "$deps_dir/$boost_archive" "$boost_sha256"
@@ -136,6 +146,7 @@ EMSDK_QUIET=1 emcmake cmake -S "$repo_root" -B "$build_dir" \
   -DBDK_BUILD_WASM=ON \
   -DBDK_BUILD_MODULES=OFF \
   -DBDK_BUILD_CORE_TESTS=OFF \
+  -DBDK_CORE_DISABLE_LOGGING=ON \
   -DBUILD_MODULE_GOLANG=OFF \
   -DBUILD_MODULE_GOLANG_INSTALL_INSOURCE=OFF \
   -DBUILD_MODULE_RUST=OFF \
@@ -155,21 +166,23 @@ EMSDK_QUIET=1 emcmake cmake -S "$repo_root" -B "$build_dir" \
   -DSECP256K1_ECMULT_WINDOW_SIZE=15 \
   -DSECP256K1_TEST_OVERRIDE_WIDE_MULTIPLY=int64
 
-cmake --build "$build_dir" --target bdk_wasm --parallel "$jobs"
+cmake --build "$build_dir" --target bdk_wasm bdk_wasm_browser bdk_wasm_umd --parallel "$jobs"
 
 dist_dir="$build_dir/module/typesbdk/wasm/dist"
 # Emscripten's -O3 link performs one Binaryen optimization pass. A converged
 # -O4 pass is measurably faster for this integer-heavy verifier while retaining
 # the same WebAssembly feature set emitted by Emscripten.
-"$wasm_opt" "$dist_dir/bdk-core.wasm" \
-  -O4 --converge \
-  --enable-bulk-memory \
-  --enable-bulk-memory-opt \
-  --enable-nontrapping-float-to-int \
-  --enable-sign-ext \
-  --enable-mutable-globals \
-  -o "$dist_dir/bdk-core.optimized.wasm"
-mv "$dist_dir/bdk-core.optimized.wasm" "$dist_dir/bdk-core.wasm"
+for wasm_name in bdk-core bdk-core.browser bdk-core.umd; do
+  "$wasm_opt" "$dist_dir/$wasm_name.wasm" \
+    -O4 --converge \
+    --enable-bulk-memory \
+    --enable-bulk-memory-opt \
+    --enable-nontrapping-float-to-int \
+    --enable-sign-ext \
+    --enable-mutable-globals \
+    -o "$dist_dir/$wasm_name.optimized.wasm"
+  mv "$dist_dir/$wasm_name.optimized.wasm" "$dist_dir/$wasm_name.wasm"
+done
 
 if [[ "${BDK_WASM_RUN_SECP_TESTS:-1}" == 1 ]]; then
   secp_test_dir="$build_dir/secp256k1-tests"
@@ -191,17 +204,32 @@ if [[ "${BDK_WASM_RUN_SECP_TESTS:-1}" == 1 ]]; then
   cmake --build "$secp_test_dir" \
     --target tests noverify_tests exhaustive_tests \
     --parallel "$jobs"
+  # A parent package.json may declare `type: module`; Emscripten's standalone
+  # test runners are CommonJS. The .cjs copies make their module format
+  # explicit without modifying generated sources or depending on checkout path.
+  for test_name in tests noverify_tests exhaustive_tests; do
+    cmake -E copy "$secp_test_dir/src/$test_name.js" "$secp_test_dir/src/$test_name.cjs"
+  done
   # 35 is the smallest scaling count that exercises every test, including
   # test_ecmult_constants_2bit, without making the cross-compiled CI run
   # unnecessarily long.
-  node "$secp_test_dir/src/tests.js" 35 35010203040506070809000102030405
-  node "$secp_test_dir/src/noverify_tests.js" 35 45010203040506070809000102030405
-  node "$secp_test_dir/src/exhaustive_tests.js" 2 20010203040506070809000102030405
+  node "$secp_test_dir/src/tests.cjs" 35 35010203040506070809000102030405
+  node "$secp_test_dir/src/noverify_tests.cjs" 35 45010203040506070809000102030405
+  node "$secp_test_dir/src/exhaustive_tests.cjs" 2 20010203040506070809000102030405
 fi
 
 install -m 0644 "$dist_dir/bdk-core.mjs" "$script_dir/bdk-core.mjs"
 install -m 0644 "$dist_dir/bdk-core.wasm" "$script_dir/bdk-core.wasm"
+install -m 0644 "$dist_dir/bdk-core.browser.mjs" "$script_dir/bdk-core.browser.mjs"
+install -m 0644 "$dist_dir/bdk-core.browser.wasm" "$script_dir/bdk-core.browser.wasm"
+install -m 0644 "$dist_dir/bdk-core.umd.js" "$script_dir/bdk-core.umd.js"
+install -m 0644 "$dist_dir/bdk-core.umd.wasm" "$script_dir/bdk-core.umd.wasm"
 node "$script_dir/test.mjs"
+node "$script_dir/test.mjs" bdk-core.browser.mjs
+node "$script_dir/test-umd.mjs"
 
 echo "Built and validated:"
-ls -lh "$script_dir/bdk-core.mjs" "$script_dir/bdk-core.wasm"
+ls -lh \
+  "$script_dir/bdk-core.mjs" "$script_dir/bdk-core.wasm" \
+  "$script_dir/bdk-core.browser.mjs" "$script_dir/bdk-core.browser.wasm" \
+  "$script_dir/bdk-core.umd.js" "$script_dir/bdk-core.umd.wasm"
