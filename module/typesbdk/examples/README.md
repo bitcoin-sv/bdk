@@ -7,21 +7,25 @@ source /path/to/emsdk/emsdk_env.sh
 module/typesbdk/wasm/build.sh
 ```
 
-The script downloads and verifies Boost 1.85.0 and OpenSSL 3.4.0, checks out the
-same `bitcoin-sv` commit used by BDK CI, builds OpenSSL for WASM, performs a clean
-core-only BDK build, runs libsecp256k1's verified, non-verified, and exhaustive
-WASM test binaries, and runs real positive and negative transaction vectors.
-Dependencies and build output default to `build-wasm-deps/` and `build-wasm/`.
-Set `BDK_WASM_DEPS_DIR`, `BDK_WASM_BUILD_DIR`, or `BDK_WASM_JOBS` to override
-those locations. Existing `BSV_ROOT`, `BOOST_ROOT`, and `OPENSSL_ROOT_DIR`
-installations are honored after their pinned versions are verified. In
-particular, an existing `BSV_ROOT` must be a git checkout at the exact commit
-used by the reproducible build.
+The script downloads and verifies Boost 1.85.0, checks out the same `bitcoin-sv`
+commit used by BDK CI, performs a clean core-only BDK build, runs
+libsecp256k1's verified, non-verified, and exhaustive WASM test binaries, and
+runs real positive and negative transaction vectors. The verifier-only WASM
+build does not require or link OpenSSL: it uses header-only multiprecision and a
+minimal memory-cleanse implementation. Dependencies and build output default to
+`build-wasm-deps/` and `build-wasm/`. Set `BDK_WASM_DEPS_DIR`,
+`BDK_WASM_BUILD_DIR`, or `BDK_WASM_JOBS` to override those locations. Existing
+`BSV_ROOT` and `BOOST_ROOT` installations are honored after their pinned
+versions are verified. In particular, an existing `BSV_ROOT` must be a git
+checkout at the exact commit used by the reproducible build.
 
 The production artifact uses libsecp256k1's 32-bit-limb arithmetic backend
-(`int64` in libsecp terminology), the maximum bundled verification precompute
-window, and a converged Binaryen `-O4` pass. On wasm32 this avoids Clang's much
-slower lowering of native `__int128` arithmetic. Set
+(`int64` in libsecp terminology), whole-program LTO for the hot verifier, and a
+converged Binaryen `-O4` pass. It retains the full W15 verification precompute
+window without shipping its serialized megabyte-scale tables: the table is
+reconstructed lazily on the first verification using one field inversion and
+the curve endomorphism for the second lane. On wasm32 the 32-bit backend avoids
+Clang's much slower lowering of native `__int128` arithmetic. Set
 `BDK_WASM_RUN_SECP_TESTS=0` only for local iteration when the standalone curve
 suite has already passed.
 
@@ -54,7 +58,8 @@ tables and returns a flat `Int32Array` of domain/code pairs in one JS/WASM call.
 transaction bytes with its source script and satoshis supplied separately.
 The batch APIs are intended for callers that already retain serialized bytes;
 chunk very large workloads rather than constructing an unbounded packed buffer.
-`VerifyScript` remains available for existing callers that use Embind vectors.
+`VerifyScript` remains available through the compatibility vector API for
+existing callers.
 
 ## Native and direct WASM benchmark controls
 

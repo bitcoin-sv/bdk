@@ -29,7 +29,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: build-wasm-deps
-          key: bdk-wasm-deps-v1-boost-1.85.0-openssl-3.4.0-bsv-879fc8b
+          key: bdk-wasm-deps-v2-boost-1.85.0-bsv-879fc8b
 
       - name: Install Emscripten 4.0.23
         run: |
