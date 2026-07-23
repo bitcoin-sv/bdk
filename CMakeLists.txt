@@ -86,6 +86,19 @@ endif()
 include(cmake/BDKInit.cmake)
 bdkInitCMake()
 
+# Error strings from Boost and BSV can contain `__FILE__`. Without stable
+# prefixes, otherwise identical WASM builds differ with the checkout location
+# (and therefore between a developer machine and CI). Apply the most specific
+# mappings first because the default dependency directory is below the BDK
+# source tree.
+if(BDK_BUILD_WASM)
+  add_compile_options(
+    "-ffile-prefix-map=${BDK_BSV_ROOT_DIR}=/bitcoin-sv"
+    "-ffile-prefix-map=${BOOST_ROOT}=/boost"
+    "-ffile-prefix-map=${CMAKE_SOURCE_DIR}=/bdk"
+  )
+endif()
+
 ## Everything in core should be includable from everywhere
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/core)
 
