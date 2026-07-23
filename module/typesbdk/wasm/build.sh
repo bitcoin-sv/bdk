@@ -113,8 +113,8 @@ if [[ "${BDK_WASM_CLEAN:-1}" == 1 ]]; then
 fi
 
 # Keep the full verification table so sustained ECDSA throughput never trades
-# away speed for download size. The verifier never signs, so its generator
-# table can still use the smallest supported, fully tested configuration.
+# away speed for download size. Signing uses libsecp256k1's smallest supported,
+# fully tested generator-table configuration.
 EMSDK_QUIET=1 emcmake cmake -S "$repo_root" -B "$build_dir" \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
@@ -140,20 +140,23 @@ EMSDK_QUIET=1 emcmake cmake -S "$repo_root" -B "$build_dir" \
   -DSECP256K1_ECMULT_GEN_KB=2 \
   -DSECP256K1_TEST_OVERRIDE_WIDE_MULTIPLY=int64
 
-# wasm-opt consumes the linker output in place. Force only the three cheap
+# wasm-opt consumes the linker output in place. Force only the four cheap
 # final links to rerun so an incremental build never optimizes an already
 # optimized binary and drifts from a clean/CI artifact.
 dist_dir="$build_dir/module/typesbdk/wasm/dist"
 cmake -E rm -f \
   "$dist_dir/bdk-core.mjs" "$dist_dir/bdk-core.wasm" \
   "$dist_dir/bdk-core.browser.mjs" "$dist_dir/bdk-core.browser.wasm" \
-  "$dist_dir/bdk-core.umd.js" "$dist_dir/bdk-core.umd.wasm"
-cmake --build "$build_dir" --target bdk_wasm bdk_wasm_browser bdk_wasm_umd --parallel "$jobs"
+  "$dist_dir/bdk-core.umd.js" "$dist_dir/bdk-core.umd.wasm" \
+  "$dist_dir/bdk-core.slim.umd.js" "$dist_dir/bdk-core.slim.umd.wasm"
+cmake --build "$build_dir" \
+  --target bdk_wasm bdk_wasm_browser bdk_wasm_umd bdk_wasm_slim_umd \
+  --parallel "$jobs"
 
 # Emscripten's -O3 link performs one Binaryen optimization pass. A converged
 # -O4 pass is measurably faster for this integer-heavy verifier while retaining
 # the same WebAssembly feature set emitted by Emscripten.
-for wasm_name in bdk-core bdk-core.browser bdk-core.umd; do
+for wasm_name in bdk-core bdk-core.browser bdk-core.umd bdk-core.slim.umd; do
   "$wasm_opt" "$dist_dir/$wasm_name.wasm" \
     -O4 --converge \
     --enable-bulk-memory \
@@ -206,6 +209,8 @@ install -m 0644 "$dist_dir/bdk-core.browser.mjs" "$script_dir/bdk-core.browser.m
 install -m 0644 "$dist_dir/bdk-core.browser.wasm" "$script_dir/bdk-core.browser.wasm"
 install -m 0644 "$dist_dir/bdk-core.umd.js" "$script_dir/bdk-core.umd.js"
 install -m 0644 "$dist_dir/bdk-core.umd.wasm" "$script_dir/bdk-core.umd.wasm"
+install -m 0644 "$dist_dir/bdk-core.slim.umd.js" "$script_dir/bdk-core.slim.umd.js"
+install -m 0644 "$dist_dir/bdk-core.slim.umd.wasm" "$script_dir/bdk-core.slim.umd.wasm"
 
 # Size is part of the verifier's compatibility contract. Check each actual
 # loader-plus-WASM payload using decimal kilobytes so compression or artifact
@@ -223,12 +228,22 @@ for bundle_name in bdk-core bdk-core.browser bdk-core.umd; do
     exit 1
   fi
 done
+slim_bundle_bytes=$((
+  $(wc -c < "$script_dir/bdk-core.slim.umd.js") +
+  $(wc -c < "$script_dir/bdk-core.slim.umd.wasm")
+))
+if (( slim_bundle_bytes > max_bundle_bytes )); then
+  echo "bdk-core.slim.umd is $slim_bundle_bytes bytes; maximum is $max_bundle_bytes" >&2
+  exit 1
+fi
 node "$script_dir/test.mjs"
 node "$script_dir/test.mjs" bdk-core.browser.mjs
 node "$script_dir/test-umd.mjs"
+node "$script_dir/test-umd.mjs" bdk-core.slim.umd.js
 
 echo "Built and validated:"
 ls -lh \
   "$script_dir/bdk-core.mjs" "$script_dir/bdk-core.wasm" \
   "$script_dir/bdk-core.browser.mjs" "$script_dir/bdk-core.browser.wasm" \
-  "$script_dir/bdk-core.umd.js" "$script_dir/bdk-core.umd.wasm"
+  "$script_dir/bdk-core.umd.js" "$script_dir/bdk-core.umd.wasm" \
+  "$script_dir/bdk-core.slim.umd.js" "$script_dir/bdk-core.slim.umd.wasm"

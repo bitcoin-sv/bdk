@@ -43,7 +43,16 @@ jobs:
           module/typesbdk/wasm/build.sh
 
       - name: Verify committed artifacts are reproducible
-        run: git diff --exit-code -- module/typesbdk/wasm/bdk-core.mjs module/typesbdk/wasm/bdk-core.wasm module/typesbdk/wasm/bdk-core.browser.mjs module/typesbdk/wasm/bdk-core.browser.wasm module/typesbdk/wasm/bdk-core.umd.js module/typesbdk/wasm/bdk-core.umd.wasm
+        run: |
+          git diff --exit-code -- \
+            module/typesbdk/wasm/bdk-core.mjs \
+            module/typesbdk/wasm/bdk-core.wasm \
+            module/typesbdk/wasm/bdk-core.browser.mjs \
+            module/typesbdk/wasm/bdk-core.browser.wasm \
+            module/typesbdk/wasm/bdk-core.umd.js \
+            module/typesbdk/wasm/bdk-core.umd.wasm \
+            module/typesbdk/wasm/bdk-core.slim.umd.js \
+            module/typesbdk/wasm/bdk-core.slim.umd.wasm
 
       - name: Upload validated module
         uses: actions/upload-artifact@v4
@@ -56,4 +65,6 @@ jobs:
             module/typesbdk/wasm/bdk-core.browser.wasm
             module/typesbdk/wasm/bdk-core.umd.js
             module/typesbdk/wasm/bdk-core.umd.wasm
+            module/typesbdk/wasm/bdk-core.slim.umd.js
+            module/typesbdk/wasm/bdk-core.slim.umd.wasm
           if-no-files-found: error

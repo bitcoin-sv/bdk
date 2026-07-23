@@ -1,13 +1,23 @@
 #include "txvalidator_wasm.h"
 #include <txvalidator.hpp>
+#include <secp256k1.h>
+#include <secp256k1_ecdh.h>
 
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <optional>
 #include <span>
 
 extern "C" void bdk_secp256k1_prepare_verification_tables(void);
+extern "C" size_t bdk_secp256k1_verification_table_snapshot_size(void);
+extern "C" int bdk_secp256k1_export_verification_tables(
+    unsigned char* output,
+    size_t size);
+extern "C" int bdk_secp256k1_import_verification_tables(
+    const unsigned char* input,
+    size_t size);
 
 namespace {
 
@@ -93,9 +103,117 @@ TxError ExceptionResult() noexcept
     return {TX_ERR_DOMAIN_EXCEPTION, 0};
 }
 
+const secp256k1_context* SigningContext() noexcept
+{
+    static const secp256k1_context* context =
+        secp256k1_context_create(SECP256K1_CONTEXT_SIGN);
+    return context;
+}
+
+bool ParsePublicKey(
+    const uint8_t* bytes,
+    uint32_t size,
+    secp256k1_pubkey& publicKey) noexcept
+{
+    return bytes != nullptr && (size == 33 || size == 65) &&
+        secp256k1_ec_pubkey_parse(
+            secp256k1_context_static, &publicKey, bytes, size) == 1;
+}
+
+bool SerializePublicKey(
+    const secp256k1_pubkey& publicKey,
+    uint8_t* output) noexcept
+{
+    if(output == nullptr)
+        return false;
+    size_t size = 33;
+    return secp256k1_ec_pubkey_serialize(
+        secp256k1_context_static,
+        output,
+        &size,
+        &publicKey,
+        SECP256K1_EC_COMPRESSED) == 1 && size == 33;
+}
+
+int SerializeCompressedPoint(
+    uint8_t* output,
+    const uint8_t* x,
+    const uint8_t* y,
+    void*) noexcept
+{
+    output[0] = static_cast<uint8_t>(2 | (y[31] & 1));
+    std::memcpy(output + 1, x, 32);
+    return 1;
+}
+
+bool VerifyDigest(
+    const uint8_t* publicKey,
+    uint32_t publicKeySize,
+    const uint8_t* digest,
+    const uint8_t* signature,
+    uint32_t signatureSize) noexcept
+{
+    if(digest == nullptr || signature == nullptr || signatureSize == 0)
+        return false;
+    secp256k1_pubkey parsedPublicKey;
+    secp256k1_ecdsa_signature parsedSignature;
+    if(!ParsePublicKey(publicKey, publicKeySize, parsedPublicKey) ||
+       secp256k1_ecdsa_signature_parse_der(
+           secp256k1_context_static,
+           &parsedSignature,
+           signature,
+           signatureSize) != 1) {
+        return false;
+    }
+    /* The SDK's generic ECDSA verifier accepts the mathematically equivalent
+     * high-S form. Script policy enforces LOW_S separately inside the
+     * transaction interpreter, so keep this generic digest primitive
+     * semantically compatible by normalizing before verification. */
+    secp256k1_ecdsa_signature_normalize(
+        secp256k1_context_static,
+        &parsedSignature,
+        &parsedSignature);
+    bdk_secp256k1_prepare_verification_tables();
+    return secp256k1_ecdsa_verify(
+        secp256k1_context_static,
+        &parsedSignature,
+        digest,
+        &parsedPublicKey) == 1;
+}
+
 } // namespace
 
 extern "C" {
+
+void bdk_prepare_verification() noexcept
+{
+    bdk_secp256k1_prepare_verification_tables();
+}
+
+uint32_t bdk_prepare_signing() noexcept
+{
+    return SigningContext() == nullptr ? 0 : 1;
+}
+
+uint32_t bdk_verification_table_snapshot_size() noexcept
+{
+    const size_t size = bdk_secp256k1_verification_table_snapshot_size();
+    return size <= UINT32_MAX ? static_cast<uint32_t>(size) : 0;
+}
+
+uint32_t bdk_export_verification_tables(
+    uint8_t* output,
+    uint32_t size) noexcept
+{
+    return bdk_secp256k1_export_verification_tables(output, size) == 1 ? 1 : 0;
+}
+
+uint32_t bdk_import_verification_tables(
+    const uint8_t* input,
+    uint32_t size) noexcept
+{
+    return bdk_secp256k1_import_verification_tables(input, size) == 1 ? 1 : 0;
+}
 
 void bdk_verify_script_main(
     const uint8_t* extendedTX,
@@ -278,6 +396,136 @@ void bdk_verify_spend_batch(
         }
         WriteResult(output, index, result);
     }
+}
+
+uint32_t bdk_sign_digest(
+    const uint8_t* privateKey,
+    const uint8_t* digest,
+    uint8_t* signature) noexcept
+{
+    if(privateKey == nullptr || digest == nullptr || signature == nullptr)
+        return 0;
+    const secp256k1_context* context = SigningContext();
+    if(context == nullptr)
+        return 0;
+    secp256k1_ecdsa_signature parsedSignature;
+    if(secp256k1_ecdsa_sign(
+           context, &parsedSignature, digest, privateKey, nullptr, nullptr) != 1) {
+        return 0;
+    }
+    size_t size = 72;
+    return secp256k1_ecdsa_signature_serialize_der(
+        context, signature, &size, &parsedSignature) == 1
+        ? static_cast<uint32_t>(size)
+        : 0;
+}
+
+uint32_t bdk_verify_digest(
+    const uint8_t* publicKey,
+    uint32_t publicKeySize,
+    const uint8_t* digest,
+    const uint8_t* signature,
+    uint32_t signatureSize) noexcept
+{
+    return VerifyDigest(
+        publicKey, publicKeySize, digest, signature, signatureSize) ? 1 : 0;
+}
+
+void bdk_verify_digest_batch(
+    const uint8_t* publicKeys,
+    uint32_t publicKeySize,
+    const uint32_t* publicKeyOffsets,
+    const uint8_t* digests,
+    uint32_t digestSize,
+    const uint8_t* signatures,
+    uint32_t signatureSize,
+    const uint32_t* signatureOffsets,
+    uint32_t entryCount,
+    uint8_t* output) noexcept
+{
+    if(output == nullptr)
+        return;
+    if(digestSize != entryCount * 32 ||
+       (publicKeySize != 0 && publicKeys == nullptr) ||
+       (signatureSize != 0 && signatures == nullptr) ||
+       (digestSize != 0 && digests == nullptr) ||
+       !ValidOffsets(publicKeyOffsets, entryCount, publicKeySize) ||
+       !ValidOffsets(signatureOffsets, entryCount, signatureSize)) {
+        std::memset(output, 0, entryCount);
+        return;
+    }
+    for(uint32_t index = 0; index < entryCount; ++index) {
+        const auto publicKey =
+            Slice(publicKeys, publicKeyOffsets, index);
+        const auto signature =
+            Slice(signatures, signatureOffsets, index);
+        output[index] = VerifyDigest(
+            publicKey.data(),
+            static_cast<uint32_t>(publicKey.size()),
+            digests + index * 32,
+            signature.data(),
+            static_cast<uint32_t>(signature.size())) ? 1 : 0;
+    }
+}
+
+uint32_t bdk_public_key_from_private(
+    const uint8_t* privateKey,
+    uint8_t* publicKey) noexcept
+{
+    if(privateKey == nullptr || publicKey == nullptr)
+        return 0;
+    const secp256k1_context* context = SigningContext();
+    secp256k1_pubkey parsedPublicKey;
+    return context != nullptr &&
+        secp256k1_ec_pubkey_create(context, &parsedPublicKey, privateKey) == 1 &&
+        SerializePublicKey(parsedPublicKey, publicKey) ? 1 : 0;
+}
+
+uint32_t bdk_multiply_public_key(
+    const uint8_t* publicKey,
+    uint32_t publicKeySize,
+    const uint8_t* scalar,
+    uint8_t* multipliedPublicKey) noexcept
+{
+    if(scalar == nullptr || multipliedPublicKey == nullptr)
+        return 0;
+    secp256k1_pubkey parsedPublicKey;
+    return ParsePublicKey(publicKey, publicKeySize, parsedPublicKey) &&
+        secp256k1_ecdh(
+            secp256k1_context_static,
+            multipliedPublicKey,
+            &parsedPublicKey,
+            scalar,
+            SerializeCompressedPoint,
+            nullptr) == 1 ? 1 : 0;
+}
+
+uint32_t bdk_tweak_public_key_add(
+    const uint8_t* publicKey,
+    uint32_t publicKeySize,
+    const uint8_t* tweak,
+    uint8_t* tweakedPublicKey) noexcept
+{
+    if(tweak == nullptr || tweakedPublicKey == nullptr)
+        return 0;
+    secp256k1_pubkey parsedPublicKey;
+    if(!ParsePublicKey(publicKey, publicKeySize, parsedPublicKey))
+        return 0;
+    return secp256k1_ec_pubkey_tweak_add(
+               secp256k1_context_static, &parsedPublicKey, tweak) == 1 &&
+        SerializePublicKey(parsedPublicKey, tweakedPublicKey) ? 1 : 0;
+}
+
+uint32_t bdk_tweak_private_key_add(
+    const uint8_t* privateKey,
+    const uint8_t* tweak,
+    uint8_t* tweakedPrivateKey) noexcept
+{
+    if(privateKey == nullptr || tweak == nullptr || tweakedPrivateKey == nullptr)
+        return 0;
+    std::memcpy(tweakedPrivateKey, privateKey, 32);
+    return secp256k1_ec_seckey_tweak_add(
+        secp256k1_context_static, tweakedPrivateKey, tweak) == 1 ? 1 : 0;
 }
 
 } // extern "C"
