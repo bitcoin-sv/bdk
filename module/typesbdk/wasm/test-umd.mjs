@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict'
+import { webcrypto } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import vm from 'node:vm'
+
+import { runBdkTestSuite } from './test-suite.mjs'
 
 const moduleName = process.argv[2] ?? 'bdk-core.umd.js'
 const script = await readFile(new URL(moduleName, import.meta.url), 'utf8')
@@ -22,6 +25,7 @@ const context = vm.createContext({
   Float64Array,
   ArrayBuffer,
   WebAssembly,
+  crypto: webcrypto,
   performance,
   window: undefined
 })
@@ -42,4 +46,9 @@ if (!moduleName.includes('.slim.')) {
   assert.equal(typeof bdk.VectorUInt8, 'function')
   assert.equal(typeof bdk.VerifyScript, 'function')
 }
-console.log(`ok - ${moduleName} exposes verifier and secp256k1 batch ABIs`)
+await runBdkTestSuite({
+  bdk,
+  createBdkModule: context.createBdkModule,
+  moduleOptions: { wasmBinary },
+  label: moduleName
+})

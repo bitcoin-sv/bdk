@@ -28,38 +28,7 @@ set(SECP256K1_BUILD_TESTS OFF)
 set(SECP256K1_BUILD_EXHAUSTIVE_TESTS OFF)
 
 add_subdirectory("${BDK_BSV_ROOT_DIR}/src/secp256k1" ${CMAKE_CURRENT_BINARY_DIR}/secp256k1)
-
-# The default verification table is a megabyte of deterministic affine points.
-# WebAssembly can reconstruct it directly into zero-initialized memory while
-# retaining the same window size and hot verification path. Native builds keep
-# libsecp256k1's normal static table unless explicitly configured otherwise.
-if(BDK_SECP256K1_RUNTIME_PRECOMPUTATION)
-  set(_runtime_precomputed_dir "${CMAKE_CURRENT_SOURCE_DIR}/../module/typesbdk/wasm")
-  set_property(TARGET secp256k1_precomputed PROPERTY SOURCES
-    "${_runtime_precomputed_dir}/secp256k1_runtime_precomputed.c"
-    "${BDK_BSV_ROOT_DIR}/src/secp256k1/src/precomputed_ecmult_gen.c"
-  )
-  target_include_directories(secp256k1_precomputed PRIVATE
-    "${BDK_BSV_ROOT_DIR}/src/secp256k1/src"
-  )
-  target_compile_options(secp256k1_precomputed PRIVATE -O3)
-  # This table builder runs once and is faster as a compact standalone object.
-  # Keep LTO for the sustained verification path, where it is measurable.
-  set_property(TARGET secp256k1_precomputed PROPERTY INTERPROCEDURAL_OPTIMIZATION OFF)
-  target_include_directories(secp256k1 PRIVATE
-    "${BDK_BSV_ROOT_DIR}/src/secp256k1/include"
-    "${BDK_BSV_ROOT_DIR}/src/secp256k1/src"
-  )
-  target_compile_options(secp256k1 PRIVATE -O3)
-  get_target_property(_secp256k1_sources secp256k1 SOURCES)
-  list(REMOVE_ITEM _secp256k1_sources "secp256k1.c")
-  list(PREPEND _secp256k1_sources
-    "${_runtime_precomputed_dir}/secp256k1_runtime.c"
-  )
-  set_property(TARGET secp256k1 PROPERTY SOURCES ${_secp256k1_sources})
-  unset(_secp256k1_sources)
-  unset(_runtime_precomputed_dir)
-endif()
+bdk_configure_secp256k1_targets()
 
 ## Set the IDE Folder to the created targets for secp256k1 to the right place #########
 set(_targetList bench bench_ecmult bench_internal secp256k1 secp256k1_precomputed)

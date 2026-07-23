@@ -102,6 +102,15 @@ else
   exit 1
 fi
 
+boost_actual_version="$(
+  sed -n 's/^#define BOOST_VERSION \([0-9][0-9]*\).*/\1/p' \
+    "$boost_include_root/boost/version.hpp"
+)"
+if [[ "$boost_actual_version" != 108500 ]]; then
+  echo "BOOST_ROOT reports BOOST_VERSION=$boost_actual_version; the reproducible WASM build requires Boost $boost_version (108500)" >&2
+  exit 1
+fi
+
 for path in \
   "$BSV_ROOT/src/script/interpreter.cpp" \
   "$boost_include_root/boost/version.hpp"; do
@@ -122,9 +131,6 @@ EMSDK_QUIET=1 emcmake cmake -S "$repo_root" -B "$build_dir" \
   -DBDK_BUILD_WASM=ON \
   -DBDK_BUILD_MODULES=OFF \
   -DBDK_BUILD_CORE_TESTS=OFF \
-  -DBDK_CORE_DISABLE_LOGGING=ON \
-  -DBDK_USE_BOOST_MULTIPRECISION=ON \
-  -DBDK_SECP256K1_RUNTIME_PRECOMPUTATION=ON \
   -DBUILD_MODULE_GOLANG=OFF \
   -DBUILD_MODULE_GOLANG_INSTALL_INSOURCE=OFF \
   -DBUILD_MODULE_RUST=OFF \

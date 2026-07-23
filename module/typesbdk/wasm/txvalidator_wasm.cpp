@@ -1,8 +1,11 @@
 #include "txvalidator_wasm.h"
+#include <crypto/sha256.h>
 #include <txvalidator.hpp>
 #include <secp256k1.h>
 #include <secp256k1_ecdh.h>
 
+#include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -103,11 +106,22 @@ TxError ExceptionResult() noexcept
     return {TX_ERR_DOMAIN_EXCEPTION, 0};
 }
 
-const secp256k1_context* SigningContext() noexcept
+secp256k1_context* SigningContextStorage() noexcept
 {
-    static const secp256k1_context* context =
+    static secp256k1_context* context =
         secp256k1_context_create(SECP256K1_CONTEXT_SIGN);
     return context;
+}
+
+bool& SigningContextPrepared() noexcept
+{
+    static bool prepared = false;
+    return prepared;
+}
+
+const secp256k1_context* SigningContext() noexcept
+{
+    return SigningContextPrepared() ? SigningContextStorage() : nullptr;
 }
 
 bool ParsePublicKey(
@@ -185,14 +199,39 @@ bool VerifyDigest(
 
 extern "C" {
 
+int bdk_secp256k1_verification_snapshot_is_valid(
+    const unsigned char* input,
+    size_t size) noexcept
+{
+    /* Bind imports to the complete canonical W15 table, including its build
+     * geometry and internal field representation. */
+    static constexpr std::array<uint8_t, CSHA256::OUTPUT_SIZE> expected{
+        0xd3, 0xc8, 0x9d, 0x8b, 0xa8, 0x29, 0xac, 0x39,
+        0x0e, 0xe9, 0x18, 0xc1, 0x21, 0x91, 0xcf, 0x0f,
+        0x53, 0x70, 0x71, 0x6b, 0x28, 0x51, 0x41, 0xec,
+        0x70, 0xfe, 0x21, 0x5f, 0x3b, 0x9d, 0xd6, 0x49
+    };
+    if(input == nullptr)
+        return 0;
+    std::array<uint8_t, CSHA256::OUTPUT_SIZE> digest{};
+    CSHA256{}.Write(input, size).Finalize(digest);
+    return std::equal(digest.begin(), digest.end(), expected.begin()) ? 1 : 0;
+}
+
 void bdk_prepare_verification() noexcept
 {
     bdk_secp256k1_prepare_verification_tables();
 }
 
-uint32_t bdk_prepare_signing() noexcept
+uint32_t bdk_prepare_signing(const uint8_t* seed) noexcept
 {
-    return SigningContext() == nullptr ? 0 : 1;
+    secp256k1_context* context = SigningContextStorage();
+    if(seed == nullptr || context == nullptr ||
+       secp256k1_context_randomize(context, seed) != 1) {
+        return 0;
+    }
+    SigningContextPrepared() = true;
+    return 1;
 }
 
 uint32_t bdk_verification_table_snapshot_size() noexcept

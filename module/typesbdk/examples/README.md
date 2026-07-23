@@ -32,8 +32,8 @@ suite has already passed.
 Successful output includes:
 
 ```text
-ok - mainnet-p2pkh-block-620940: domain=0 code=0
-ok - mainnet-p2pkh-corrupt-signature: domain=1 code=39
+ok - bdk-core.mjs mainnet-p2pkh-block-620940: domain=0 code=0
+ok - bdk-core.mjs mainnet-p2pkh-corrupt-signature: domain=1 code=39
 ```
 
 The validated Node (`bdk-core.mjs`, `bdk-core.wasm`) and browser/worker
@@ -61,6 +61,13 @@ chunk very large workloads rather than constructing an unbounded packed buffer.
 `VerifyScript` remains available through the compatibility vector API for
 existing callers.
 
+The generic signing and public-key creation helpers initialize lazily and
+randomize their libsecp256k1 signing context from
+`globalThis.crypto.getRandomValues`; they fail closed if a secure host RNG is
+unavailable. Full builds can export verification-table snapshots for worker
+instances. Imports authenticate the complete snapshot before installing it, so
+wrong-build or corrupted tables are rejected even when their length is valid.
+
 ## Native and direct WASM benchmark controls
 
 After a WASM build, benchmark the exact exported verifier without SDK
@@ -78,7 +85,6 @@ cmake -S . -B build-native-benchmark \
   -DBDK_BUILD_CORE_ONLY=ON \
   -DBDK_BUILD_MODULES=OFF \
   -DBDK_BUILD_CORE_TESTS=OFF \
-  -DBDK_CORE_DISABLE_LOGGING=ON \
   -DBUILD_MODULE_GOLANG=OFF \
   -DBUILD_MODULE_GOLANG_INSTALL_INSOURCE=OFF \
   -DBUILD_MODULE_RUST=OFF \

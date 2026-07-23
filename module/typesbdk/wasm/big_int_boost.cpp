@@ -1,3 +1,4 @@
+/* Header-only big-integer backend owned by the constrained WASM module. */
 #include <big_int.h>
 
 #include <boost/multiprecision/cpp_int.hpp>
