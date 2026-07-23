@@ -324,12 +324,21 @@ static Consensus::Params consensusParameters(bsv::TxValidationNetwork network)
 bsv::CTxValidator::CTxValidator(const std::string chainName)
     : source{ task::CCancellationSource::Make() }
 {
-    const auto chainParams = bsv::CreateCustomChainParams(chainName);
-    consensusParams = chainParams->GetConsensus();
+    // SV's CStnParams does not initialize BIP65Height, BIP66Height or
+    // CSVHeight. Reading those indeterminate fields makes script flags depend
+    // on the compiler and whatever happened to occupy the object storage.
+    // Normalize STN through the explicit verifier table used by the compact
+    // constructor. Other built-in and registered custom chains continue to
+    // use their complete CChainParams definitions.
+    const bool isStn = chainName == CBaseChainParams::STN;
+    const auto chainParams = isStn ? nullptr : bsv::CreateCustomChainParams(chainName);
+    consensusParams = isStn
+        ? consensusParameters(TxValidationNetwork::Stn)
+        : chainParams->GetConsensus();
     std::string errStr;
     bool ok {true};
 
-    policySettings.SetRequireStandard(chainParams->RequireStandard());
+    policySettings.SetRequireStandard(isStn ? false : chainParams->RequireStandard());
 
     ok = ok && this->SetGenesisActivationHeight(consensusParams.genesisHeight, &errStr);
     ok = ok && this->SetChronicleActivationHeight(consensusParams.chronicleHeight, &errStr);

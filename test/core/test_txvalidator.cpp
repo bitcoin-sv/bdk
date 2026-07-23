@@ -114,6 +114,26 @@ BOOST_AUTO_TEST_CASE(built_in_network_parameters_match_chainparams)
     }
 }
 
+BOOST_AUTO_TEST_CASE(stn_string_constructor_has_deterministic_activation_flags)
+{
+    const bsv::CTxValidator compact{bsv::TxValidationNetwork::Stn};
+
+    // CStnParams in SV leaves the BIP65, BIP66 and CSV heights uninitialized.
+    // Repeated string construction must use BDK's explicit STN table instead
+    // of inheriting platform- and stack-dependent values from those fields.
+    for(int iteration = 0; iteration < 32; ++iteration) {
+        const bsv::CTxValidator stringNamed{std::string{"stn"}};
+        for(const int32_t height : {1, 14, 15, 99, 100, 249, 250, 2199, 2200}) {
+            BOOST_CHECK_EQUAL(
+                stringNamed.CalculateFlags(height, height, false),
+                compact.CalculateFlags(height, height, false));
+            BOOST_CHECK_EQUAL(
+                stringNamed.CalculateFlags(height, height, true),
+                compact.CalculateFlags(height, height, true));
+        }
+    }
+}
+
 BOOST_AUTO_TEST_CASE(get_script_verify_flags)
 {
     using namespace std;
