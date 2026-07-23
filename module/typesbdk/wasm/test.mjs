@@ -262,3 +262,92 @@ assert.throws(
   undefined,
   'unsafe source amounts fail closed'
 )
+
+const privateKeyOne = fromHex(
+  '0000000000000000000000000000000000000000000000000000000000000001'
+)
+const privateKeyTwo = fromHex(
+  '0000000000000000000000000000000000000000000000000000000000000002'
+)
+const publicKeyOne = fromHex(
+  '0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798'
+)
+const publicKeyTwo = fromHex(
+  '02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5'
+)
+const digest = fromHex(
+  '4f3c2f0f55e2f4f08c892a2ca2c10100c33c5e7f443f3d13f86af68b4f8f25de'
+)
+const signature = bdk.SignDigest(privateKeyOne, digest)
+assert.deepEqual(
+  bdk.SignDigest(privateKeyOne, digest),
+  signature,
+  'digest signatures are deterministic'
+)
+assert.equal(
+  bdk.VerifyDigest(publicKeyOne, digest, signature),
+  true,
+  'digest signature verifies'
+)
+const corruptedSignature = signature.slice()
+corruptedSignature[corruptedSignature.length - 1] ^= 1
+assert.equal(
+  bdk.VerifyDigest(publicKeyOne, digest, corruptedSignature),
+  false,
+  'corrupted digest signature is rejected'
+)
+assert.deepEqual(
+  bdk.PublicKeyFromPrivate(privateKeyOne),
+  publicKeyOne,
+  'compressed public key creation'
+)
+assert.deepEqual(
+  bdk.MultiplyPublicKey(publicKeyOne, privateKeyTwo),
+  publicKeyTwo,
+  'constant-time public-key scalar multiplication'
+)
+assert.deepEqual(
+  bdk.TweakPublicKeyAdd(publicKeyOne, privateKeyOne),
+  publicKeyTwo,
+  'public-key tweak addition'
+)
+assert.deepEqual(
+  bdk.TweakPrivateKeyAdd(privateKeyOne, privateKeyOne),
+  privateKeyTwo,
+  'private-key tweak addition'
+)
+
+const packedPublicKeys = concatenate([publicKeyOne, publicKeyOne, publicKeyOne])
+const packedDigests = concatenate([digest, digest, digest])
+const packedSignatures = concatenate([signature, signature, corruptedSignature])
+assert.deepEqual(
+  bdk.VerifyDigestBatchArray(
+    packedPublicKeys.values,
+    packedPublicKeys.offsets,
+    packedDigests.values,
+    packedSignatures.values,
+    packedSignatures.offsets
+  ),
+  Uint8Array.from([1, 1, 0]),
+  'packed digest verification returns one result byte per entry'
+)
+
+const verificationTables = bdk.ExportVerificationTables()
+assert.equal(
+  verificationTables.length,
+  1024 * 1024,
+  'verification table snapshot contains both runtime W15 tables'
+)
+const importedBdk = await createBdkModule(moduleOptions)
+importedBdk.ImportVerificationTables(verificationTables)
+assert.equal(
+  importedBdk.VerifyDigest(publicKeyOne, digest, signature),
+  true,
+  'a fresh instance verifies after importing the precomputed tables'
+)
+assert.throws(
+  () => importedBdk.ImportVerificationTables(verificationTables.subarray(1)),
+  undefined,
+  'verification table imports require the exact deterministic snapshot'
+)
+console.log('ok - compact secp256k1 primitive ABIs')

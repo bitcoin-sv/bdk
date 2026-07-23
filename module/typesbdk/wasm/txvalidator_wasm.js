@@ -3,179 +3,42 @@
 // Public JavaScript compatibility layer for the verifier's compact C ABI.
 // Kept as post-link glue so Node, browser ESM, and UMD builds share one API.
 {
-  const vectorHandle = Symbol('BDK verifier vector')
-  let singleResultPointer = 0
-
-  class VectorHandle {
-    clone () {
-      const handle = checkedHandle(this)
-      const clone = Object.create(Object.getPrototypeOf(this))
-      handle.store.references++
-      clone[vectorHandle] = { store: handle.store, deleted: false }
-      return clone
-    }
-
-    delete () {
-      const handle = this[vectorHandle]
-      if (handle === undefined || handle.deleted) return
-      handle.deleted = true
-      handle.store.references--
-      if (handle.store.references === 0 && handle.store.pointer !== 0) {
-        Module._free(handle.store.pointer)
-        handle.store.pointer = 0
-        handle.store.ptr = 0
-        handle.store.capacity = 0
-      }
-    }
-
-    deleteLater () {
-      this.delete()
-      return this
-    }
-
-    isAliasOf (other) {
-      const handle = checkedHandle(this)
-      const otherHandle = checkedHandle(other)
-      return handle.store === otherHandle.store
-    }
-
-    isDeleted () {
-      return this[vectorHandle]?.deleted !== false
-    }
-  }
-
-  function checkedHandle (value) {
-    const handle = value?.[vectorHandle]
-    if (handle === undefined || handle.deleted) {
-      throw new Error('Cannot pass deleted verifier vector')
-    }
-    return handle
-  }
-
-  function makeVectorType (name, Type) {
-    const Vector = class extends VectorHandle {
-      constructor () {
-        super()
-        this[vectorHandle] = {
-          store: {
-            Type,
-            values: [],
-            pointer: 0,
-            ptr: 0,
-            length: 0,
-            capacity: 0,
-            dirty: false,
-            references: 1
-          },
-          deleted: false
-        }
-      }
-
-      get (index) {
-        return checkedHandle(this).store.values[index]
-      }
-
-      push_back (value) {
-        const store = checkedHandle(this).store
-        store.values.push(Type.of(value)[0])
-        store.dirty = true
-      }
-
-      resize (size, value = 0) {
-        if (!Number.isSafeInteger(size) || size < 0) throw new RangeError('invalid vector size')
-        const store = checkedHandle(this).store
-        const converted = Type.of(value)[0]
-        while (store.values.length < size) store.values.push(converted)
-        store.values.length = size
-        store.dirty = true
-      }
-
-      set (index, value) {
-        const store = checkedHandle(this).store
-        if (index >= 0 && index < store.values.length) {
-          store.values[index] = Type.of(value)[0]
-          store.dirty = true
-        }
-        return true
-      }
-
-      size () {
-        return checkedHandle(this).store.values.length
-      }
-    }
-    Object.defineProperty(Vector, 'name', { value: name })
-    return Vector
-  }
-
   function asTypedArray (values, Type, name) {
-    const vector = values?.[vectorHandle]
-    if (vector !== undefined) {
-      const handle = checkedHandle(values)
-      if (handle.store.Type !== Type) throw new TypeError(`${name} has the wrong vector type`)
-      return Type.from(handle.store.values)
-    }
     if (values === null || values === undefined || typeof values.length !== 'number') {
       throw new TypeError(`${name} must be an array or typed array`)
     }
     return values instanceof Type ? values : Type.from(values)
   }
 
-  function materializeVector (store, heap, name) {
-    const length = store.values.length
-    store.length = length
-    if (length === 0) {
-      store.ptr = 0
-      store.dirty = false
-      return store
-    }
-    if (length > 0xffffffff / store.Type.BYTES_PER_ELEMENT) {
-      throw new RangeError(`${name} is too large`)
-    }
-    const byteLength = length * store.Type.BYTES_PER_ELEMENT
-    if (store.capacity < byteLength) {
-      const pointer = Module._malloc(byteLength)
-      if (pointer === 0) throw new Error(`unable to allocate ${byteLength} verifier bytes`)
-      if (store.pointer !== 0) Module._free(store.pointer)
-      store.pointer = pointer
-      store.capacity = byteLength
-      store.dirty = true
-    }
-    store.ptr = store.pointer
-    if (store.dirty) {
-      heap().set(store.Type.from(store.values), store.pointer / store.Type.BYTES_PER_ELEMENT)
-      store.dirty = false
-    }
-    return store
-  }
-
-  function runWithBuffers (definitions, outputLength, callback) {
-    const inputs = definitions.map(([values, Type, heap, name]) => {
-      const vector = values?.[vectorHandle]
-      if (vector === undefined) {
-        return { typed: asTypedArray(values, Type, name), Type, heap, offset: 0 }
-      }
-      const store = checkedHandle(values).store
-      if (store.Type !== Type) throw new TypeError(`${name} has the wrong vector type`)
-      return { external: materializeVector(store, heap, name), Type, heap, offset: 0 }
-    })
+  function runWithOutput (
+    definitions,
+    outputLength,
+    OutputType,
+    outputHeap,
+    callback
+  ) {
+    const inputs = definitions.map(([values, Type, heap, name]) => ({
+      typed: asTypedArray(values, Type, name),
+      Type,
+      heap,
+      offset: 0
+    }))
     let byteLength = 0
     for (const input of inputs) {
-      if (input.external !== undefined) continue
       byteLength = Math.ceil(byteLength / input.Type.BYTES_PER_ELEMENT) * input.Type.BYTES_PER_ELEMENT
       input.offset = byteLength
       byteLength += input.typed.byteLength
     }
-    byteLength = Math.ceil(byteLength / Int32Array.BYTES_PER_ELEMENT) * Int32Array.BYTES_PER_ELEMENT
+    byteLength = Math.ceil(byteLength / OutputType.BYTES_PER_ELEMENT) * OutputType.BYTES_PER_ELEMENT
     const outputOffset = byteLength
-    byteLength += outputLength * Int32Array.BYTES_PER_ELEMENT
+    byteLength += outputLength * OutputType.BYTES_PER_ELEMENT
     let arena = 0
     try {
       if (byteLength !== 0) {
-        arena = Module._malloc(byteLength)
+        arena = _malloc(byteLength)
         if (arena === 0) throw new Error(`unable to allocate ${byteLength} verifier bytes`)
       }
       const buffers = inputs.map(input => {
-        if (input.external !== undefined) return input.external
         const ptr = input.typed.length === 0 ? 0 : arena + input.offset
         if (ptr !== 0) input.heap().set(input.typed, ptr / input.Type.BYTES_PER_ELEMENT)
         return { ptr, length: input.typed.length }
@@ -183,11 +46,26 @@
       const output = outputLength === 0 ? 0 : arena + outputOffset
       callback(buffers, output)
       return outputLength === 0
-        ? new Int32Array()
-        : Int32Array.from(HEAP32.subarray(output >> 2, (output >> 2) + outputLength))
+        ? new OutputType()
+        : OutputType.from(outputHeap().subarray(
+          output / OutputType.BYTES_PER_ELEMENT,
+          output / OutputType.BYTES_PER_ELEMENT + outputLength
+        ))
     } finally {
-      if (arena !== 0) Module._free(arena)
+      if (arena !== 0) _free(arena)
     }
+  }
+
+  function runWithBuffers (definitions, outputLength, callback) {
+    return runWithOutput(
+      definitions, outputLength, Int32Array, () => HEAP32, callback
+    )
+  }
+
+  function runWithByteOutput (definitions, outputLength, callback) {
+    return runWithOutput(
+      definitions, outputLength, Uint8Array, () => HEAPU8, callback
+    )
   }
 
   const uint8 = values => [values, Uint8Array, () => HEAPU8, 'bytes']
@@ -210,81 +88,54 @@
     }
   }
 
+  function exactBytes (values, size, name) {
+    const bytes = asTypedArray(values, Uint8Array, name)
+    if (bytes.length !== size) {
+      throw new RangeError(`${name} must contain exactly ${size} bytes`)
+    }
+    return bytes
+  }
+
+  function publicKeyBytes (values, name = 'public key') {
+    const bytes = asTypedArray(values, Uint8Array, name)
+    if (bytes.length !== 33 && bytes.length !== 65) {
+      throw new RangeError(`${name} must contain 33 or 65 bytes`)
+    }
+    return bytes
+  }
+
   function resultObject (result) {
     return { domain: result[0], code: result[1] }
   }
 
-  function reusableResultPointer () {
-    if (singleResultPointer === 0) {
-      singleResultPointer = Module._malloc(2 * Int32Array.BYTES_PER_ELEMENT)
-      if (singleResultPointer === 0) throw new Error('unable to allocate verifier result')
-    }
-    return singleResultPointer
-  }
-
-  function verifyScriptVectors (
-    txHandle,
-    heightHandle,
-    flagHandle,
-    blockHeight,
-    consensus
-  ) {
-    const tx = txHandle.store
-    const heights = heightHandle.store
-    const flags = flagHandle.store
-    if (tx.Type !== Uint8Array || heights.Type !== Int32Array || flags.Type !== Uint32Array) {
-      throw new TypeError('verifier vector has the wrong element type')
-    }
-    if (tx.dirty) materializeVector(tx, () => HEAPU8, 'bytes')
-    if (heights.dirty) materializeVector(heights, () => HEAP32, 'int32 values')
-    if (flags.dirty) materializeVector(flags, () => HEAPU32, 'uint32 values')
-    const output = reusableResultPointer()
-    Module._bdk_verify_script_main(
-      tx.ptr, tx.length,
-      heights.ptr, heights.length,
-      blockHeight, consensus ? 1 : 0,
-      flags.ptr, flags.length,
-      output
-    )
-    return { domain: HEAP32[output >> 2], code: HEAP32[(output >> 2) + 1] }
-  }
-
-  function verifyScriptMain (extendedTX, utxoHeights, blockHeight, consensus, customFlags) {
-    const txHandle = extendedTX?.[vectorHandle]
-    const heightHandle = utxoHeights?.[vectorHandle]
-    const flagHandle = customFlags?.[vectorHandle]
-    if (txHandle !== undefined && heightHandle !== undefined && flagHandle !== undefined) {
-      if (txHandle.deleted || heightHandle.deleted || flagHandle.deleted) {
-        throw new Error('Cannot pass deleted verifier vector')
-      }
-      return verifyScriptVectors(
-        txHandle,
-        heightHandle,
-        flagHandle,
-        blockHeight,
-        consensus
-      )
-    }
+  function verifyScriptArray (extendedTX, utxoHeights, blockHeight, consensus, customFlags) {
     const result = runWithBuffers(
       [uint8(extendedTX), int32(utxoHeights), uint32(customFlags)],
       2,
-      ([tx, heights, flags], output) => Module._bdk_verify_script_main(
+      ([tx, heights, flags], output) => _bdk_verify_script(
         tx.ptr, tx.length,
         heights.ptr, heights.length,
         blockHeight, consensus ? 1 : 0,
         flags.ptr, flags.length,
+        0,
         output
       )
     )
     return resultObject(result)
   }
 
-  Module.VectorUInt8 = makeVectorType('VectorUInt8', Uint8Array)
-  Module.VectorInt32 = makeVectorType('VectorInt32', Int32Array)
-  Module.VectorUInt32 = makeVectorType('VectorUInt32', Uint32Array)
+  Module.PrepareVerification = function () {
+    _bdk_prepare_verification()
+  }
+
+  Module.PrepareSigning = function () {
+    if (_bdk_prepare_signing() !== 1) {
+      throw new Error('unable to prepare secp256k1 signing context')
+    }
+  }
 
   Module.VerifyScript = function (extendedTX, utxoHeights, blockHeight, consensus, customFlags) {
-    return verifyScriptMain(extendedTX, utxoHeights, blockHeight, consensus, customFlags)
+    return verifyScriptArray(extendedTX, utxoHeights, blockHeight, consensus, customFlags)
   }
 
   Module.VerifyScriptArray = Module.VerifyScript
@@ -296,7 +147,7 @@
     const result = runWithBuffers(
       [uint8(extendedTX), int32(utxoHeights), uint32(customFlags)],
       2,
-      ([tx, heights, flags], output) => Module._bdk_verify_script(
+      ([tx, heights, flags], output) => _bdk_verify_script(
         tx.ptr, tx.length,
         heights.ptr, heights.length,
         blockHeight, consensus ? 1 : 0,
@@ -340,7 +191,7 @@
       ],
       count * 2,
       ([txs, txEnds, heights, heightEnds, blocks, modes, flags, flagEnds], output) => {
-        Module._bdk_verify_script_batch(
+        _bdk_verify_script_batch(
           txs.ptr, txs.length, txEnds.ptr,
           heights.ptr, heights.length, heightEnds.ptr,
           blocks.ptr, modes.ptr,
@@ -370,7 +221,7 @@
     const result = runWithBuffers(
       [uint8(transaction), uint8(lockingScript)],
       2,
-      ([tx, script], output) => Module._bdk_verify_spend(
+      ([tx, script], output) => _bdk_verify_spend(
         tx.ptr, tx.length, inputIndex,
         script.ptr, script.length, sourceSatoshis,
         utxoHeight, blockHeight, consensus ? 1 : 0,
@@ -425,7 +276,7 @@
       ],
       count * 2,
       ([txs, txEnds, inputs, scripts, scriptEnds, satoshis, heights, blocks, modes, hasFlags, flags], output) => {
-        Module._bdk_verify_spend_batch(
+        _bdk_verify_spend_batch(
           txs.ptr, txs.length, txEnds.ptr, inputs.ptr,
           scripts.ptr, scripts.length, scriptEnds.ptr,
           satoshis.ptr, heights.ptr, blocks.ptr, modes.ptr, hasFlags.ptr, flags.ptr,
@@ -433,5 +284,148 @@
         )
       }
     )
+  }
+
+  Module.SignDigest = function (privateKeyValue, digestValue) {
+    const privateKey = exactBytes(privateKeyValue, 32, 'private key')
+    const digest = exactBytes(digestValue, 32, 'digest')
+    let signatureLength = 0
+    const signature = runWithByteOutput(
+      [uint8(privateKey), uint8(digest)],
+      72,
+      ([key, hash], output) => {
+        signatureLength = _bdk_sign_digest(key.ptr, hash.ptr, output)
+      }
+    )
+    if (signatureLength === 0 || signatureLength > signature.length) {
+      throw new Error('unable to sign digest')
+    }
+    return signature.slice(0, signatureLength)
+  }
+
+  Module.VerifyDigest = function (publicKeyValue, digestValue, signatureValue) {
+    const publicKey = publicKeyBytes(publicKeyValue)
+    const digest = exactBytes(digestValue, 32, 'digest')
+    const signature = asTypedArray(signatureValue, Uint8Array, 'signature')
+    if (signature.length === 0 || signature.length > 72) return false
+    let verified = 0
+    runWithByteOutput(
+      [uint8(publicKey), uint8(digest), uint8(signature)],
+      0,
+      ([key, hash, der]) => {
+        verified = _bdk_verify_digest(
+          key.ptr, key.length, hash.ptr, der.ptr, der.length
+        )
+      }
+    )
+    return verified === 1
+  }
+
+  Module.VerifyDigestBatchArray = function (
+    publicKeysValue,
+    publicKeyOffsetsValue,
+    digestsValue,
+    signaturesValue,
+    signatureOffsetsValue
+  ) {
+    const publicKeys = asTypedArray(publicKeysValue, Uint8Array, 'public keys')
+    const publicKeyOffsets = asTypedArray(
+      publicKeyOffsetsValue, Uint32Array, 'public key offsets'
+    )
+    const digests = asTypedArray(digestsValue, Uint8Array, 'digests')
+    const signatures = asTypedArray(signaturesValue, Uint8Array, 'signatures')
+    const signatureOffsets = asTypedArray(
+      signatureOffsetsValue, Uint32Array, 'signature offsets'
+    )
+    if (digests.length % 32 !== 0) {
+      throw new RangeError('packed digests must contain 32 bytes per entry')
+    }
+    const count = digests.length / 32
+    validateOffsets(publicKeys, publicKeyOffsets, count, 'public key')
+    validateOffsets(signatures, signatureOffsets, count, 'signature')
+    for (let index = 0; index < count; index++) {
+      const keySize = publicKeyOffsets[index + 1] - publicKeyOffsets[index]
+      if (keySize !== 33 && keySize !== 65) {
+        throw new RangeError('each public key must contain 33 or 65 bytes')
+      }
+    }
+    return runWithByteOutput(
+      [
+        uint8(publicKeys), uint32(publicKeyOffsets), uint8(digests),
+        uint8(signatures), uint32(signatureOffsets)
+      ],
+      count,
+      ([keys, keyEnds, hashes, ders, derEnds], output) => {
+        _bdk_verify_digest_batch(
+          keys.ptr, keys.length, keyEnds.ptr,
+          hashes.ptr, hashes.length,
+          ders.ptr, ders.length, derEnds.ptr,
+          count, output
+        )
+      }
+    )
+  }
+
+  function runPublicKeyOperation (definitions, callback, failureMessage) {
+    let succeeded = 0
+    const publicKey = runWithByteOutput(
+      definitions,
+      33,
+      (buffers, output) => {
+        succeeded = callback(buffers, output)
+      }
+    )
+    if (succeeded !== 1) throw new Error(failureMessage)
+    return publicKey
+  }
+
+  Module.PublicKeyFromPrivate = function (privateKeyValue) {
+    const privateKey = exactBytes(privateKeyValue, 32, 'private key')
+    return runPublicKeyOperation(
+      [uint8(privateKey)],
+      ([key], output) => _bdk_public_key_from_private(key.ptr, output),
+      'unable to create public key'
+    )
+  }
+
+  Module.MultiplyPublicKey = function (publicKeyValue, scalarValue) {
+    const publicKey = publicKeyBytes(publicKeyValue)
+    const scalar = exactBytes(scalarValue, 32, 'scalar')
+    return runPublicKeyOperation(
+      [uint8(publicKey), uint8(scalar)],
+      ([key, factor], output) => _bdk_multiply_public_key(
+        key.ptr, key.length, factor.ptr, output
+      ),
+      'unable to multiply public key'
+    )
+  }
+
+  Module.TweakPublicKeyAdd = function (publicKeyValue, tweakValue) {
+    const publicKey = publicKeyBytes(publicKeyValue)
+    const tweak = exactBytes(tweakValue, 32, 'tweak')
+    return runPublicKeyOperation(
+      [uint8(publicKey), uint8(tweak)],
+      ([key, offset], output) => _bdk_tweak_public_key_add(
+        key.ptr, key.length, offset.ptr, output
+      ),
+      'unable to tweak public key'
+    )
+  }
+
+  Module.TweakPrivateKeyAdd = function (privateKeyValue, tweakValue) {
+    const privateKey = exactBytes(privateKeyValue, 32, 'private key')
+    const tweak = exactBytes(tweakValue, 32, 'tweak')
+    let succeeded = 0
+    const tweakedPrivateKey = runWithByteOutput(
+      [uint8(privateKey), uint8(tweak)],
+      32,
+      ([key, offset], output) => {
+        succeeded = _bdk_tweak_private_key_add(
+          key.ptr, offset.ptr, output
+        )
+      }
+    )
+    if (succeeded !== 1) throw new Error('unable to tweak private key')
+    return tweakedPrivateKey
   }
 }

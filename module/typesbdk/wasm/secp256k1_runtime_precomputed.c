@@ -8,9 +8,11 @@
 #include "secp256k1_runtime_precomputed.h"
 
 #include <stdlib.h>
+#include <string.h>
 
 secp256k1_ge_storage secp256k1_pre_g[ECMULT_TABLE_SIZE(WINDOW_G)];
 secp256k1_ge_storage secp256k1_pre_g_128[ECMULT_TABLE_SIZE(WINDOW_G)];
+static int verification_tables_prepared = 0;
 
 /* Generate odd multiples with one field inversion for the complete table.
  * The upstream table generator converts every point independently because it
@@ -76,10 +78,9 @@ static void bdk_secp256k1_compute_table(
 }
 
 void bdk_secp256k1_prepare_verification_tables(void) {
-    static int prepared = 0;
     secp256k1_gej generator;
 
-    if (prepared) {
+    if (verification_tables_prepared) {
         return;
     }
     secp256k1_gej_set_ge(&generator, &secp256k1_ge_const_g);
@@ -88,5 +89,31 @@ void bdk_secp256k1_prepare_verification_tables(void) {
         secp256k1_pre_g_128,
         &generator
     );
-    prepared = 1;
+    verification_tables_prepared = 1;
+}
+
+size_t bdk_secp256k1_verification_table_snapshot_size(void) {
+    return sizeof(secp256k1_pre_g) + sizeof(secp256k1_pre_g_128);
+}
+
+int bdk_secp256k1_export_verification_tables(unsigned char* output, size_t size) {
+    const size_t first_size = sizeof(secp256k1_pre_g);
+    if (output == NULL || size != bdk_secp256k1_verification_table_snapshot_size()) {
+        return 0;
+    }
+    bdk_secp256k1_prepare_verification_tables();
+    memcpy(output, secp256k1_pre_g, first_size);
+    memcpy(output + first_size, secp256k1_pre_g_128, sizeof(secp256k1_pre_g_128));
+    return 1;
+}
+
+int bdk_secp256k1_import_verification_tables(const unsigned char* input, size_t size) {
+    const size_t first_size = sizeof(secp256k1_pre_g);
+    if (input == NULL || size != bdk_secp256k1_verification_table_snapshot_size()) {
+        return 0;
+    }
+    memcpy(secp256k1_pre_g, input, first_size);
+    memcpy(secp256k1_pre_g_128, input + first_size, sizeof(secp256k1_pre_g_128));
+    verification_tables_prepared = 1;
+    return 1;
 }

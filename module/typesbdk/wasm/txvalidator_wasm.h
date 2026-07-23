@@ -4,6 +4,14 @@
 
 extern "C" {
 
+void bdk_prepare_verification() noexcept;
+uint32_t bdk_prepare_signing() noexcept;
+uint32_t bdk_verification_table_snapshot_size() noexcept;
+uint32_t bdk_export_verification_tables(uint8_t* output, uint32_t size) noexcept;
+uint32_t bdk_import_verification_tables(
+    const uint8_t* input,
+    uint32_t size) noexcept;
+
 void bdk_verify_script_main(
     const uint8_t* extendedTX,
     uint32_t extendedTXSize,
@@ -75,5 +83,50 @@ void bdk_verify_spend_batch(
     uint32_t entryCount,
     uint32_t network,
     int32_t* output) noexcept;
+
+uint32_t bdk_sign_digest(
+    const uint8_t* privateKey,
+    const uint8_t* digest,
+    uint8_t* signature) noexcept;
+
+uint32_t bdk_verify_digest(
+    const uint8_t* publicKey,
+    uint32_t publicKeySize,
+    const uint8_t* digest,
+    const uint8_t* signature,
+    uint32_t signatureSize) noexcept;
+
+void bdk_verify_digest_batch(
+    const uint8_t* publicKeys,
+    uint32_t publicKeySize,
+    const uint32_t* publicKeyOffsets,
+    const uint8_t* digests,
+    uint32_t digestSize,
+    const uint8_t* signatures,
+    uint32_t signatureSize,
+    const uint32_t* signatureOffsets,
+    uint32_t entryCount,
+    uint8_t* output) noexcept;
+
+uint32_t bdk_public_key_from_private(
+    const uint8_t* privateKey,
+    uint8_t* publicKey) noexcept;
+
+uint32_t bdk_multiply_public_key(
+    const uint8_t* publicKey,
+    uint32_t publicKeySize,
+    const uint8_t* scalar,
+    uint8_t* multipliedPublicKey) noexcept;
+
+uint32_t bdk_tweak_public_key_add(
+    const uint8_t* publicKey,
+    uint32_t publicKeySize,
+    const uint8_t* tweak,
+    uint8_t* tweakedPublicKey) noexcept;
+
+uint32_t bdk_tweak_private_key_add(
+    const uint8_t* privateKey,
+    const uint8_t* tweak,
+    uint8_t* tweakedPrivateKey) noexcept;
 
 }

@@ -2,8 +2,12 @@ import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import vm from 'node:vm'
 
-const script = await readFile(new URL('./bdk-core.umd.js', import.meta.url), 'utf8')
-const wasmBinary = await readFile(new URL('./bdk-core.umd.wasm', import.meta.url))
+const moduleName = process.argv[2] ?? 'bdk-core.umd.js'
+const script = await readFile(new URL(moduleName, import.meta.url), 'utf8')
+const wasmName = moduleName.includes('.slim.')
+  ? 'bdk-core.slim.umd.wasm'
+  : 'bdk-core.umd.wasm'
+const wasmBinary = await readFile(new URL(wasmName, import.meta.url))
 const context = vm.createContext({
   console,
   TextDecoder,
@@ -22,9 +26,20 @@ const context = vm.createContext({
   window: undefined
 })
 context.window = context
-vm.runInContext(script, context, { filename: 'bdk-core.umd.js' })
+vm.runInContext(script, context, { filename: moduleName })
 assert.equal(typeof context.createBdkModule, 'function')
 const bdk = await context.createBdkModule({ wasmBinary })
 assert.equal(typeof bdk.VerifyScriptBatchArray, 'function')
 assert.equal(typeof bdk.VerifySpendBatchArray, 'function')
-console.log('ok - UMD browser loader exposes transaction and Spend batch ABIs')
+assert.equal(typeof bdk.SignDigest, 'function')
+assert.equal(typeof bdk.VerifyDigestBatchArray, 'function')
+assert.equal(typeof bdk.MultiplyPublicKey, 'function')
+bdk.PrepareVerification()
+bdk.PrepareSigning()
+if (!moduleName.includes('.slim.')) {
+  assert.equal(typeof bdk.ExportVerificationTables, 'function')
+  assert.equal(typeof bdk.ImportVerificationTables, 'function')
+  assert.equal(typeof bdk.VectorUInt8, 'function')
+  assert.equal(typeof bdk.VerifyScript, 'function')
+}
+console.log(`ok - ${moduleName} exposes verifier and secp256k1 batch ABIs`)
