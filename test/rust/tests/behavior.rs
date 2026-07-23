@@ -334,7 +334,7 @@ fn standardness_policy_matches_go_behaviour() {
 fn version_values_match_go_version_tests() {
     assert_eq!(bsv_client_version_major(), 1);
     assert_eq!(bsv_client_version_minor(), 2);
-    assert_eq!(bsv_client_version_revision(), 2);
+    assert_eq!(bsv_client_version_revision(), 3);
     assert_eq!(bdk_version_major(), 1);
     assert_eq!(bdk_version_minor(), 2);
     assert_eq!(bdk_version_patch(), 2);
