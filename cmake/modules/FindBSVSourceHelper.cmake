@@ -109,6 +109,9 @@ function(bdkSetMinimumListBSVSource)############################################
       "src/crypto/ripemd160.h"  ##  Used by [base58.cpp], [block.cpp], [config.cpp], [core_write.cpp], [dstencode.cpp], [fRequireStandard.cpp], [hash.cpp], [interpreter.cpp], [key.cpp], [limitedstack.cpp], [merkle.cpp], [pubkey.cpp], [ripemd160.cpp], [scriptcache.cpp], [sigcache.cpp], [standard.cpp], [transaction.cpp]
       "src/crypto/sha1.h"  ##  Used by [interpreter.cpp], [limitedstack.cpp], [sha1.cpp]
       "src/crypto/sha256.h"  ##  Used by [base58.cpp], [block.cpp], [config.cpp], [core_write.cpp], [dstencode.cpp], [fRequireStandard.cpp], [hash.cpp], [hmac_sha256.cpp], [interpreter.cpp], [key.cpp], [limitedstack.cpp], [merkle.cpp], [pubkey.cpp], [scriptcache.cpp], [sha256.cpp], [sigcache.cpp], [standard.cpp], [transaction.cpp]
+      "src/crypto/sha256_dispatch.h"           ## dev_1_2_3: SHA-256 runtime dispatch (inline fn-ptr globals stream/d_block_1way/d_block_2way), included by [sha256.cpp], [merkle.cpp]
+      "src/crypto/sha256_stream_scalar.h"      ## dev_1_2_3: declares sha256_stream_scalar::Transform (default sha256_dispatch::stream)
+      "src/crypto/sha256d64_scalar.h"          ## dev_1_2_3: declares sha256d64_scalar::Transform (default sha256_dispatch::d_block_1way)
       "src/crypto/sha512.h"  ##  Used by [hash.cpp], [hmac_sha512.cpp], [key.cpp], [random.cpp], [sha512.cpp]
       "src/cuckoocache.h"  ##  Used by [scriptcache.cpp], [sigcache.cpp]
       "src/enum_cast.h"  ##  Used by [config.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [scriptcache.cpp]
@@ -172,6 +175,8 @@ function(bdkSetMinimumListBSVSource)############################################
       "src/crypto/sha1.cpp"
       "src/crypto/sha256.cpp"
       "src/crypto/sha256_sse4.cpp"
+      "src/crypto/sha256_stream_scalar.cpp"   ## dev_1_2_3: scalar streaming SHA-256 transform (default sha256_dispatch::stream)
+      "src/crypto/sha256d64_scalar.cpp"        ## dev_1_2_3: scalar double-SHA256 D64 transform (default sha256_dispatch::d_block_1way)
       "src/crypto/sha512.cpp"
       "src/hash.cpp"
       "src/key.cpp"

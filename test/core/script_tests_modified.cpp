@@ -71,7 +71,10 @@ struct BasicTestingSetup {
     ConfigInit& testConfig;
     BasicTestingSetup():testConfig(GlobalConfig::GetModifiableGlobalConfig())
     {
-        SHA256AutoDetect();
+        // bitcoin-sv 1.2.3 replaced the global SHA256AutoDetect() with
+        // sha256_dispatch::AutoDetect() (crypto/sha256_dispatch.cpp), which bdk does
+        // not vendor (it would pull the SSE4/SHA-NI TUs). bdk uses the scalar dispatch
+        // defaults only, so no detection call is needed to select an implementation.
         RandomInit();
         SetupEnvironment();
         SetupNetworking();
