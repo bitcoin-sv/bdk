@@ -1,6 +1,7 @@
 #include <set>
 
 #include <base58.h>
+#include <chainparams.h>
 #include <core_io.h>
 #include <protocol_era.h>
 #include <policy/policy.h>
@@ -267,19 +268,93 @@ static int32_t resolveUtxoEraHeight(int32_t utxoHeight, int32_t nextBlockHeight)
     return (utxoHeight == MEMPOOL_HEIGHT) ? nextBlockHeight : utxoHeight;
 }
 
-bsv::CTxValidator::CTxValidator(const std::string chainName)
-    : chainParams{ std::move(bsv::CreateCustomChainParams(chainName)) }
-    , source{ task::CCancellationSource::Make() }
+static Consensus::Params consensusParameters(bsv::TxValidationNetwork network)
 {
+    Consensus::Params params{};
+    switch(network) {
+    case bsv::TxValidationNetwork::Main:
+        params.BIP65Height = 388381;
+        params.BIP66Height = 363725;
+        params.CSVHeight = 419328;
+        params.uahfHeight = 478558;
+        params.daaHeight = 504031;
+        params.genesisHeight = 620538;
+        params.chronicleHeight = 943816;
+        params.p2shHeight = 173805;
+        break;
+    case bsv::TxValidationNetwork::Test:
+        params.BIP65Height = 581885;
+        params.BIP66Height = 330776;
+        params.CSVHeight = 770112;
+        params.uahfHeight = 1155875;
+        params.daaHeight = 1188697;
+        params.genesisHeight = 1344302;
+        params.chronicleHeight = 1713168;
+        params.p2shHeight = 519;
+        break;
+    case bsv::TxValidationNetwork::Stn:
+        params.uahfHeight = 15;
+        params.daaHeight = 2200;
+        params.genesisHeight = 100;
+        params.chronicleHeight = 250;
+        params.p2shHeight = 1;
+        break;
+    case bsv::TxValidationNetwork::Regtest:
+        params.BIP65Height = 1351;
+        params.BIP66Height = 1251;
+        params.CSVHeight = 576;
+        params.genesisHeight = 10000;
+        params.chronicleHeight = 15000;
+        params.p2shHeight = 1;
+        break;
+    case bsv::TxValidationNetwork::TeraTestnet:
+        params.genesisHeight = 1;
+        params.chronicleHeight = 2;
+        params.p2shHeight = 519;
+        break;
+    case bsv::TxValidationNetwork::TeraScalingTestnet:
+        params.genesisHeight = 1;
+        params.chronicleHeight = 2;
+        params.p2shHeight = 1;
+        break;
+    }
+    return params;
+}
+
+bsv::CTxValidator::CTxValidator(const std::string chainName)
+    : source{ task::CCancellationSource::Make() }
+{
+    const auto chainParams = bsv::CreateCustomChainParams(chainName);
+    consensusParams = chainParams->GetConsensus();
     std::string errStr;
     bool ok {true};
 
     policySettings.SetRequireStandard(chainParams->RequireStandard());
 
-    int32_t genesisHeight;
-    int32_t chronicleHeight;
-    ok = ok && this->SetGenesisActivationHeight(chainParams->GetConsensus().genesisHeight, &errStr);
-    ok = ok && this->SetChronicleActivationHeight(chainParams->GetConsensus().chronicleHeight, &errStr);
+    ok = ok && this->SetGenesisActivationHeight(consensusParams.genesisHeight, &errStr);
+    ok = ok && this->SetChronicleActivationHeight(consensusParams.chronicleHeight, &errStr);
+    if (!(ok || errStr.empty())){
+        throw std::runtime_error("error setting genesis and chronicle heights " + errStr);
+    }
+}
+
+bsv::CTxValidator::CTxValidator(TxValidationNetwork network)
+    : CTxValidator(consensusParameters(network), network == TxValidationNetwork::Main)
+{}
+
+bsv::CTxValidator::CTxValidator(
+    const Consensus::Params& consensusParamsIn,
+    bool requireStandard)
+    : consensusParams{consensusParamsIn}
+    , source{task::CCancellationSource::Make()}
+{
+    std::string errStr;
+    bool ok {true};
+
+    policySettings.SetRequireStandard(requireStandard);
+
+    ok = ok && this->SetGenesisActivationHeight(consensusParams.genesisHeight, &errStr);
+    ok = ok && this->SetChronicleActivationHeight(consensusParams.chronicleHeight, &errStr);
     if (!(ok || errStr.empty())){
         throw std::runtime_error("error setting genesis and chronicle heights " + errStr);
     }
@@ -581,8 +656,7 @@ uint32_t bsv::CTxValidator::CalculateFlags(int32_t utxoHeight, int32_t blockHeig
         // blockHeight is the block the tx belong to
         // In that case, the chainTip is blockHeight-1
         era = GetProtocolEra(policySettings, blockHeight );
-        const Consensus::Params& consensusparams = chainParams->GetConsensus();
-        protocolFlags = GetBlockScriptFlags(consensusparams, blockHeight - 1 , era);
+        protocolFlags = GetBlockScriptFlags(consensusParams, blockHeight - 1 , era);
     } else {
         // For tx coming from a peer
         // blockHeight is the chain tip (highest current block)
@@ -1193,8 +1267,7 @@ TxError bsv::CTxValidator::implCheckConsensusSigops(const CTransaction& tx,
     // bitcoin-sv's BlockValidateTxns which passes (flags & SCRIPT_VERIFY_P2SH) to
     // GetTransactionSigOpCount. BDK previously gated on UTXO era, which is wrong at
     // historical pre-P2SH heights where P2SH was not yet enforced by the block flags.
-    const Consensus::Params& consensusparams = chainParams->GetConsensus();
-    const uint32_t blockFlags = GetBlockScriptFlags(consensusparams, blockHeight - 1, era);
+    const uint32_t blockFlags = GetBlockScriptFlags(consensusParams, blockHeight - 1, era);
     const bool countP2SHSigOps = (blockFlags & SCRIPT_VERIFY_P2SH) != 0;
 
     const uint64_t nSigOps = implGetSigOpCount(tx, prevUTXO, utxoHeights, era, blockHeight, countP2SHSigOps);

@@ -10,7 +10,7 @@
 #include <vector>
 
 #include <configscriptpolicy.h>
-#include <chainparams.h>
+#include <consensus/params.h>
 #include <taskcancellation.h>
 #include <script/script.h>
 #include <script/interpreter.h>
@@ -22,10 +22,19 @@
 namespace bsv
 {
 
+enum class TxValidationNetwork {
+    Main,
+    Test,
+    Stn,
+    Regtest,
+    TeraTestnet,
+    TeraScalingTestnet
+};
+
 /**
- * CTxValidator holds its own ConfigScriptPolicy, ChainParams and CCancellationSource
- * objects in order to execute the script fully. It forwards the node's settings to its
- * own ConfigScriptPolicy instance through all setters.
+ * CTxValidator holds its own ConfigScriptPolicy, consensus parameters and
+ * CCancellationSource in order to execute the script fully. It forwards the
+ * node's settings to its own ConfigScriptPolicy instance through all setters.
  *
  * Checks present in bitcoin-sv's TxnValidation / BlockValidateTxns that are intentionally
  * absent here. In every case BDK is missing the chain / mempool / node-state context the
@@ -95,6 +104,8 @@ namespace bsv
 class CTxValidator {
     public:
         CTxValidator(const std::string chainName);
+        CTxValidator(TxValidationNetwork network);
+        CTxValidator(const Consensus::Params& consensusParams, bool requireStandard);
 
         // Forward policy settings call to GlobalConfig
         bool SetMaxOpsPerScriptPolicy(int64_t maxOpsPerScriptPolicyIn, std::string* error);
@@ -273,7 +284,7 @@ class CTxValidator {
 
     private :
         ConfigScriptPolicy policySettings;
-        std::unique_ptr<CChainParams> chainParams;
+        Consensus::Params consensusParams{};
         std::shared_ptr<task::CCancellationSource> source;
 
         // Consolidation policy settings (not part of ConfigScriptPolicy).

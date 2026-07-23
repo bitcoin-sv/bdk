@@ -143,9 +143,14 @@ macro(bdkInitCMake)
     message(FATAL_ERROR "Unable to find Threads library")
   endif()
 
-  include(FindOpenSSLHelper)
-  HelpFindOpenSSL()
-  #bdkPrintOpenSSLInfo()#Debug Log
+  # The verifier-only WebAssembly target excludes the two OpenSSL-backed BSV
+  # sources and uses its header-only big-integer backend. Do not make consumers
+  # download and cross-compile an otherwise unreachable crypto library.
+  if(NOT BDK_BUILD_WASM)
+    include(FindOpenSSLHelper)
+    HelpFindOpenSSL()
+    #bdkPrintOpenSSLInfo()#Debug Log
+  endif()
 
   enable_testing()
 endmacro()

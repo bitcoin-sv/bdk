@@ -12,11 +12,6 @@ boost_archive="boost-$boost_version-cmake.tar.gz"
 boost_url="https://github.com/boostorg/boost/releases/download/boost-$boost_version/$boost_archive"
 boost_sha256=ab9c9c4797384b0949dd676cf86b4f99553f8c148d767485aaac412af25183e6
 
-openssl_version=3.4.0
-openssl_archive="openssl-$openssl_version.tar.gz"
-openssl_url="https://www.openssl.org/source/$openssl_archive"
-openssl_sha256=e15dda82fe2fe8139dc2ac21a36d4ca01d5313c75f99f46c4e8a27709b7294bf
-
 bsv_commit=879fc8b42168dd0e608dafd51b39c6dabad37d4d
 
 for command in cmake emcmake emcc em++ emar emranlib git curl make node; do
@@ -98,26 +93,6 @@ if [[ -z "${BOOST_ROOT:-}" ]]; then
   BOOST_ROOT="$boost_source"
 fi
 
-if [[ -z "${OPENSSL_ROOT_DIR:-}" ]]; then
-  openssl_source="$deps_dir/openssl-$openssl_version"
-  OPENSSL_ROOT_DIR="$deps_dir/openssl-wasm-$openssl_version"
-  download "$openssl_url" "$deps_dir/$openssl_archive" "$openssl_sha256"
-  if [[ ! -d "$openssl_source" ]]; then
-    tar -xzf "$deps_dir/$openssl_archive" -C "$deps_dir"
-  fi
-  if [[ ! -f "$OPENSSL_ROOT_DIR/lib/libcrypto.a" ]]; then
-    make -C "$openssl_source" clean >/dev/null 2>&1 || true
-    (
-      cd "$openssl_source"
-      CROSS_COMPILE= CC=emcc CXX=em++ AR=emar RANLIB=emranlib NM=emnm \
-        ./Configure linux-generic32 no-asm no-shared no-threads no-dso no-tests no-docs no-engine no-ui-console \
-        --prefix="$OPENSSL_ROOT_DIR" --openssldir="$OPENSSL_ROOT_DIR"
-      make -j"$jobs"
-      make install_sw
-    )
-  fi
-fi
-
 if [[ -f "$BOOST_ROOT/boost/version.hpp" ]]; then
   boost_include_root="$BOOST_ROOT"
 elif [[ -f "$BOOST_ROOT/include/boost/version.hpp" ]]; then
@@ -129,10 +104,7 @@ fi
 
 for path in \
   "$BSV_ROOT/src/script/interpreter.cpp" \
-  "$boost_include_root/boost/version.hpp" \
-  "$OPENSSL_ROOT_DIR/include/openssl/ssl.h" \
-  "$OPENSSL_ROOT_DIR/lib/libcrypto.a" \
-  "$OPENSSL_ROOT_DIR/lib/libssl.a"; do
+  "$boost_include_root/boost/version.hpp"; do
   [[ -e "$path" ]] || { echo "Required dependency path is missing: $path" >&2; exit 1; }
 done
 
@@ -140,13 +112,19 @@ if [[ "${BDK_WASM_CLEAN:-1}" == 1 ]]; then
   cmake -E remove_directory "$build_dir"
 fi
 
+# Keep the full verification table so sustained ECDSA throughput never trades
+# away speed for download size. The verifier never signs, so its generator
+# table can still use the smallest supported, fully tested configuration.
 EMSDK_QUIET=1 emcmake cmake -S "$repo_root" -B "$build_dir" \
   -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
   -DBDK_BUILD_CORE_ONLY=ON \
   -DBDK_BUILD_WASM=ON \
   -DBDK_BUILD_MODULES=OFF \
   -DBDK_BUILD_CORE_TESTS=OFF \
   -DBDK_CORE_DISABLE_LOGGING=ON \
+  -DBDK_USE_BOOST_MULTIPRECISION=ON \
+  -DBDK_SECP256K1_RUNTIME_PRECOMPUTATION=ON \
   -DBUILD_MODULE_GOLANG=OFF \
   -DBUILD_MODULE_GOLANG_INSTALL_INSOURCE=OFF \
   -DBUILD_MODULE_RUST=OFF \
@@ -156,19 +134,22 @@ EMSDK_QUIET=1 emcmake cmake -S "$repo_root" -B "$build_dir" \
   -DBDK_LOG_BSV_FILES=OFF \
   -DBSV_ROOT="$BSV_ROOT" \
   -DBOOST_ROOT="$BOOST_ROOT" \
-  -DOPENSSL_ROOT_DIR="$OPENSSL_ROOT_DIR" \
-  -DOPENSSL_INCLUDE_DIR="$OPENSSL_ROOT_DIR/include" \
-  -DOPENSSL_CRYPTO_LIBRARY="$OPENSSL_ROOT_DIR/lib/libcrypto.a" \
-  -DOPENSSL_SSL_LIBRARY="$OPENSSL_ROOT_DIR/lib/libssl.a" \
-  -DOPENSSL_USE_STATIC_LIBS=TRUE \
   -DSECP256K1_ASM=OFF \
   -DSECP256K1_BUILD_BENCHMARK=OFF \
   -DSECP256K1_ECMULT_WINDOW_SIZE=15 \
+  -DSECP256K1_ECMULT_GEN_KB=2 \
   -DSECP256K1_TEST_OVERRIDE_WIDE_MULTIPLY=int64
 
+# wasm-opt consumes the linker output in place. Force only the three cheap
+# final links to rerun so an incremental build never optimizes an already
+# optimized binary and drifts from a clean/CI artifact.
+dist_dir="$build_dir/module/typesbdk/wasm/dist"
+cmake -E rm -f \
+  "$dist_dir/bdk-core.mjs" "$dist_dir/bdk-core.wasm" \
+  "$dist_dir/bdk-core.browser.mjs" "$dist_dir/bdk-core.browser.wasm" \
+  "$dist_dir/bdk-core.umd.js" "$dist_dir/bdk-core.umd.wasm"
 cmake --build "$build_dir" --target bdk_wasm bdk_wasm_browser bdk_wasm_umd --parallel "$jobs"
 
-dist_dir="$build_dir/module/typesbdk/wasm/dist"
 # Emscripten's -O3 link performs one Binaryen optimization pass. A converged
 # -O4 pass is measurably faster for this integer-heavy verifier while retaining
 # the same WebAssembly feature set emitted by Emscripten.
@@ -198,6 +179,7 @@ if [[ "${BDK_WASM_RUN_SECP_TESTS:-1}" == 1 ]]; then
     -DSECP256K1_BUILD_EXHAUSTIVE_TESTS=ON \
     -DSECP256K1_BUILD_TESTS=ON \
     -DSECP256K1_ECMULT_WINDOW_SIZE=15 \
+    -DSECP256K1_ECMULT_GEN_KB=2 \
     -DSECP256K1_ENABLE_MODULE_ECDH=ON \
     -DSECP256K1_ENABLE_MODULE_RECOVERY=ON \
     -DSECP256K1_TEST_OVERRIDE_WIDE_MULTIPLY=int64
@@ -224,6 +206,23 @@ install -m 0644 "$dist_dir/bdk-core.browser.mjs" "$script_dir/bdk-core.browser.m
 install -m 0644 "$dist_dir/bdk-core.browser.wasm" "$script_dir/bdk-core.browser.wasm"
 install -m 0644 "$dist_dir/bdk-core.umd.js" "$script_dir/bdk-core.umd.js"
 install -m 0644 "$dist_dir/bdk-core.umd.wasm" "$script_dir/bdk-core.umd.wasm"
+
+# Size is part of the verifier's compatibility contract. Check each actual
+# loader-plus-WASM payload using decimal kilobytes so compression or artifact
+# splitting can never disguise a regression above the 300 KB ceiling.
+max_bundle_bytes=300000
+for bundle_name in bdk-core bdk-core.browser bdk-core.umd; do
+  loader_suffix=mjs
+  [[ "$bundle_name" == bdk-core.umd ]] && loader_suffix=js
+  bundle_bytes=$((
+    $(wc -c < "$script_dir/$bundle_name.$loader_suffix") +
+    $(wc -c < "$script_dir/$bundle_name.wasm")
+  ))
+  if (( bundle_bytes > max_bundle_bytes )); then
+    echo "$bundle_name is $bundle_bytes bytes; maximum is $max_bundle_bytes" >&2
+    exit 1
+  fi
+done
 node "$script_dir/test.mjs"
 node "$script_dir/test.mjs" bdk-core.browser.mjs
 node "$script_dir/test-umd.mjs"
