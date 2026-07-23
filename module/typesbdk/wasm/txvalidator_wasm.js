@@ -72,6 +72,7 @@
   const int32 = values => [values, Int32Array, () => HEAP32, 'int32 values']
   const uint32 = values => [values, Uint32Array, () => HEAPU32, 'uint32 values']
   const float64 = values => [values, Float64Array, () => HEAPF64, 'float64 values']
+  let signingPrepared = false
 
   function validateNetwork (network) {
     if (!Number.isInteger(network) || network < 0 || network > 5) {
@@ -129,9 +130,25 @@
   }
 
   Module.PrepareSigning = function () {
-    if (_bdk_prepare_signing() !== 1) {
+    if (signingPrepared) return
+    const random = globalThis.crypto
+    if (random === undefined || typeof random.getRandomValues !== 'function') {
+      throw new Error('secure random values are required to prepare the signing context')
+    }
+    const seed = new Uint8Array(32)
+    random.getRandomValues(seed)
+    let prepared = 0
+    try {
+      runWithByteOutput([uint8(seed)], 0, ([randomness]) => {
+        prepared = _bdk_prepare_signing(randomness.ptr)
+      })
+    } finally {
+      seed.fill(0)
+    }
+    if (prepared !== 1) {
       throw new Error('unable to prepare secp256k1 signing context')
     }
+    signingPrepared = true
   }
 
   Module.VerifyScript = function (extendedTX, utxoHeights, blockHeight, consensus, customFlags) {
@@ -287,6 +304,7 @@
   }
 
   Module.SignDigest = function (privateKeyValue, digestValue) {
+    Module.PrepareSigning()
     const privateKey = exactBytes(privateKeyValue, 32, 'private key')
     const digest = exactBytes(digestValue, 32, 'digest')
     let signatureLength = 0
@@ -380,6 +398,7 @@
   }
 
   Module.PublicKeyFromPrivate = function (privateKeyValue) {
+    Module.PrepareSigning()
     const privateKey = exactBytes(privateKeyValue, 32, 'private key')
     return runPublicKeyOperation(
       [uint8(privateKey)],

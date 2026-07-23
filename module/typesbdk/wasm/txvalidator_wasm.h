@@ -5,7 +5,7 @@
 extern "C" {
 
 void bdk_prepare_verification() noexcept;
-uint32_t bdk_prepare_signing() noexcept;
+uint32_t bdk_prepare_signing(const uint8_t* seed) noexcept;
 uint32_t bdk_verification_table_snapshot_size() noexcept;
 uint32_t bdk_export_verification_tables(uint8_t* output, uint32_t size) noexcept;
 uint32_t bdk_import_verification_tables(

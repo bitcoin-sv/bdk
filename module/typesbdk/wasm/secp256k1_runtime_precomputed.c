@@ -10,6 +10,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+int bdk_secp256k1_verification_snapshot_is_valid(
+    const unsigned char* input,
+    size_t size);
+
 secp256k1_ge_storage secp256k1_pre_g[ECMULT_TABLE_SIZE(WINDOW_G)];
 secp256k1_ge_storage secp256k1_pre_g_128[ECMULT_TABLE_SIZE(WINDOW_G)];
 static int verification_tables_prepared = 0;
@@ -109,7 +113,9 @@ int bdk_secp256k1_export_verification_tables(unsigned char* output, size_t size)
 
 int bdk_secp256k1_import_verification_tables(const unsigned char* input, size_t size) {
     const size_t first_size = sizeof(secp256k1_pre_g);
-    if (input == NULL || size != bdk_secp256k1_verification_table_snapshot_size()) {
+    if (input == NULL ||
+        size != bdk_secp256k1_verification_table_snapshot_size() ||
+        !bdk_secp256k1_verification_snapshot_is_valid(input, size)) {
         return 0;
     }
     memcpy(secp256k1_pre_g, input, first_size);

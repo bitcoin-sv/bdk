@@ -40,9 +40,6 @@ option(BDK_BUILD_MODULES "Activate the build of modules" ON)
 option(BDK_BUILD_CORE_TESTS "Activate the build of core tests" ON)
 option(BDK_BUILD_WASM "Build the TypeScript/JavaScript WebAssembly module" OFF)
 option(BDK_BUILD_NATIVE_VERIFY_BENCHMARK "Build the native VerifyScript benchmark" OFF)
-option(BDK_CORE_DISABLE_LOGGING "Compile bdk_core without node logging calls" OFF)
-option(BDK_USE_BOOST_MULTIPRECISION "Use the header-only script big-integer backend" ${EMSCRIPTEN})
-option(BDK_SECP256K1_RUNTIME_PRECOMPUTATION "Build secp256k1 verification tables at runtime" ${EMSCRIPTEN})
 # Independent install gates: FreeBSD/gobdk-only packages set both OFF.
 option(BDK_INSTALL_CORE_ARCHIVE "Install the bdk_core static archive" ON)
 option(BDK_INSTALL_BSV_HEADERS "Install Bitcoin SV headers and bundled support files" ON)
@@ -71,6 +68,15 @@ include(cmake/modules/FindBSVSourceHelper.cmake)
 HelpFindBSVSource()
 #bdkPrintBSVSourceInfo()#Print help to debug
 
+# Select one core profile before dependency discovery and target creation.
+# Specialized behavior stays in the consuming module's directory.
+include(cmake/BDKCoreConfig.cmake)
+if(BDK_BUILD_WASM)
+  include(module/typesbdk/wasm/core-overrides.cmake)
+elseif(BDK_BUILD_NATIVE_VERIFY_BENCHMARK)
+  include(module/typesbdk/benchmark/core-overrides.cmake)
+endif()
+
 ## Global version should be the maximum of all version numbers
 set(BDK_VERSION_MAJOR "1" CACHE INTERNAL "Bitcoin Development Kit major version")
 set(BDK_VERSION_MINOR "2" CACHE INTERNAL "Bitcoin Development Kit minor version")
@@ -86,19 +92,6 @@ endif()
 include(cmake/BDKInit.cmake)
 bdkInitCMake()
 
-# Error strings from Boost and BSV can contain `__FILE__`. Without stable
-# prefixes, otherwise identical WASM builds differ with the checkout location
-# (and therefore between a developer machine and CI). Apply the most specific
-# mappings first because the default dependency directory is below the BDK
-# source tree.
-if(BDK_BUILD_WASM)
-  add_compile_options(
-    "-ffile-prefix-map=${BDK_BSV_ROOT_DIR}=/bitcoin-sv"
-    "-ffile-prefix-map=${BOOST_ROOT}=/boost"
-    "-ffile-prefix-map=${CMAKE_SOURCE_DIR}=/bdk"
-  )
-endif()
-
 ## Everything in core should be includable from everywhere
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/core)
 
@@ -106,9 +99,6 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/core)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/core)
 
 if(BDK_BUILD_WASM)
-  if(NOT EMSCRIPTEN)
-    message(FATAL_ERROR "BDK_BUILD_WASM requires the Emscripten toolchain (configure with emcmake cmake)")
-  endif()
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/module/typesbdk/wasm)
 endif()
 

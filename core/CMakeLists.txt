@@ -11,9 +11,6 @@ HelpFindBoost()
 if(NOT Boost_FOUND)
   message(FATAL_ERROR "Boost is required to build bdk_core")
 endif()
-if(NOT BDK_BUILD_WASM AND NOT OPENSSL_FOUND)
-  message(FATAL_ERROR "OpenSSL is required to build native bdk_core")
-endif()
 
 ## Build bdk requires locating bsv source code
 if(NOT DEFINED BDK_BSV_ROOT_DIR)#
@@ -61,23 +58,8 @@ source_group("_generated" FILES "${BITCOIN_CONFIG_FILE}" "${BDK_VERSION_CPP}")
 file(GLOB_RECURSE BDK_CORE_EXTRA_HDR_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp" "${CMAKE_CURRENT_SOURCE_DIR}/*.h")
 file(GLOB_RECURSE BDK_CORE_EXTRA_SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
 
-# The node's bint implementation uses a small part of OpenSSL BIGNUM. On WASM,
-# that retains most of OpenSSL 3's provider registry and unrelated algorithms.
-# Keep native builds unchanged while allowing the equivalent header-only
-# backend to remove that dependency from constrained targets.
-set(BDK_BOOST_BINT_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/big_int_boost.cpp")
-set(BDK_WASM_CLEANSE_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/memory_cleanse_wasm.cpp")
-list(REMOVE_ITEM BDK_CORE_EXTRA_SRC_FILES "${BDK_BOOST_BINT_SOURCE}")
-list(REMOVE_ITEM BDK_CORE_EXTRA_SRC_FILES "${BDK_WASM_CLEANSE_SOURCE}")
-if(BDK_USE_BOOST_MULTIPRECISION)
-  list(REMOVE_ITEM BSV_MINIMAL_SRC_FILES "${BDK_BSV_ROOT_DIR}/src/big_int.cpp")
-  list(APPEND BDK_CORE_EXTRA_SRC_FILES "${BDK_BOOST_BINT_SOURCE}")
-endif()
-if(BDK_BUILD_WASM)
-  list(REMOVE_ITEM BSV_MINIMAL_SRC_FILES "${BDK_BSV_ROOT_DIR}/src/random.cpp")
-  list(REMOVE_ITEM BSV_MINIMAL_SRC_FILES "${BDK_BSV_ROOT_DIR}/src/support/cleanse.cpp")
-  list(APPEND BDK_CORE_EXTRA_SRC_FILES "${BDK_WASM_CLEANSE_SOURCE}")
-endif()
+list(REMOVE_ITEM BSV_MINIMAL_SRC_FILES ${BDK_CORE_EXCLUDED_BSV_SOURCES})
+list(APPEND BDK_CORE_EXTRA_SRC_FILES ${BDK_CORE_ADDITIONAL_SOURCES})
 
 set(BDK_CORE_HDR_FILES ${BDK_CORE_EXTRA_HDR_FILES} ${BSV_MINIMAL_HDR_FILES})
 set(BDK_CORE_SRC_FILES ${BDK_CORE_EXTRA_SRC_FILES} ${BSV_MINIMAL_SRC_FILES})
@@ -92,10 +74,10 @@ endforeach()
 add_library(bdk_core ${BITCOIN_CONFIG_FILE} ${BDK_VERSION_CPP} ${BDK_CORE_HDR_FILES} ${BDK_CORE_SRC_FILES})
 #set_target_properties(bdk_core PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS 1)
 target_include_directories(bdk_core PUBLIC ${BSV_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(bdk_core PRIVATE secp256k1 ${UNIVALUE_LIB} Boost::boost)
-if(NOT BDK_BUILD_WASM)
-  target_link_libraries(bdk_core PRIVATE OpenSSL::Crypto OpenSSL::SSL)
-endif()
+target_link_libraries(
+  bdk_core PRIVATE
+  secp256k1 ${UNIVALUE_LIB} Boost::boost ${BDK_CORE_LINK_LIBRARIES}
+)
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU") # remove warning on linux
     # Add the warning suppression flag to a specific source file
@@ -106,19 +88,13 @@ if(WIN32)
   target_link_libraries(bdk_core PRIVATE Crypt32.lib Ws2_32)
 endif()
 target_compile_definitions(bdk_core PUBLIC HAVE_CONFIG_H)
-target_compile_definitions(bdk_core PRIVATE BOOST_ALL_NO_LIB BOOST_SP_USE_STD_ATOMIC BOOST_AC_USE_STD_ATOMIC)
-
-# Emscripten's single-threaded target provides the POSIX thread headers used by
-# Boost.Thread, but Boost cannot auto-detect them unless `-pthread` is enabled.
-# BDK core only needs these declarations transitively; forcing the pthread
-# header backend avoids requiring SharedArrayBuffer or a browser worker pool.
-if(EMSCRIPTEN)
-  target_compile_definitions(bdk_core PRIVATE BOOST_HAS_PTHREADS)
-endif()
-
-if(BDK_CORE_DISABLE_LOGGING)
-  target_compile_definitions(bdk_core PRIVATE DISABLE_LOGGING)
-endif()
+target_compile_definitions(
+  bdk_core PRIVATE
+  BOOST_ALL_NO_LIB
+  BOOST_SP_USE_STD_ATOMIC
+  BOOST_AC_USE_STD_ATOMIC
+  ${BDK_CORE_PRIVATE_COMPILE_DEFINITIONS}
+)
 
 set_property(TARGET bdk_core PROPERTY FOLDER "core")
 
