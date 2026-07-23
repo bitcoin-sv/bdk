@@ -1,3 +1,4 @@
+#include <array>
 #include <chrono>
 #include <memory>
 #include <string>
@@ -70,6 +71,47 @@ BOOST_AUTO_TEST_CASE(custom_chainparams)
 
     // Unknown network should throw a exception
     BOOST_CHECK_THROW(bsv::CreateCustomChainParams(std::string{ "unknownchain" }), std::runtime_error);
+}
+
+BOOST_AUTO_TEST_CASE(built_in_network_parameters_match_chainparams)
+{
+    struct NetworkCase {
+        bsv::TxValidationNetwork network;
+        const char* chainName;
+    };
+    const std::array networks{
+        NetworkCase{bsv::TxValidationNetwork::Main, "main"},
+        NetworkCase{bsv::TxValidationNetwork::Test, "test"},
+        NetworkCase{bsv::TxValidationNetwork::Stn, "stn"},
+        NetworkCase{bsv::TxValidationNetwork::Regtest, "regtest"},
+        NetworkCase{bsv::TxValidationNetwork::TeraTestnet, "teratestnet"},
+        NetworkCase{bsv::TxValidationNetwork::TeraScalingTestnet, "tstn"}
+    };
+    const std::array heights{
+        1, 2, 14, 15, 99, 100, 249, 250, 518, 519, 575, 576, 1250,
+        1251, 1350, 1351, 2199, 2200, 9999, 10000, 14999, 15000,
+        173804, 173805, 330775, 330776, 363724, 363725, 388380,
+        388381, 419327, 419328, 478557, 478558, 504030, 504031,
+        581884, 581885, 620537, 620538, 770111, 770112, 943815, 943816,
+        1155874, 1155875, 1188696, 1188697, 1344301, 1344302,
+        1713167, 1713168
+    };
+
+    for(const auto& network : networks) {
+        const bsv::CTxValidator compact{network.network};
+        const bsv::CTxValidator full{std::string{network.chainName}};
+        BOOST_CHECK_EQUAL(compact.GetRequireStandard(), full.GetRequireStandard());
+        BOOST_CHECK_EQUAL(compact.GetGenesisActivationHeight(), full.GetGenesisActivationHeight());
+        BOOST_CHECK_EQUAL(compact.GetChronicleActivationHeight(), full.GetChronicleActivationHeight());
+        for(const int32_t height : heights) {
+            BOOST_CHECK_EQUAL(
+                compact.CalculateFlags(height, height, false),
+                full.CalculateFlags(height, height, false));
+            BOOST_CHECK_EQUAL(
+                compact.CalculateFlags(height, height, true),
+                full.CalculateFlags(height, height, true));
+        }
+    }
 }
 
 BOOST_AUTO_TEST_CASE(get_script_verify_flags)

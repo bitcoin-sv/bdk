@@ -121,6 +121,23 @@ for (const vector of vectors) {
     assert.deepEqual(bulk, vector.expected, `${vector.name} bulk ABI`)
     assert.deepEqual(network, vector.expected, `${vector.name} network ABI`)
 
+    const alias = extendedTx.clone()
+    assert.equal(alias.isAliasOf(extendedTx), true, `${vector.name} vector aliases share storage`)
+    assert.deepEqual(
+      bdk.VerifyScript(alias, utxoHeights, vector.blockHeight, vector.consensus, customFlags),
+      vector.expected,
+      `${vector.name} aliased vector ABI`
+    )
+    alias.delete()
+    assert.equal(alias.isDeleted(), true, `${vector.name} deleted alias is marked deleted`)
+    assert.equal(extendedTx.isDeleted(), false, `${vector.name} live alias retains storage`)
+    extendedTx.set(0, extendedTx.get(0))
+    assert.deepEqual(
+      bdk.VerifyScript(extendedTx, utxoHeights, vector.blockHeight, vector.consensus, customFlags),
+      vector.expected,
+      `${vector.name} vector mutation invalidates cached storage`
+    )
+
     const { transaction, spends } = rawTransactionAndSpendsFromEF(ef)
     const spend = bdk.VerifySpendArray(
       transaction,
