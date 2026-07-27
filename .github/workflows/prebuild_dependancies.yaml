@@ -54,7 +54,7 @@ jobs:
         wget -q $BOOST_URL -O "boost-$BOOST_VERSION-cmake.tar.gz"
         tar -xzf "boost-$BOOST_VERSION-cmake.tar.gz"
         mkdir -p "boost-$BOOST_VERSION/build"
-        cmake -B "./boost-$BOOST_VERSION/build" -S "./boost-$BOOST_VERSION" -DBUILD_SHARED_LIBS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX="$BOOST_ROOT" -DBOOST_INCLUDE_LIBRARIES="chrono;filesystem;program_options;system;test;thread;circular_buffer;multi_index;property_tree;signals2;uuid;variant"
+        cmake -B "./boost-$BOOST_VERSION/build" -S "./boost-$BOOST_VERSION" -DBUILD_SHARED_LIBS=OFF -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCMAKE_INSTALL_PREFIX="$BOOST_ROOT" -DBOOST_INCLUDE_LIBRARIES="chrono;filesystem;program_options;system;test;thread;circular_buffer;multi_index;property_tree;signals2;uuid;variant;multiprecision"
         cmake --build "./boost-$BOOST_VERSION/build" -j$(nproc) --target install
 
     - name: Build OpenSSL
@@ -66,6 +66,73 @@ jobs:
         ./config no-shared no-tests no-docs no-dso no-engine --prefix="$OPENSSL_ROOT_DIR" --openssldir="$OPENSSL_ROOT_DIR"
         make -j$(nproc)
         make install_sw
+
+    - name: Create archive
+      run: |
+        cd ${{ github.workspace }}
+        tar -czf "$PACKAGE_NAME.tar.gz" "$PACKAGE_NAME"
+      shell: bash
+
+    - name: Upload artifact using github cli
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        TAG_NAME="depcy"
+        ASSET_PATH="./${{ env.PACKAGE_NAME }}.tar.gz"
+        gh release upload $TAG_NAME $ASSET_PATH --repo ${{ github.repository }} --clobber
+
+  build-upload-wasm-dependencies:
+    # Platform-independent Boost header package for the standalone wasm build:
+    # one ubuntu job is enough. NO OpenSSL here — the wasm verifier never links it.
+    runs-on: ubuntu-22.04
+
+    env:
+      BOOST_VERSION : 1.85.0
+      # Minimal component set for the wasm verifier, converged empirically with
+      # the add-and-prune derivation procedure (build against a candidate
+      # headers-only install, extend on missing-header errors, then prune one
+      # component at a time keeping removals that still build). To change this
+      # list, re-run that procedure and pin its output — never hand-edit.
+      WASM_BOOST_INCLUDE_LIBRARIES : "multiprecision;chrono;uuid;variant;thread;filesystem;signals2;multi_index"
+
+    steps:
+    - name: Check out repository
+      uses: actions/checkout@v4
+
+    - name: Set Environment Variables
+      run: |
+        PACKAGE_NAME="dependancies_wasm"
+        echo "Building $PACKAGE_NAME (Boost headers for the wasm build, platform-independent)"
+        echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
+        echo "BOOST_URL=https://github.com/boostorg/boost/releases/download/boost-$BOOST_VERSION/boost-$BOOST_VERSION-cmake.tar.gz" >> $GITHUB_ENV
+        echo "INSTALL_DIR=${{ github.workspace }}/$PACKAGE_NAME" >> $GITHUB_ENV
+        echo "WASM_BOOST_DIR=${{ github.workspace }}/$PACKAGE_NAME/boost_$BOOST_VERSION" >> $GITHUB_ENV
+        cat $GITHUB_ENV
+
+    - name: Prepare Environment
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential g++ wget
+        mkdir -p $WASM_BOOST_DIR
+
+    - name: Build minimal Boost headers using cmake
+      run: |
+        wget -q $BOOST_URL -O "boost-$BOOST_VERSION-cmake.tar.gz"
+        tar -xzf "boost-$BOOST_VERSION-cmake.tar.gz"
+        mkdir -p "boost-$BOOST_VERSION/build"
+        cmake -B "./boost-$BOOST_VERSION/build" -S "./boost-$BOOST_VERSION" -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DCMAKE_INSTALL_PREFIX="${{ github.workspace }}/wasm-boost-staging" -DBOOST_INCLUDE_LIBRARIES="$WASM_BOOST_INCLUDE_LIBRARIES"
+        cmake --build "./boost-$BOOST_VERSION/build" -j$(nproc) --target install
+        # Headers only: the wasm build never links native Boost archives, so the
+        # compiled static libs from the install prefix are discarded.
+        # BYTE-REPRODUCIBILITY LAYOUT RULE: the wasm build normalizes Boost
+        # __FILE__ strings with -ffile-prefix-map=${BOOST_ROOT}=/boost, and the
+        # committed artifacts were produced with headers at $BOOST_ROOT/boost/...
+        # Consumers must therefore point BOOST_ROOT at a directory that contains
+        # boost/ DIRECTLY: BOOST_ROOT=<unpacked>/$PACKAGE_NAME/boost_$BOOST_VERSION.
+        # An include/ level in between changes the embedded strings and breaks
+        # the artifact byte-compare.
+        mv "${{ github.workspace }}/wasm-boost-staging/include/boost" "$WASM_BOOST_DIR/boost"
+        rm -rf "${{ github.workspace }}/wasm-boost-staging"
 
     - name: Create archive
       run: |
