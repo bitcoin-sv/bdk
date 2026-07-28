@@ -10,6 +10,7 @@ if(NOT DEFINED BDK_BSV_ROOT_DIR)#
     message(FATAL_ERROR "Unable to locate bsv source code by BDK_BSV_ROOT_DIR")
 endif()
 # This file is mainly copied from ${BDK_BSV_ROOT_DIR}/sv/src/config/CMakeLists.txt with slightl modifications
+## Include-location-independent: reads only BDK_BSV_ROOT_DIR and BDK_GENERATED_HPP_DIR (cache), sets BITCOIN_CONFIG_FILE at include scope
 #######################################################################
 
 

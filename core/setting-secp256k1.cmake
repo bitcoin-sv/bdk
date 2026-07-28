@@ -5,6 +5,12 @@
 #  Copyright (c) 2020 nChain Limited. All rights reserved       #
 #################################################################
 
+## Defensive idempotency: one secp256k1 sub-build per build tree; a second
+## include in the same tree reuses the existing targets
+if(TARGET secp256k1)
+  return()
+endif()
+
 ## Build secp256k1 requires locating bsv source code
 if(NOT DEFINED BDK_BSV_ROOT_DIR)#
     message(FATAL_ERROR "Unable to locate bsv source code by BDK_BSV_ROOT_DIR")
@@ -28,7 +34,6 @@ set(SECP256K1_BUILD_TESTS OFF)
 set(SECP256K1_BUILD_EXHAUSTIVE_TESTS OFF)
 
 add_subdirectory("${BDK_BSV_ROOT_DIR}/src/secp256k1" ${CMAKE_CURRENT_BINARY_DIR}/secp256k1)
-bdk_configure_secp256k1_targets()
 
 ## Set the IDE Folder to the created targets for secp256k1 to the right place #########
 set(_targetList bench bench_ecmult bench_internal secp256k1 secp256k1_precomputed)

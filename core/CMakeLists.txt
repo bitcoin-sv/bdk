@@ -17,86 +17,26 @@ if(NOT DEFINED BDK_BSV_ROOT_DIR)#
   message(FATAL_ERROR "Unable to locate bsv source code by BDK_BSV_ROOT_DIR")
 endif()
 
-#### Generate version C++  #####
-set(BDK_VERSION_CPP_IN ${CMAKE_CURRENT_SOURCE_DIR}/BDKVersion.cpp.in CACHE INTERNAL "Template File for C++ version")
-set(BDK_VERSION_CPP ${BDK_GENERATED_CPP_DIR}/BDKVersion.cpp CACHE INTERNAL "CPP File for framework version config")
-configure_file(${BDK_VERSION_CPP_IN} ${BDK_VERSION_CPP})
+## The reusable core recipe: setting-*.cmake includes plus the
+## bdk_add_core_library() factory building one core library variant
+include("${CMAKE_CURRENT_SOURCE_DIR}/bdk-core-recipe.cmake")
 
-set(BSV_MINIMAL_FILES ${BSV_MINIMAL_HDR_FILES} ${BSV_MINIMAL_SRC_FILES})
-#bdkPrintList("BSV_MINIMAL_FILES" "${BSV_MINIMAL_FILES}")## Help to debug
-
-## Helper files activate some settings for bsv and secp256k1 native source codes
-include("${CMAKE_CURRENT_SOURCE_DIR}/setting-bitcoin.cmake")
-include("${CMAKE_CURRENT_SOURCE_DIR}/setting-secp256k1.cmake")
-if(BDK_BUILD_UNIVALUE)
-  include("${CMAKE_CURRENT_SOURCE_DIR}/setting-univalue.cmake")
-  set(UNIVALUE_LIB univalue)
-else()
-  set(UNIVALUE_LIB "")
-endif()
+## LevelDB is a native-only side build (no core variant links it), so it stays
+## here in the thin native part, outside the reusable recipe
 if(BDK_BUILD_LEVELDB)
   include("${CMAKE_CURRENT_SOURCE_DIR}/setting-leveldb.cmake")
 endif()
 
-## Log list of bsv source files
-message(STATUS "Build core using bsv source code in ${BDK_BSV_ROOT_DIR}")
-foreach(_bitcoin_file ${BSV_MINIMAL_FILES})
-  if(BDK_LOG_BSV_FILES)
-    message(STATUS "    [${_bitcoin_file}]")
-  endif()
-  ## Set the nice structure in IDE
-  get_filename_component(_file_ext "${_bitcoin_file}" EXT)
-  if(${_file_ext} MATCHES ".cpp" OR ${_file_ext} MATCHES ".c")
-    source_group(TREE ${BDK_BSV_ROOT_DIR} PREFIX "bitcoin SRC" FILES "${_bitcoin_file}")
-  else()
-    source_group(TREE ${BDK_BSV_ROOT_DIR} PREFIX "bitcoin HDR" FILES "${_bitcoin_file}")
-  endif()
-endforeach()
-source_group("_generated" FILES "${BITCOIN_CONFIG_FILE}" "${BDK_VERSION_CPP}")
-
-## any .cpp .hpp file added here will be added group with bsv file to build the core.
-file(GLOB_RECURSE BDK_CORE_EXTRA_HDR_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.hpp" "${CMAKE_CURRENT_SOURCE_DIR}/*.h")
-file(GLOB_RECURSE BDK_CORE_EXTRA_SRC_FILES "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
-
-list(REMOVE_ITEM BSV_MINIMAL_SRC_FILES ${BDK_CORE_EXCLUDED_BSV_SOURCES})
-list(APPEND BDK_CORE_EXTRA_SRC_FILES ${BDK_CORE_ADDITIONAL_SOURCES})
-
-set(BDK_CORE_HDR_FILES ${BDK_CORE_EXTRA_HDR_FILES} ${BSV_MINIMAL_HDR_FILES})
-set(BDK_CORE_SRC_FILES ${BDK_CORE_EXTRA_SRC_FILES} ${BSV_MINIMAL_SRC_FILES})
-message(STATUS "Extra c++ file in ${CMAKE_CURRENT_SOURCE_DIR}")
-foreach(_extra_file ${BDK_CORE_EXTRA_HDR_FILES} ${BDK_CORE_EXTRA_SRC_FILES})
-  if(BDK_LOG_BSV_FILES)
-    message(STATUS "      +[${_extra_file}]")
-  endif()
-endforeach()
-
-## Build bdk_core as a library using bsv source code
-add_library(bdk_core ${BITCOIN_CONFIG_FILE} ${BDK_VERSION_CPP} ${BDK_CORE_HDR_FILES} ${BDK_CORE_SRC_FILES})
-#set_target_properties(bdk_core PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS 1)
-target_include_directories(bdk_core PUBLIC ${BSV_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(
-  bdk_core PRIVATE
-  secp256k1 ${UNIVALUE_LIB} Boost::boost ${BDK_CORE_LINK_LIBRARIES}
-)
-
-if (CMAKE_CXX_COMPILER_ID STREQUAL "GNU") # remove warning on linux
-    # Add the warning suppression flag to a specific source file
-    set_source_files_properties("${BDK_BSV_ROOT_DIR}/src/script/sign.cpp" PROPERTIES COMPILE_FLAGS "-Wno-stringop-overread")
-endif()
-
-if(WIN32)
-  target_link_libraries(bdk_core PRIVATE Crypt32.lib Ws2_32)
-endif()
-target_compile_definitions(bdk_core PUBLIC HAVE_CONFIG_H)
-target_compile_definitions(
-  bdk_core PRIVATE
-  BOOST_ALL_NO_LIB
-  BOOST_SP_USE_STD_ATOMIC
-  BOOST_AC_USE_STD_ATOMIC
-  ${BDK_CORE_PRIVATE_COMPILE_DEFINITIONS}
-)
-
-set_property(TARGET bdk_core PROPERTY FOLDER "core")
+## TRANSITIONAL: the root still loads cmake/BDKCoreConfig.cmake, so the profile
+## variables keep feeding the canonical core here. The root-wiring commit
+## removes that profile mechanism and replaces this call with the explicit
+## canonical arguments (LINK_LIBRARIES OpenSSL::Crypto OpenSSL::SSL).
+## (OpenSSL discovery runs at root scope, visible to core/, module/ and test/)
+bdk_add_core_library(bdk_core
+  EXCLUDE_BSV_SOURCES ${BDK_CORE_EXCLUDED_BSV_SOURCES}
+  ADDITIONAL_SOURCES ${BDK_CORE_ADDITIONAL_SOURCES}
+  LINK_LIBRARIES ${BDK_CORE_LINK_LIBRARIES}
+  COMPILE_DEFINITIONS ${BDK_CORE_PRIVATE_COMPILE_DEFINITIONS})
 
 ## Install the binary library
 if(BDK_INSTALL_CORE_ARCHIVE)

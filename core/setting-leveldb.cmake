@@ -10,6 +10,11 @@ if(NOT DEFINED BDK_BSV_ROOT_DIR)#
     message(FATAL_ERROR "Unable to locate bsv source code by BDK_BSV_ROOT_DIR")
 endif()
 
+## Defensive idempotency: a second include in one build tree reuses the target
+if(TARGET leveldb)
+  return()
+endif()
+
 macro(FindSHLWAPI)
 # Try to find the SHLWAPI librairy
 # SHLWAPI_FOUND - system has SHLWAPI lib
