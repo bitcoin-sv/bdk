@@ -1,15 +1,26 @@
 ## Build and validate the WASM module
 
-Use Emscripten 4.0.23, then run the pinned build script from the BDK root:
+`build.sh` is the reproducible WASM entry point. Use Emscripten 4.0.23, then
+run the pinned build script from the BDK root:
 
 ```bash
 source /path/to/emsdk/emsdk_env.sh
 module/typesbdk/wasm/build.sh
+
+# Optional: build against the prebuilt minimal Boost package instead of
+# letting the script self-provision it:
+curl --fail --location -o /tmp/dependancies_wasm.tar.gz \
+  "https://github.com/bitcoin-sv/bdk/releases/download/depcy/dependancies_wasm.tar.gz"
+mkdir -p build-wasm-deps && tar -xzf /tmp/dependancies_wasm.tar.gz -C build-wasm-deps
+BOOST_ROOT="$PWD/build-wasm-deps/dependancies_wasm/boost_1.85.0" module/typesbdk/wasm/build.sh
 ```
 
-The script downloads and verifies Boost 1.85.0, checks out the same `bitcoin-sv`
-commit used by BDK CI, performs a clean core-only BDK build, runs
-libsecp256k1's verified, non-verified, and exhaustive WASM test binaries, and
+The script installs the pinned minimal Boost 1.85.0 header set (when no
+`BOOST_ROOT` is supplied), checks out the same `bitcoin-sv` commit used by BDK
+CI, performs a clean standalone module build (`-DBDK_BUILD_CORE=OFF
+-DBDK_BUILD_TYPES=ON`) that assembles the module's own `bdk_core_wasm` variant
+from the shared core recipe, runs libsecp256k1's verified, non-verified, and
+exhaustive WASM test binaries, and
 runs real positive and negative transaction vectors. The verifier-only WASM
 build does not require or link OpenSSL: it uses header-only multiprecision and a
 minimal memory-cleanse implementation. Dependencies and build output default to
