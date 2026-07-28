@@ -27,16 +27,10 @@ if(BDK_BUILD_LEVELDB)
   include("${CMAKE_CURRENT_SOURCE_DIR}/setting-leveldb.cmake")
 endif()
 
-## TRANSITIONAL: the root still loads cmake/BDKCoreConfig.cmake, so the profile
-## variables keep feeding the canonical core here. The root-wiring commit
-## removes that profile mechanism and replaces this call with the explicit
-## canonical arguments (LINK_LIBRARIES OpenSSL::Crypto OpenSSL::SSL).
+## Canonical native core: OpenSSL-linked, no exclusions, no extra definitions
 ## (OpenSSL discovery runs at root scope, visible to core/, module/ and test/)
 bdk_add_core_library(bdk_core
-  EXCLUDE_BSV_SOURCES ${BDK_CORE_EXCLUDED_BSV_SOURCES}
-  ADDITIONAL_SOURCES ${BDK_CORE_ADDITIONAL_SOURCES}
-  LINK_LIBRARIES ${BDK_CORE_LINK_LIBRARIES}
-  COMPILE_DEFINITIONS ${BDK_CORE_PRIVATE_COMPILE_DEFINITIONS})
+  LINK_LIBRARIES OpenSSL::Crypto OpenSSL::SSL)
 
 ## Install the binary library
 if(BDK_INSTALL_CORE_ARCHIVE)

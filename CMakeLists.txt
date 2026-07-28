@@ -38,8 +38,9 @@ option(BDK_BUILD_UNIVALUE "Activate the build of univalue" ON)
 option(BDK_BUILD_CORE_ONLY "Build only core and deactivate everything else" OFF)
 option(BDK_BUILD_MODULES "Activate the build of modules" ON)
 option(BDK_BUILD_CORE_TESTS "Activate the build of core tests" ON)
-option(BDK_BUILD_WASM "Build the TypeScript/JavaScript WebAssembly module" OFF)
-option(BDK_BUILD_NATIVE_VERIFY_BENCHMARK "Build the native VerifyScript benchmark" OFF)
+option(BDK_BUILD_CORE "Build the canonical native bdk_core library" ON)
+option(BDK_BUILD_TYPES "Build the TypeScript/JavaScript WASM module (standalone; requires Emscripten and BDK_BUILD_CORE=OFF)" OFF)
+option(BDK_REQUIRE_BIGINT_PARITY "Fail configure when Boost multiprecision headers are missing (CI enforcement)" OFF)
 # Independent install gates: FreeBSD/gobdk-only packages set both OFF.
 option(BDK_INSTALL_CORE_ARCHIVE "Install the bdk_core static archive" ON)
 option(BDK_INSTALL_BSV_HEADERS "Install Bitcoin SV headers and bundled support files" ON)
@@ -49,6 +50,34 @@ option(BUILD_MODULE_GOLANG "Build and test the Golang module" ON)
 option(BUILD_MODULE_GOLANG_INSTALL_INSOURCE "Install the static stand alone GoBDK in source directory (module/gobdk)" ON)
 option(BUILD_MODULE_RUST "Build and test the Rust module" ON)
 option(BUILD_MODULE_RUST_INSTALL_INSOURCE "Install the merged standalone libbdkffi in source directory (module/rustbdk/bdk-sys/lib)" ON)
+
+## Standalone-contract guards
+if(BDK_BUILD_TYPES)
+  if(NOT EMSCRIPTEN)
+    message(FATAL_ERROR "BDK_BUILD_TYPES requires the Emscripten toolchain (use emcmake or build.sh)")
+  endif()
+  if(BDK_BUILD_CORE)
+    message(FATAL_ERROR "BDK_BUILD_TYPES is a standalone build: configure with -DBDK_BUILD_CORE=OFF")
+  endif()
+endif()
+if(NOT BDK_BUILD_CORE)
+  if(BDK_BUILD_CORE_ONLY)
+    message(FATAL_ERROR "BDK_BUILD_CORE_ONLY=ON contradicts BDK_BUILD_CORE=OFF")
+  endif()
+  ## Everything that links or installs the shared core is force-disabled,
+  ## loudly. The install gates are included so a direct standalone configure
+  ## (-DBDK_BUILD_CORE=OFF -DBDK_BUILD_TYPES=ON) emits no install rules through
+  ## the recipe's secp256k1/univalue includes or the root file installs.
+  foreach(_opt BDK_BUILD_MODULES BDK_BUILD_CORE_TESTS
+               BUILD_MODULE_GOLANG BUILD_MODULE_GOLANG_INSTALL_INSOURCE
+               BUILD_MODULE_RUST BUILD_MODULE_RUST_INSTALL_INSOURCE
+               BDK_INSTALL_CORE_ARCHIVE BDK_INSTALL_BSV_HEADERS)
+    if(${_opt})
+      message(STATUS "BDK_BUILD_CORE=OFF: forcing ${_opt}=OFF (it depends on the shared bdk_core)")
+      set(${_opt} OFF CACHE BOOL "" FORCE)
+    endif()
+  endforeach()
+endif()
 
 find_program(CARGO_EXECUTABLE cargo)
 find_program(RUSTC_EXECUTABLE rustc)
@@ -68,15 +97,6 @@ include(cmake/modules/FindBSVSourceHelper.cmake)
 HelpFindBSVSource()
 #bdkPrintBSVSourceInfo()#Print help to debug
 
-# Select one core profile before dependency discovery and target creation.
-# Specialized behavior stays in the consuming module's directory.
-include(cmake/BDKCoreConfig.cmake)
-if(BDK_BUILD_WASM)
-  include(module/typesbdk/wasm/core-overrides.cmake)
-elseif(BDK_BUILD_NATIVE_VERIFY_BENCHMARK)
-  include(module/typesbdk/benchmark/core-overrides.cmake)
-endif()
-
 ## Global version should be the maximum of all version numbers
 set(BDK_VERSION_MAJOR "1" CACHE INTERNAL "Bitcoin Development Kit major version")
 set(BDK_VERSION_MINOR "2" CACHE INTERNAL "Bitcoin Development Kit minor version")
@@ -95,21 +115,18 @@ bdkInitCMake()
 ## Everything in core should be includable from everywhere
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/core)
 
-## Build bdk_core
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/core)
+## Build the canonical native bdk_core
+if(BDK_BUILD_CORE)
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/core)
+endif()
 
-if(BDK_BUILD_WASM)
+## The typesbdk WASM module is a standalone build: it assembles its own core
+## variant from the shared recipe in its own directory
+if(BDK_BUILD_TYPES)
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/module/typesbdk/wasm)
 endif()
 
-if(BDK_BUILD_NATIVE_VERIFY_BENCHMARK)
-  if(EMSCRIPTEN)
-    message(FATAL_ERROR "BDK_BUILD_NATIVE_VERIFY_BENCHMARK requires a native toolchain")
-  endif()
-  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/module/typesbdk/benchmark)
-endif()
-
-if(NOT BDK_BUILD_CORE_ONLY)
+if(NOT BDK_BUILD_CORE_ONLY AND BDK_BUILD_CORE)
   if(BDK_BUILD_MODULES)
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/module)
   endif()

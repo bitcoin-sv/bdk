@@ -143,7 +143,10 @@ macro(bdkInitCMake)
     message(FATAL_ERROR "Unable to find Threads library")
   endif()
 
-  if(BDK_CORE_FIND_OPENSSL)
+  ## OpenSSL is required by the native core and by the native modules/tests;
+  ## imported targets are directory-scoped, so discovery must run at root scope
+  ## to stay visible to core/, module/ and test/ alike
+  if(BDK_BUILD_CORE)
     include(FindOpenSSLHelper)
     HelpFindOpenSSL()
     #bdkPrintOpenSSLInfo()#Debug Log
