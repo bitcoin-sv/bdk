@@ -149,16 +149,17 @@ Defaults are shown in parentheses.
 | `BDK_BUILD_MODULES` | `ON` | Build the language-binding modules. |
 | `BDK_BUILD_CORE_TESTS` | `ON` | Build the C++ core tests. |
 | `BDK_BUILD_CORE` | `ON` | Build the canonical native `bdk_core`. `OFF` skips core and force-disables everything that links or installs it (modules, tests, install gates). |
-| `BDK_BUILD_TYPES` | `OFF` | Build the typesbdk WASM module as a standalone build. Requires Emscripten and `BDK_BUILD_CORE=OFF` (see below). |
+| `BDK_BUILD_WASM` | `OFF` | Build the typesbdk WASM module as a standalone build. Requires Emscripten and `BDK_BUILD_CORE=OFF` (see below). |
 | `BUILD_MODULE_GOLANG` | `ON` | Build and test the Golang (cgo) module. |
 | `BUILD_MODULE_GOLANG_INSTALL_INSOURCE` | `ON` | Install the standalone GoBDK static lib into `module/gobdk` (used by CI). |
 
-> The former `BDK_BUILD_WASM` and `BDK_BUILD_NATIVE_VERIFY_BENCHMARK` options **no longer
-> exist** and nothing in the tree reads those names: a stale `-DBDK_BUILD_WASM=...` on the
-> command line merely produces CMake's standard "Manually-specified variables were not used"
-> notice. The WASM build is activated by `BDK_BUILD_TYPES`; the VerifyScript benchmark is the
-> ordinary `bench_verifyscript` executable in `module/example/`, built by the regular native
-> build.
+> `BDK_BUILD_WASM` now activates the **standalone** WASM build described below; in the
+> pre-refactor tree the same name selected an in-tree overlay build that mutated the shared
+> core, and its semantics changed with the standalone architecture (`-DBDK_BUILD_WASM=ON`
+> without Emscripten is now a configure error). The former
+> `BDK_BUILD_NATIVE_VERIFY_BENCHMARK` option **no longer exists** and nothing reads it; the
+> VerifyScript benchmark is the ordinary `bench_verifyscript` executable in `module/example/`,
+> built by the regular native build.
 
 Additional build-facing variables live in the `cmake/` helpers and the GoBDK module:
 
@@ -204,7 +205,7 @@ artifacts.) A direct configure without `build.sh` is also supported:
 
 ```console
 emcmake cmake -S . -B build-wasm -DCMAKE_BUILD_TYPE=Release \
-  -DBDK_BUILD_CORE=OFF -DBDK_BUILD_TYPES=ON \
+  -DBDK_BUILD_CORE=OFF -DBDK_BUILD_WASM=ON \
   -DBSV_ROOT=/path/to/bitcoin-sv -DBOOST_ROOT=/path/to/boost \
   -DSECP256K1_ASM=OFF -DSECP256K1_ECMULT_WINDOW_SIZE=15 -DSECP256K1_ECMULT_GEN_KB=2 \
   -DSECP256K1_TEST_OVERRIDE_WIDE_MULTIPLY=int64 -DSECP256K1_BUILD_BENCHMARK=OFF

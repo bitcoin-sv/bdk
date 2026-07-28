@@ -18,7 +18,7 @@ BOOST_ROOT="$PWD/build-wasm-deps/dependancies_wasm/boost_1.85.0" module/typesbdk
 The script installs the pinned minimal Boost 1.85.0 header set (when no
 `BOOST_ROOT` is supplied), checks out the same `bitcoin-sv` commit used by BDK
 CI, performs a clean standalone module build (`-DBDK_BUILD_CORE=OFF
--DBDK_BUILD_TYPES=ON`) that assembles the module's own `bdk_core_wasm` variant
+-DBDK_BUILD_WASM=ON`) that assembles the module's own `bdk_core_wasm` variant
 from the shared core recipe, runs libsecp256k1's verified, non-verified, and
 exhaustive WASM test binaries, and
 runs real positive and negative transaction vectors. The verifier-only WASM

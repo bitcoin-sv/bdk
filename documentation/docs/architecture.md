@@ -162,7 +162,7 @@ gobdk/rustbdk link, and its build must stay canonical. The WASM build is therefo
 `bdk_core_wasm` variant inside the module directory, and the canonical `bdk_core` is never
 modified by any module.
 
-It configures with `-DBDK_BUILD_CORE=OFF -DBDK_BUILD_TYPES=ON` under the Emscripten toolchain
+It configures with `-DBDK_BUILD_CORE=OFF -DBDK_BUILD_WASM=ON` under the Emscripten toolchain
 rather than as part of the default native build. The pinned `wasm/build.sh` performs a clean
 Emscripten build, runs standalone libsecp256k1 tests and real positive/negative transaction
 vectors, and installs the validated `bdk-core.mjs` and `bdk-core.wasm` artifacts. See

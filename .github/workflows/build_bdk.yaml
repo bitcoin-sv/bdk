@@ -159,7 +159,7 @@ jobs:
         if: runner.os == 'Windows'
         run: |
           mkdir "build"
-          cmake -G"Visual Studio 17 2022" -A x64 -B "build" -S "." -DBUILD_MODULE_GOLANG=OFF -DBOOST_ROOT="./dependancies_windows_x86_64/boost_1.85.0" -DOPENSSL_ROOT_DIR="./dependancies_windows_x86_64/openssl_3.0.14"
+          cmake -G"Visual Studio 17 2022" -A x64 -B "build" -S "." -DBDK_BUILD_MODULES=OFF -DBOOST_ROOT="./dependancies_windows_x86_64/boost_1.85.0" -DOPENSSL_ROOT_DIR="./dependancies_windows_x86_64/openssl_3.0.14"
           cmake --build build --config Debug --parallel 4
           ctest --output-on-failure --test-dir build -C Debug --parallel 4
           cmake --build build --config Release --parallel 4
