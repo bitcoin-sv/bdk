@@ -8,7 +8,7 @@ This package contains comprehensive benchmarks measuring:
 
 - **bench_cgosimple_test.go**: Simple CGO overhead benchmarks (no-op calls, byte summing)
 - **bench_verifyscript_test.go**: Go implementation of script verification benchmark
-- **../../../example/bench_verifyscript.cpp**: C++ implementation of script verification benchmark
+- **../../example/bench_verifyscript.cpp**: C++ implementation of script verification benchmark
 
 ## Test Data
 
@@ -65,27 +65,23 @@ go test -bench=BenchmarkVerifyScript -benchtime=100000x
 ### 3. C++ Benchmark
 
 ```bash
-# Assuming you've built the project, the binary is at:
+# The regular native build produces the binary in the normal output directory:
 BENCH_BIN=/home/ctnguyen/development/bitcoin-sv/build/x64/release/bench_verifyscript
 
-# Run with default iterations (10,000)
+# Run with defaults (1000 iterations per sample, 9 samples)
 $BENCH_BIN
 
-# Run with custom iterations
-$BENCH_BIN -i 100000
-$BENCH_BIN -i 1000000
-
-# Run without consensus checking
-$BENCH_BIN -i 100000 -c
-$BENCH_BIN --iterations=100000 --disable-consensus
-
-# Show help
-$BENCH_BIN -h
+# Positional arguments: iterations, then samples
+$BENCH_BIN 100000
+$BENCH_BIN 100000 9
 ```
 
-To build the C++ benchmark:
+The benchmark always verifies with consensus flags for the hardcoded block
+height; there is no consensus toggle.
+
+To build only the C++ benchmark (from the build root):
 ```bash
-cd /home/ctnguyen/development/bitcoin-sv/build/x64/release
+cd /home/ctnguyen/development/bitcoin-sv/build
 cmake --build . --target bench_verifyscript
 ```
 
@@ -296,15 +292,14 @@ The 14% CGO overhead observed in Go comes from multiple sources:
 ```bash
 cd /home/ctnguyen/development/bitcoin-sv/build
 
-# Single mode (10,000 iterations)
-./x64/release/bench_verifyscript_single -i 10000
-
-# Batch modes
-./x64/release/bench_verifyscript_batch -i 1000 -b 10
-./x64/release/bench_verifyscript_batch -i 100 -b 100
-./x64/release/bench_verifyscript_batch -i 10 -b 1000
-./x64/release/bench_verifyscript_batch -i 1 -b 10000
+# Single mode: positional arguments are iterations per sample, then samples
+./x64/release/bench_verifyscript 10000 9
 ```
+
+The C++ batch-mode rows in the tables above were produced with a batch harness
+that is no longer in the tree; the current C++ benchmark (`bench_verifyscript`)
+measures single-transaction VerifyScript only. Batch modes remain runnable
+through the Go benchmarks below.
 
 **Go Benchmarks:**
 ```bash
@@ -335,13 +330,14 @@ Memory profiling was performed using Valgrind on debug builds to understand allo
 | **Test 1** | Single | 1 tx/call | 1000 calls | 1000 |
 | **Test 2** | Batch | 1000 tx/batch | 1 call | 1000 |
 
-**Commands used:**
+**Commands used** (with the benchmark harnesses of the time; the equivalent
+single-mode run with the current binary is
+`valgrind --tool=dhat ./x64/debug/bench_verifyscriptd 1000 1` - positional
+iterations and samples, debug `d` postfix - while the batch harness is no
+longer in the tree):
 ```bash
 # Test 1: Single mode - 1000 iterations of single transaction verification
-valgrind --tool=dhat ./x64/debug/bench_verifyscript_singled -i 1000
-
-# Test 2: Batch mode - 1 batch of 1000 transactions
-valgrind --tool=dhat ./x64/debug/bench_verifyscript_batchd -i 1 -b 1000
+# Test 2: Batch mode - 1 batch of 1000 transactions (harness since removed)
 ```
 
 ### DHAT Results: Allocation Counts

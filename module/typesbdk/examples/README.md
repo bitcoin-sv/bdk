@@ -77,25 +77,20 @@ serialization overhead:
 node module/typesbdk/wasm/benchmark.mjs 5000 11
 ```
 
-Build the matching native control with a native Boost and OpenSSL installation:
+The native control is `bench_verifyscript` in `module/example/`, built by the
+regular native build (no dedicated configure or flag needed):
 
 ```bash
-cmake -S . -B build-native-benchmark \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DBDK_BUILD_CORE_ONLY=ON \
-  -DBDK_BUILD_MODULES=OFF \
-  -DBDK_BUILD_CORE_TESTS=OFF \
-  -DBUILD_MODULE_GOLANG=OFF \
-  -DBUILD_MODULE_GOLANG_INSTALL_INSOURCE=OFF \
-  -DBUILD_MODULE_RUST=OFF \
-  -DBUILD_MODULE_RUST_INSTALL_INSOURCE=OFF \
-  -DBDK_BUILD_NATIVE_VERIFY_BENCHMARK=ON \
-  -DBSV_ROOT=/path/to/bitcoin-sv \
-  -DCUSTOM_BOOST_ROOT=/path/to/boost \
-  -DOPENSSL_ROOT_DIR=/path/to/openssl
-cmake --build build-native-benchmark --target bdk_verify_benchmark
-build-native-benchmark/x64/release/bdk_verify_benchmark 5000 11
+cmake --build /path/to/build --target bench_verifyscript
+/path/to/build/x64/release/bench_verifyscript 5000 11
 ```
+
+Note: `bench_verifyscript` links the canonical `bdk_core` with logging compiled
+in - the code path real native consumers (gobdk, rustbdk) run - whereas the
+WASM verifier is compiled with `DISABLE_LOGGING`. For an occasional
+logging-free native measurement, use a throwaway build tree configured with
+`-DCMAKE_CXX_FLAGS=-DDISABLE_LOGGING`; that is a one-off, not a committed
+build mode.
 
 ### To run example backend
 
