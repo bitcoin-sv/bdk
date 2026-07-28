@@ -1,3 +1,11 @@
+// Why this test exists: bdk ships two implementations of the consensus-critical
+// bsv::bint script arithmetic - bitcoin-sv's OpenSSL BIGNUM backend (compiled
+// into the native core) and the wasm verifier's Boost multiprecision backend
+// (module/typesbdk/wasm/big_int_boost.cpp). This one suite runs identically
+// against both: test_big_int links the native core, test_big_int_boost compiles
+// the Boost backend. Any behavioral divergence between the two - a silent
+// wasm-vs-native consensus split - fails a test here instead of shipping.
+
 #ifdef NDEBUG
 #define BOOST_TEST_MODULE test_big_int
 #else

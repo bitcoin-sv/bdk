@@ -20,6 +20,7 @@ installed alongside the package (`CMakeLists.txt`).
   `BDK_BUILD_NATIVE_VERIFY_BENCHMARK` options are removed and nothing reads them anymore. The
   VerifyScript benchmark moved to `module/example/bench_verifyscript`, built by the regular
   native build. The default native build configures, builds and tests again on the official
-  prebuilt dependency package: the big-int parity suite (`test_big_int_boost`) degrades to a
-  loud configure-time skip when Boost multiprecision headers are absent, and CI enforces it
-  with `-DBDK_REQUIRE_BIGINT_PARITY=ON`.
+  prebuilt dependency package. Boost multiprecision is now a required native dependency (the
+  packages carry the headers): it backs the big-int parity suite (`test_big_int_boost`), which
+  always builds and runs — a Boost install without multiprecision fails configure with an
+  actionable error.

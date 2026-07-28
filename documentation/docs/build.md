@@ -150,7 +150,6 @@ Defaults are shown in parentheses.
 | `BDK_BUILD_CORE_TESTS` | `ON` | Build the C++ core tests. |
 | `BDK_BUILD_CORE` | `ON` | Build the canonical native `bdk_core`. `OFF` skips core and force-disables everything that links or installs it (modules, tests, install gates). |
 | `BDK_BUILD_TYPES` | `OFF` | Build the typesbdk WASM module as a standalone build. Requires Emscripten and `BDK_BUILD_CORE=OFF` (see below). |
-| `BDK_REQUIRE_BIGINT_PARITY` | `OFF` | Fail configure when Boost multiprecision headers are missing. Set by CI so the big-int parity suite can never be silently skipped there. |
 | `BUILD_MODULE_GOLANG` | `ON` | Build and test the Golang (cgo) module. |
 | `BUILD_MODULE_GOLANG_INSTALL_INSOURCE` | `ON` | Install the standalone GoBDK static lib into `module/gobdk` (used by CI). |
 
@@ -227,12 +226,11 @@ list.
 ### Boost multiprecision and the big-int parity suite
 
 `test_big_int_boost` proves the wasm Boost bigint backend matches the OpenSSL-backed native
-implementation. It needs the Boost **multiprecision** headers, which are **deliberately not
-part of the official native dependency package** — a wasm-module test must not change the
-native dependency contract. CI parity jobs provision the headers in-job and configure with
-`-DBDK_REQUIRE_BIGINT_PARITY=ON`; locally, either install Boost multiprecision yourself or
-accept the loud configure-time warning that the suite is skipped (everything else builds and
-tests normally).
+implementation of the consensus-critical `bsv::bint` arithmetic. The Boost **multiprecision**
+headers are a **required native dependency** (header-only; the official prebuilt dependency
+packages carry them). A Boost install without them fails the native configure with an
+actionable error — use the refreshed `depcy` packages, or add `multiprecision` to your Boost
+install's `BOOST_INCLUDE_LIBRARIES`.
 
 ## How BDK finds the bitcoin-sv source
 
