@@ -86,7 +86,7 @@ jobs:
         run: |
           source "$RUNNER_TEMP/emsdk/emsdk_env.sh"
           emcmake cmake -S . -B build-wasm-direct -DCMAKE_BUILD_TYPE=Release \
-            -DBDK_BUILD_CORE=OFF -DBDK_BUILD_TYPES=ON \
+            -DBDK_BUILD_CORE=OFF -DBDK_BUILD_WASM=ON \
             -DBSV_ROOT="$BSV_ROOT" \
             -DBOOST_ROOT="$BOOST_ROOT" \
             -DSECP256K1_ASM=OFF -DSECP256K1_BUILD_BENCHMARK=OFF \

@@ -15,9 +15,10 @@ installed alongside the package (`CMakeLists.txt`).
   builds by mutating the shared core: it assembles its own `bdk_core_wasm` variant from the
   reusable core recipe (`core/bdk-core-recipe.cmake`) inside `module/typesbdk/wasm/`, and the
   canonical native `bdk_core` is never modified by any module. New root flags: `BDK_BUILD_CORE`
-  (default `ON`) and `BDK_BUILD_TYPES` (default `OFF`); the wasm build configures with
-  `-DBDK_BUILD_CORE=OFF -DBDK_BUILD_TYPES=ON` under Emscripten. The `BDK_BUILD_WASM` and
-  `BDK_BUILD_NATIVE_VERIFY_BENCHMARK` options are removed and nothing reads them anymore. The
+  (default `ON`) and `BDK_BUILD_WASM` (default `OFF`; the name is kept but its semantics
+  changed from the old in-tree overlay to the standalone build); the wasm build configures with
+  `-DBDK_BUILD_CORE=OFF -DBDK_BUILD_WASM=ON` under Emscripten. The
+  `BDK_BUILD_NATIVE_VERIFY_BENCHMARK` option is removed and nothing reads it anymore. The
   VerifyScript benchmark moved to `module/example/bench_verifyscript`, built by the regular
   native build. The default native build configures, builds and tests again on the official
   prebuilt dependency package. Boost multiprecision is now a required native dependency (the

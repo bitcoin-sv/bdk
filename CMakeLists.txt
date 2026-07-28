@@ -12,11 +12,11 @@
 ## Run to build/test/install
 ##
 ## On Windows
-##   cmake -G"Visual Studio 17 2022" -A x64 ..\bdk && cmake --build . --target ALL_BUILD --config Debug && cmake --build . --target ALL_BUILD --config Release && ctest -C Debug && ctest -C Release && cpack -G NSIS -C Release && cpack -G NSIS -C Debug
+##   cmake -G"Visual Studio 17 2022" -A x64 -DBDK_BUILD_MODULES=OFF ..\bdk && cmake --build . --target ALL_BUILD --config Debug && cmake --build . --target ALL_BUILD --config Release && ctest -C Debug && ctest -C Release && cpack -G NSIS -C Release && cpack -G NSIS -C Debug
 ##
 ## Windows alternative with MSBuild parallele:
-##   cmake -G"Visual Studio 17 2022" -A x64 ..\bdk && msbuild bdk.sln -maxcpucount:4 /p:Configuration=Debug && msbuild bdk.sln -maxcpucount:4 /p:Configuration=Release && ctest -C Debug && ctest -C Release && cpack -G NSIS -C Release && cpack -G NSIS -C Release
-##   cmake -G"Visual Studio 17 2022" -A x64 ..\bdk && msbuild bdk.sln -v:q -maxcpucount:4 /p:Configuration=Debug && msbuild bdk.sln  -v:q -maxcpucount:4 /p:Configuration=Release && ctest -C Debug && ctest -C Release && cpack -G NSIS -C Release && cpack -G NSIS -C Release
+##   cmake -G"Visual Studio 17 2022" -A x64 -DBDK_BUILD_MODULES=OFF ..\bdk && msbuild bdk.sln -maxcpucount:4 /p:Configuration=Debug && msbuild bdk.sln -maxcpucount:4 /p:Configuration=Release && ctest -C Debug && ctest -C Release && cpack -G NSIS -C Release && cpack -G NSIS -C Release
+##   cmake -G"Visual Studio 17 2022" -A x64 -DBDK_BUILD_MODULES=OFF ..\bdk && msbuild bdk.sln -v:q -maxcpucount:4 /p:Configuration=Debug && msbuild bdk.sln  -v:q -maxcpucount:4 /p:Configuration=Release && ctest -C Debug && ctest -C Release && cpack -G NSIS -C Release && cpack -G NSIS -C Release
 ##
 ## On Linux (Ubuntu)
 ##   cmake ../bdk -DCMAKE_BUILD_TYPE=Debug -DCUSTOM_SYSTEM_OS_NAME=Ubuntu; time -p make -j8 ; ctest ; make install; cpack -G TGZ
@@ -39,7 +39,7 @@ option(BDK_BUILD_CORE_ONLY "Build only core and deactivate everything else" OFF)
 option(BDK_BUILD_MODULES "Activate the build of modules" ON)
 option(BDK_BUILD_CORE_TESTS "Activate the build of core tests" ON)
 option(BDK_BUILD_CORE "Build the canonical native bdk_core library" ON)
-option(BDK_BUILD_TYPES "Build the TypeScript/JavaScript WASM module (standalone; requires Emscripten and BDK_BUILD_CORE=OFF)" OFF)
+option(BDK_BUILD_WASM "Build the TypeScript/JavaScript WASM module (standalone; requires Emscripten and BDK_BUILD_CORE=OFF)" OFF)
 # Independent install gates: FreeBSD/gobdk-only packages set both OFF.
 option(BDK_INSTALL_CORE_ARCHIVE "Install the bdk_core static archive" ON)
 option(BDK_INSTALL_BSV_HEADERS "Install Bitcoin SV headers and bundled support files" ON)
@@ -51,12 +51,12 @@ option(BUILD_MODULE_RUST "Build and test the Rust module" ON)
 option(BUILD_MODULE_RUST_INSTALL_INSOURCE "Install the merged standalone libbdkffi in source directory (module/rustbdk/bdk-sys/lib)" ON)
 
 ## Standalone-contract guards
-if(BDK_BUILD_TYPES)
+if(BDK_BUILD_WASM)
   if(NOT EMSCRIPTEN)
-    message(FATAL_ERROR "BDK_BUILD_TYPES requires the Emscripten toolchain (use emcmake or build.sh)")
+    message(FATAL_ERROR "BDK_BUILD_WASM requires the Emscripten toolchain (use emcmake or build.sh)")
   endif()
   if(BDK_BUILD_CORE)
-    message(FATAL_ERROR "BDK_BUILD_TYPES is a standalone build: configure with -DBDK_BUILD_CORE=OFF")
+    message(FATAL_ERROR "BDK_BUILD_WASM is a standalone build: configure with -DBDK_BUILD_CORE=OFF")
   endif()
 endif()
 if(NOT BDK_BUILD_CORE)
@@ -65,7 +65,7 @@ if(NOT BDK_BUILD_CORE)
   endif()
   ## Everything that links or installs the shared core is force-disabled,
   ## loudly. The install gates are included so a direct standalone configure
-  ## (-DBDK_BUILD_CORE=OFF -DBDK_BUILD_TYPES=ON) emits no install rules through
+  ## (-DBDK_BUILD_CORE=OFF -DBDK_BUILD_WASM=ON) emits no install rules through
   ## the recipe's secp256k1/univalue includes or the root file installs.
   foreach(_opt BDK_BUILD_MODULES BDK_BUILD_CORE_TESTS
                BUILD_MODULE_GOLANG BUILD_MODULE_GOLANG_INSTALL_INSOURCE
@@ -78,8 +78,42 @@ if(NOT BDK_BUILD_CORE)
   endforeach()
 endif()
 
-find_program(CARGO_EXECUTABLE cargo)
-find_program(RUSTC_EXECUTABLE rustc)
+## Flag hierarchy: a disabled parent flag forces its subordinate flags OFF. The
+## override WARNs when the subordinate was still ON (it may have been enabled
+## on the command line); an already-OFF subordinate needs no action.
+if(BDK_BUILD_CORE_ONLY)
+  foreach(_opt BDK_BUILD_MODULES BDK_BUILD_CORE_TESTS
+               BUILD_MODULE_GOLANG BUILD_MODULE_GOLANG_INSTALL_INSOURCE
+               BUILD_MODULE_RUST BUILD_MODULE_RUST_INSTALL_INSOURCE)
+    if(${_opt})
+      message(WARNING "BDK_BUILD_CORE_ONLY=ON: forcing ${_opt}=OFF (only bdk_core is built)")
+      set(${_opt} OFF CACHE BOOL "" FORCE)
+    endif()
+  endforeach()
+endif()
+if(NOT BDK_BUILD_MODULES)
+  foreach(_opt BUILD_MODULE_GOLANG BUILD_MODULE_GOLANG_INSTALL_INSOURCE
+               BUILD_MODULE_RUST BUILD_MODULE_RUST_INSTALL_INSOURCE)
+    if(${_opt})
+      message(WARNING "BDK_BUILD_MODULES=OFF: forcing ${_opt}=OFF")
+      set(${_opt} OFF CACHE BOOL "" FORCE)
+    endif()
+  endforeach()
+endif()
+if(NOT BUILD_MODULE_GOLANG AND BUILD_MODULE_GOLANG_INSTALL_INSOURCE)
+  message(WARNING "BUILD_MODULE_GOLANG=OFF: forcing BUILD_MODULE_GOLANG_INSTALL_INSOURCE=OFF")
+  set(BUILD_MODULE_GOLANG_INSTALL_INSOURCE OFF CACHE BOOL "" FORCE)
+endif()
+if(NOT BUILD_MODULE_RUST AND BUILD_MODULE_RUST_INSTALL_INSOURCE)
+  message(WARNING "BUILD_MODULE_RUST=OFF: forcing BUILD_MODULE_RUST_INSTALL_INSOURCE=OFF")
+  set(BUILD_MODULE_RUST_INSTALL_INSOURCE OFF CACHE BOOL "" FORCE)
+endif()
+
+## The Rust toolchain lookup runs only when the Rust module is enabled
+if(BUILD_MODULE_RUST)
+  find_program(CARGO_EXECUTABLE cargo)
+  find_program(RUSTC_EXECUTABLE rustc)
+endif()
 # A missing Rust toolchain is enforced as a hard error at the Rust module entry
 # (module/CMakeLists.txt) when BUILD_MODULE_RUST=ON, rather than silently skipped.
 
@@ -121,7 +155,7 @@ endif()
 
 ## The typesbdk WASM module is a standalone build: it assembles its own core
 ## variant from the shared recipe in its own directory
-if(BDK_BUILD_TYPES)
+if(BDK_BUILD_WASM)
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/module/typesbdk/wasm)
 endif()
 
@@ -133,31 +167,9 @@ if(NOT BDK_BUILD_CORE_ONLY AND BDK_BUILD_CORE)
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/test)
 
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/documentation)
-else ()
-  if(BDK_BUILD_MODULES)
-    message(WARNING "BDK_BUILD_MODULES was set while using BDK_BUILD_CORE_ONLY. This is conflictual")
-  endif()
-
-  if(BDK_BUILD_CORE_TESTS)
-    message(WARNING "BDK_BUILD_CORE_TESTS was set while using BDK_BUILD_CORE_ONLY. This is conflictual")
-  endif()
-
-  if(BUILD_MODULE_GOLANG)
-    message(WARNING "BUILD_MODULE_GOLANG was set while using BDK_BUILD_CORE_ONLY. This is conflictual")
-  endif()
-
-  if(BUILD_MODULE_GOLANG_INSTALL_INSOURCE)
-    message(WARNING "BUILD_MODULE_GOLANG_INSTALL_INSOURCE was set while using BDK_BUILD_CORE_ONLY. This is conflictual")
-  endif()
-
-  if(BUILD_MODULE_RUST)
-    message(WARNING "BUILD_MODULE_RUST was set while using BDK_BUILD_CORE_ONLY. This is conflictual")
-  endif()
-
-  if(BUILD_MODULE_RUST_INSTALL_INSOURCE)
-    message(WARNING "BUILD_MODULE_RUST_INSTALL_INSOURCE was set while using BDK_BUILD_CORE_ONLY. This is conflictual")
-  endif()
 endif()
+## (No else-branch warnings needed: the flag-hierarchy block above already
+## forced the subordinate flags OFF, with a WARNING for each one that was ON.)
 
 ## On Widows, need to download NSIS https://nsis.sourceforge.io/Download
 ## Possible to do WIX generator for MSI installer
