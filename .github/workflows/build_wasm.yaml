@@ -37,10 +37,35 @@ jobs:
           "$RUNNER_TEMP/emsdk/emsdk" install 4.0.23
           "$RUNNER_TEMP/emsdk/emsdk" activate 4.0.23
 
+        ## CI validates the pinned minimal Boost component set on every run:
+        ## a new boost include anywhere in the wasm compile set fails with a
+        ## missing-header error instead of rotting silently.
+      - name: Provision pinned minimal Boost package
+        run: |
+          curl --fail --location --retry 3 -o dependancies_wasm.tar.gz \
+            "https://github.com/bitcoin-sv/bdk/releases/download/depcy/dependancies_wasm.tar.gz"
+          tar -xzf dependancies_wasm.tar.gz
+          # Byte-repro layout rule: BOOST_ROOT is the directory containing boost/ directly
+          echo "BOOST_ROOT=$PWD/dependancies_wasm/boost_1.85.0" >> "$GITHUB_ENV"
+
       - name: Build and run curve tests and real transaction vectors
         run: |
           source "$RUNNER_TEMP/emsdk/emsdk_env.sh"
           module/typesbdk/wasm/build.sh
+
+        ## Proves the recipe/factory path works without build.sh's environment
+        ## and catches any future re-coupling of the wasm build to root state.
+      - name: Standalone configure smoke (direct emcmake, no build.sh)
+        run: |
+          source "$RUNNER_TEMP/emsdk/emsdk_env.sh"
+          emcmake cmake -S . -B build-wasm-direct -DCMAKE_BUILD_TYPE=Release \
+            -DBDK_BUILD_CORE=OFF -DBDK_BUILD_TYPES=ON \
+            -DBSV_ROOT="$PWD/build-wasm-deps/bitcoin-sv" \
+            -DBOOST_ROOT="$BOOST_ROOT" \
+            -DSECP256K1_ASM=OFF -DSECP256K1_BUILD_BENCHMARK=OFF \
+            -DSECP256K1_ECMULT_WINDOW_SIZE=15 -DSECP256K1_ECMULT_GEN_KB=2 \
+            -DSECP256K1_TEST_OVERRIDE_WIDE_MULTIPLY=int64
+          cmake --build build-wasm-direct --target bdk_wasm --parallel
 
       - name: Verify committed artifacts are reproducible
         run: |
