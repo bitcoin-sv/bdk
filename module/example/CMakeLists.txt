@@ -49,10 +49,10 @@ set_target_properties(example_special_opcode_validate PROPERTIES  FOLDER "module
 
 ## VerifyScript micro-benchmark. Links the CANONICAL bdk_core (logging compiled
 ## in) - this measures the code path real native consumers (gobdk, rustbdk) run.
-## Boost::chrono supplies the Boost headers+lib needed by txvalidator.hpp's
-## taskcancellation.h include (bdk_core keeps Boost PRIVATE).
-add_executable(bench_verifyscript "${CMAKE_CURRENT_SOURCE_DIR}/bench_verifyscript.cpp")
-target_link_libraries(bench_verifyscript PRIVATE bdk_core Boost::chrono)
+## Like every other example, it compiles in the standard application-source set,
+## which supplies the logging/text-writer symbols the canonical core references.
+add_executable(bench_verifyscript "${CMAKE_CURRENT_SOURCE_DIR}/bench_verifyscript.cpp" "${BSV_APPLICATION_HDR_FILES}" "${BSV_APPLICATION_SRC_FILES}")
+target_link_libraries(bench_verifyscript PRIVATE bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono ${CMAKE_DL_LIBS})
 target_compile_features(bench_verifyscript PRIVATE cxx_std_20)
 if(NOT MSVC)
   target_compile_options(bench_verifyscript PRIVATE -O3)
