@@ -40,7 +40,6 @@ option(BDK_BUILD_MODULES "Activate the build of modules" ON)
 option(BDK_BUILD_CORE_TESTS "Activate the build of core tests" ON)
 option(BDK_BUILD_CORE "Build the canonical native bdk_core library" ON)
 option(BDK_BUILD_TYPES "Build the TypeScript/JavaScript WASM module (standalone; requires Emscripten and BDK_BUILD_CORE=OFF)" OFF)
-option(BDK_REQUIRE_BIGINT_PARITY "Fail configure when Boost multiprecision headers are missing (CI enforcement)" OFF)
 # Independent install gates: FreeBSD/gobdk-only packages set both OFF.
 option(BDK_INSTALL_CORE_ARCHIVE "Install the bdk_core static archive" ON)
 option(BDK_INSTALL_BSV_HEADERS "Install Bitcoin SV headers and bundled support files" ON)
