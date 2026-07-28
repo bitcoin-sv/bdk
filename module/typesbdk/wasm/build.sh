@@ -12,6 +12,12 @@ boost_archive="boost-$boost_version-cmake.tar.gz"
 boost_url="https://github.com/boostorg/boost/releases/download/boost-$boost_version/$boost_archive"
 boost_sha256=ab9c9c4797384b0949dd676cf86b4f99553f8c148d767485aaac412af25183e6
 
+# Minimal Boost component set for the wasm verifier, converged empirically with
+# the add-and-prune derivation procedure. Must stay identical to
+# WASM_BOOST_INCLUDE_LIBRARIES in .github/workflows/prebuild_dependancies.yaml;
+# to change it, re-run the derivation and pin its output, never hand-edit.
+BDK_WASM_BOOST_LIBS="multiprecision;chrono;uuid;variant;thread;filesystem;signals2;multi_index"
+
 bsv_commit=879fc8b42168dd0e608dafd51b39c6dabad37d4d
 
 for command in cmake emcmake emcc em++ emar emranlib git curl make node; do
@@ -82,15 +88,32 @@ if [[ "$bsv_actual_commit" != "$bsv_commit" ]]; then
 fi
 
 if [[ -z "${BOOST_ROOT:-}" ]]; then
+  # Self-provision the pinned minimal header set from the once-downloaded
+  # cached tarball, with the same cmake mechanism the prebuilt wasm dependency
+  # package uses. Local builds therefore exercise exactly the component set CI
+  # enforces, and a missing-header failure reproduces the CI failure.
   boost_source="$deps_dir/boost-$boost_version"
+  boost_install="$deps_dir/boost-wasm"
+  boost_stamp="$boost_install/.bdk-wasm-boost-libs"
   download "$boost_url" "$deps_dir/$boost_archive" "$boost_sha256"
   if [[ ! -d "$boost_source" ]]; then
     tar -xzf "$deps_dir/$boost_archive" -C "$deps_dir"
   fi
-  if [[ ! -f "$boost_source/boost/version.hpp" ]]; then
-    (cd "$boost_source" && ./bootstrap.sh && ./b2 headers)
+  if [[ ! -f "$boost_install/include/boost/version.hpp" ]] \
+    || [[ "$(cat "$boost_stamp" 2>/dev/null)" != "$BDK_WASM_BOOST_LIBS" ]]; then
+    cmake -E rm -rf "$boost_install"
+    cmake -B "$boost_source/build" -S "$boost_source" \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DBUILD_SHARED_LIBS=OFF \
+      -DCMAKE_INSTALL_PREFIX="$boost_install" \
+      -DBOOST_INCLUDE_LIBRARIES="$BDK_WASM_BOOST_LIBS"
+    cmake --build "$boost_source/build" --target install --parallel "$jobs"
+    printf '%s' "$BDK_WASM_BOOST_LIBS" > "$boost_stamp"
   fi
-  BOOST_ROOT="$boost_source"
+  # Byte-reproducibility layout rule: BOOST_ROOT must be the directory that
+  # contains boost/ DIRECTLY, so -ffile-prefix-map yields /boost/boost/... in
+  # embedded __FILE__ strings exactly like the committed artifacts.
+  BOOST_ROOT="$boost_install/include"
 fi
 
 if [[ -f "$BOOST_ROOT/boost/version.hpp" ]]; then
@@ -101,6 +124,10 @@ else
   echo "Required Boost header is missing below BOOST_ROOT: boost/version.hpp" >&2
   exit 1
 fi
+# Byte-repro layout rule: hand cmake the directory containing boost/ DIRECTLY,
+# so -ffile-prefix-map=${BOOST_ROOT}=/boost always embeds /boost/boost/...
+# regardless of whether the caller supplied a source layout or an install prefix.
+BOOST_ROOT="$boost_include_root"
 
 boost_actual_version="$(
   sed -n 's/^#define BOOST_VERSION \([0-9][0-9]*\).*/\1/p' \
@@ -127,8 +154,8 @@ fi
 EMSDK_QUIET=1 emcmake cmake -S "$repo_root" -B "$build_dir" \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON \
-  -DBDK_BUILD_CORE_ONLY=ON \
-  -DBDK_BUILD_WASM=ON \
+  -DBDK_BUILD_CORE=OFF \
+  -DBDK_BUILD_TYPES=ON \
   -DBDK_BUILD_MODULES=OFF \
   -DBDK_BUILD_CORE_TESTS=OFF \
   -DBUILD_MODULE_GOLANG=OFF \
