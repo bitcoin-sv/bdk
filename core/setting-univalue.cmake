@@ -9,6 +9,11 @@
 if(NOT DEFINED BDK_BSV_ROOT_DIR)#
     message(FATAL_ERROR "Unable to locate bsv source code by BDK_BSV_ROOT_DIR")
 endif()
+
+## Defensive idempotency: a second include in one build tree reuses the target
+if(TARGET univalue)
+  return()
+endif()
 # This file is mainly copied from ${BDK_BSV_ROOT_DIR}/sv/src/univalue/CMakeLists.txt with slightl modifications
 #######################################################################
 
