@@ -144,15 +144,46 @@ add_executable(test_big_int "${CMAKE_CURRENT_SOURCE_DIR}/test_big_int.cpp")
 target_link_libraries(test_big_int PRIVATE bdk_core)
 bdk_add_unit_test(test_big_int)
 
-add_executable(
-  test_big_int_boost
-  "${CMAKE_CURRENT_SOURCE_DIR}/test_big_int.cpp"
-  "${CMAKE_SOURCE_DIR}/module/typesbdk/wasm/big_int_boost.cpp"
-)
-target_include_directories(test_big_int_boost PRIVATE ${BSV_INCLUDE_DIRS})
-target_link_libraries(test_big_int_boost PRIVATE Boost::boost)
-target_compile_features(test_big_int_boost PRIVATE cxx_std_20)
-bdk_add_unit_test(test_big_int_boost)
+## The big-int parity suite deliberately compiles a module source: the Boost
+## bigint backend is module-owned (module/typesbdk/wasm/big_int_boost.cpp), and
+## proving backend parity against the OpenSSL core can only happen in a native
+## test that links both side by side.
+## Boost multiprecision is NOT part of bdk's native dependency contract, so the
+## suite degrades gracefully when the headers are absent; CI passes
+## -DBDK_REQUIRE_BIGINT_PARITY=ON so it can never be silently skipped there.
+set(_bdk_multiprecision_found FALSE)
+get_target_property(_bdk_boost_iface_dirs Boost::boost INTERFACE_INCLUDE_DIRECTORIES)
+foreach(_dir IN LISTS _bdk_boost_iface_dirs Boost_INCLUDE_DIRS)
+  if(_dir AND EXISTS "${_dir}/boost/multiprecision/cpp_int.hpp")
+    set(_bdk_multiprecision_found TRUE)
+    break()
+  endif()
+endforeach()
+
+if(_bdk_multiprecision_found)
+  add_executable(
+    test_big_int_boost
+    "${CMAKE_CURRENT_SOURCE_DIR}/test_big_int.cpp"
+    "${CMAKE_SOURCE_DIR}/module/typesbdk/wasm/big_int_boost.cpp"
+  )
+  target_include_directories(test_big_int_boost PRIVATE ${BSV_INCLUDE_DIRS})
+  target_link_libraries(test_big_int_boost PRIVATE Boost::boost)
+  target_compile_features(test_big_int_boost PRIVATE cxx_std_20)
+  bdk_add_unit_test(test_big_int_boost)
+elseif(BDK_REQUIRE_BIGINT_PARITY)
+  message(FATAL_ERROR
+    "BDK_REQUIRE_BIGINT_PARITY=ON but boost/multiprecision/cpp_int.hpp was not found "
+    "in the Boost include directories. Install Boost with the multiprecision headers "
+    "(CI provisions them in-job before configuring).")
+else()
+  message(WARNING
+    " ==========================================================================\n"
+    "  boost/multiprecision/cpp_int.hpp NOT FOUND - SKIPPING test_big_int_boost\n"
+    "  (the WASM big-int backend parity suite). The native build does not\n"
+    "  require Boost multiprecision; CI enforces this suite with\n"
+    "  -DBDK_REQUIRE_BIGINT_PARITY=ON, so the skip is local-only.\n"
+    " ==========================================================================")
+endif()
 
 add_executable(test_txvalidator "${CMAKE_CURRENT_SOURCE_DIR}/test_txvalidator.cpp" "${BSV_APPLICATION_HDR_FILES}" "${BSV_APPLICATION_SRC_FILES}")
 target_link_libraries(test_txvalidator PRIVATE bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono ${CMAKE_DL_LIBS})
@@ -172,7 +203,9 @@ if(CMAKE_CONFIGURATION_TYPES)
   set_target_properties(test_extended_tx PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d
   set_target_properties(test_script_error PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d
   set_target_properties(test_big_int PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")
-  set_target_properties(test_big_int_boost PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")
+  if(TARGET test_big_int_boost)
+    set_target_properties(test_big_int_boost PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")
+  endif()
   set_target_properties(test_txvalidator PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d
   set_target_properties(test_chronicle PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d
   set_target_properties(test_sigopcount PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d
@@ -182,7 +215,9 @@ else()
   set_target_properties(test_extended_tx PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
   set_target_properties(test_script_error PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
   set_target_properties(test_big_int PROPERTIES DEBUG_POSTFIX "")
-  set_target_properties(test_big_int_boost PROPERTIES DEBUG_POSTFIX "")
+  if(TARGET test_big_int_boost)
+    set_target_properties(test_big_int_boost PROPERTIES DEBUG_POSTFIX "")
+  endif()
   set_target_properties(test_txvalidator PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
   set_target_properties(test_chronicle PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
   set_target_properties(test_sigopcount PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode

@@ -114,13 +114,30 @@ jobs:
             echo "OPENSSL_ROOT_DIR=${{ github.workspace }}/dependancies_darwin_arm64/openssl_3.4.0" >> $GITHUB_ENV
           fi
 
+        ## Permanent primary mechanism supplying Boost multiprecision to the
+        ## parity-gate jobs: -DBDK_REQUIRE_BIGINT_PARITY=ON must hold on any
+        ## package state, so the headers are provisioned in-job when absent.
+      - name: Ensure Boost multiprecision headers (big-int parity suite)
+        if: runner.os != 'Windows'
+        run: |
+          if [ ! -f "$BOOST_ROOT/include/boost/multiprecision/cpp_int.hpp" ]; then
+            curl --fail --location --retry 3 -o boost-src.tar.gz \
+              "https://github.com/boostorg/boost/releases/download/boost-1.85.0/boost-1.85.0-cmake.tar.gz"
+            tar -xzf boost-src.tar.gz
+            cmake -B boost-mp-build -S boost-1.85.0 \
+              -DBOOST_INCLUDE_LIBRARIES=multiprecision \
+              -DCMAKE_INSTALL_PREFIX="$PWD/boost-mp"
+            cmake --build boost-mp-build --target install --parallel 4
+            cp -R "$PWD/boost-mp/include/boost/." "$BOOST_ROOT/include/boost/"
+          fi
+
       - name: Build and Test BDK Unix (all linux and mac arm)
         if: runner.os != 'Windows'
         run: |
           mkdir -p "build"
           rm -fR ./build/* && rm -fR test/golang/vendor/*
 
-          cmake -B build -S "." -DBUILD_MODULE_GOLANG_INSTALL_INSOURCE=ON
+          cmake -B build -S "." -DBUILD_MODULE_GOLANG_INSTALL_INSOURCE=ON -DBDK_REQUIRE_BIGINT_PARITY=ON
           cmake --build build --parallel 4
           ctest --output-on-failure --test-dir build
 
