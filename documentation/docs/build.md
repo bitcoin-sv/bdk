@@ -137,7 +137,7 @@ cpack -G TGZ        # Linux/macOS tarball
 
 ## CMake build options
 
-The root `CMakeLists.txt` (lines 34-44) and the `cmake/` helpers expose the following options.
+The root `CMakeLists.txt` (lines 34-52) and the `cmake/` helpers expose the following options.
 Defaults are shown in parentheses.
 
 | Option | Default | Effect |
@@ -148,8 +148,18 @@ Defaults are shown in parentheses.
 | `BDK_BUILD_CORE_ONLY` | `OFF` | Build only `bdk_core`; skip modules, tests and docs. |
 | `BDK_BUILD_MODULES` | `ON` | Build the language-binding modules. |
 | `BDK_BUILD_CORE_TESTS` | `ON` | Build the C++ core tests. |
+| `BDK_BUILD_CORE` | `ON` | Build the canonical native `bdk_core`. `OFF` skips core and force-disables everything that links or installs it (modules, tests, install gates). |
+| `BDK_BUILD_TYPES` | `OFF` | Build the typesbdk WASM module as a standalone build. Requires Emscripten and `BDK_BUILD_CORE=OFF` (see below). |
+| `BDK_REQUIRE_BIGINT_PARITY` | `OFF` | Fail configure when Boost multiprecision headers are missing. Set by CI so the big-int parity suite can never be silently skipped there. |
 | `BUILD_MODULE_GOLANG` | `ON` | Build and test the Golang (cgo) module. |
 | `BUILD_MODULE_GOLANG_INSTALL_INSOURCE` | `ON` | Install the standalone GoBDK static lib into `module/gobdk` (used by CI). |
+
+> The former `BDK_BUILD_WASM` and `BDK_BUILD_NATIVE_VERIFY_BENCHMARK` options **no longer
+> exist** and nothing in the tree reads those names: a stale `-DBDK_BUILD_WASM=...` on the
+> command line merely produces CMake's standard "Manually-specified variables were not used"
+> notice. The WASM build is activated by `BDK_BUILD_TYPES`; the VerifyScript benchmark is the
+> ordinary `bench_verifyscript` executable in `module/example/`, built by the regular native
+> build.
 
 Additional build-facing variables live in the `cmake/` helpers and the GoBDK module:
 
@@ -167,6 +177,62 @@ Additional build-facing variables live in the `cmake/` helpers and the GoBDK mod
   warning) when unset (`cmake/BDKInit.cmake:29-31`). Use `-DCMAKE_BUILD_TYPE=Debug` for a debug build.
 - **`CUSTOM_SYSTEM_OS_NAME`** — used for packaging to embed a precise OS name in the installer file
   name (`CMakeLists.txt:22-23,28`), e.g. `-DCUSTOM_SYSTEM_OS_NAME=Ubuntu`.
+
+## The standalone WASM build
+
+The WASM verifier needs aggressive size optimization (no OpenSSL, substituted
+`big_int.cpp`/`random.cpp`/`cleanse.cpp` sources, runtime-reconstructed secp256k1 tables) that
+must not deform the regular build: the canonical native `bdk_core` is never modified by any
+module. Instead, `core/bdk-core-recipe.cmake` exposes the reusable core recipe — the curated
+source lists plus the `bdk_add_core_library()` factory — and the WASM module uses it to build
+its own `bdk_core_wasm` variant inside `module/typesbdk/wasm/`. There is exactly one canonical
+native core; a specialized consumer builds its own variant in its own directory.
+
+The reproducible entry point is `module/typesbdk/wasm/build.sh` (Emscripten 4.0.23). When no
+`BOOST_ROOT` is supplied it self-provisions the pinned minimal Boost 1.85.0 header set. The
+prebuilt package published on the `depcy` release contains exactly that set and skips the
+self-provisioning:
+
+```console
+curl --fail --location -o /tmp/dependancies_wasm.tar.gz \
+  "https://github.com/bitcoin-sv/bdk/releases/download/depcy/dependancies_wasm.tar.gz"
+mkdir -p build-wasm-deps && tar -xzf /tmp/dependancies_wasm.tar.gz -C build-wasm-deps
+BOOST_ROOT="$PWD/build-wasm-deps/dependancies_wasm/boost_1.85.0" module/typesbdk/wasm/build.sh
+```
+
+(`BOOST_ROOT` must be the directory containing `boost/` directly — required for byte-identical
+artifacts.) A direct configure without `build.sh` is also supported:
+
+```console
+emcmake cmake -S . -B build-wasm -DCMAKE_BUILD_TYPE=Release \
+  -DBDK_BUILD_CORE=OFF -DBDK_BUILD_TYPES=ON \
+  -DBSV_ROOT=/path/to/bitcoin-sv -DBOOST_ROOT=/path/to/boost \
+  -DSECP256K1_ASM=OFF -DSECP256K1_ECMULT_WINDOW_SIZE=15 -DSECP256K1_ECMULT_GEN_KB=2 \
+  -DSECP256K1_TEST_OVERRIDE_WIDE_MULTIPLY=int64 -DSECP256K1_BUILD_BENCHMARK=OFF
+```
+
+The wasm Boost package pins this minimal `BOOST_INCLUDE_LIBRARIES` component set:
+
+```text
+multiprecision;chrono;uuid;variant;thread;filesystem;signals2;multi_index
+```
+
+(it legitimately includes `multiprecision` — the wasm bigint backend needs it). The same list
+is pinned verbatim in `build.sh` (`BDK_WASM_BOOST_LIBS`) and in `prebuild_dependancies.yaml`
+(`WASM_BOOST_INCLUDE_LIBRARIES`). To change it, re-run the add-and-prune derivation (install a
+candidate list, build, add components on missing-header errors, then remove each component one
+at a time and keep only the necessary ones) and pin the converged result — never hand-edit the
+list.
+
+### Boost multiprecision and the big-int parity suite
+
+`test_big_int_boost` proves the wasm Boost bigint backend matches the OpenSSL-backed native
+implementation. It needs the Boost **multiprecision** headers, which are **deliberately not
+part of the official native dependency package** — a wasm-module test must not change the
+native dependency contract. CI parity jobs provision the headers in-job and configure with
+`-DBDK_REQUIRE_BIGINT_PARITY=ON`; locally, either install Boost multiprecision yourself or
+accept the loud configure-time warning that the suite is skipped (everything else builds and
+tests normally).
 
 ## How BDK finds the bitcoin-sv source
 

@@ -15,17 +15,19 @@ graph TD
     CORE --> EX[module/example<br/>C++ examples & benchmarks]
     CORE --> TESTS[test/core<br/>C++ ctest]
     GO --> GOTESTS[test/golang<br/>Go tests]
-    CORE --> WASM[module/typesbdk<br/>validated WASM verifier]
+    BSV -->|curated subset via shared core recipe| WASM[module/typesbdk<br/>standalone WASM verifier<br/>own bdk_core_wasm variant]
 ```
 
 - **`core/`** builds `bdk_core`, the C++ library. It is assembled from BDK's own sources
   (`core/*.cpp`) plus a **curated subset of the bitcoin-sv sources** (see below).
 - **`module/`** holds extension applications and language bindings that build on top of core and
-  are independent of each other: the Go (cgo) binding, the experimental Rust binding, the C++
-  examples/benchmarks, and the opt-in WASM/TypeScript verifier. They link `bdk_core`; note
+  are independent of each other: the Go (cgo) binding, the experimental Rust binding, and the C++
+  examples/benchmarks. They link `bdk_core`; note
   that the C++ examples, the GoBDK cgo library, and the Rust `bdkffi` library additionally
   **compile in** the 15 "application" BSV sources directly (see the source-subset table below), so
-  they are not purely linking core.
+  they are not purely linking core. The WASM/TypeScript verifier also lives under `module/`, but
+  it is a **standalone build** that assembles its own core variant instead of linking the shared
+  `bdk_core` (see [The typesbdk WASM verifier](#the-typesbdk-wasm-verifier)).
 - **`test/`** holds the C++ (`test/core`, via `ctest`) and Go (`test/golang`) test suites.
 
 The CMake build (root `CMakeLists.txt`, minimum version 3.16) assembles `bdk_core`, builds the
@@ -147,8 +149,22 @@ When all conditions are met, the bot commits the refreshed archives with a `[GoB
 ## The typesbdk WASM verifier
 
 `module/typesbdk` provides the JavaScript/WebAssembly binding for `CTxValidator::VerifyScript`.
-It is an opt-in root CMake target (`BDK_BUILD_WASM=ON`) rather than part of the default native
-build. The pinned `wasm/build.sh` performs a clean Emscripten build, runs standalone
-libsecp256k1 tests and real positive/negative transaction vectors, and installs the validated
-`bdk-core.mjs` and `bdk-core.wasm` artifacts. See `module/typesbdk/examples/README.md` for the
-reproducible build, ABI, and native/WASM benchmark controls.
+
+The WASM verifier requires aggressive size optimization to be deployable in browsers and SDKs:
+no OpenSSL (which forces substituting the OpenSSL-backed `big_int.cpp`/`random.cpp` with a
+Boost-based bigint backend and a wasm-safe cleanse), runtime-reconstructed secp256k1
+verification tables, and a minimal runtime. Threading those deviations through the shared build
+would deform the regular build architecture — core is the upstream-tracking trunk that
+gobdk/rustbdk link, and its build must stay canonical. The WASM build is therefore a fully
+**standalone module build**: it reuses the shared core *recipe*
+(`core/bdk-core-recipe.cmake`, the same curated bitcoin-sv source lists and
+`bdk_add_core_library()` factory that produce the native `bdk_core`) to assemble its own
+`bdk_core_wasm` variant inside the module directory, and the canonical `bdk_core` is never
+modified by any module.
+
+It configures with `-DBDK_BUILD_CORE=OFF -DBDK_BUILD_TYPES=ON` under the Emscripten toolchain
+rather than as part of the default native build. The pinned `wasm/build.sh` performs a clean
+Emscripten build, runs standalone libsecp256k1 tests and real positive/negative transaction
+vectors, and installs the validated `bdk-core.mjs` and `bdk-core.wasm` artifacts. See
+`module/typesbdk/examples/README.md` for the reproducible build, ABI, and native/WASM benchmark
+controls, and [Development Build](build.md) for the flags and the prebuilt Boost package.
