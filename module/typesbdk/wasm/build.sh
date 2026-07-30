@@ -3,22 +3,10 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/../../.." && pwd)"
-deps_dir="${BDK_WASM_DEPS_DIR:-$repo_root/build-wasm-deps}"
 build_dir="${BDK_WASM_BUILD_DIR:-$repo_root/build-wasm}"
 jobs="${BDK_WASM_JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu)}"
 
-boost_version=1.85.0
-boost_archive="boost-$boost_version-cmake.tar.gz"
-boost_url="https://github.com/boostorg/boost/releases/download/boost-$boost_version/$boost_archive"
-boost_sha256=ab9c9c4797384b0949dd676cf86b4f99553f8c148d767485aaac412af25183e6
-
-# Minimal Boost component set for the wasm verifier, converged empirically with
-# the add-and-prune derivation procedure. Must stay identical to
-# WASM_BOOST_INCLUDE_LIBRARIES in .github/workflows/prebuild_dependancies.yaml;
-# to change it, re-run the derivation and pin its output, never hand-edit.
-BDK_WASM_BOOST_LIBS="multiprecision;chrono;uuid;variant;thread;filesystem;signals2;multi_index"
-
-for command in cmake emcmake emcc em++ emar emranlib curl make node; do
+for command in cmake emcmake emcc em++ emar emranlib make node; do
   command -v "$command" >/dev/null || {
     echo "Missing required command: $command" >&2
     echo "Activate Emscripten 4.0.23 with 'source /path/to/emsdk_env.sh' before running this script." >&2
@@ -38,33 +26,6 @@ if [[ -z "$wasm_opt" ]]; then
   fi
 fi
 
-sha256_file () {
-  local expected="$1"
-  local file="$2"
-  local actual
-  if command -v sha256sum >/dev/null; then
-    actual="$(sha256sum "$file" | awk '{print $1}')"
-  else
-    actual="$(shasum -a 256 "$file" | awk '{print $1}')"
-  fi
-  if [[ "$actual" != "$expected" ]]; then
-    echo "SHA-256 mismatch for $file: expected $expected, got $actual" >&2
-    exit 1
-  fi
-}
-
-download () {
-  local url="$1"
-  local destination="$2"
-  local sha256="$3"
-  if [[ ! -f "$destination" ]]; then
-    curl --fail --location --retry 3 --output "$destination" "$url"
-  fi
-  sha256_file "$sha256" "$destination"
-}
-
-mkdir -p "$deps_dir"
-
 # bitcoin-sv is discovered by CMake, exactly like the native build: it honours
 # ENV{BSV_ROOT} when set and otherwise resolves the sibling ../bitcoin-sv. The
 # facility script neither pins a commit nor provisions a checkout; the pinned
@@ -72,61 +33,12 @@ mkdir -p "$deps_dir"
 # local one). The resolved path is read back from the CMake cache after the
 # configure step (see below) for the secp256k1 sub-build.
 
-if [[ -z "${BOOST_ROOT:-}" ]]; then
-  # Self-provision the pinned minimal header set from the once-downloaded
-  # cached tarball, with the same cmake mechanism the prebuilt wasm dependency
-  # package uses. Local builds therefore exercise exactly the component set CI
-  # enforces, and a missing-header failure reproduces the CI failure.
-  boost_source="$deps_dir/boost-$boost_version"
-  boost_install="$deps_dir/boost-wasm"
-  boost_stamp="$boost_install/.bdk-wasm-boost-libs"
-  download "$boost_url" "$deps_dir/$boost_archive" "$boost_sha256"
-  if [[ ! -d "$boost_source" ]]; then
-    tar -xzf "$deps_dir/$boost_archive" -C "$deps_dir"
-  fi
-  if [[ ! -f "$boost_install/include/boost/version.hpp" ]] \
-    || [[ "$(cat "$boost_stamp" 2>/dev/null)" != "$BDK_WASM_BOOST_LIBS" ]]; then
-    cmake -E rm -rf "$boost_install"
-    cmake -B "$boost_source/build" -S "$boost_source" \
-      -DCMAKE_BUILD_TYPE=Release \
-      -DBUILD_SHARED_LIBS=OFF \
-      -DCMAKE_INSTALL_PREFIX="$boost_install" \
-      -DBOOST_INCLUDE_LIBRARIES="$BDK_WASM_BOOST_LIBS"
-    cmake --build "$boost_source/build" --target install --parallel "$jobs"
-    printf '%s' "$BDK_WASM_BOOST_LIBS" > "$boost_stamp"
-  fi
-  # Byte-reproducibility layout rule: BOOST_ROOT must be the directory that
-  # contains boost/ DIRECTLY, so -ffile-prefix-map yields /boost/boost/... in
-  # embedded __FILE__ strings exactly like the committed artifacts.
-  BOOST_ROOT="$boost_install/include"
-fi
-
-if [[ -f "$BOOST_ROOT/boost/version.hpp" ]]; then
-  boost_include_root="$BOOST_ROOT"
-elif [[ -f "$BOOST_ROOT/include/boost/version.hpp" ]]; then
-  boost_include_root="$BOOST_ROOT/include"
-else
-  echo "Required Boost header is missing below BOOST_ROOT: boost/version.hpp" >&2
-  exit 1
-fi
-# Byte-repro layout rule: hand cmake the directory containing boost/ DIRECTLY,
-# so -ffile-prefix-map=${BOOST_ROOT}=/boost always embeds /boost/boost/...
-# regardless of whether the caller supplied a source layout or an install prefix.
-BOOST_ROOT="$boost_include_root"
-
-boost_actual_version="$(
-  sed -n 's/^#define BOOST_VERSION \([0-9][0-9]*\).*/\1/p' \
-    "$boost_include_root/boost/version.hpp"
-)"
-if [[ "$boost_actual_version" != 108500 ]]; then
-  echo "BOOST_ROOT reports BOOST_VERSION=$boost_actual_version; the reproducible WASM build requires Boost $boost_version (108500)" >&2
-  exit 1
-fi
-
-for path in \
-  "$boost_include_root/boost/version.hpp"; do
-  [[ -e "$path" ]] || { echo "Required dependency path is missing: $path" >&2; exit 1; }
-done
+# Boost is discovered, version-checked and layout-normalized entirely by CMake
+# (module/typesbdk/wasm/CMakeLists.txt): it reads ENV{BOOST_ROOT}, accepts both a
+# root that contains boost/ directly and one that contains include/boost/,
+# enforces BOOST_VERSION 108500, and anchors the -ffile-prefix-map on the
+# resolved include directory. The facility script neither downloads nor pins
+# Boost; the environment supplies it (CI's depcy package, or a local install).
 
 if [[ "${BDK_WASM_CLEAN:-1}" == 1 ]]; then
   cmake -E remove_directory "$build_dir"
@@ -149,7 +61,6 @@ EMSDK_QUIET=1 emcmake cmake -S "$repo_root" -B "$build_dir" \
   -DBDK_INSTALL_CORE_ARCHIVE=OFF \
   -DBDK_INSTALL_BSV_HEADERS=OFF \
   -DBDK_LOG_BSV_FILES=OFF \
-  -DBOOST_ROOT="$BOOST_ROOT" \
   -DSECP256K1_ASM=OFF \
   -DSECP256K1_BUILD_BENCHMARK=OFF \
   -DSECP256K1_ECMULT_WINDOW_SIZE=15 \
