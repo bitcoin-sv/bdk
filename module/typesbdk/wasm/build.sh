@@ -18,9 +18,7 @@ boost_sha256=ab9c9c4797384b0949dd676cf86b4f99553f8c148d767485aaac412af25183e6
 # to change it, re-run the derivation and pin its output, never hand-edit.
 BDK_WASM_BOOST_LIBS="multiprecision;chrono;uuid;variant;thread;filesystem;signals2;multi_index"
 
-bsv_commit=879fc8b42168dd0e608dafd51b39c6dabad37d4d
-
-for command in cmake emcmake emcc em++ emar emranlib git curl make node; do
+for command in cmake emcmake emcc em++ emar emranlib curl make node; do
   command -v "$command" >/dev/null || {
     echo "Missing required command: $command" >&2
     echo "Activate Emscripten 4.0.23 with 'source /path/to/emsdk_env.sh' before running this script." >&2
@@ -67,25 +65,12 @@ download () {
 
 mkdir -p "$deps_dir"
 
-if [[ -z "${BSV_ROOT:-}" ]]; then
-  BSV_ROOT="$deps_dir/bitcoin-sv"
-  if [[ ! -d "$BSV_ROOT/.git" ]]; then
-    git init "$BSV_ROOT"
-    git -C "$BSV_ROOT" remote add origin https://github.com/bitcoin-sv/bitcoin-sv.git
-    git -C "$BSV_ROOT" fetch --depth 1 origin "$bsv_commit"
-    git -C "$BSV_ROOT" checkout --detach FETCH_HEAD
-  fi
-fi
-
-if [[ ! -d "$BSV_ROOT/.git" ]]; then
-  echo "BSV_ROOT must be a git checkout pinned to $bsv_commit: $BSV_ROOT" >&2
-  exit 1
-fi
-bsv_actual_commit="$(git -C "$BSV_ROOT" rev-parse HEAD)"
-if [[ "$bsv_actual_commit" != "$bsv_commit" ]]; then
-  echo "BSV_ROOT is at $bsv_actual_commit; the reproducible WASM build requires $bsv_commit" >&2
-  exit 1
-fi
+# bitcoin-sv is discovered by CMake, exactly like the native build: it honours
+# ENV{BSV_ROOT} when set and otherwise resolves the sibling ../bitcoin-sv. The
+# facility script neither pins a commit nor provisions a checkout; the pinned
+# version is owned by the environment (CI's pinned checkout, or the developer's
+# local one). The resolved path is read back from the CMake cache after the
+# configure step (see below) for the secp256k1 sub-build.
 
 if [[ -z "${BOOST_ROOT:-}" ]]; then
   # Self-provision the pinned minimal header set from the once-downloaded
@@ -139,7 +124,6 @@ if [[ "$boost_actual_version" != 108500 ]]; then
 fi
 
 for path in \
-  "$BSV_ROOT/src/script/interpreter.cpp" \
   "$boost_include_root/boost/version.hpp"; do
   [[ -e "$path" ]] || { echo "Required dependency path is missing: $path" >&2; exit 1; }
 done
@@ -165,13 +149,23 @@ EMSDK_QUIET=1 emcmake cmake -S "$repo_root" -B "$build_dir" \
   -DBDK_INSTALL_CORE_ARCHIVE=OFF \
   -DBDK_INSTALL_BSV_HEADERS=OFF \
   -DBDK_LOG_BSV_FILES=OFF \
-  -DBSV_ROOT="$BSV_ROOT" \
   -DBOOST_ROOT="$BOOST_ROOT" \
   -DSECP256K1_ASM=OFF \
   -DSECP256K1_BUILD_BENCHMARK=OFF \
   -DSECP256K1_ECMULT_WINDOW_SIZE=15 \
   -DSECP256K1_ECMULT_GEN_KB=2 \
   -DSECP256K1_TEST_OVERRIDE_WIDE_MULTIPLY=int64
+
+# Reuse CMake's single bitcoin-sv discovery result instead of re-deriving it in
+# the shell: the configure above wrote the resolved path to the cache as
+# BDK_BSV_ROOT_DIR, and the secp256k1 curve-test sub-build below needs it for
+# its -S source path. Fail loudly on an empty or bogus read so a broken cache
+# surfaces here rather than as an opaque "-S /src/secp256k1" configure error.
+bsv_root="$(sed -n 's/^BDK_BSV_ROOT_DIR:PATH=//p' "$build_dir/CMakeCache.txt")"
+if [[ -z "$bsv_root" || ! -d "$bsv_root/src/secp256k1" ]]; then
+  echo "could not read the resolved bitcoin-sv root from the CMake cache: $build_dir/CMakeCache.txt" >&2
+  exit 1
+fi
 
 # wasm-opt consumes the linker output in place. Force only the four cheap
 # final links to rerun so an incremental build never optimizes an already
@@ -204,7 +198,7 @@ done
 if [[ "${BDK_WASM_RUN_SECP_TESTS:-1}" == 1 ]]; then
   secp_test_dir="$build_dir/secp256k1-tests"
   EMSDK_QUIET=1 emcmake cmake \
-    -S "$BSV_ROOT/src/secp256k1" \
+    -S "$bsv_root/src/secp256k1" \
     -B "$secp_test_dir" \
     -DCMAKE_BUILD_TYPE=Release \
     "-DCMAKE_EXE_LINKER_FLAGS=-sSTACK_SIZE=8388608 -sALLOW_MEMORY_GROWTH=1" \
