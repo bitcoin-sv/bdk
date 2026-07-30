@@ -29,9 +29,16 @@ if(MSVC)
   mark_as_advanced(CMAKE_MODULE_LINKER_FLAGS_COVERAGE)
 endif()
 
-# We can disable the test building for secp256k1 here as it is not our job
-set(SECP256K1_BUILD_TESTS OFF)
-set(SECP256K1_BUILD_EXHAUSTIVE_TESTS OFF)
+# Disable the secp256k1 test build by default -- it is not this recipe's job.
+# Guarded so a caller may opt in by pre-defining either option: the native core
+# defines neither, so both stay OFF and its behaviour is byte-for-byte unchanged;
+# the wasm variant pre-defines them ON to build the curve suites in-tree.
+if(NOT DEFINED SECP256K1_BUILD_TESTS)
+  set(SECP256K1_BUILD_TESTS OFF)
+endif()
+if(NOT DEFINED SECP256K1_BUILD_EXHAUSTIVE_TESTS)
+  set(SECP256K1_BUILD_EXHAUSTIVE_TESTS OFF)
+endif()
 
 add_subdirectory("${BDK_BSV_ROOT_DIR}/src/secp256k1" ${CMAKE_CURRENT_BINARY_DIR}/secp256k1)
 

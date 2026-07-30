@@ -51,6 +51,19 @@ add_compile_options(
   "-ffile-prefix-map=${CMAKE_SOURCE_DIR}=/bdk"
 )
 
+# secp256k1 curve suites: build them in-tree as CTest tests (was a second CMake
+# project in build.sh). Guarded so a command-line -DSECP256K1_BUILD_TESTS=OFF can
+# skip the build cost; default ON keeps "a green build implies green tests".
+# These MUST precede the recipe include: the recipe includes setting-secp256k1.cmake
+# at file scope, so setting them after the include is silently ineffective.
+if(NOT DEFINED SECP256K1_BUILD_TESTS)
+  set(SECP256K1_BUILD_TESTS ON)
+endif()
+if(NOT DEFINED SECP256K1_BUILD_EXHAUSTIVE_TESTS)
+  set(SECP256K1_BUILD_EXHAUSTIVE_TESTS ON)
+endif()
+set(SECP256K1_BUILD_BENCHMARK OFF)   # wasm: no benchmarks (the old sub-project set this too)
+
 # The module's own core variant, built from the shared recipe. The recipe
 # instantiates the secp256k1 sub-build under this directory's binary dir.
 include("${CMAKE_SOURCE_DIR}/core/bdk-core-recipe.cmake")
@@ -91,6 +104,19 @@ list(PREPEND _secp256k1_sources
   "${CMAKE_CURRENT_SOURCE_DIR}/secp256k1_runtime.c"
 )
 set_property(TARGET secp256k1 PROPERTY SOURCES ${_secp256k1_sources})
+
+# Per-target link options for the in-tree secp256k1 curve suites only. The old
+# sub-project passed these via a project-wide CMAKE_EXE_LINKER_FLAGS; in-tree that
+# would leak onto the module's own four targets and CHANGE the shipped artifact
+# bytes. Scope them to the three test targets so the committed artifacts are byte
+# identical (R3). Targets are global, so this wasm scope reaches the sub-build's
+# targets, exactly as it already rewires secp256k1/secp256k1_precomputed above.
+foreach(_secp_test tests noverify_tests exhaustive_tests)
+  if(TARGET ${_secp_test})
+    target_link_options(${_secp_test} PRIVATE
+      "SHELL:-s STACK_SIZE=8388608" "SHELL:-s ALLOW_MEMORY_GROWTH=1")
+  endif()
+endforeach()
 
 # wasm-opt resolution mirrors the facility script exactly:
 #   1. a non-empty, existing WASM_OPT override
