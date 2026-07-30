@@ -352,3 +352,22 @@ add_test(NAME wasm_size_gate
     -P "${_wasm_size_gate_script}")
 set_tests_properties(wasm_size_gate PROPERTIES
   LABELS "wasm;sizegate" TIMEOUT 60 FIXTURES_REQUIRED wasm_optimized)
+
+# In-source publish of the 8 committed artifacts. NOT in ALL: naming the target IS
+# the opt-in, so no option() variable is needed and a plain build never publishes.
+# copy_if_different is portable and leaves mtimes untouched when bytes are already
+# identical (byte-repro friendly). DEPENDS the optimise targets so a direct
+# invocation still gets final bytes. NOT install() -- the standalone configure
+# deliberately emits zero install rules (root CMakeLists.txt:62-75).
+add_custom_target(bdk_wasm_install_insource
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${BDK_WASM_DIST_DIR}/bdk-core.mjs"          "${CMAKE_CURRENT_SOURCE_DIR}/bdk-core.mjs"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${BDK_WASM_DIST_DIR}/bdk-core.wasm"         "${CMAKE_CURRENT_SOURCE_DIR}/bdk-core.wasm"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${BDK_WASM_DIST_DIR}/bdk-core.browser.mjs"  "${CMAKE_CURRENT_SOURCE_DIR}/bdk-core.browser.mjs"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${BDK_WASM_DIST_DIR}/bdk-core.browser.wasm" "${CMAKE_CURRENT_SOURCE_DIR}/bdk-core.browser.wasm"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${BDK_WASM_DIST_DIR}/bdk-core.umd.js"       "${CMAKE_CURRENT_SOURCE_DIR}/bdk-core.umd.js"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${BDK_WASM_DIST_DIR}/bdk-core.umd.wasm"      "${CMAKE_CURRENT_SOURCE_DIR}/bdk-core.umd.wasm"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${BDK_WASM_DIST_DIR}/bdk-core.slim.umd.js"  "${CMAKE_CURRENT_SOURCE_DIR}/bdk-core.slim.umd.js"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${BDK_WASM_DIST_DIR}/bdk-core.slim.umd.wasm" "${CMAKE_CURRENT_SOURCE_DIR}/bdk-core.slim.umd.wasm"
+  DEPENDS bdk_wasm_optimized bdk_wasm_browser_optimized
+          bdk_wasm_umd_optimized bdk_wasm_slim_umd_optimized
+  COMMENT "Publish the 8 committed wasm artifacts into the source tree")

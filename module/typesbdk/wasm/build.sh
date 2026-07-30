@@ -18,8 +18,8 @@ done
 # ENV{BSV_ROOT} when set and otherwise resolves the sibling ../bitcoin-sv. The
 # facility script neither pins a commit nor provisions a checkout; the pinned
 # version is owned by the environment (CI's pinned checkout, or the developer's
-# local one). The resolved path is read back from the CMake cache after the
-# configure step (see below) for the secp256k1 sub-build.
+# local one). build.sh needs no bitcoin-sv path of its own: CMake discovers it and
+# the in-tree secp256k1 build reaches it directly, so nothing reads CMakeCache.txt.
 
 # Boost is discovered, version-checked and layout-normalized entirely by CMake
 # (module/typesbdk/wasm/CMakeLists.txt): it reads ENV{BOOST_ROOT}, accepts both a
@@ -81,21 +81,12 @@ else
   summary_label="Built (CTest validation skipped via BDK_WASM_RUN_TESTS=0):"
 fi
 
-# Publishing the committed artifacts is an explicit opt-in. A plain build stays
-# entirely in the build tree and never writes the tracked files, so a valid but
-# off-pin local environment cannot leave committable-looking output behind. CI
-# (or a deliberate regen under the pinned environment) sets this flag; the size
-# gate above has already rejected any over-ceiling bundle before it can reach the
-# tracked tree.
+# Publish (opt-in). Reached only after ctest passed (set -e), so publishing always
+# follows validation. build.sh still owns the WHETHER; CMake owns the HOW -- the
+# bdk_wasm_install_insource target copies the eight final artifacts into the source
+# tree (it is not in ALL, so a plain build never writes the tracked files).
 if [[ "${BDK_WASM_UPDATE_COMMITTED_ARTIFACTS:-0}" == 1 ]]; then
-  install -m 0644 "$dist_dir/bdk-core.mjs" "$script_dir/bdk-core.mjs"
-  install -m 0644 "$dist_dir/bdk-core.wasm" "$script_dir/bdk-core.wasm"
-  install -m 0644 "$dist_dir/bdk-core.browser.mjs" "$script_dir/bdk-core.browser.mjs"
-  install -m 0644 "$dist_dir/bdk-core.browser.wasm" "$script_dir/bdk-core.browser.wasm"
-  install -m 0644 "$dist_dir/bdk-core.umd.js" "$script_dir/bdk-core.umd.js"
-  install -m 0644 "$dist_dir/bdk-core.umd.wasm" "$script_dir/bdk-core.umd.wasm"
-  install -m 0644 "$dist_dir/bdk-core.slim.umd.js" "$script_dir/bdk-core.slim.umd.js"
-  install -m 0644 "$dist_dir/bdk-core.slim.umd.wasm" "$script_dir/bdk-core.slim.umd.wasm"
+  cmake --build "$build_dir" --target bdk_wasm_install_insource
 fi
 
 echo "$summary_label"
