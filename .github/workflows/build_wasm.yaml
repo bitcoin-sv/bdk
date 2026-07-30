@@ -75,7 +75,14 @@ jobs:
           # Byte-repro layout rule: BOOST_ROOT is the directory containing boost/ directly
           echo "BOOST_ROOT=$PWD/dependancies_wasm/boost_1.85.0" >> "$GITHUB_ENV"
 
+        ## Only a default-pin build regenerates the tracked artifacts, so the
+        ## "Verify committed artifacts are reproducible" step below compares a
+        ## fresh pinned-env regen against the committed bytes. A custom-commit
+        ## dispatch builds off-pin bytes, so the flag stays off there to keep the
+        ## tracked tree untouched.
       - name: Build and run curve tests and real transaction vectors
+        env:
+          BDK_WASM_UPDATE_COMMITTED_ARTIFACTS: ${{ steps.define-bitcoin-sv-commit.outputs.bsvcommit == env.DEFAULT_BITCOIN_SV_COMMIT && '1' || '0' }}
         run: |
           source "$RUNNER_TEMP/emsdk/emsdk_env.sh"
           module/typesbdk/wasm/build.sh
@@ -94,7 +101,11 @@ jobs:
             -DSECP256K1_TEST_OVERRIDE_WIDE_MULTIPLY=int64
           cmake --build build-wasm-direct --target bdk_wasm --parallel
 
+        ## Byte-compare the tracked artifacts against a fresh pinned-env regen.
+        ## Skip it for a custom-commit dispatch: those bytes were built off-pin
+        ## and would fail by design against the default-pin committed files.
       - name: Verify committed artifacts are reproducible
+        if: steps.define-bitcoin-sv-commit.outputs.bsvcommit == env.DEFAULT_BITCOIN_SV_COMMIT
         run: |
           git diff --exit-code -- \
             module/typesbdk/wasm/bdk-core.mjs \
@@ -106,17 +117,22 @@ jobs:
             module/typesbdk/wasm/bdk-core.slim.umd.js \
             module/typesbdk/wasm/bdk-core.slim.umd.wasm
 
+        ## Upload the artifacts build.sh actually produced (the build-tree dist
+        ## directory), not the tracked source-tree copies. On a custom-commit run
+        ## the tracked tree still holds the default-pin bytes, so uploading it
+        ## would publish output that does not match what this run built. The dist
+        ## directory always reflects the current build regardless of the pin.
       - name: Upload validated module
         uses: actions/upload-artifact@v4
         with:
           name: bdk-wasm
           path: |
-            module/typesbdk/wasm/bdk-core.mjs
-            module/typesbdk/wasm/bdk-core.wasm
-            module/typesbdk/wasm/bdk-core.browser.mjs
-            module/typesbdk/wasm/bdk-core.browser.wasm
-            module/typesbdk/wasm/bdk-core.umd.js
-            module/typesbdk/wasm/bdk-core.umd.wasm
-            module/typesbdk/wasm/bdk-core.slim.umd.js
-            module/typesbdk/wasm/bdk-core.slim.umd.wasm
+            build-wasm/module/typesbdk/wasm/dist/bdk-core.mjs
+            build-wasm/module/typesbdk/wasm/dist/bdk-core.wasm
+            build-wasm/module/typesbdk/wasm/dist/bdk-core.browser.mjs
+            build-wasm/module/typesbdk/wasm/dist/bdk-core.browser.wasm
+            build-wasm/module/typesbdk/wasm/dist/bdk-core.umd.js
+            build-wasm/module/typesbdk/wasm/dist/bdk-core.umd.wasm
+            build-wasm/module/typesbdk/wasm/dist/bdk-core.slim.umd.js
+            build-wasm/module/typesbdk/wasm/dist/bdk-core.slim.umd.wasm
           if-no-files-found: error

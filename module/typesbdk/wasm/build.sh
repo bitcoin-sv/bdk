@@ -236,47 +236,63 @@ if [[ "${BDK_WASM_RUN_SECP_TESTS:-1}" == 1 ]]; then
   node "$secp_test_dir/src/exhaustive_tests.cjs" 2 20010203040506070809000102030405
 fi
 
-install -m 0644 "$dist_dir/bdk-core.mjs" "$script_dir/bdk-core.mjs"
-install -m 0644 "$dist_dir/bdk-core.wasm" "$script_dir/bdk-core.wasm"
-install -m 0644 "$dist_dir/bdk-core.browser.mjs" "$script_dir/bdk-core.browser.mjs"
-install -m 0644 "$dist_dir/bdk-core.browser.wasm" "$script_dir/bdk-core.browser.wasm"
-install -m 0644 "$dist_dir/bdk-core.umd.js" "$script_dir/bdk-core.umd.js"
-install -m 0644 "$dist_dir/bdk-core.umd.wasm" "$script_dir/bdk-core.umd.wasm"
-install -m 0644 "$dist_dir/bdk-core.slim.umd.js" "$script_dir/bdk-core.slim.umd.js"
-install -m 0644 "$dist_dir/bdk-core.slim.umd.wasm" "$script_dir/bdk-core.slim.umd.wasm"
+# Functional tests run against the freshly built artifacts in the build tree,
+# never the tracked source-tree copies, so a build is validated whether or not
+# it goes on to publish the committed files. They come before the size gate:
+# correctness is the more important signal and must always be exercised, while
+# the size gate is a deployment-size contract reported last. Each test script is
+# handed the dist module path so it loads the matching dist WASM alongside it.
+node "$script_dir/test.mjs" "$dist_dir/bdk-core.mjs"
+node "$script_dir/test.mjs" "$dist_dir/bdk-core.browser.mjs"
+node "$script_dir/test-umd.mjs" "$dist_dir/bdk-core.umd.js"
+node "$script_dir/test-umd.mjs" "$dist_dir/bdk-core.slim.umd.js"
 
 # Size is part of the verifier's compatibility contract. Check each actual
 # loader-plus-WASM payload using decimal kilobytes so compression or artifact
-# splitting can never disguise a regression above the 300 KB ceiling.
+# splitting can never disguise a regression above the 300 KB ceiling. Report
+# every oversized bundle and fail once at the end, so a single run surfaces the
+# full picture instead of stopping at the first offender.
 max_bundle_bytes=300000
-for bundle_name in bdk-core bdk-core.browser bdk-core.umd; do
-  loader_suffix=mjs
-  [[ "$bundle_name" == bdk-core.umd ]] && loader_suffix=js
+oversized_bundles=()
+for bundle_name in bdk-core bdk-core.browser bdk-core.umd bdk-core.slim.umd; do
+  case "$bundle_name" in
+    bdk-core.umd|bdk-core.slim.umd) loader_suffix=js ;;
+    *) loader_suffix=mjs ;;
+  esac
   bundle_bytes=$((
-    $(wc -c < "$script_dir/$bundle_name.$loader_suffix") +
-    $(wc -c < "$script_dir/$bundle_name.wasm")
+    $(wc -c < "$dist_dir/$bundle_name.$loader_suffix") +
+    $(wc -c < "$dist_dir/$bundle_name.wasm")
   ))
   if (( bundle_bytes > max_bundle_bytes )); then
     echo "$bundle_name is $bundle_bytes bytes; maximum is $max_bundle_bytes" >&2
-    exit 1
+    oversized_bundles+=("$bundle_name")
   fi
 done
-slim_bundle_bytes=$((
-  $(wc -c < "$script_dir/bdk-core.slim.umd.js") +
-  $(wc -c < "$script_dir/bdk-core.slim.umd.wasm")
-))
-if (( slim_bundle_bytes > max_bundle_bytes )); then
-  echo "bdk-core.slim.umd is $slim_bundle_bytes bytes; maximum is $max_bundle_bytes" >&2
+if (( ${#oversized_bundles[@]} > 0 )); then
+  echo "Oversized wasm bundles (max $max_bundle_bytes bytes): ${oversized_bundles[*]}" >&2
   exit 1
 fi
-node "$script_dir/test.mjs"
-node "$script_dir/test.mjs" bdk-core.browser.mjs
-node "$script_dir/test-umd.mjs"
-node "$script_dir/test-umd.mjs" bdk-core.slim.umd.js
+
+# Publishing the committed artifacts is an explicit opt-in. A plain build stays
+# entirely in the build tree and never writes the tracked files, so a valid but
+# off-pin local environment cannot leave committable-looking output behind. CI
+# (or a deliberate regen under the pinned environment) sets this flag; the size
+# gate above has already rejected any over-ceiling bundle before it can reach the
+# tracked tree.
+if [[ "${BDK_WASM_UPDATE_COMMITTED_ARTIFACTS:-0}" == 1 ]]; then
+  install -m 0644 "$dist_dir/bdk-core.mjs" "$script_dir/bdk-core.mjs"
+  install -m 0644 "$dist_dir/bdk-core.wasm" "$script_dir/bdk-core.wasm"
+  install -m 0644 "$dist_dir/bdk-core.browser.mjs" "$script_dir/bdk-core.browser.mjs"
+  install -m 0644 "$dist_dir/bdk-core.browser.wasm" "$script_dir/bdk-core.browser.wasm"
+  install -m 0644 "$dist_dir/bdk-core.umd.js" "$script_dir/bdk-core.umd.js"
+  install -m 0644 "$dist_dir/bdk-core.umd.wasm" "$script_dir/bdk-core.umd.wasm"
+  install -m 0644 "$dist_dir/bdk-core.slim.umd.js" "$script_dir/bdk-core.slim.umd.js"
+  install -m 0644 "$dist_dir/bdk-core.slim.umd.wasm" "$script_dir/bdk-core.slim.umd.wasm"
+fi
 
 echo "Built and validated:"
 ls -lh \
-  "$script_dir/bdk-core.mjs" "$script_dir/bdk-core.wasm" \
-  "$script_dir/bdk-core.browser.mjs" "$script_dir/bdk-core.browser.wasm" \
-  "$script_dir/bdk-core.umd.js" "$script_dir/bdk-core.umd.wasm" \
-  "$script_dir/bdk-core.slim.umd.js" "$script_dir/bdk-core.slim.umd.wasm"
+  "$dist_dir/bdk-core.mjs" "$dist_dir/bdk-core.wasm" \
+  "$dist_dir/bdk-core.browser.mjs" "$dist_dir/bdk-core.browser.wasm" \
+  "$dist_dir/bdk-core.umd.js" "$dist_dir/bdk-core.umd.wasm" \
+  "$dist_dir/bdk-core.slim.umd.js" "$dist_dir/bdk-core.slim.umd.wasm"
