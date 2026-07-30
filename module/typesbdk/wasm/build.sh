@@ -55,61 +55,12 @@ EMSDK_QUIET=1 emcmake cmake -S "$repo_root" -B "$build_dir" \
   -DSECP256K1_ECMULT_GEN_KB=2 \
   -DSECP256K1_TEST_OVERRIDE_WIDE_MULTIPLY=int64
 
-# Reuse CMake's single bitcoin-sv discovery result instead of re-deriving it in
-# the shell: the configure above wrote the resolved path to the cache as
-# BDK_BSV_ROOT_DIR, and the secp256k1 curve-test sub-build below needs it for
-# its -S source path. Fail loudly on an empty or bogus read so a broken cache
-# surfaces here rather than as an opaque "-S /src/secp256k1" configure error.
-bsv_root="$(sed -n 's/^BDK_BSV_ROOT_DIR:PATH=//p' "$build_dir/CMakeCache.txt")"
-if [[ -z "$bsv_root" || ! -d "$bsv_root/src/secp256k1" ]]; then
-  echo "could not read the resolved bitcoin-sv root from the CMake cache: $build_dir/CMakeCache.txt" >&2
-  exit 1
-fi
-
-# wasm-opt now runs inside CMake as a tracked build edge: each link output is
-# snapshotted raw and the optimized canonical .wasm is produced from that pristine
-# snapshot. Building the four *_optimized targets drives the module targets, their
-# raw snapshots and the optimize edges, leaving the final optimized bytes in dist.
+# One build. ALL builds the four module targets and their optimize edges (wasm-opt
+# runs inside CMake, fed from a pristine snapshot of each linker output) plus the
+# in-tree secp256k1 curve-test executables; benchmarks are off for wasm. No
+# bitcoin-sv path is needed here and nothing reads CMakeCache.txt.
 dist_dir="$build_dir/module/typesbdk/wasm/dist"
-cmake --build "$build_dir" \
-  --target bdk_wasm_optimized bdk_wasm_browser_optimized \
-           bdk_wasm_umd_optimized bdk_wasm_slim_umd_optimized \
-  --parallel "$jobs"
-
-if [[ "${BDK_WASM_RUN_SECP_TESTS:-1}" == 1 ]]; then
-  secp_test_dir="$build_dir/secp256k1-tests"
-  EMSDK_QUIET=1 emcmake cmake \
-    -S "$bsv_root/src/secp256k1" \
-    -B "$secp_test_dir" \
-    -DCMAKE_BUILD_TYPE=Release \
-    "-DCMAKE_EXE_LINKER_FLAGS=-sSTACK_SIZE=8388608 -sALLOW_MEMORY_GROWTH=1" \
-    -DSECP256K1_ASM=OFF \
-    -DSECP256K1_BUILD_BENCHMARK=OFF \
-    -DSECP256K1_BUILD_CTIME_TESTS=OFF \
-    -DSECP256K1_BUILD_EXAMPLES=OFF \
-    -DSECP256K1_BUILD_EXHAUSTIVE_TESTS=ON \
-    -DSECP256K1_BUILD_TESTS=ON \
-    -DSECP256K1_ECMULT_WINDOW_SIZE=15 \
-    -DSECP256K1_ECMULT_GEN_KB=2 \
-    -DSECP256K1_ENABLE_MODULE_ECDH=ON \
-    -DSECP256K1_ENABLE_MODULE_RECOVERY=ON \
-    -DSECP256K1_TEST_OVERRIDE_WIDE_MULTIPLY=int64
-  cmake --build "$secp_test_dir" \
-    --target tests noverify_tests exhaustive_tests \
-    --parallel "$jobs"
-  # A parent package.json may declare `type: module`; Emscripten's standalone
-  # test runners are CommonJS. The .cjs copies make their module format
-  # explicit without modifying generated sources or depending on checkout path.
-  for test_name in tests noverify_tests exhaustive_tests; do
-    cmake -E copy "$secp_test_dir/src/$test_name.js" "$secp_test_dir/src/$test_name.cjs"
-  done
-  # 35 is the smallest scaling count that exercises every test, including
-  # test_ecmult_constants_2bit, without making the cross-compiled CI run
-  # unnecessarily long.
-  node "$secp_test_dir/src/tests.cjs" 35 35010203040506070809000102030405
-  node "$secp_test_dir/src/noverify_tests.cjs" 35 45010203040506070809000102030405
-  node "$secp_test_dir/src/exhaustive_tests.cjs" 2 20010203040506070809000102030405
-fi
+cmake --build "$build_dir" --parallel "$jobs"
 
 # Validate. CTest owns the functional suites and the size gate; it runs them
 # against the freshly built dist artifacts, gates them behind the optimize
