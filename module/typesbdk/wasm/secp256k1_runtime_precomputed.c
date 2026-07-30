@@ -1,5 +1,31 @@
 /******************************************************************************
  * Runtime construction of libsecp256k1's deterministic verification tables.
+ *
+ * THIS FILE REPLACES A NATIVE libsecp256k1 TABLE. Upstream's secp256k1_precomputed
+ * object library compiles two generated sources (src/secp256k1/src/CMakeLists.txt):
+ *
+ *   precomputed_ecmult.c      ~2.3 MB  the large fixed-base VERIFICATION table
+ *   precomputed_ecmult_gen.c  ~260 KB  the compact SIGNING generator table
+ *
+ * module/typesbdk/wasm/CMakeLists.txt overwrites that target's SOURCES property,
+ * listing only this file plus precomputed_ecmult_gen.c -- so precomputed_ecmult.c
+ * is never compiled. The signing table stays static because it is already small.
+ *
+ * The definitions of secp256k1_pre_g and secp256k1_pre_g_128 below deliberately
+ * carry the SAME symbol names upstream's dropped file would have defined, so the
+ * linker still resolves every reference from ecmult_impl.h. The difference is that
+ * upstream emits them as initialised const data, whereas here they are ordinary
+ * zero-initialised globals filled in at run time. That converts ~2.3 MB of table
+ * bytes into empty .bss plus the small generator below -- the reason the shipped
+ * WASM payload fits its size budget.
+ *
+ * CONSEQUENCE: the tables are ALL ZERO until
+ * bdk_secp256k1_prepare_verification_tables() runs. Every binding entry point in
+ * txvalidator_wasm.cpp calls it before touching the curve. Any other consumer that
+ * links these targets -- notably libsecp256k1's own tests/noverify_tests binaries,
+ * which link secp256k1_precomputed -- will compute wrong results unless it calls
+ * that function first. Those upstream suites are therefore not enabled for this
+ * module; see the rationale in module/typesbdk/wasm/CMakeLists.txt.
  ******************************************************************************/
 
 #include "field_impl.h"
