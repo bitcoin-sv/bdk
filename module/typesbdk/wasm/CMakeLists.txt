@@ -51,17 +51,29 @@ add_compile_options(
   "-ffile-prefix-map=${CMAKE_SOURCE_DIR}=/bdk"
 )
 
-# secp256k1 curve suites: build them in-tree as CTest tests (was a second CMake
-# project in build.sh). Guarded so a command-line -DSECP256K1_BUILD_TESTS=OFF can
-# skip the build cost; default ON keeps "a green build implies green tests".
-# These MUST precede the recipe include: the recipe includes setting-secp256k1.cmake
-# at file scope, so setting them after the include is silently ineffective.
-if(NOT DEFINED SECP256K1_BUILD_TESTS)
-  set(SECP256K1_BUILD_TESTS ON)
-endif()
-if(NOT DEFINED SECP256K1_BUILD_EXHAUSTIVE_TESTS)
-  set(SECP256K1_BUILD_EXHAUSTIVE_TESTS ON)
-endif()
+# secp256k1's own curve suites are deliberately NOT enabled here.
+#
+# They cannot validate what this module ships. The module replaces the large
+# fixed-base verification table with a runtime reconstruction (see the rewiring
+# of secp256k1_precomputed below): secp256k1_pre_g/_pre_g_128 start out empty and
+# are filled by bdk_secp256k1_prepare_verification_tables(), which every binding
+# entry point calls. Upstream's test binaries know nothing about that function, so
+# built against this module's targets they run with all-zero tables and fail
+# secp256k1_ecdsa_sig_verify. Conversely, building them against a pristine
+# secp256k1 -- as a separate sub-project once did -- exercises upstream's code
+# rather than the substitution this module actually uses.
+#
+# The tables therefore need a purpose-built check (compare the runtime-computed
+# tables against upstream's static ones via bdk_secp256k1_export_verification_tables)
+# rather than upstream's suites. Until that exists, the shipped curve path is
+# covered by the module's own functional vectors (wasm_functional_*).
+#
+# core/setting-secp256k1.cmake defaults both options OFF when the caller defines
+# neither, so simply saying nothing here disables them while still honouring an
+# explicit command-line -DSECP256K1_BUILD_TESTS=ON for anyone investigating.
+# Anything we DID set would have to precede the recipe include: the recipe includes
+# setting-secp256k1.cmake at file scope, so setting it afterwards is silently
+# ineffective.
 set(SECP256K1_BUILD_BENCHMARK OFF)   # wasm: no benchmarks (the old sub-project set this too)
 
 # The module's own core variant, built from the shared recipe. The recipe
@@ -81,6 +93,32 @@ bdk_add_core_library(bdk_core_wasm
 # preserving the full W15 hot path and the compact signing table. The recipe
 # instantiated secp256k1 from this directory's scope, so the module rewires
 # targets it owns.
+#
+# RISK -- THIS SUBSTITUTION IS UNVERIFIED. Replacing SOURCES below drops upstream's
+# generated precomputed_ecmult.c (~2.3 MB of const verification table) and supplies
+# secp256k1_runtime_precomputed.c in its place, which defines the same
+# secp256k1_pre_g/_pre_g_128 symbols as zero-initialised globals and computes their
+# contents at run time. precomputed_ecmult_gen.c (the compact signing table) is
+# deliberately kept as-is.
+#
+# So the correctness of every ECDSA verification in this module rests on
+# hand-written table generation replacing values upstream generates and ships, and
+# nothing tests that replacement:
+#   * libsecp256k1's own suites cannot: linked against this rewired target they see
+#     all-zero tables until bdk_secp256k1_prepare_verification_tables() runs, which
+#     only the bindings call, so tests/noverify_tests fail on sound code. They are
+#     therefore not enabled (see the rationale further up this file).
+#   * built instead against a pristine secp256k1, those suites exercise upstream's
+#     shipped table and never this substitution -- which is what the previous
+#     sub-project arrangement did.
+#   * this module has no test of its own for the tables. The shipped curve path is
+#     covered only indirectly, by the handful of transaction vectors in
+#     wasm_functional_*; those would catch a grossly wrong table but not a wrong
+#     entry in a window they never reach.
+#
+# The check this needs is a direct one: run the reconstruction, export it with
+# bdk_secp256k1_export_verification_tables(), and compare byte-for-byte against
+# upstream's static precomputed_ecmult.c values. That test does not exist yet.
 set_property(TARGET secp256k1_precomputed PROPERTY SOURCES
   "${CMAKE_CURRENT_SOURCE_DIR}/secp256k1_runtime_precomputed.c"
   "${BDK_BSV_ROOT_DIR}/src/secp256k1/src/precomputed_ecmult_gen.c"
@@ -105,12 +143,13 @@ list(PREPEND _secp256k1_sources
 )
 set_property(TARGET secp256k1 PROPERTY SOURCES ${_secp256k1_sources})
 
-# Per-target link options for the in-tree secp256k1 curve suites only. The old
-# sub-project passed these via a project-wide CMAKE_EXE_LINKER_FLAGS; in-tree that
-# would leak onto the module's own four targets and CHANGE the shipped artifact
-# bytes. Scope them to the three test targets so the committed artifacts are byte
-# identical (R3). Targets are global, so this wasm scope reaches the sub-build's
-# targets, exactly as it already rewires secp256k1/secp256k1_precomputed above.
+# Per-target link options for secp256k1's curve suites, applied only if someone
+# opts them back in with -DSECP256K1_BUILD_TESTS=ON (they are off by default, see
+# above); the TARGET guard makes this a no-op otherwise. The old sub-project passed
+# these via a project-wide CMAKE_EXE_LINKER_FLAGS; in-tree that would leak onto the
+# module's own four targets and CHANGE the shipped artifact bytes, so they stay
+# scoped to the test targets (R3). Targets are global, so this wasm scope reaches
+# the sub-build's targets, exactly as it rewires secp256k1/secp256k1_precomputed.
 foreach(_secp_test tests noverify_tests exhaustive_tests)
   if(TARGET ${_secp_test})
     target_link_options(${_secp_test} PRIVATE
