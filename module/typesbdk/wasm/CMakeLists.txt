@@ -252,3 +252,77 @@ target_sources(bdk_wasm_slim_umd PRIVATE
   txvalidator_wasm_minimal_extern.js
   txvalidator_wasm_minimal_pre.js
 )
+
+find_program(BDK_NODE_EXECUTABLE NAMES node NO_CMAKE_FIND_ROOT_PATH)
+
+# Fixture: bring the optimized sidecars up to date before any functional/size test
+# reads them, so a standalone `ctest` can never validate a raw/stale artifact.
+# It is itself a CTest test, so it carries the wasm label and a generous timeout.
+add_test(NAME wasm_build_optimized
+  COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}"
+    --target bdk_wasm_optimized bdk_wasm_browser_optimized
+             bdk_wasm_umd_optimized bdk_wasm_slim_umd_optimized)
+set_tests_properties(wasm_build_optimized PROPERTIES
+  FIXTURES_SETUP wasm_optimized LABELS "wasm;fixture" TIMEOUT 1800)
+
+if(BDK_NODE_EXECUTABLE)
+  add_test(NAME wasm_functional_node
+    COMMAND "${BDK_NODE_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test.mjs"
+            "${BDK_WASM_DIST_DIR}/bdk-core.mjs"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+  add_test(NAME wasm_functional_browser
+    COMMAND "${BDK_NODE_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test.mjs"
+            "${BDK_WASM_DIST_DIR}/bdk-core.browser.mjs"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+  add_test(NAME wasm_functional_umd
+    COMMAND "${BDK_NODE_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test-umd.mjs"
+            "${BDK_WASM_DIST_DIR}/bdk-core.umd.js"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+  add_test(NAME wasm_functional_slim_umd
+    COMMAND "${BDK_NODE_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test-umd.mjs"
+            "${BDK_WASM_DIST_DIR}/bdk-core.slim.umd.js"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+  set_tests_properties(
+    wasm_functional_node wasm_functional_browser
+    wasm_functional_umd wasm_functional_slim_umd
+    PROPERTIES LABELS "wasm;functional" TIMEOUT 300
+               FIXTURES_REQUIRED wasm_optimized)
+else()
+  message(WARNING
+    "node not found: the wasm functional CTest tests were not registered. "
+    "build.sh preflights node before configuring, so its validated path always "
+    "registers them.")
+endif()
+
+# Size gate: sum loader+wasm per variant in decimal bytes, report EVERY oversized
+# bundle and fail once. Generated into the build tree (no new tracked source);
+# dist_dir and the ceiling are passed with -D so nothing reads CMakeCache.txt.
+set(_wasm_size_gate_script "${CMAKE_CURRENT_BINARY_DIR}/wasm_size_gate.cmake")
+file(WRITE "${_wasm_size_gate_script}" [==[
+set(bundles
+  "bdk-core:mjs" "bdk-core.browser:mjs" "bdk-core.umd:js" "bdk-core.slim.umd:js")
+set(oversized "")
+foreach(entry IN LISTS bundles)
+  string(REPLACE ":" ";" parts "${entry}")
+  list(GET parts 0 name)
+  list(GET parts 1 loader)
+  file(SIZE "${dist_dir}/${name}.${loader}" loader_bytes)
+  file(SIZE "${dist_dir}/${name}.wasm" wasm_bytes)
+  math(EXPR total "${loader_bytes} + ${wasm_bytes}")
+  if(total GREATER max_bundle_bytes)
+    message(WARNING "${name} is ${total} bytes; maximum is ${max_bundle_bytes}")
+    list(APPEND oversized "${name}")
+  endif()
+endforeach()
+if(oversized)
+  string(REPLACE ";" " " oversized_str "${oversized}")
+  message(FATAL_ERROR "Oversized wasm bundles (max ${max_bundle_bytes} bytes): ${oversized_str}")
+endif()
+]==])
+
+add_test(NAME wasm_size_gate
+  COMMAND "${CMAKE_COMMAND}"
+    "-Ddist_dir=${BDK_WASM_DIST_DIR}" "-Dmax_bundle_bytes=300000"
+    -P "${_wasm_size_gate_script}")
+set_tests_properties(wasm_size_gate PROPERTIES
+  LABELS "wasm;sizegate" TIMEOUT 60 FIXTURES_REQUIRED wasm_optimized)

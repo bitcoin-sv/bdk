@@ -6,7 +6,7 @@ repo_root="$(cd "$script_dir/../../.." && pwd)"
 build_dir="${BDK_WASM_BUILD_DIR:-$repo_root/build-wasm}"
 jobs="${BDK_WASM_JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu)}"
 
-for command in cmake emcmake emcc em++ emar emranlib make node; do
+for command in cmake emcmake emcc em++ emar emranlib make node ctest; do
   command -v "$command" >/dev/null || {
     echo "Missing required command: $command" >&2
     echo "Activate Emscripten 4.0.23 with 'source /path/to/emsdk_env.sh' before running this script." >&2
@@ -111,41 +111,23 @@ if [[ "${BDK_WASM_RUN_SECP_TESTS:-1}" == 1 ]]; then
   node "$secp_test_dir/src/exhaustive_tests.cjs" 2 20010203040506070809000102030405
 fi
 
-# Functional tests run against the freshly built artifacts in the build tree,
-# never the tracked source-tree copies, so a build is validated whether or not
-# it goes on to publish the committed files. They come before the size gate:
-# correctness is the more important signal and must always be exercised, while
-# the size gate is a deployment-size contract reported last. Each test script is
-# handed the dist module path so it loads the matching dist WASM alongside it.
-node "$script_dir/test.mjs" "$dist_dir/bdk-core.mjs"
-node "$script_dir/test.mjs" "$dist_dir/bdk-core.browser.mjs"
-node "$script_dir/test-umd.mjs" "$dist_dir/bdk-core.umd.js"
-node "$script_dir/test-umd.mjs" "$dist_dir/bdk-core.slim.umd.js"
-
-# Size is part of the verifier's compatibility contract. Check each actual
-# loader-plus-WASM payload using decimal kilobytes so compression or artifact
-# splitting can never disguise a regression above the 300 KB ceiling. Report
-# every oversized bundle and fail once at the end, so a single run surfaces the
-# full picture instead of stopping at the first offender.
-max_bundle_bytes=300000
-oversized_bundles=()
-for bundle_name in bdk-core bdk-core.browser bdk-core.umd bdk-core.slim.umd; do
-  case "$bundle_name" in
-    bdk-core.umd|bdk-core.slim.umd) loader_suffix=js ;;
-    *) loader_suffix=mjs ;;
-  esac
-  bundle_bytes=$((
-    $(wc -c < "$dist_dir/$bundle_name.$loader_suffix") +
-    $(wc -c < "$dist_dir/$bundle_name.wasm")
-  ))
-  if (( bundle_bytes > max_bundle_bytes )); then
-    echo "$bundle_name is $bundle_bytes bytes; maximum is $max_bundle_bytes" >&2
-    oversized_bundles+=("$bundle_name")
-  fi
-done
-if (( ${#oversized_bundles[@]} > 0 )); then
-  echo "Oversized wasm bundles (max $max_bundle_bytes bytes): ${oversized_bundles[*]}" >&2
+# Validate. CTest owns the functional suites and the size gate; it runs them
+# against the freshly built dist artifacts, gates them behind the optimize
+# fixture, and reports correctness before the size contract. Default on; opt out
+# with BDK_WASM_RUN_TESTS=0. Publishing requires validation, so refuse to publish
+# when tests were skipped. Runs are cwd-based: the repo floor is CMake 3.16, which
+# has neither --test-dir nor --no-tests=error, so a non-empty registration is
+# asserted with a `ctest -N` count first (a zero-test build is not "validated").
+if [[ "${BDK_WASM_RUN_TESTS:-1}" == 1 ]]; then
+  ntests="$( cd "$build_dir" && ctest -N | grep -c 'Test #' || true )"
+  [[ "${ntests:-0}" -ge 1 ]] || { echo "No CTest tests registered; refusing to report validated." >&2; exit 1; }
+  ( cd "$build_dir" && ctest --output-on-failure )
+  summary_label="Built and validated:"
+elif [[ "${BDK_WASM_UPDATE_COMMITTED_ARTIFACTS:-0}" == 1 ]]; then
+  echo "Refusing to publish with BDK_WASM_RUN_TESTS=0: publishing requires validation." >&2
   exit 1
+else
+  summary_label="Built (CTest validation skipped via BDK_WASM_RUN_TESTS=0):"
 fi
 
 # Publishing the committed artifacts is an explicit opt-in. A plain build stays
@@ -165,7 +147,7 @@ if [[ "${BDK_WASM_UPDATE_COMMITTED_ARTIFACTS:-0}" == 1 ]]; then
   install -m 0644 "$dist_dir/bdk-core.slim.umd.wasm" "$script_dir/bdk-core.slim.umd.wasm"
 fi
 
-echo "Built and validated:"
+echo "$summary_label"
 ls -lh \
   "$dist_dir/bdk-core.mjs" "$dist_dir/bdk-core.wasm" \
   "$dist_dir/bdk-core.browser.mjs" "$dist_dir/bdk-core.browser.wasm" \
