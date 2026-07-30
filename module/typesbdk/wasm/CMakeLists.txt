@@ -92,6 +92,57 @@ list(PREPEND _secp256k1_sources
 )
 set_property(TARGET secp256k1 PROPERTY SOURCES ${_secp256k1_sources})
 
+# wasm-opt resolution mirrors the facility script exactly:
+#   1. a non-empty, existing WASM_OPT override
+#   2. else wasm-opt on PATH ONLY (a fresh `command -v`-equivalent probe)
+#   3. else $EMSDK/upstream/bin/wasm-opt
+# NOTE: after `source emsdk_env.sh`, wasm-opt is NOT on PATH and $EMSDK/upstream/bin
+# is NOT added to PATH; only the binary exists on disk, so step 3 resolves it.
+set(_bdk_wasm_opt "")
+
+# (1) Explicit override -- honoured only when non-empty AND present. build.sh uses
+#     `${WASM_OPT:-}` (a non-empty test); EXISTS (not an executable-bit check) is
+#     sufficient because a bogus override fails loudly at build time when the
+#     optimise edge invokes it -- never a silent artifact-correctness problem.
+if(DEFINED ENV{WASM_OPT} AND NOT "$ENV{WASM_OPT}" STREQUAL "")
+  if(EXISTS "$ENV{WASM_OPT}")
+    set(_bdk_wasm_opt "$ENV{WASM_OPT}")
+  else()
+    message(FATAL_ERROR "WASM_OPT=[$ENV{WASM_OPT}] is set but does not exist")
+  endif()
+endif()
+
+# (2) wasm-opt on PATH ONLY, re-probed fresh each configure like `command -v`.
+#     unset drops any prior hit so a reconfigure never reuses a stale path;
+#     PATHS ENV PATH + NO_DEFAULT_PATH searches only the environment PATH dirs
+#     (a bare find_program would consult CMake-specific program dirs first).
+if(_bdk_wasm_opt STREQUAL "")
+  unset(_bdk_wasm_opt_probe CACHE)
+  find_program(_bdk_wasm_opt_probe NAMES wasm-opt
+    PATHS ENV PATH NO_DEFAULT_PATH NO_CMAKE_FIND_ROOT_PATH)
+  if(_bdk_wasm_opt_probe)
+    set(_bdk_wasm_opt "${_bdk_wasm_opt_probe}")
+  endif()
+endif()
+
+# (3) The Emscripten SDK's bundled binary (the path that actually resolves).
+if(_bdk_wasm_opt STREQUAL "" AND DEFINED ENV{EMSDK}
+   AND EXISTS "$ENV{EMSDK}/upstream/bin/wasm-opt")
+  set(_bdk_wasm_opt "$ENV{EMSDK}/upstream/bin/wasm-opt")
+endif()
+
+if(_bdk_wasm_opt STREQUAL "" OR NOT EXISTS "${_bdk_wasm_opt}")
+  message(FATAL_ERROR
+    "wasm-opt not found. Set WASM_OPT, put wasm-opt on PATH, or activate the "
+    "pinned Emscripten SDK so $EMSDK/upstream/bin/wasm-opt exists.")
+endif()
+set(BDK_WASM_OPT "${_bdk_wasm_opt}")   # NORMAL variable: never written to / read from the cache
+
+# The dist directory is RUNTIME_OUTPUT_DIRECTORY for every wasm target (set in
+# add_bdk_wasm_target). Define it once so add_custom_command(OUTPUT ...) needs no
+# generator expressions (not portable on the 3.16 floor).
+set(BDK_WASM_DIST_DIR "${CMAKE_CURRENT_BINARY_DIR}/dist")
+
 function(add_bdk_wasm_target target_name output_name environment export_es6 suffix include_compat)
   add_executable(${target_name} txvalidator_wasm.cpp txvalidator_wasm.h txvalidator_wasm.js)
   # The WASM binding includes BDK headers that transitively include Boost.
@@ -146,6 +197,41 @@ function(add_bdk_wasm_target target_name output_name environment export_es6 suff
     RUNTIME_OUTPUT_DIRECTORY_MINSIZEREL "${CMAKE_CURRENT_BINARY_DIR}/dist"
     RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${CMAKE_CURRENT_BINARY_DIR}/dist"
   )
+
+  set(_canon "${BDK_WASM_DIST_DIR}/${output_name}.wasm")
+  set(_raw   "${BDK_WASM_DIST_DIR}/${output_name}.raw.wasm")
+  set(_stamp "${CMAKE_CURRENT_BINARY_DIR}/${output_name}.wasm.optimized.stamp")
+
+  # (1) Snapshot Emscripten's freshly emitted, UN-optimized sidecar on every
+  #     relink. Plain copy (not copy_if_different): a relink always overwrites the
+  #     canonical .wasm with raw bytes, so the optimize edge must re-run afterwards
+  #     even when the raw bytes are unchanged.
+  add_custom_command(TARGET ${target_name} POST_BUILD
+    COMMAND "${CMAKE_COMMAND}" -E copy "${_canon}" "${_raw}"
+    BYPRODUCTS "${_raw}"
+    VERBATIM
+    COMMENT "capture raw ${output_name}.wasm")
+
+  # (2) Tracked optimize edge: PRISTINE raw snapshot -> canonical .wasm.
+  #     Reads _raw (never _canon), so it is idempotent (no double-optimize hazard,
+  #     no need to force-relink); _canon is a declared OUTPUT, so a deleted/stale
+  #     canonical .wasm is regenerated; _stamp is the mono-writer timestamp that
+  #     makes "re-run after any relink" reliable.
+  add_custom_command(
+    OUTPUT "${_canon}" "${_stamp}"
+    DEPENDS ${target_name} "${_raw}"
+    COMMAND "${BDK_WASM_OPT}" "${_raw}"
+      -O4 --converge
+      --enable-bulk-memory --enable-bulk-memory-opt
+      --enable-nontrapping-float-to-int --enable-sign-ext --enable-mutable-globals
+      -o "${_canon}.opt"
+    COMMAND "${CMAKE_COMMAND}" -E rename "${_canon}.opt" "${_canon}"
+    COMMAND "${CMAKE_COMMAND}" -E touch "${_stamp}"
+    VERBATIM
+    COMMENT "wasm-opt ${output_name}.wasm")
+
+  # (3) An ALL target so a plain `cmake --build` reconciles the sidecar.
+  add_custom_target(${target_name}_optimized ALL DEPENDS "${_stamp}")
 endfunction()
 
 # Keep platform-specific loader glue separate. Browser bundlers should never
