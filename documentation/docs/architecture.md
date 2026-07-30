@@ -163,8 +163,12 @@ gobdk/rustbdk link, and its build must stay canonical. The WASM build is therefo
 modified by any module.
 
 It configures with `-DBDK_BUILD_CORE=OFF -DBDK_BUILD_WASM=ON` under the Emscripten toolchain
-rather than as part of the default native build. The pinned `wasm/build.sh` performs a clean
-Emscripten build, runs standalone libsecp256k1 tests and real positive/negative transaction
-vectors, and installs the validated `bdk-core.mjs` and `bdk-core.wasm` artifacts. See
+rather than as part of the default native build. `wasm/build.sh` is a facility script that
+automates the clean configure/build/validate commands — a standalone libsecp256k1 test run and
+real positive/negative transaction vectors — and makes no version decisions of its own. The
+bitcoin-sv commit, the Boost 1.85.0 package and the Emscripten 4.0.23 SDK are pinned by the
+environment (CI, or the developer's local install), not by the script; reproducibility of the
+eight committed artifacts is owned by CI, which regenerates them under the pinned environment and
+fails if the tracked bytes drift. See
 `module/typesbdk/examples/README.md` for the reproducible build, ABI, and native/WASM benchmark
 controls, and [Development Build](build.md) for the flags and the prebuilt Boost package.

@@ -5,9 +5,9 @@ if(BDK_BUILD_CORE)
   message(FATAL_ERROR "The WASM module is standalone: configure with -DBDK_BUILD_CORE=OFF")
 endif()
 
-# Boost: header-only import, module-owned. Enforcing the pinned version here
-# gives a direct emcmake configure (not routed through build.sh) the same
-# reproducibility guarantee build.sh provides.
+# Boost: header-only import, module-owned. The pinned version is enforced here,
+# in the build system, so every build path -- the build.sh facility script and a
+# direct emcmake configure alike -- shares one reproducibility contract.
 if(NOT TARGET Boost::boost)
   if(CUSTOM_BOOST_ROOT)
     set(BOOST_ROOT ${CUSTOM_BOOST_ROOT})
@@ -20,8 +20,9 @@ if(NOT TARGET Boost::boost)
   if(NOT BDK_BOOST_INCLUDE_DIR)
     message(FATAL_ERROR
       "Unable to find boost/version.hpp below BOOST_ROOT=[${BOOST_ROOT}]. "
-      "Point BOOST_ROOT at the prebuilt wasm Boost package (dependancies_wasm.tar.gz), "
-      "or let build.sh provision the pinned minimal Boost install.")
+      "Set BOOST_ROOT to a prepared wasm Boost 1.85.0 package: the prebuilt depcy "
+      "package (dependancies_wasm.tar.gz), or a local Boost 1.85.0 install whose "
+      "directory contains boost/ directly or under include/.")
   endif()
   file(STRINGS "${BDK_BOOST_INCLUDE_DIR}/boost/version.hpp" _bdk_boost_version_line
        REGEX "^#define BOOST_VERSION [0-9]+")

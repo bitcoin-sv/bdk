@@ -188,20 +188,31 @@ source lists plus the `bdk_add_core_library()` factory — and the WASM module u
 its own `bdk_core_wasm` variant inside `module/typesbdk/wasm/`. There is exactly one canonical
 native core; a specialized consumer builds its own variant in its own directory.
 
-The reproducible entry point is `module/typesbdk/wasm/build.sh` (Emscripten 4.0.23). When no
-`BOOST_ROOT` is supplied it self-provisions the pinned minimal Boost 1.85.0 header set. The
-prebuilt package published on the `depcy` release contains exactly that set and skips the
-self-provisioning:
+The reproducible entry point is `module/typesbdk/wasm/build.sh` (Emscripten 4.0.23). It is a
+facility script that only automates the configure/build/validate commands; the environment must
+be prepared before it runs, exactly like the native build. Provide:
+
+- Emscripten 4.0.23 (activate its `emsdk_env.sh`);
+- `BOOST_ROOT` pointing at a Boost 1.85.0 install — the prebuilt `depcy` wasm package or a local
+  install. CMake accepts either a directory that contains `boost/` directly or one that contains
+  `include/boost/`, and enforces `BOOST_VERSION 108500`;
+- a bitcoin-sv checkout — the sibling `../bitcoin-sv`, or `BSV_ROOT` (see *How BDK finds the
+  bitcoin-sv source* below).
 
 ```console
 curl --fail --location -o /tmp/dependancies_wasm.tar.gz \
   "https://github.com/bitcoin-sv/bdk/releases/download/depcy/dependancies_wasm.tar.gz"
 mkdir -p build-wasm-deps && tar -xzf /tmp/dependancies_wasm.tar.gz -C build-wasm-deps
-BOOST_ROOT="$PWD/build-wasm-deps/dependancies_wasm/boost_1.85.0" module/typesbdk/wasm/build.sh
+export BOOST_ROOT="$PWD/build-wasm-deps/dependancies_wasm/boost_1.85.0"
+module/typesbdk/wasm/build.sh
 ```
 
-(`BOOST_ROOT` must be the directory containing `boost/` directly — required for byte-identical
-artifacts.) A direct configure without `build.sh` is also supported:
+A plain `build.sh` builds and validates entirely inside the build tree (`build-wasm/`) and never
+writes the eight tracked artifacts. Regenerating the committed files is an explicit opt-in —
+`BDK_WASM_UPDATE_COMMITTED_ARTIFACTS=1 module/typesbdk/wasm/build.sh` — and is normally done by
+CI under the pinned environment, which owns the byte-for-byte reproducibility of the tracked
+artifacts. Override the build tree with `BDK_WASM_BUILD_DIR` or the job count with
+`BDK_WASM_JOBS`. A direct configure without `build.sh` is also supported:
 
 ```console
 emcmake cmake -S . -B build-wasm -DCMAKE_BUILD_TYPE=Release \
@@ -217,12 +228,11 @@ The wasm Boost package pins this minimal `BOOST_INCLUDE_LIBRARIES` component set
 multiprecision;chrono;uuid;variant;thread;filesystem;signals2;multi_index
 ```
 
-(it legitimately includes `multiprecision` — the wasm bigint backend needs it). The same list
-is pinned verbatim in `build.sh` (`BDK_WASM_BOOST_LIBS`) and in `prebuild_dependancies.yaml`
-(`WASM_BOOST_INCLUDE_LIBRARIES`). To change it, re-run the add-and-prune derivation (install a
-candidate list, build, add components on missing-header errors, then remove each component one
-at a time and keep only the necessary ones) and pin the converged result — never hand-edit the
-list.
+(it legitimately includes `multiprecision` — the wasm bigint backend needs it). This list is
+defined once, in `prebuild_dependancies.yaml` (`WASM_BOOST_INCLUDE_LIBRARIES`) — the workflow
+that builds the package. To change it, re-run the add-and-prune derivation (install a candidate
+list, build, add components on missing-header errors, then remove each component one at a time
+and keep only the necessary ones) and pin the converged result — never hand-edit the list.
 
 ### Boost multiprecision and the big-int parity suite
 
