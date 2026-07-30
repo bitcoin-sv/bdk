@@ -14,18 +14,6 @@ for command in cmake emcmake emcc em++ emar emranlib make node; do
   }
 done
 
-wasm_opt="${WASM_OPT:-}"
-if [[ -z "$wasm_opt" ]]; then
-  if command -v wasm-opt >/dev/null; then
-    wasm_opt="$(command -v wasm-opt)"
-  elif [[ -n "${EMSDK:-}" && -x "$EMSDK/upstream/bin/wasm-opt" ]]; then
-    wasm_opt="$EMSDK/upstream/bin/wasm-opt"
-  else
-    echo "Missing wasm-opt; activate the pinned Emscripten SDK or set WASM_OPT." >&2
-    exit 1
-  fi
-fi
-
 # bitcoin-sv is discovered by CMake, exactly like the native build: it honours
 # ENV{BSV_ROOT} when set and otherwise resolves the sibling ../bitcoin-sv. The
 # facility script neither pins a commit nor provisions a checkout; the pinned
@@ -78,33 +66,15 @@ if [[ -z "$bsv_root" || ! -d "$bsv_root/src/secp256k1" ]]; then
   exit 1
 fi
 
-# wasm-opt consumes the linker output in place. Force only the four cheap
-# final links to rerun so an incremental build never optimizes an already
-# optimized binary and drifts from a clean/CI artifact.
+# wasm-opt now runs inside CMake as a tracked build edge: each link output is
+# snapshotted raw and the optimized canonical .wasm is produced from that pristine
+# snapshot. Building the four *_optimized targets drives the module targets, their
+# raw snapshots and the optimize edges, leaving the final optimized bytes in dist.
 dist_dir="$build_dir/module/typesbdk/wasm/dist"
-cmake -E rm -f \
-  "$dist_dir/bdk-core.mjs" "$dist_dir/bdk-core.wasm" \
-  "$dist_dir/bdk-core.browser.mjs" "$dist_dir/bdk-core.browser.wasm" \
-  "$dist_dir/bdk-core.umd.js" "$dist_dir/bdk-core.umd.wasm" \
-  "$dist_dir/bdk-core.slim.umd.js" "$dist_dir/bdk-core.slim.umd.wasm"
 cmake --build "$build_dir" \
-  --target bdk_wasm bdk_wasm_browser bdk_wasm_umd bdk_wasm_slim_umd \
+  --target bdk_wasm_optimized bdk_wasm_browser_optimized \
+           bdk_wasm_umd_optimized bdk_wasm_slim_umd_optimized \
   --parallel "$jobs"
-
-# Emscripten's -O3 link performs one Binaryen optimization pass. A converged
-# -O4 pass is measurably faster for this integer-heavy verifier while retaining
-# the same WebAssembly feature set emitted by Emscripten.
-for wasm_name in bdk-core bdk-core.browser bdk-core.umd bdk-core.slim.umd; do
-  "$wasm_opt" "$dist_dir/$wasm_name.wasm" \
-    -O4 --converge \
-    --enable-bulk-memory \
-    --enable-bulk-memory-opt \
-    --enable-nontrapping-float-to-int \
-    --enable-sign-ext \
-    --enable-mutable-globals \
-    -o "$dist_dir/$wasm_name.optimized.wasm"
-  mv "$dist_dir/$wasm_name.optimized.wasm" "$dist_dir/$wasm_name.wasm"
-done
 
 if [[ "${BDK_WASM_RUN_SECP_TESTS:-1}" == 1 ]]; then
   secp_test_dir="$build_dir/secp256k1-tests"
