@@ -1,34 +1,32 @@
 ## Build and validate the WASM module
 
-`build.sh` is the reproducible WASM entry point. Use Emscripten 4.0.23, then
-run the pinned build script from the BDK root:
+`build.sh` is the reproducible WASM entry point. It is a facility script that
+automates the configure/build/validate commands; the environment must be prepared
+before it runs. Use Emscripten 4.0.23, set `BOOST_ROOT` to a Boost 1.85.0 install,
+and provide a `bitcoin-sv` checkout (the sibling `../bitcoin-sv`, or `BSV_ROOT`),
+then run it from the BDK root:
 
 ```bash
 source /path/to/emsdk/emsdk_env.sh
-module/typesbdk/wasm/build.sh
-
-# Optional: build against the prebuilt minimal Boost package instead of
-# letting the script self-provision it:
+# Prepare Boost 1.85.0 (here from the prebuilt minimal depcy package):
 curl --fail --location -o /tmp/dependancies_wasm.tar.gz \
   "https://github.com/bitcoin-sv/bdk/releases/download/depcy/dependancies_wasm.tar.gz"
 mkdir -p build-wasm-deps && tar -xzf /tmp/dependancies_wasm.tar.gz -C build-wasm-deps
-BOOST_ROOT="$PWD/build-wasm-deps/dependancies_wasm/boost_1.85.0" module/typesbdk/wasm/build.sh
+export BOOST_ROOT="$PWD/build-wasm-deps/dependancies_wasm/boost_1.85.0"
+module/typesbdk/wasm/build.sh
 ```
 
-The script installs the pinned minimal Boost 1.85.0 header set (when no
-`BOOST_ROOT` is supplied), checks out the same `bitcoin-sv` commit used by BDK
-CI, performs a clean standalone module build (`-DBDK_BUILD_CORE=OFF
+`build.sh` performs a clean standalone module build (`-DBDK_BUILD_CORE=OFF
 -DBDK_BUILD_WASM=ON`) that assembles the module's own `bdk_core_wasm` variant
 from the shared core recipe, runs libsecp256k1's verified, non-verified, and
-exhaustive WASM test binaries, and
-runs real positive and negative transaction vectors. The verifier-only WASM
-build does not require or link OpenSSL: it uses header-only multiprecision and a
-minimal memory-cleanse implementation. Dependencies and build output default to
-`build-wasm-deps/` and `build-wasm/`. Set `BDK_WASM_DEPS_DIR`,
-`BDK_WASM_BUILD_DIR`, or `BDK_WASM_JOBS` to override those locations. Existing
-`BSV_ROOT` and `BOOST_ROOT` installations are honored after their pinned
-versions are verified. In particular, an existing `BSV_ROOT` must be a git
-checkout at the exact commit used by the reproducible build.
+exhaustive WASM test binaries, and runs real positive and negative transaction
+vectors. The verifier-only WASM build does not require or link OpenSSL: it uses
+header-only multiprecision and a minimal memory-cleanse implementation. CMake
+discovers bitcoin-sv (`ENV{BSV_ROOT}` or the sibling `../bitcoin-sv`) and Boost
+(`ENV{BOOST_ROOT}` — either a directory containing `boost/` directly or one
+containing `include/boost/`), and enforces the pinned Boost version 1.85.0. The
+build output defaults to `build-wasm/`; set `BDK_WASM_BUILD_DIR` or
+`BDK_WASM_JOBS` to override the location or job count.
 
 The production artifact uses libsecp256k1's 32-bit-limb arithmetic backend
 (`int64` in libsecp terminology), whole-program LTO for the hot verifier, and a
@@ -48,10 +46,13 @@ ok - bdk-core.mjs mainnet-p2pkh-corrupt-signature: domain=1 code=39
 ```
 
 The validated Node (`bdk-core.mjs`, `bdk-core.wasm`) and browser/worker
-(`bdk-core.browser.mjs`, `bdk-core.browser.wasm`) artifacts are installed beside
-the build script, together with a classic-script/UMD loader
-(`bdk-core.umd.js`, `bdk-core.umd.wasm`). The split keeps Node loader imports
-out of browser bundler graphs while preserving an identical verification ABI.
+(`bdk-core.browser.mjs`, `bdk-core.browser.wasm`) artifacts are produced in the
+build tree, together with a classic-script/UMD loader (`bdk-core.umd.js`,
+`bdk-core.umd.wasm`). A plain build never modifies the eight tracked artifacts
+committed beside the build script; regenerating those is an explicit opt-in via
+`BDK_WASM_UPDATE_COMMITTED_ARTIFACTS=1` and is normally done by CI under the
+pinned environment. The split keeps Node loader imports out of browser bundler
+graphs while preserving an identical verification ABI.
 
 Verifier calls return a structured `{ domain, code }` result: domain `0` is
 success, domain `1` is a script failure, domain `2` is a transaction-validation

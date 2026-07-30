@@ -46,9 +46,11 @@ jobs:
           echo "Build using bsvcommit=$bsvcommit ..."
           echo "bsvcommit=$bsvcommit" >> "$GITHUB_OUTPUT"
 
-        ## build.sh enforces its own pinned commit against the supplied
-        ## BSV_ROOT, so a mismatched dispatch input fails loudly there --
-        ## that check is the reproducibility guard.
+        ## This checkout is what pins the effective bitcoin-sv commit: it is
+        ## exported as BSV_ROOT below and the build system simply consumes it.
+        ## The reproducibility guard is the default-pin "Verify committed
+        ## artifacts are reproducible" step, which byte-compares the tracked
+        ## artifacts against a fresh regen built from this pinned checkout.
       - name: Check out bitcoin-sv
         shell: bash
         run: |
