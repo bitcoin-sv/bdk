@@ -392,6 +392,195 @@ add_test(NAME wasm_size_gate
 set_tests_properties(wasm_size_gate PROPERTIES
   LABELS "wasm;sizegate" TIMEOUT 60 FIXTURES_REQUIRED wasm_optimized)
 
+# ---------------------------------------------------------------------------
+# secp256k1 runtime-table parity tests. The WASM build reconstructs libsecp256k1's
+# fixed-base verification tables at runtime instead of shipping the static const
+# ones (see secp256k1_runtime.c and secp256k1_runtime_precomputed.c); these tests
+# check that reconstruction. Every target and output here is build-tree only:
+# EXCLUDE_FROM_ALL executables built on demand by their fixtures, plus node tests.
+# Nothing is published, so the eight committed artifacts and the size gate are
+# unaffected.
+# ---------------------------------------------------------------------------
+
+# (1) Run libsecp256k1's own unit suite against the substituted runtime tables.
+#     wasm_tests_patch.cmake writes a build-tree patched copy of tests.c (adapting
+#     the two upstream checks that assume the static 2^128 second table, and
+#     injecting the table-priming call into main()); wasm_tests.c wraps it with the
+#     split_128 -> split_lambda redefinition so the suite's ecmult matches the
+#     runtime lambda tables. See wasm_tests.c's header for the full rationale.
+set(_wasm_secp_tests_src "${CMAKE_CURRENT_SOURCE_DIR}/wasm_tests.c")
+set(_wasm_secp_patch     "${CMAKE_CURRENT_SOURCE_DIR}/wasm_tests_patch.cmake")
+set(_wasm_secp_patched_dir "${CMAKE_CURRENT_BINARY_DIR}/wasm_tests_patched")
+set(_wasm_secp_upstream_tests "${BDK_BSV_ROOT_DIR}/src/secp256k1/src/tests.c")
+add_custom_command(
+  OUTPUT "${_wasm_secp_patched_dir}/tests.c"
+  COMMAND "${CMAKE_COMMAND}"
+    "-Din=${_wasm_secp_upstream_tests}"
+    "-Dout=${_wasm_secp_patched_dir}/tests.c"
+    -P "${_wasm_secp_patch}"
+  DEPENDS "${_wasm_secp_upstream_tests}" "${_wasm_secp_patch}"
+  COMMENT "Generate patched secp256k1 tests.c for the WASM parity suite"
+  VERBATIM)
+add_custom_target(wasm_secp256k1_patched_tests
+  DEPENDS "${_wasm_secp_patched_dir}/tests.c")
+
+# Iteration count forwarded to the suites (argv[1] of tests.c main). Higher values
+# deepen the randomised coverage at the cost of runtime; overridable from the cache.
+set(WASM_SECP256K1_TEST_ITERS "4" CACHE STRING
+  "Iteration count for the WASM secp256k1 unit-suite parity tests.")
+
+# LOAD-BEARING: mirror the secp256k1 sub-build's configuration onto the suite
+# targets. These executables compile secp256k1.c inline (through the patched
+# tests.c) but live in THIS module directory scope, so they inherit none of the
+# configuration macros the sub-build applies with add_compile_definitions in its own
+# scope -- ECMULT_WINDOW_SIZE, COMB_BLOCKS/COMB_TEETH, USE_FORCE_WIDEMUL_INT64 and the
+# ENABLE_MODULE_* set (src/secp256k1/CMakeLists.txt). Upstream's own tests target gets
+# them for free because it is created inside that scope; ours is not. Compiling the
+# inlined library with a different field representation (int128/5x52 vs the forced
+# int64/10x26) or a different comb geometry than the objects it links
+# (secp256k1_precomputed) silently produces garbage. Read the sub-build's actual
+# directory definitions and apply the same set, so a future configuration change
+# cannot diverge from what this suite links.
+get_directory_property(_wasm_secp_defs
+  DIRECTORY "${BDK_BSV_ROOT_DIR}/src/secp256k1" COMPILE_DEFINITIONS)
+if(NOT _wasm_secp_defs)
+  message(FATAL_ERROR
+    "Unable to read the secp256k1 sub-build COMPILE_DEFINITIONS; the parity suite "
+    "would compile a configuration mismatched with the tables it links. Confirm the "
+    "secp256k1 sub-build directory [${BDK_BSV_ROOT_DIR}/src/secp256k1].")
+endif()
+# Assert the definitions that actually caused the field/comb mismatches are present,
+# so a silent inheritance failure fails the configure rather than a later suite run.
+# The widemul override is only required when the cache selects one (otherwise the
+# library autodetects it and no override define exists to mirror).
+set(_wasm_secp_required "ECMULT_WINDOW_SIZE" "COMB_BLOCKS" "COMB_TEETH")
+if(SECP256K1_TEST_OVERRIDE_WIDE_MULTIPLY AND
+   NOT SECP256K1_TEST_OVERRIDE_WIDE_MULTIPLY STREQUAL "OFF")
+  string(TOUPPER "${SECP256K1_TEST_OVERRIDE_WIDE_MULTIPLY}" _wasm_widemul_upper)
+  list(APPEND _wasm_secp_required "USE_FORCE_WIDEMUL_${_wasm_widemul_upper}")
+endif()
+set(_wasm_secp_missing "")
+foreach(_req IN LISTS _wasm_secp_required)
+  set(_found FALSE)
+  foreach(_def IN LISTS _wasm_secp_defs)
+    if(_def MATCHES "^${_req}=")
+      set(_found TRUE)
+    endif()
+  endforeach()
+  if(NOT _found)
+    list(APPEND _wasm_secp_missing "${_req}")
+  endif()
+endforeach()
+if(_wasm_secp_missing)
+  string(REPLACE ";" " " _wasm_secp_missing_str "${_wasm_secp_missing}")
+  message(FATAL_ERROR
+    "secp256k1 parity suite: required configuration definitions missing from the "
+    "sub-build scope: ${_wasm_secp_missing_str}. Inherited set was: ${_wasm_secp_defs}")
+endif()
+
+foreach(_variant tests noverify_tests)
+  set(_tgt "wasm_secp256k1_${_variant}")
+  add_executable(${_tgt} EXCLUDE_FROM_ALL "${_wasm_secp_tests_src}")
+  add_dependencies(${_tgt} wasm_secp256k1_patched_tests)
+  # Patched tests.c must resolve before the vendored one; the module dir carries
+  # secp256k1_runtime_precomputed.h.
+  target_include_directories(${_tgt} PRIVATE
+    "${_wasm_secp_patched_dir}"
+    "${CMAKE_CURRENT_SOURCE_DIR}"
+    "${BDK_BSV_ROOT_DIR}/src/secp256k1/src"
+    "${BDK_BSV_ROOT_DIR}/src/secp256k1/include")
+  target_compile_definitions(${_tgt} PRIVATE ${_wasm_secp_defs})
+  target_link_libraries(${_tgt} PRIVATE secp256k1_precomputed secp256k1_asm)
+  target_compile_options(${_tgt} PRIVATE -O2)
+  # Match secp256k1_precomputed (CMakeLists.txt:130-132): keep IPO/LTO off so the
+  # runtime tables and the explicit prepare call are never folded or reordered.
+  set_target_properties(${_tgt} PROPERTIES SUFFIX ".js" INTERPROCEDURAL_OPTIMIZATION OFF)
+  target_link_options(${_tgt} PRIVATE
+    -O2
+    "SHELL:-s STACK_SIZE=8388608"
+    "SHELL:-s ALLOW_MEMORY_GROWTH=1"
+    "SHELL:-s EXIT_RUNTIME=1"
+    "SHELL:-s ENVIRONMENT=node")
+endforeach()
+# VERIFY (exhaustive internal consistency checks) on the tests variant only, exactly
+# as upstream separates tests from noverify_tests.
+target_compile_definitions(wasm_secp256k1_tests PRIVATE VERIFY)
+
+if(BDK_NODE_EXECUTABLE)
+  # Fixture: build the two suite executables (and, transitively, the patched
+  # tests.c) before either suite test reads them.
+  add_test(NAME wasm_secp256k1_build
+    COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}"
+      --target wasm_secp256k1_tests wasm_secp256k1_noverify_tests)
+  set_tests_properties(wasm_secp256k1_build PROPERTIES
+    FIXTURES_SETUP wasm_secp256k1_build LABELS "wasm;secp256k1;fixture" TIMEOUT 3600)
+
+  # $<TARGET_FILE:...> resolves to each suite's emitted .js wherever the build's
+  # global runtime-output directory places it (Emscripten locates the sibling .wasm
+  # relative to the .js, so no working directory is needed).
+  add_test(NAME wasm_secp256k1_tests
+    COMMAND "${BDK_NODE_EXECUTABLE}"
+      "$<TARGET_FILE:wasm_secp256k1_tests>" "${WASM_SECP256K1_TEST_ITERS}")
+  add_test(NAME wasm_secp256k1_noverify_tests
+    COMMAND "${BDK_NODE_EXECUTABLE}"
+      "$<TARGET_FILE:wasm_secp256k1_noverify_tests>" "${WASM_SECP256K1_TEST_ITERS}")
+  set_tests_properties(wasm_secp256k1_tests wasm_secp256k1_noverify_tests PROPERTIES
+    LABELS "wasm;secp256k1;parity" TIMEOUT 3600
+    FIXTURES_REQUIRED wasm_secp256k1_build)
+
+  # (2) First-call tweak-add regression. bdk_tweak_public_key_add reaches the
+  #     fixed-base tables but does not itself prime them, so on a fresh instance it
+  #     returns a wrong point (see txvalidator_wasm.cpp and test-first-call.mjs's
+  #     header). The script itself inverts the exit semantics (green only when every
+  #     invariant holds AND the known bug reproduces; red when the bug is fixed or
+  #     anything else breaks), so WILL_FAIL is deliberately NOT used -- it would mask
+  #     real setup/prepared-path regressions.
+  add_test(NAME wasm_secp256k1_first_call_parity
+    COMMAND "${BDK_NODE_EXECUTABLE}"
+      "${CMAKE_CURRENT_SOURCE_DIR}/test-first-call.mjs" "${BDK_WASM_DIST_DIR}/bdk-core.mjs"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+  set_tests_properties(wasm_secp256k1_first_call_parity PROPERTIES
+    LABELS "wasm;parity;functional" TIMEOUT 300
+    FIXTURES_REQUIRED wasm_optimized)
+
+  # (3) Whole-pipeline verification parity over a shared corpus. The corpus fixture
+  #     signs a spread of edge and deterministic-random key/digest inputs with the
+  #     shipped module and records the definitional verdicts (valid must verify,
+  #     tampered must be rejected); the parity test confirms the module verifies them
+  #     through the substituted tables. See verify-corpus-gen.mjs's header for scope.
+  add_test(NAME wasm_secp256k1_verify_corpus
+    COMMAND "${BDK_NODE_EXECUTABLE}"
+      "${CMAKE_CURRENT_SOURCE_DIR}/verify-corpus-gen.mjs"
+      "${BDK_WASM_DIST_DIR}/bdk-core.mjs"
+      "${CMAKE_CURRENT_BINARY_DIR}/wasm_secp256k1_corpus.json"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+  set_tests_properties(wasm_secp256k1_verify_corpus PROPERTIES
+    FIXTURES_SETUP wasm_secp256k1_verify_corpus LABELS "wasm;secp256k1;fixture"
+    TIMEOUT 300 FIXTURES_REQUIRED wasm_optimized)
+
+  add_test(NAME wasm_secp256k1_verify_parity_node
+    COMMAND "${BDK_NODE_EXECUTABLE}"
+      "${CMAKE_CURRENT_SOURCE_DIR}/test-verify-parity.mjs"
+      "${BDK_WASM_DIST_DIR}/bdk-core.mjs"
+      "${CMAKE_CURRENT_BINARY_DIR}/wasm_secp256k1_corpus.json"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+  set_tests_properties(wasm_secp256k1_verify_parity_node PROPERTIES
+    LABELS "wasm;parity;functional" TIMEOUT 300
+    FIXTURES_REQUIRED "wasm_optimized;wasm_secp256k1_verify_corpus")
+
+  # The independent native-oracle leg (wasm_secp256k1_verify_parity_native) is not
+  # registered here. This module's CMake project is Emscripten-only (it aborts under
+  # a non-Emscripten toolchain, top of this file), so it produces no native binary to
+  # act as an oracle, and the test loop does not run separate native builds. The
+  # corpus above instead grounds its expected verdicts in RFC 6979 deterministic
+  # signatures (valid -> accept, tampered -> reject), which still exercises the
+  # substituted verification tables end to end. A native cross-check can be added when
+  # a native build harness is available in the same tree.
+else()
+  message(WARNING
+    "node not found: the wasm secp256k1 parity CTest tests were not registered.")
+endif()
+
 # In-source publish of the 8 committed artifacts. NOT in ALL: naming the target IS
 # the opt-in, so no option() variable is needed and a plain build never publishes.
 # copy_if_different is portable and leaves mtimes untouched when bytes are already
