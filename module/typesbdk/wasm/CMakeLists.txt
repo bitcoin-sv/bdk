@@ -1,3 +1,7 @@
+# Target definitions only. Every CTest registration for this module lives in
+# test/types/CMakeLists.txt, which the root CMakeLists.txt adds alongside this
+# directory when BDK_BUILD_WASM=ON.
+
 if(NOT EMSCRIPTEN)
   message(FATAL_ERROR "The BDK WASM target requires Emscripten")
 endif()
@@ -208,6 +212,11 @@ set(BDK_WASM_OPT "${_bdk_wasm_opt}")   # NORMAL variable: never written to / rea
 # generator expressions (not portable on the 3.16 floor).
 set(BDK_WASM_DIST_DIR "${CMAKE_CURRENT_BINARY_DIR}/dist")
 
+# Published to the parent (root) scope so the sibling test directory, added from
+# the same if(BDK_BUILD_WASM) block, can register tests against the dist artifacts.
+# A sibling directory does not inherit variables from this scope, only from the parent.
+set(BDK_WASM_DIST_DIR "${BDK_WASM_DIST_DIR}" PARENT_SCOPE)
+
 function(add_bdk_wasm_target target_name output_name environment export_es6 suffix include_compat)
   add_executable(${target_name} txvalidator_wasm.cpp txvalidator_wasm.h txvalidator_wasm.js)
   # The WASM binding includes BDK headers that transitively include Boost.
@@ -318,88 +327,15 @@ target_sources(bdk_wasm_slim_umd PRIVATE
   txvalidator_wasm_minimal_pre.js
 )
 
-find_program(BDK_NODE_EXECUTABLE NAMES node NO_CMAKE_FIND_ROOT_PATH)
-
-# Fixture: bring the optimized sidecars up to date before any functional/size test
-# reads them, so a standalone `ctest` can never validate a raw/stale artifact.
-# It is itself a CTest test, so it carries the wasm label and a generous timeout.
-add_test(NAME wasm_build_optimized
-  COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}"
-    --target bdk_wasm_optimized bdk_wasm_browser_optimized
-             bdk_wasm_umd_optimized bdk_wasm_slim_umd_optimized)
-set_tests_properties(wasm_build_optimized PROPERTIES
-  FIXTURES_SETUP wasm_optimized LABELS "wasm;fixture" TIMEOUT 1800)
-
-if(BDK_NODE_EXECUTABLE)
-  add_test(NAME wasm_functional_node
-    COMMAND "${BDK_NODE_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test.mjs"
-            "${BDK_WASM_DIST_DIR}/bdk-core.mjs"
-    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
-  add_test(NAME wasm_functional_browser
-    COMMAND "${BDK_NODE_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test.mjs"
-            "${BDK_WASM_DIST_DIR}/bdk-core.browser.mjs"
-    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
-  add_test(NAME wasm_functional_umd
-    COMMAND "${BDK_NODE_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test-umd.mjs"
-            "${BDK_WASM_DIST_DIR}/bdk-core.umd.js"
-    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
-  add_test(NAME wasm_functional_slim_umd
-    COMMAND "${BDK_NODE_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test-umd.mjs"
-            "${BDK_WASM_DIST_DIR}/bdk-core.slim.umd.js"
-    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
-  set_tests_properties(
-    wasm_functional_node wasm_functional_browser
-    wasm_functional_umd wasm_functional_slim_umd
-    PROPERTIES LABELS "wasm;functional" TIMEOUT 300
-               FIXTURES_REQUIRED wasm_optimized)
-else()
-  message(WARNING
-    "node not found: the wasm functional CTest tests were not registered. "
-    "build.sh preflights node before configuring, so its validated path always "
-    "registers them.")
-endif()
-
-# Size gate: sum loader+wasm per variant in decimal bytes, report EVERY oversized
-# bundle and fail once. Generated into the build tree (no new tracked source);
-# dist_dir and the ceiling are passed with -D so nothing reads CMakeCache.txt.
-set(_wasm_size_gate_script "${CMAKE_CURRENT_BINARY_DIR}/wasm_size_gate.cmake")
-file(WRITE "${_wasm_size_gate_script}" [==[
-set(bundles
-  "bdk-core:mjs" "bdk-core.browser:mjs" "bdk-core.umd:js" "bdk-core.slim.umd:js")
-set(oversized "")
-foreach(entry IN LISTS bundles)
-  string(REPLACE ":" ";" parts "${entry}")
-  list(GET parts 0 name)
-  list(GET parts 1 loader)
-  file(SIZE "${dist_dir}/${name}.${loader}" loader_bytes)
-  file(SIZE "${dist_dir}/${name}.wasm" wasm_bytes)
-  math(EXPR total "${loader_bytes} + ${wasm_bytes}")
-  if(total GREATER max_bundle_bytes)
-    message(WARNING "${name} is ${total} bytes; maximum is ${max_bundle_bytes}")
-    list(APPEND oversized "${name}")
-  endif()
-endforeach()
-if(oversized)
-  string(REPLACE ";" " " oversized_str "${oversized}")
-  message(FATAL_ERROR "Oversized wasm bundles (max ${max_bundle_bytes} bytes): ${oversized_str}")
-endif()
-]==])
-
-add_test(NAME wasm_size_gate
-  COMMAND "${CMAKE_COMMAND}"
-    "-Ddist_dir=${BDK_WASM_DIST_DIR}" "-Dmax_bundle_bytes=300000"
-    -P "${_wasm_size_gate_script}")
-set_tests_properties(wasm_size_gate PROPERTIES
-  LABELS "wasm;sizegate" TIMEOUT 60 FIXTURES_REQUIRED wasm_optimized)
-
 # ---------------------------------------------------------------------------
-# secp256k1 runtime-table parity tests. The WASM build reconstructs libsecp256k1's
-# fixed-base verification tables at runtime instead of shipping the static const
-# ones (see secp256k1_runtime.c and secp256k1_runtime_precomputed.c); these tests
-# check that reconstruction. Every target and output here is build-tree only:
-# EXCLUDE_FROM_ALL executables built on demand by their fixtures, plus node tests.
-# Nothing is published, so the eight committed artifacts and the size gate are
-# unaffected.
+# secp256k1 runtime-table parity SUITE TARGETS. The WASM build reconstructs
+# libsecp256k1's fixed-base verification tables at runtime instead of shipping the
+# static const ones (see secp256k1_runtime.c and secp256k1_runtime_precomputed.c);
+# these executables check that reconstruction. The CTest entries that run them --
+# wasm_secp256k1_build, wasm_secp256k1_tests, wasm_secp256k1_noverify_tests -- are
+# registered in test/types/CMakeLists.txt. Every target and output here is build-tree
+# only: EXCLUDE_FROM_ALL executables, built on demand by their CTest fixture. Nothing
+# is published, so the eight committed artifacts are unaffected.
 # ---------------------------------------------------------------------------
 
 # (1) Run libsecp256k1's own unit suite against the substituted runtime tables.
@@ -423,11 +359,6 @@ add_custom_command(
   VERBATIM)
 add_custom_target(wasm_secp256k1_patched_tests
   DEPENDS "${_wasm_secp_patched_dir}/tests.c")
-
-# Iteration count forwarded to the suites (argv[1] of tests.c main). Higher values
-# deepen the randomised coverage at the cost of runtime; overridable from the cache.
-set(WASM_SECP256K1_TEST_ITERS "4" CACHE STRING
-  "Iteration count for the WASM secp256k1 unit-suite parity tests.")
 
 # LOAD-BEARING: mirror the secp256k1 sub-build's configuration onto the suite
 # targets. These executables compile secp256k1.c inline (through the patched
@@ -505,81 +436,6 @@ endforeach()
 # VERIFY (exhaustive internal consistency checks) on the tests variant only, exactly
 # as upstream separates tests from noverify_tests.
 target_compile_definitions(wasm_secp256k1_tests PRIVATE VERIFY)
-
-if(BDK_NODE_EXECUTABLE)
-  # Fixture: build the two suite executables (and, transitively, the patched
-  # tests.c) before either suite test reads them.
-  add_test(NAME wasm_secp256k1_build
-    COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}"
-      --target wasm_secp256k1_tests wasm_secp256k1_noverify_tests)
-  set_tests_properties(wasm_secp256k1_build PROPERTIES
-    FIXTURES_SETUP wasm_secp256k1_build LABELS "wasm;secp256k1;fixture" TIMEOUT 3600)
-
-  # $<TARGET_FILE:...> resolves to each suite's emitted .js wherever the build's
-  # global runtime-output directory places it (Emscripten locates the sibling .wasm
-  # relative to the .js, so no working directory is needed).
-  add_test(NAME wasm_secp256k1_tests
-    COMMAND "${BDK_NODE_EXECUTABLE}"
-      "$<TARGET_FILE:wasm_secp256k1_tests>" "${WASM_SECP256K1_TEST_ITERS}")
-  add_test(NAME wasm_secp256k1_noverify_tests
-    COMMAND "${BDK_NODE_EXECUTABLE}"
-      "$<TARGET_FILE:wasm_secp256k1_noverify_tests>" "${WASM_SECP256K1_TEST_ITERS}")
-  set_tests_properties(wasm_secp256k1_tests wasm_secp256k1_noverify_tests PROPERTIES
-    LABELS "wasm;secp256k1;parity" TIMEOUT 3600
-    FIXTURES_REQUIRED wasm_secp256k1_build)
-
-  # (2) First-call tweak-add regression. bdk_tweak_public_key_add reaches the
-  #     fixed-base tables but does not itself prime them, so on a fresh instance it
-  #     returns a wrong point (see txvalidator_wasm.cpp and test-first-call.mjs's
-  #     header). The script itself inverts the exit semantics (green only when every
-  #     invariant holds AND the known bug reproduces; red when the bug is fixed or
-  #     anything else breaks), so WILL_FAIL is deliberately NOT used -- it would mask
-  #     real setup/prepared-path regressions.
-  add_test(NAME wasm_secp256k1_first_call_parity
-    COMMAND "${BDK_NODE_EXECUTABLE}"
-      "${CMAKE_CURRENT_SOURCE_DIR}/test-first-call.mjs" "${BDK_WASM_DIST_DIR}/bdk-core.mjs"
-    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
-  set_tests_properties(wasm_secp256k1_first_call_parity PROPERTIES
-    LABELS "wasm;parity;functional" TIMEOUT 300
-    FIXTURES_REQUIRED wasm_optimized)
-
-  # (3) Whole-pipeline verification parity over a shared corpus. The corpus fixture
-  #     signs a spread of edge and deterministic-random key/digest inputs with the
-  #     shipped module and records the definitional verdicts (valid must verify,
-  #     tampered must be rejected); the parity test confirms the module verifies them
-  #     through the substituted tables. See verify-corpus-gen.mjs's header for scope.
-  add_test(NAME wasm_secp256k1_verify_corpus
-    COMMAND "${BDK_NODE_EXECUTABLE}"
-      "${CMAKE_CURRENT_SOURCE_DIR}/verify-corpus-gen.mjs"
-      "${BDK_WASM_DIST_DIR}/bdk-core.mjs"
-      "${CMAKE_CURRENT_BINARY_DIR}/wasm_secp256k1_corpus.json"
-    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
-  set_tests_properties(wasm_secp256k1_verify_corpus PROPERTIES
-    FIXTURES_SETUP wasm_secp256k1_verify_corpus LABELS "wasm;secp256k1;fixture"
-    TIMEOUT 300 FIXTURES_REQUIRED wasm_optimized)
-
-  add_test(NAME wasm_secp256k1_verify_parity_node
-    COMMAND "${BDK_NODE_EXECUTABLE}"
-      "${CMAKE_CURRENT_SOURCE_DIR}/test-verify-parity.mjs"
-      "${BDK_WASM_DIST_DIR}/bdk-core.mjs"
-      "${CMAKE_CURRENT_BINARY_DIR}/wasm_secp256k1_corpus.json"
-    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
-  set_tests_properties(wasm_secp256k1_verify_parity_node PROPERTIES
-    LABELS "wasm;parity;functional" TIMEOUT 300
-    FIXTURES_REQUIRED "wasm_optimized;wasm_secp256k1_verify_corpus")
-
-  # The independent native-oracle leg (wasm_secp256k1_verify_parity_native) is not
-  # registered here. This module's CMake project is Emscripten-only (it aborts under
-  # a non-Emscripten toolchain, top of this file), so it produces no native binary to
-  # act as an oracle, and the test loop does not run separate native builds. The
-  # corpus above instead grounds its expected verdicts in RFC 6979 deterministic
-  # signatures (valid -> accept, tampered -> reject), which still exercises the
-  # substituted verification tables end to end. A native cross-check can be added when
-  # a native build harness is available in the same tree.
-else()
-  message(WARNING
-    "node not found: the wasm secp256k1 parity CTest tests were not registered.")
-endif()
 
 # In-source publish of the 8 committed artifacts. NOT in ALL: naming the target IS
 # the opt-in, so no option() variable is needed and a plain build never publishes.
