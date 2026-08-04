@@ -157,6 +157,10 @@ endif()
 ## variant from the shared recipe in its own directory
 if(BDK_BUILD_WASM)
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/module/typesbdk/wasm)
+  ## The module's tests live outside the module, like test/golang and test/rust.
+  ## They are added here (and never from test/CMakeLists.txt, which is native-only)
+  ## so the module directory scope has already defined every target they register.
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/test/types)
 endif()
 
 if(NOT BDK_BUILD_CORE_ONLY AND BDK_BUILD_CORE)
