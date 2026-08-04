@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { performance } from 'node:perf_hooks'
 import { readFile } from 'node:fs/promises'
-import createBdkModule from './bdk-core.mjs'
+import createBdkModule from '../../module/typesbdk/wasm/bdk-core.mjs'
 
 const iterations = positiveInteger(process.argv[2] ?? '1000', 'iterations')
 const samples = positiveInteger(process.argv[3] ?? '9', 'samples')

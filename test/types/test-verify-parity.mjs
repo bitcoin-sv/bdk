@@ -9,7 +9,7 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 
-const moduleName = process.argv[2] ?? 'bdk-core.mjs'
+const moduleName = process.argv[2] ?? '../../module/typesbdk/wasm/bdk-core.mjs'
 const corpusPath = process.argv[3]
 if (!corpusPath) throw new Error('usage: test-verify-parity.mjs <module> <corpus.json>')
 

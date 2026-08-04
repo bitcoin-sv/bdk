@@ -5,7 +5,7 @@ import vm from 'node:vm'
 
 import { runBdkTestSuite } from './test-suite.mjs'
 
-const moduleName = process.argv[2] ?? 'bdk-core.umd.js'
+const moduleName = process.argv[2] ?? '../../module/typesbdk/wasm/bdk-core.umd.js'
 const moduleUrl = new URL(moduleName, import.meta.url)
 const wasmUrl = new URL(moduleName.replace(/\.js$/, '.wasm'), import.meta.url)
 const script = await readFile(moduleUrl, 'utf8')

@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises'
 
 import { runBdkTestSuite } from './test-suite.mjs'
 
-const moduleName = process.argv[2] ?? 'bdk-core.mjs'
+const moduleName = process.argv[2] ?? '../../module/typesbdk/wasm/bdk-core.mjs'
 const isBrowserBuild = moduleName.includes('.browser.')
 const moduleUrl = new URL(moduleName, import.meta.url)
 const wasmUrl = new URL(moduleName.replace(/\.mjs$/, '.wasm'), import.meta.url)
