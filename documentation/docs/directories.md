@@ -16,6 +16,8 @@ out-of-tree `build` directory:
      |-- test
      |    |-- core        # C++ (ctest) tests
      |    |-- golang      # Go tests
+     |    |-- rust        # Rust tests
+     |    |-- types       # typesbdk WASM tests (node scripts + every wasm CTest registration)
      |-- cmake            # CMake helpers, find-modules, doc tooling, packaging config
      |-- documentation    # mkdocs site (this documentation) + core_doc build target
 ```

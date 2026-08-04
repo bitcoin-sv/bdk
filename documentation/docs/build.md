@@ -149,7 +149,7 @@ Defaults are shown in parentheses.
 | `BDK_BUILD_MODULES` | `ON` | Build the language-binding modules. |
 | `BDK_BUILD_CORE_TESTS` | `ON` | Build the C++ core tests. |
 | `BDK_BUILD_CORE` | `ON` | Build the canonical native `bdk_core`. `OFF` skips core and force-disables everything that links or installs it (modules, tests, install gates). |
-| `BDK_BUILD_WASM` | `OFF` | Build the typesbdk WASM module as a standalone build. Requires Emscripten and `BDK_BUILD_CORE=OFF` (see below). |
+| `BDK_BUILD_WASM` | `OFF` | Build the typesbdk WASM module as a standalone build. Also adds `test/types`, which registers the module's CTest entries. Requires Emscripten and `BDK_BUILD_CORE=OFF` (see below). |
 | `BUILD_MODULE_GOLANG` | `ON` | Build and test the Golang (cgo) module. |
 | `BUILD_MODULE_GOLANG_INSTALL_INSOURCE` | `ON` | Install the standalone GoBDK static lib into `module/gobdk` (used by CI). |
 
@@ -189,8 +189,9 @@ its own `bdk_core_wasm` variant inside `module/typesbdk/wasm/`. There is exactly
 native core; a specialized consumer builds its own variant in its own directory.
 
 The reproducible entry point is `module/typesbdk/wasm/build.sh` (Emscripten 4.0.23). It is a
-facility script that only automates the configure/build/validate commands; the environment must
-be prepared before it runs, exactly like the native build. Provide:
+facility script that only automates the clean configure and build commands — it runs no test and
+publishes nothing; the environment must be prepared before it runs, exactly like the native
+build. Provide:
 
 - Emscripten 4.0.23 (activate its `emsdk_env.sh`);
 - `BOOST_ROOT` pointing at a Boost 1.85.0 install — the prebuilt `depcy` wasm package or a local
@@ -205,14 +206,29 @@ curl --fail --location -o /tmp/dependancies_wasm.tar.gz \
 mkdir -p build-wasm-deps && tar -xzf /tmp/dependancies_wasm.tar.gz -C build-wasm-deps
 export BOOST_ROOT="$PWD/build-wasm-deps/dependancies_wasm/boost_1.85.0"
 module/typesbdk/wasm/build.sh
+( cd build-wasm && ctest --output-on-failure )
 ```
 
-A plain `build.sh` builds and validates entirely inside the build tree (`build-wasm/`) and never
-writes the eight tracked artifacts. Regenerating the committed files is an explicit opt-in —
-`BDK_WASM_UPDATE_COMMITTED_ARTIFACTS=1 module/typesbdk/wasm/build.sh` — and is normally done by
-CI under the pinned environment, which owns the byte-for-byte reproducibility of the tracked
-artifacts. Override the build tree with `BDK_WASM_BUILD_DIR` or the job count with
-`BDK_WASM_JOBS`. A direct configure without `build.sh` is also supported:
+Three commands, one responsibility each:
+
+- **`build.sh` builds.** Everything stays inside the build tree (`build-wasm/`); it never writes
+  the eight tracked artifacts and never runs a test. Override the build tree with
+  `BDK_WASM_BUILD_DIR` or the job count with `BDK_WASM_JOBS`. The preflight covers build tools
+  only (`cmake emcmake emcc em++ emar emranlib make`).
+- **`ctest` validates.** The twelve entries are registered by `test/types/CMakeLists.txt`; see
+  [`test/types/README.md`](https://github.com/bitcoin-sv/bdk/blob/master/test/types/README.md)
+  for what each covers. `node` must be on `PATH` at **configure** time or ten of the twelve are
+  silently not registered — `build.sh` no longer preflights it.
+- **`cmake --build build-wasm --target bdk_wasm_install_insource` publishes.** This is the only
+  thing that writes the eight committed artifacts under `module/typesbdk/wasm/`, and only the CI
+  commit path invokes it (dispatch `build_bdk.yaml` with `commit-wasm-artifacts` ticked). The
+  tracked artifacts are a refreshed-on-demand convenience, exactly like `module/gobdk`'s
+  `libGoBDK_*.a`: they may lag the sources between refreshes, and no pull-request gate compares
+  them against a fresh build.
+
+The former `BDK_WASM_RUN_TESTS` and `BDK_WASM_UPDATE_COMMITTED_ARTIFACTS` environment variables no
+longer exist; anything still setting them has no effect. A direct configure without `build.sh` is
+also supported:
 
 ```console
 emcmake cmake -S . -B build-wasm -DCMAKE_BUILD_TYPE=Release \

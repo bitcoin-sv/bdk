@@ -1,10 +1,14 @@
 ## Build and validate the WASM module
 
+See also [`module/typesbdk/wasm/README.md`](../wasm/README.md) for what that directory
+contains (build inputs and the eight committed artifacts) and
+[`test/types/README.md`](../../../test/types/README.md) for the twelve CTest entries.
+
 `build.sh` is the reproducible WASM entry point. It is a facility script that
-automates the configure/build/validate commands; the environment must be prepared
-before it runs. Use Emscripten 4.0.23, set `BOOST_ROOT` to a Boost 1.85.0 install,
-and provide a `bitcoin-sv` checkout (the sibling `../bitcoin-sv`, or `BSV_ROOT`),
-then run it from the BDK root:
+automates the clean configure and build commands; it runs no test and publishes
+nothing. The environment must be prepared before it runs. Use Emscripten 4.0.23, set
+`BOOST_ROOT` to a Boost 1.85.0 install, and provide a `bitcoin-sv` checkout (the
+sibling `../bitcoin-sv`, or `BSV_ROOT`), then run it from the BDK root:
 
 ```bash
 source /path/to/emsdk/emsdk_env.sh
@@ -14,13 +18,19 @@ curl --fail --location -o /tmp/dependancies_wasm.tar.gz \
 mkdir -p build-wasm-deps && tar -xzf /tmp/dependancies_wasm.tar.gz -C build-wasm-deps
 export BOOST_ROOT="$PWD/build-wasm-deps/dependancies_wasm/boost_1.85.0"
 module/typesbdk/wasm/build.sh
+( cd build-wasm && ctest --output-on-failure )
 ```
 
 `build.sh` performs a clean standalone module build (`-DBDK_BUILD_CORE=OFF
 -DBDK_BUILD_WASM=ON`) that assembles the module's own `bdk_core_wasm` variant
-from the shared core recipe, runs libsecp256k1's verified, non-verified, and
-exhaustive WASM test binaries, and runs real positive and negative transaction
-vectors. The verifier-only WASM build does not require or link OpenSSL: it uses
+from the shared core recipe. Validation is the separate `ctest` run above: it
+executes libsecp256k1's verified and non-verified unit suites against the
+substituted runtime tables (the *exhaustive* suite is not registered), the real
+positive and negative transaction vectors, the verification-corpus parity leg and
+the bundle size gate — twelve entries in total, registered by
+`test/types/CMakeLists.txt`. `node` must be on `PATH` at **configure** time or ten of
+them are silently not registered.
+The verifier-only WASM build does not require or link OpenSSL: it uses
 header-only multiprecision and a minimal memory-cleanse implementation. CMake
 discovers bitcoin-sv (`ENV{BSV_ROOT}` or the sibling `../bitcoin-sv`) and Boost
 (`ENV{BOOST_ROOT}` — either a directory containing `boost/` directly or one
@@ -34,11 +44,9 @@ converged Binaryen `-O4` pass. It retains the full W15 verification precompute
 window without shipping its serialized megabyte-scale tables: the table is
 reconstructed lazily on the first verification using one field inversion and
 the curve endomorphism for the second lane. On wasm32 the 32-bit backend avoids
-Clang's much slower lowering of native `__int128` arithmetic. Set
-`BDK_WASM_RUN_SECP_TESTS=0` only for local iteration when the standalone curve
-suite has already passed.
+Clang's much slower lowering of native `__int128` arithmetic.
 
-Successful output includes:
+Successful `ctest` output includes:
 
 ```text
 ok - bdk-core.mjs mainnet-p2pkh-block-620940: domain=0 code=0
@@ -48,11 +56,15 @@ ok - bdk-core.mjs mainnet-p2pkh-corrupt-signature: domain=1 code=39
 The validated Node (`bdk-core.mjs`, `bdk-core.wasm`) and browser/worker
 (`bdk-core.browser.mjs`, `bdk-core.browser.wasm`) artifacts are produced in the
 build tree, together with a classic-script/UMD loader (`bdk-core.umd.js`,
-`bdk-core.umd.wasm`). A plain build never modifies the eight tracked artifacts
-committed beside the build script; regenerating those is an explicit opt-in via
-`BDK_WASM_UPDATE_COMMITTED_ARTIFACTS=1` and is normally done by CI under the
-pinned environment. The split keeps Node loader imports out of browser bundler
-graphs while preserving an identical verification ABI.
+`bdk-core.umd.wasm`). No build ever modifies the eight tracked artifacts committed
+beside the build script: writing them is a CMake target of its own,
+`cmake --build build-wasm --target bdk_wasm_install_insource`, invoked only by the CI
+commit path. To refresh the committed copies, dispatch
+`.github/workflows/build_bdk.yaml` with the **`commit-wasm-artifacts`** box ticked; the
+bot commits them with a `[WasmBDKUpdate]` marker. They are a refreshed-on-demand
+convenience, so they may lag the sources — there is no reproducibility gate on pull
+requests. The loader split keeps Node imports out of browser bundler graphs while
+preserving an identical verification ABI.
 
 Verifier calls return a structured `{ domain, code }` result: domain `0` is
 success, domain `1` is a script failure, domain `2` is a transaction-validation
@@ -82,11 +94,12 @@ wrong-build or corrupted tables are rejected even when their length is valid.
 
 ## Native and direct WASM benchmark controls
 
-After a WASM build, benchmark the exact exported verifier without SDK
-serialization overhead:
+Benchmark the exact exported verifier without SDK serialization overhead. The
+benchmark imports the **committed** `module/typesbdk/wasm/bdk-core.mjs`, so it needs no
+build tree and no Emscripten:
 
 ```bash
-node module/typesbdk/wasm/benchmark.mjs 5000 11
+node test/types/benchmark.mjs 5000 11
 ```
 
 The native control is `bench_verifyscript` in `module/example/`, built by the
