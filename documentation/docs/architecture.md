@@ -132,19 +132,42 @@ committed static archives — one per supported platform/arch:
 There is **no Windows archive** (Windows is experimental/unsupported — see
 [build.md](build.md#windows-experimental-unsupported)).
 
-CI can rebuild and **auto-commit** these archives via the `commit-static-gobdk` job, but only under
-a specific gate — **not** on every build. All of the following must hold
-(`build_bdk.yaml:128-140,169-211`, condition at `:174`):
+CI can rebuild and **auto-commit** these archives, but only under a specific gate — **not** on
+every build. The gate lives in the single `commit-built-artifacts` job of `build_bdk.yaml`, which
+handles both committed-binary families (the gobdk archives and the typesbdk WASM artifacts) so
+that two jobs can never race to push the same branch.
 
-1. the trigger is a **manual `workflow_dispatch`**, and
-2. the `commit-built-binaries` input is **`true`**, and
-3. the matrix build **succeeds** (`success()`), and
-4. the archives have actually **changed** (`gobdk_change.outputs.modified == 'true'`, which is only
-   evaluated on `workflow_dispatch`), and
-5. the head commit does **not** contain the `[GoBDKUpdate]` marker — the marker the bot itself uses
-   when it commits, which prevents an infinite rebuild loop.
+`build_bdk.yaml` is the only manually dispatchable workflow in this pipeline. Its dispatch form
+carries **two independent checkboxes** — `commit-gobdk-archives` and `commit-wasm-artifacts` — and
+all four combinations are meaningful: gobdk only, wasm only, both, neither (build and test
+everything, commit nothing). The wasm leg (`build_wasm.yaml`, invoked through `workflow_call`) runs
+on **every** dispatch regardless of the checkboxes, and `commit-built-artifacts` `needs:` both
+legs with default `success()` semantics, so **any red leg blocks all commits** — including for the
+family whose box was ticked.
 
-When all conditions are met, the bot commits the refreshed archives with a `[GoBDKUpdate]` message.
+Inside the job:
+
+1. the trigger must be a **manual `workflow_dispatch`** and at least one box must be ticked;
+2. **loop-breaker markers** are read from the head commit *with git*, not from
+   `github.event.head_commit.message` (that context is populated on `push` events only, so on the
+   dispatch trigger an expression guard would evaluate `contains(null, …)` → false and never
+   suppress anything). `[GoBDKUpdate]` suppresses a further gobdk commit and `[WasmBDKUpdate]` a
+   further wasm commit — each family breaks only its own rebuild loop;
+3. **"did it change" is decided per family by a staged `git diff --cached --quiet`**, never by a
+   build leg's job output. `build-bdk` is a three-leg matrix and all legs write one job-level
+   `modified` output, so last-writer-wins would silently drop a changed, uploaded archive whenever
+   the platforms disagree;
+4. because the job now runs even when nothing changed, each Unix matrix leg uploads a small
+   `gobdk-status-<os_arch>` marker on **every** dispatch stating whether its archive changed. That
+   is what separates "no archive changed" from "the download failed": the job derives the expected
+   archive set from the three markers (the count is pinned to the matrix length), skips the archive
+   download when the set is empty, and **fails hard** when an expected archive does not arrive. No
+   step in the job uses `continue-on-error`, precisely so a real artifact-service failure goes red
+   instead of quietly committing nothing;
+5. the two families are committed **sequentially, as two commits** — each carrying its own marker
+   and independently revertable — and there is exactly **one push, at the end**.
+
+The bot commits with `[bot] [GoBDKUpdate] …` and `[bot] [WasmBDKUpdate] …` subjects.
 
 ## The typesbdk WASM verifier
 
@@ -163,12 +186,32 @@ gobdk/rustbdk link, and its build must stay canonical. The WASM build is therefo
 modified by any module.
 
 It configures with `-DBDK_BUILD_CORE=OFF -DBDK_BUILD_WASM=ON` under the Emscripten toolchain
-rather than as part of the default native build. `wasm/build.sh` is a facility script that
-automates the clean configure/build/validate commands — a standalone libsecp256k1 test run and
-real positive/negative transaction vectors — and makes no version decisions of its own. The
-bitcoin-sv commit, the Boost 1.85.0 package and the Emscripten 4.0.23 SDK are pinned by the
-environment (CI, or the developer's local install), not by the script; reproducibility of the
-eight committed artifacts is owned by CI, which regenerates them under the pinned environment and
-fails if the tracked bytes drift. See
-`module/typesbdk/examples/README.md` for the reproducible build, ABI, and native/WASM benchmark
-controls, and [Development Build](build.md) for the flags and the prebuilt Boost package.
+rather than as part of the default native build, and that same root block adds `test/types`
+alongside the module directory.
+
+Build inputs, tests and publishing are three separate places:
+
+- `module/typesbdk/wasm/` holds the build inputs and the eight committed artifacts, and its
+  `CMakeLists.txt` defines **targets only**;
+- `test/types/` owns **every** CTest registration for the module, mirroring what `test/golang` and
+  `test/rust` do for the other two bindings. It defines no build target, so the wasm `ALL` target
+  and the shipped artifact bytes cannot be perturbed by test code. It is added from the root
+  `if(BDK_BUILD_WASM)` block, never from `test/CMakeLists.txt` (native-only, and it requires
+  `Boost::unit_test_framework`);
+- `wasm/build.sh` is a facility script that automates the clean configure and build only. It runs
+  no test — `ctest` in the build directory does that — and publishes nothing. It makes no version
+  decisions of its own: the bitcoin-sv commit, the Boost 1.85.0 package and the Emscripten 4.0.23
+  SDK are pinned by the environment (CI, or the developer's local install).
+
+The eight committed artifacts are a **refreshed-on-demand convenience**, not a build-reproducibility
+contract: `cmake --build build-wasm --target bdk_wasm_install_insource` is the only thing that
+writes them, and only the CI commit path (a `build_bdk.yaml` dispatch with `commit-wasm-artifacts`
+ticked) invokes it. This matches how `module/gobdk/bdkcgo/libGoBDK_*.a` is handled. Pull requests
+no longer byte-compare the tracked artifacts against a fresh pinned build, and nothing reports the
+difference: drift between a source change and the next refresh is expected and allowed, so a pull
+request that touches wasm sources does not have to carry regenerated binaries.
+
+See `module/typesbdk/wasm/README.md` for the directory layout, `test/types/README.md` for the
+twelve CTest entries and the toolchain-free node runner,
+`module/typesbdk/examples/README.md` for the ABI and the native/WASM benchmark controls, and
+[Development Build](build.md) for the flags and the prebuilt Boost package.
