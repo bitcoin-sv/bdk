@@ -1,5 +1,14 @@
 name: Build BDK
 
+## This is the SINGLE manual dispatch entry for the build-and-commit pipeline. The
+## wasm leg is `build_wasm.yaml`, called through `workflow_call` below; that workflow
+## has no `workflow_dispatch` trigger of its own on purpose, so the two artifact
+## families can never be built and published independently of the all-or-nothing
+## commit gate.
+##
+## The two commit checkboxes are independent, and all four combinations are
+## meaningful: gobdk only, wasm only, both, neither (build and test everything,
+## commit nothing).
 on:
   pull_request:
     types: [opened, synchronize]
@@ -12,8 +21,13 @@ on:
         description: 'Custom bitcoin-sv commit to be used to build bdk'
         required: false
         default: 879fc8b42168dd0e608dafd51b39c6dabad37d4d
-      commit-built-binaries:
-        description: 'Enable/Disable github workflow to commit the binaries built by the workflow'
+      commit-gobdk-archives:
+        description: 'Commit the gobdk static archives built by this run'
+        required: true
+        default: 'true'
+        type: boolean
+      commit-wasm-artifacts:
+        description: 'Commit the typesbdk WASM artifacts built by this run'
         required: true
         default: 'true'
         type: boolean
@@ -138,6 +152,30 @@ jobs:
             echo "modified=false" >> "$GITHUB_OUTPUT"
           fi
 
+        ## Per-leg status marker, uploaded on EVERY dispatch whether or not this leg's
+        ## archive changed. It is what lets the commit job tell "no archive changed"
+        ## apart from "the download failed": the job derives the expected archive set
+        ## from these markers and fails hard when an expected archive does not arrive.
+        ## The job-level output `modified` above cannot serve that purpose -- a matrix
+        ## writes one job output last-writer-wins, so a leg that changed nothing can
+        ## overwrite a leg that did.
+      - name: Publish gobdk change status for this leg
+        if: runner.os != 'Windows' && github.event_name == 'workflow_dispatch'
+        run: |
+          printf 'os_arch=%s\nmodified=%s\n' \
+            "${{ env.OS_ARCH }}" "${{ steps.gobdk_change.outputs.modified }}" \
+            > "gobdk-status-${{ env.OS_ARCH }}.txt"
+
+      - name: Upload gobdk change status for this leg
+        if: runner.os != 'Windows' && github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: gobdk-status-${{ env.OS_ARCH }}
+          path: gobdk-status-${{ env.OS_ARCH }}.txt
+          retention-days: 1
+          overwrite: true
+          if-no-files-found: error
+
       - name: Upload GoBDK static libraries to artifact UNIX
         if: runner.os != 'Windows' && github.event_name == 'workflow_dispatch' && steps.gobdk_change.outputs.modified == 'true'
         uses: actions/upload-artifact@v4
@@ -165,45 +203,183 @@ jobs:
           cmake --build build --config Release --parallel 4
           ctest --output-on-failure --test-dir build -C Release --parallel 4
 
-  commit-static-gobdk:
+  ## The wasm leg runs on EVERY dispatch, regardless of either checkbox. That is what
+  ## makes the all-or-nothing gate meaningful: a red wasm leg blocks the gobdk commit
+  ## too. With commit-wasm-artifacts unticked it builds and tests but never publishes
+  ## in-source, so it leaves the tracked tree clean and reports `modified` empty.
+  build-wasm:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    uses: ./.github/workflows/build_wasm.yaml
+    with:
+      bitcoin-sv-commit: ${{ github.event.inputs.bitcoin-sv-commit }}
+      publish-artifacts: ${{ github.event.inputs.commit-wasm-artifacts == 'true' }}
+
+  commit-built-artifacts:
     runs-on: ubuntu-latest
-    needs: build-bdk
-    # Commit static libraries gobdk iff all matrix build succeeds and the commit does not contains [GoBDKUpdate]
-    # The commit containing [GoBDKUpdate] is submitted by the bot, we should prevent the infinit build loops
-    if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.commit-built-binaries == 'true' && success() && needs.build-bdk.outputs.modified == 'true' && !contains(github.event.head_commit.message, '[GoBDKUpdate]') }}
+    needs: [build-bdk, build-wasm]
+    # Default success() semantics: ANY red leg blocks ALL commits, including the
+    # un-ticked artifact. Dispatch-only, and at least one box must be ticked.
+    # Whether anything actually CHANGED is decided per family by the staged diff
+    # inside the job -- never by a matrix job's last-writer-wins output.
+    if: ${{ github.event_name == 'workflow_dispatch' && success() && (
+            github.event.inputs.commit-gobdk-archives == 'true'
+            || github.event.inputs.commit-wasm-artifacts == 'true'
+          ) }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Download all gobdk static libraries artifacts
+        ## Loop-breaker markers, read from git rather than from
+        ## github.event.head_commit.message: that context is populated for `push`
+        ## events only, so on the dispatch trigger that is the only way into this job
+        ## an expression guard would evaluate contains(null, ...) -> false and never
+        ## suppress anything. Each artifact family carries its own marker, and each
+        ## marker suppresses only its own family's rebuild loop.
+      - name: Read loop-breaker markers from the head commit
+        id: markers
+        run: |
+          subject="$(git log -1 --pretty=%B)"
+          grep -q '\[GoBDKUpdate\]'   <<<"$subject" && echo "gobdk_marker=true"  >> "$GITHUB_OUTPUT" || echo "gobdk_marker=false" >> "$GITHUB_OUTPUT"
+          grep -q '\[WasmBDKUpdate\]' <<<"$subject" && echo "wasm_marker=true"   >> "$GITHUB_OUTPUT" || echo "wasm_marker=false"  >> "$GITHUB_OUTPUT"
+
+        ## `pattern:` downloads create one subdirectory per artifact unless
+        ## merge-multiple is set, and each gobdk artifact is named after the file it
+        ## contains (extension included), so a flat-path assumption would look at a
+        ## directory named exactly like the file. Every artifact family gets its own
+        ## path as well: the always-uploaded `bdk-wasm` dist artifact carries the same
+        ## bdk-core.* file names as `bdk-wasm-artifacts`.
+      - name: Download the gobdk status markers
+        if: github.event.inputs.commit-gobdk-archives == 'true' && steps.markers.outputs.gobdk_marker != 'true'
         uses: actions/download-artifact@v4
         with:
-          # pattern: libGoBDK_*.a
-          path: ./tmp_artifact
+          pattern: gobdk-status-*
+          path: ./tmp_status
+          merge-multiple: true
 
-      - name: Copy and show ./module/gobdk/bdkcgo/
+        ## success() on needs already guarantees every matrix leg finished, so all
+        ## three Unix legs must have uploaded a marker; fewer is a real fault and goes
+        ## red. The count is hard-coded from the matrix length on purpose: adding a
+        ## platform must be a deliberate edit here.
+      - name: Derive the expected gobdk archive set
+        id: gobdk_expect
+        if: github.event.inputs.commit-gobdk-archives == 'true' && steps.markers.outputs.gobdk_marker != 'true'
         run: |
-          find ./tmp_artifact -type f -name 'libGoBDK_*_*.a' -exec mv {} ./module/gobdk/bdkcgo/ \;
+          mapfile -t markers < <(find ./tmp_status -type f -name 'gobdk-status-*.txt' | sort)
+          found=${#markers[@]}
+          [ "$found" -eq 3 ] || { echo "expected 3 gobdk status markers, found $found" >&2; exit 1; }
+          expected=""
+          for marker in "${markers[@]}"; do
+            cat "$marker"
+            if grep -q '^modified=true$' "$marker"; then
+              expected="$expected $(sed -n 's/^os_arch=//p' "$marker")"
+            fi
+          done
+          expected="$(echo $expected)"
+          if [ -n "$expected" ]; then
+            echo "legs reporting a changed archive: $expected"
+            echo "any=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "no gobdk archive changed"
+            echo "any=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "expected=$expected" >> "$GITHUB_OUTPUT"
+
+      - name: Download the changed gobdk static libraries
+        if: github.event.inputs.commit-gobdk-archives == 'true' && steps.markers.outputs.gobdk_marker != 'true' && steps.gobdk_expect.outputs.any == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          pattern: libGoBDK_*
+          path: ./tmp_artifact_gobdk
+          merge-multiple: true
+
+        ## Assert every archive a leg said it changed actually arrived, then move it.
+        ## A recursive find keeps this correct whether or not merge-multiple survives a
+        ## future edit. Nothing here tolerates a failed download: a missing expected
+        ## archive fails the job instead of silently committing nothing.
+      - name: Move the changed gobdk static libraries into place
+        if: github.event.inputs.commit-gobdk-archives == 'true' && steps.markers.outputs.gobdk_marker != 'true' && steps.gobdk_expect.outputs.any == 'true'
+        run: |
+          for os_arch in ${{ steps.gobdk_expect.outputs.expected }}; do
+            archive="$(find ./tmp_artifact_gobdk -type f -name "libGoBDK_${os_arch}.a" -print -quit)"
+            [ -n "$archive" ] \
+              || { echo "leg $os_arch reported a changed archive but it did not arrive" >&2; exit 1; }
+            mv "$archive" ./module/gobdk/bdkcgo/
+          done
           ls ./module/gobdk/bdkcgo/
 
-      - name: Commit and push gobdk static libraries changes
+        ## `build-wasm` is a single job, so its `modified` output is unambiguous. It is
+        ## used only to skip a download that would find nothing -- the artifact is
+        ## uploaded exactly when the tracked bytes changed, so a `name:` download would
+        ## otherwise 404. `name:` unpacks flat, hence no merge-multiple here.
+      - name: Download the refreshed wasm artifacts
+        if: github.event.inputs.commit-wasm-artifacts == 'true' && needs.build-wasm.outputs.modified == 'true' && steps.markers.outputs.wasm_marker != 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: bdk-wasm-artifacts
+          path: ./tmp_artifact_wasm
+
+      - name: Move the refreshed wasm artifacts into place
+        if: github.event.inputs.commit-wasm-artifacts == 'true' && needs.build-wasm.outputs.modified == 'true' && steps.markers.outputs.wasm_marker != 'true'
         run: |
-          # Stash all gobdk static libraries if any change
+          for artifact in bdk-core.mjs bdk-core.wasm \
+                          bdk-core.browser.mjs bdk-core.browser.wasm \
+                          bdk-core.umd.js bdk-core.umd.wasm \
+                          bdk-core.slim.umd.js bdk-core.slim.umd.wasm; do
+            [ -f "./tmp_artifact_wasm/$artifact" ] \
+              || { echo "wasm leg reported changed artifacts but $artifact did not arrive" >&2; exit 1; }
+            mv "./tmp_artifact_wasm/$artifact" ./module/typesbdk/wasm/
+          done
+          ls ./module/typesbdk/wasm/
+
+      - name: Configure the bot git identity
+        run: |
+          git config --global user.name  "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+        ## `git diff --cached --quiet` is the AUTHORITATIVE per-family change decision:
+        ## an empty staged set means nothing changed, whatever any leg reported. The
+        ## marker/assertion steps above have already proven that every archive a leg
+        ## said it changed did arrive, so this is a second line of defence rather than
+        ## the only one. Two commits, one per family, are intentional: each carries the
+        ## marker that suppresses its own rebuild loop and each is independently
+        ## revertable.
+      - name: Stage and commit the gobdk static libraries
+        if: github.event.inputs.commit-gobdk-archives == 'true' && steps.markers.outputs.gobdk_marker != 'true'
+        run: |
+          # The glob always matches the four tracked archives, whatever was downloaded
+          # (a `git add` glob matching nothing is an error).
           git add ./module/gobdk/bdkcgo/libGoBDK_*_*.a
           git status
-
-          # Commit only if there are changes
           if ! git diff --cached --quiet; then
-            git config --global user.name "github-actions[bot]"
-            git config --global user.email "github-actions[bot]@users.noreply.github.com"
             git commit -m "[bot] [GoBDKUpdate] Update gobdk static libraries changes"
           else
-            echo "No changes to commit"
+            echo "No gobdk changes to commit"
           fi
 
-          BRANCH_NAME=${{ github.head_ref }}
+      - name: Stage and commit the typesbdk wasm artifacts
+        if: github.event.inputs.commit-wasm-artifacts == 'true' && steps.markers.outputs.wasm_marker != 'true'
+        run: |
+          git add ./module/typesbdk/wasm/bdk-core.mjs  ./module/typesbdk/wasm/bdk-core.wasm \
+                  ./module/typesbdk/wasm/bdk-core.browser.mjs ./module/typesbdk/wasm/bdk-core.browser.wasm \
+                  ./module/typesbdk/wasm/bdk-core.umd.js ./module/typesbdk/wasm/bdk-core.umd.wasm \
+                  ./module/typesbdk/wasm/bdk-core.slim.umd.js ./module/typesbdk/wasm/bdk-core.slim.umd.wasm
+          git status
+          if ! git diff --cached --quiet; then
+            git commit -m "[bot] [WasmBDKUpdate] Update typesbdk wasm artifacts"
+          else
+            echo "No wasm artifact changes to commit"
+          fi
+
+        ## Exactly ONE push, at the end, after both commit steps. Two jobs pushing to
+        ## the same branch race; a single job that stages both families and pushes once
+        ## cannot. A run that committed nothing pushes an already-current branch, which
+        ## is a no-op. github.ref_name is the dispatched branch -- github.head_ref is a
+        ## pull-request-only value and is empty on workflow_dispatch.
+      - name: Push the artifact commits
+        run: |
+          BRANCH_NAME=${{ github.ref_name }}
           echo "BRANCH_NAME=$BRANCH_NAME"
-          git log -2
-          git push -u origin $BRANCH_NAME
+          git log -3
+          git push -u origin "$BRANCH_NAME"
