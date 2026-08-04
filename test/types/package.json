@@ -1,0 +1,10 @@
+{
+  "name": "bdk-wasm-tests",
+  "private": true,
+  "description": "Artifact-level tests for the committed module/typesbdk/wasm bundles",
+  "scripts": {
+    "test": "node test.mjs && node test.mjs ../../module/typesbdk/wasm/bdk-core.browser.mjs && node test-umd.mjs && node test-umd.mjs ../../module/typesbdk/wasm/bdk-core.slim.umd.js && node test-first-call.mjs",
+    "test:parity": "node verify-corpus-gen.mjs ../../module/typesbdk/wasm/bdk-core.mjs .corpus.json && node test-verify-parity.mjs ../../module/typesbdk/wasm/bdk-core.mjs .corpus.json",
+    "bench": "node benchmark.mjs 5000 11"
+  }
+}
