@@ -24,7 +24,7 @@
 
 import assert from 'node:assert/strict'
 
-const moduleName = process.argv[2] ?? 'bdk-core.mjs'
+const moduleName = process.argv[2] ?? '../../module/typesbdk/wasm/bdk-core.mjs'
 const isBrowserBuild = moduleName.includes('.browser.')
 const moduleUrl = new URL(moduleName, import.meta.url)
 

@@ -21,7 +21,7 @@
 import { writeFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
 
-const moduleName = process.argv[2] ?? 'bdk-core.mjs'
+const moduleName = process.argv[2] ?? '../../module/typesbdk/wasm/bdk-core.mjs'
 const outputPath = process.argv[3]
 if (!outputPath) throw new Error('usage: verify-corpus-gen.mjs <module> <output-corpus.json>')
 
