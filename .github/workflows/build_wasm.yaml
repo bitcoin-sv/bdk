@@ -1,5 +1,15 @@
 name: Build BDK WASM
 
+## This workflow has NO manual trigger, deliberately. `build_bdk.yaml` is the single
+## manual dispatch entry for this pipeline: it calls this workflow through
+## `workflow_call`, so a red wasm leg blocks the gobdk commit too. A wasm-only manual
+## run is a `build_bdk.yaml` dispatch with both commit boxes unticked -- it builds and
+## tests both legs and commits nothing -- and a custom bitcoin-sv commit is that
+## workflow's `bitcoin-sv-commit` input, forwarded below.
+##
+## `publish-artifacts` is the ONLY thing that ever writes the eight tracked artifacts
+## under module/typesbdk/wasm/. PR and push runs build and test in the build tree and
+## leave the tracked files untouched.
 on:
   pull_request:
     paths:
@@ -7,6 +17,7 @@ on:
       - 'cmake/**'
       - 'core/**'
       - 'module/typesbdk/wasm/**'
+      - 'test/types/**'
       - '.github/workflows/build_wasm.yaml'
   push:
     branches: [master]
@@ -15,13 +26,23 @@ on:
       - 'cmake/**'
       - 'core/**'
       - 'module/typesbdk/wasm/**'
+      - 'test/types/**'
       - '.github/workflows/build_wasm.yaml'
-  workflow_dispatch:
+  workflow_call:
     inputs:
       bitcoin-sv-commit:
-        description: 'Custom bitcoin-sv commit to be used to build bdk'
         required: false
+        type: string
         default: 879fc8b42168dd0e608dafd51b39c6dabad37d4d
+      publish-artifacts:
+        description: 'Publish the freshly built artifacts in-source and upload them for the commit job'
+        required: false
+        type: boolean
+        default: false
+    outputs:
+      modified:
+        description: 'true when the freshly built artifacts differ from the committed ones'
+        value: ${{ jobs.wasm.outputs.modified }}
 
 env:
   DEFAULT_BITCOIN_SV_COMMIT: 879fc8b42168dd0e608dafd51b39c6dabad37d4d
@@ -29,7 +50,9 @@ env:
 jobs:
   wasm:
     runs-on: ubuntu-22.04
-    timeout-minutes: 45
+    timeout-minutes: 60
+    outputs:
+      modified: ${{ steps.wasm_change.outputs.modified }}
     steps:
       - uses: actions/checkout@v4
 
@@ -37,20 +60,14 @@ jobs:
         id: define-bitcoin-sv-commit
         shell: bash
         run: |
-          # Use dispatch input if present, otherwise default from env
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            bsvcommit="${{ github.event.inputs.bitcoin-sv-commit }}"
-          else
-            bsvcommit="${{ env.DEFAULT_BITCOIN_SV_COMMIT }}"
-          fi
+          # workflow_call supplies the commit; PR/push runs supply nothing and take the pin.
+          bsvcommit="${{ inputs.bitcoin-sv-commit }}"
+          [ -n "$bsvcommit" ] || bsvcommit="${{ env.DEFAULT_BITCOIN_SV_COMMIT }}"
           echo "Build using bsvcommit=$bsvcommit ..."
           echo "bsvcommit=$bsvcommit" >> "$GITHUB_OUTPUT"
 
         ## This checkout is what pins the effective bitcoin-sv commit: it is
         ## exported as BSV_ROOT below and the build system simply consumes it.
-        ## The reproducibility guard is the default-pin "Verify committed
-        ## artifacts are reproducible" step, which byte-compares the tracked
-        ## artifacts against a fresh regen built from this pinned checkout.
       - name: Check out bitcoin-sv
         shell: bash
         run: |
@@ -77,17 +94,37 @@ jobs:
           # Byte-repro layout rule: BOOST_ROOT is the directory containing boost/ directly
           echo "BOOST_ROOT=$PWD/dependancies_wasm/boost_1.85.0" >> "$GITHUB_ENV"
 
-        ## Only a default-pin build regenerates the tracked artifacts, so the
-        ## "Verify committed artifacts are reproducible" step below compares a
-        ## fresh pinned-env regen against the committed bytes. A custom-commit
-        ## dispatch builds off-pin bytes, so the flag stays off there to keep the
-        ## tracked tree untouched.
-      - name: Build and run curve tests and real transaction vectors
-        env:
-          BDK_WASM_UPDATE_COMMITTED_ARTIFACTS: ${{ steps.define-bitcoin-sv-commit.outputs.bsvcommit == env.DEFAULT_BITCOIN_SV_COMMIT && '1' || '0' }}
+        ## build.sh builds only; it never writes the tracked artifacts and never runs
+        ## a test. Validation is the separate ctest step below.
+      - name: Build the wasm module
         run: |
           source "$RUNNER_TEMP/emsdk/emsdk_env.sh"
           module/typesbdk/wasm/build.sh
+
+        ## Green/red only. The registration list is asserted BY NAME, not by count:
+        ## without `node` at configure time ten of the twelve registrations silently
+        ## vanish and the remaining two pass, so a count check cannot tell a healthy
+        ## tree from a node-less one. This is a presence check, so adding a test needs
+        ## no CI edit. The repository CMake floor is 3.16, which has neither
+        ## --test-dir nor --no-tests=error, hence the `cd` and the manual check.
+      - name: Run the wasm test suites
+        run: |
+          source "$RUNNER_TEMP/emsdk/emsdk_env.sh"
+          cd build-wasm
+          registered="$(ctest -N)"
+          for expected in wasm_build_optimized wasm_size_gate \
+                          wasm_functional_node wasm_functional_browser \
+                          wasm_functional_umd wasm_functional_slim_umd \
+                          wasm_secp256k1_build \
+                          wasm_secp256k1_tests wasm_secp256k1_noverify_tests \
+                          wasm_secp256k1_first_call_parity \
+                          wasm_secp256k1_verify_corpus wasm_secp256k1_verify_parity_node; do
+            grep -q "[[:space:]]${expected}\$" <<<"$registered" || {
+              echo "CTest registration missing: $expected (node absent at configure time?)" >&2
+              exit 1
+            }
+          done
+          ctest --output-on-failure
 
         ## Proves the recipe/factory path works without build.sh's environment
         ## and catches any future re-coupling of the wasm build to root state.
@@ -103,13 +140,27 @@ jobs:
             -DSECP256K1_TEST_OVERRIDE_WIDE_MULTIPLY=int64
           cmake --build build-wasm-direct --target bdk_wasm --parallel
 
-        ## Byte-compare the tracked artifacts against a fresh pinned-env regen.
-        ## Skip it for a custom-commit dispatch: those bytes were built off-pin
-        ## and would fail by design against the default-pin committed files.
-      - name: Verify committed artifacts are reproducible
-        if: steps.define-bitcoin-sv-commit.outputs.bsvcommit == env.DEFAULT_BITCOIN_SV_COMMIT
+        ## The only step that writes the tracked artifacts, and only when the caller
+        ## asked for it. The default-pin condition is deliberate: an off-pin build
+        ## produces off-pin bytes and must never overwrite the tracked ones.
+        ##
+        ## There is no reproducibility gate any more: the tracked artifacts are a
+        ## refreshed-on-demand convenience, exactly like module/gobdk's libGoBDK_*.a.
+        ## Drift between them and a fresh build is expected between refreshes, so a
+        ## source change no longer has to carry regenerated binaries. No report
+        ## replaces the gate either -- a publish-and-restore report would keep every
+        ## PR run writing the tracked files to compute a diff nobody acts on.
+      - name: Publish the freshly built artifacts in-source
+        if: inputs.publish-artifacts && steps.define-bitcoin-sv-commit.outputs.bsvcommit == env.DEFAULT_BITCOIN_SV_COMMIT
         run: |
-          git diff --exit-code -- \
+          source "$RUNNER_TEMP/emsdk/emsdk_env.sh"
+          cmake --build build-wasm --target bdk_wasm_install_insource
+
+      - name: Check the committed wasm artifacts have changed
+        id: wasm_change
+        if: inputs.publish-artifacts && steps.define-bitcoin-sv-commit.outputs.bsvcommit == env.DEFAULT_BITCOIN_SV_COMMIT
+        run: |
+          changed_files=$(git diff --name-only -- \
             module/typesbdk/wasm/bdk-core.mjs \
             module/typesbdk/wasm/bdk-core.wasm \
             module/typesbdk/wasm/bdk-core.browser.mjs \
@@ -117,7 +168,36 @@ jobs:
             module/typesbdk/wasm/bdk-core.umd.js \
             module/typesbdk/wasm/bdk-core.umd.wasm \
             module/typesbdk/wasm/bdk-core.slim.umd.js \
+            module/typesbdk/wasm/bdk-core.slim.umd.wasm)
+          git status
+          if [[ -n "$changed_files" ]]; then
+            echo "Modified files detected : $changed_files"
+            echo "modified=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No modifications detected"
+            echo "modified=false" >> "$GITHUB_OUTPUT"
+          fi
+
+        ## Transport to the commit job in build_bdk.yaml, mirroring how libGoBDK_*.a
+        ## travels today. Uploaded only when the tracked bytes actually changed, so
+        ## the commit job's `name:` download is either present or a real failure.
+      - name: Upload the refreshed committed artifacts
+        if: steps.wasm_change.outputs.modified == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: bdk-wasm-artifacts
+          path: |
+            module/typesbdk/wasm/bdk-core.mjs
+            module/typesbdk/wasm/bdk-core.wasm
+            module/typesbdk/wasm/bdk-core.browser.mjs
+            module/typesbdk/wasm/bdk-core.browser.wasm
+            module/typesbdk/wasm/bdk-core.umd.js
+            module/typesbdk/wasm/bdk-core.umd.wasm
+            module/typesbdk/wasm/bdk-core.slim.umd.js
             module/typesbdk/wasm/bdk-core.slim.umd.wasm
+          retention-days: 1
+          overwrite: true
+          if-no-files-found: error
 
         ## Upload the artifacts build.sh actually produced (the build-tree dist
         ## directory), not the tracked source-tree copies. On a custom-commit run
