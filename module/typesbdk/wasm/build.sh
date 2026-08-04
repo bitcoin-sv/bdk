@@ -1,12 +1,31 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Build the standalone WASM module. Build ONLY:
+#
+#   * validation is `ctest` in the build directory, which is where the tests are
+#     registered (test/types/CMakeLists.txt):
+#         module/typesbdk/wasm/build.sh
+#         ( cd build-wasm && ctest --output-on-failure )
+#
+#   * publishing the eight committed artifacts into the source tree is
+#         cmake --build build-wasm --target bdk_wasm_install_insource
+#     invoked only by the CI commit path (.github/workflows/build_bdk.yaml).
+#
+# Environment: BDK_WASM_BUILD_DIR (default <repo>/build-wasm), BDK_WASM_JOBS,
+# BDK_WASM_CLEAN (default 1). BDK_WASM_RUN_TESTS and
+# BDK_WASM_UPDATE_COMMITTED_ARTIFACTS no longer exist.
+#
+# Preflight covers build tools only. `node` is needed to RUN the tests (all but
+# the optimize fixture and the size gate are node scripts) and must be on PATH at
+# CONFIGURE time for CMake to register them; `ctest` ships with cmake.
+
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/../../.." && pwd)"
 build_dir="${BDK_WASM_BUILD_DIR:-$repo_root/build-wasm}"
 jobs="${BDK_WASM_JOBS:-$(getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu)}"
 
-for command in cmake emcmake emcc em++ emar emranlib make node ctest; do
+for command in cmake emcmake emcc em++ emar emranlib make; do
   command -v "$command" >/dev/null || {
     echo "Missing required command: $command" >&2
     echo "Activate Emscripten 4.0.23 with 'source /path/to/emsdk_env.sh' before running this script." >&2
@@ -56,40 +75,14 @@ EMSDK_QUIET=1 emcmake cmake -S "$repo_root" -B "$build_dir" \
   -DSECP256K1_TEST_OVERRIDE_WIDE_MULTIPLY=int64
 
 # One build. ALL builds the four module targets and their optimize edges (wasm-opt
-# runs inside CMake, fed from a pristine snapshot of each linker output) plus the
-# in-tree secp256k1 curve-test executables; benchmarks are off for wasm. No
-# bitcoin-sv path is needed here and nothing reads CMakeCache.txt.
+# runs inside CMake, fed from a pristine snapshot of each linker output). The
+# secp256k1 parity-suite executables are EXCLUDE_FROM_ALL and are built on demand
+# by their CTest fixture; benchmarks are off for wasm. No bitcoin-sv path is needed
+# here and nothing reads CMakeCache.txt.
 dist_dir="$build_dir/module/typesbdk/wasm/dist"
 cmake --build "$build_dir" --parallel "$jobs"
 
-# Validate. CTest owns the functional suites and the size gate; it runs them
-# against the freshly built dist artifacts, gates them behind the optimize
-# fixture, and reports correctness before the size contract. Default on; opt out
-# with BDK_WASM_RUN_TESTS=0. Publishing requires validation, so refuse to publish
-# when tests were skipped. Runs are cwd-based: the repo floor is CMake 3.16, which
-# has neither --test-dir nor --no-tests=error, so a non-empty registration is
-# asserted with a `ctest -N` count first (a zero-test build is not "validated").
-if [[ "${BDK_WASM_RUN_TESTS:-1}" == 1 ]]; then
-  ntests="$( cd "$build_dir" && ctest -N | grep -c 'Test #' || true )"
-  [[ "${ntests:-0}" -ge 1 ]] || { echo "No CTest tests registered; refusing to report validated." >&2; exit 1; }
-  ( cd "$build_dir" && ctest --output-on-failure )
-  summary_label="Built and validated:"
-elif [[ "${BDK_WASM_UPDATE_COMMITTED_ARTIFACTS:-0}" == 1 ]]; then
-  echo "Refusing to publish with BDK_WASM_RUN_TESTS=0: publishing requires validation." >&2
-  exit 1
-else
-  summary_label="Built (CTest validation skipped via BDK_WASM_RUN_TESTS=0):"
-fi
-
-# Publish (opt-in). Reached only after ctest passed (set -e), so publishing always
-# follows validation. build.sh still owns the WHETHER; CMake owns the HOW -- the
-# bdk_wasm_install_insource target copies the eight final artifacts into the source
-# tree (it is not in ALL, so a plain build never writes the tracked files).
-if [[ "${BDK_WASM_UPDATE_COMMITTED_ARTIFACTS:-0}" == 1 ]]; then
-  cmake --build "$build_dir" --target bdk_wasm_install_insource
-fi
-
-echo "$summary_label"
+echo "Built:"
 ls -lh \
   "$dist_dir/bdk-core.mjs" "$dist_dir/bdk-core.wasm" \
   "$dist_dir/bdk-core.browser.mjs" "$dist_dir/bdk-core.browser.wasm" \
