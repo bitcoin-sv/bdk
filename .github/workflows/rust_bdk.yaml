@@ -45,10 +45,29 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Set up Rust stable
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy,rustfmt
+      ## module/rustbdk/rust-toolchain.toml is the source of truth for the toolchain version
+      ## and components; test/rust carries a byte-identical copy for the ctest-driven suite.
+      ## rustup reads that file from the working directory, so this step (and every cargo step
+      ## below) must run INSIDE the package -- hence working-directory instead of
+      ## --manifest-path. `rustup toolchain install` with no arguments installs exactly what the
+      ## file pins, so this job cannot drift from what developers get locally. Bump the pin
+      ## in those files, not here.
+      - name: Check the Rust toolchain pins agree
+        shell: bash
+        run: |
+          cmp module/rustbdk/rust-toolchain.toml test/rust/rust-toolchain.toml \
+            || { echo "::error::module/rustbdk and test/rust toolchain pins differ; bump them together"; exit 1; }
+
+      - name: Set up the pinned Rust toolchain
+        shell: bash
+        working-directory: module/rustbdk
+        run: |
+          rustup toolchain install
+          rustup show active-toolchain
+          rustc --version
+          cargo --version
+          cargo clippy --version
+          cargo fmt --version
 
       - name: Define dependant bitcoin-sv commit
         id: define-bitcoin-sv-commit
@@ -117,13 +136,17 @@ jobs:
           test -f "$BDK_LIB_DIR/libbdkffi_${OS_ARCH}.a"
 
       - name: Cargo build
-        run: cargo build --manifest-path module/rustbdk/Cargo.toml --workspace --all-targets
+        working-directory: module/rustbdk
+        run: cargo build --locked --workspace --all-targets
 
       - name: Cargo test
-        run: cargo test --manifest-path module/rustbdk/Cargo.toml --workspace
+        working-directory: module/rustbdk
+        run: cargo test --locked --workspace
 
       - name: Cargo clippy
-        run: cargo clippy --manifest-path module/rustbdk/Cargo.toml --workspace --all-targets -- -D warnings
+        working-directory: module/rustbdk
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
 
       - name: Cargo fmt
-        run: cargo fmt --manifest-path module/rustbdk/Cargo.toml --all -- --check
+        working-directory: module/rustbdk
+        run: cargo fmt --all -- --check
