@@ -1,0 +1,96 @@
+## Early-warning job for Rust toolchain drift.
+##
+## The gating "Rust BDK" workflow runs on the toolchain pinned in rust-toolchain.toml, so a new
+## stable release can no longer redden an unrelated pull request. The cost of pinning is that the
+## pin silently ages: new default clippy lints and rustc warnings pile up unseen until somebody
+## bumps it, and then they all land at once.
+##
+## This workflow removes that cost. It runs the same clippy and fmt gates against the FLOATING
+## stable channel on a schedule, so upcoming lints surface here first. It is scheduled-only (plus
+## manual dispatch), never on pull_request or push, so a failure here reports drift without ever
+## blocking a merge. When it goes red, fix the lints and then bump the pin in rust-toolchain.toml.
+##
+## Only one platform is covered on purpose: lints are target-independent, so a second leg would
+## just double the cost for the same signal.
+name: Rust Toolchain Canary
+
+on:
+  schedule:
+    ## Mondays 04:17 UTC. Off the hour to avoid the scheduling spike GitHub warns about.
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+
+env:
+  DEFAULT_BITCOIN_SV_COMMIT: 879fc8b42168dd0e608dafd51b39c6dabad37d4d
+
+jobs:
+  clippy-on-floating-stable:
+    runs-on: ubuntu-22.04
+
+    env:
+      BDK_LIB_DIR: ${{ github.workspace }}/module/rustbdk/bdk-sys/lib
+      CARGO_TERM_COLOR: always
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      ## Deliberately NOT the rust-toolchain.toml pin: this job exists to test what the pin is
+      ## shielding the gating workflow from. `+stable` on every cargo call overrides the pin
+      ## that module/rustbdk/rust-toolchain.toml would otherwise select.
+      - name: Install the floating stable toolchain
+        shell: bash
+        working-directory: module/rustbdk
+        run: |
+          rustup toolchain install stable --profile minimal --component clippy,rustfmt
+          echo "floating stable under test:"
+          rustup run stable rustc --version
+          echo "pinned toolchain it is compared against:"
+          rustup toolchain install
+          rustup show active-toolchain
+
+      - name: Check out bitcoin-sv
+        shell: bash
+        run: |
+          git clone https://github.com/bitcoin-sv/bitcoin-sv.git bitcoin-sv
+          cd bitcoin-sv && git checkout "${{ env.DEFAULT_BITCOIN_SV_COMMIT }}" && git log -1
+
+      - name: Prepare Environment and Dependencies
+        run: |
+          echo "BSV_ROOT=${{ github.workspace }}/bitcoin-sv" >> $GITHUB_ENV
+          echo "OS_ARCH=$(uname -s | tr 'A-Z' 'a-z')_$(uname -m)" >> $GITHUB_ENV
+          sudo apt-get update
+          sudo apt-get install -y build-essential g++ wget
+          wget https://github.com/bitcoin-sv/bdk/releases/download/depcy/dependancies_linux_x86_64.tar.gz
+          tar -xzf dependancies_linux_x86_64.tar.gz
+          echo "DEPENDENCIES_DIR=${{ github.workspace }}/dependancies_linux_x86_64" >> $GITHUB_ENV
+          echo "BOOST_ROOT=${{ github.workspace }}/dependancies_linux_x86_64/boost_1.85.0" >> $GITHUB_ENV
+          echo "OPENSSL_ROOT_DIR=${{ github.workspace }}/dependancies_linux_x86_64/openssl_3.4.0" >> $GITHUB_ENV
+
+      ## bdk-sys/build.rs panics unless the merged archive exists, so clippy cannot run without
+      ## a prior CMake build producing MergeBDKFFI.
+      - name: Build libbdkffi
+        run: |
+          mkdir -p "build"
+          rm -fR ./build/* && rm -fR ./module/rustbdk/bdk-sys/lib/*
+
+          cmake -B build -S "." -DBUILD_MODULE_GOLANG=OFF -DBUILD_MODULE_RUST=ON -DBUILD_MODULE_RUST_INSTALL_INSOURCE=ON
+          cmake --build build --parallel 4 --target MergeBDKFFI
+          test -f "$BDK_LIB_DIR/libbdkffi_${OS_ARCH}.a"
+
+      ## working-directory, not --manifest-path: rustup resolves rust-toolchain.toml from the
+      ## working directory, and `+stable` then overrides it for this job only.
+      - name: Cargo clippy on floating stable
+        working-directory: module/rustbdk
+        run: cargo +stable clippy --locked --workspace --all-targets -- -D warnings
+
+      - name: Cargo fmt on floating stable
+        working-directory: module/rustbdk
+        run: cargo +stable fmt --all -- --check

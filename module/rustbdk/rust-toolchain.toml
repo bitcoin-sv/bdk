@@ -1,0 +1,24 @@
+# Pins the Rust toolchain for this cargo package, so CI and developer machines agree.
+#
+# Without a pin the toolchain is an unrecorded build input: CI installed "latest stable" at job
+# time, so a new stable release could turn a freshly added default clippy lint into a hard error
+# (`-D warnings`) and redden an unrelated pull request, while a developer on an older stable saw
+# the same code pass.
+#
+# rustup resolves this file from the CURRENT WORKING DIRECTORY, walking upwards -- not from
+# `--manifest-path`. A pin therefore only applies to cargo invocations made from inside this
+# directory tree, which is why every cargo working directory in this repository carries its own
+# copy, and why the CI jobs `cd` into the package instead of passing `--manifest-path`:
+#
+#   module/rustbdk   the rustbdk workspace (bdk-sys + rust-bdk), driven by .github/workflows
+#   test/rust        the standalone linkage suite, driven by ctest (test/rust/CMakeLists.txt)
+#
+# These copies are kept BYTE-IDENTICAL and CI enforces it, so bump them together.
+#
+# Bump deliberately, not reactively. The weekly `Rust Toolchain Canary` workflow runs clippy on
+# the floating `stable` channel, so new lints show up there first and can be fixed before the
+# pin moves.
+[toolchain]
+channel = "1.98.1"
+components = ["clippy", "rustfmt"]
+profile = "minimal"
