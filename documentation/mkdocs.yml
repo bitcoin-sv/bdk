@@ -10,9 +10,11 @@
 ##    Linux  : chmod +x plantuml ; export PATH=$PATH:/path/to/dir/containing/plantuml
 ##    Windows: set PATH=%PATH%;C:\path\to\dir\containing\plantuml
 ##
-## Note: if the python doc packages (mkdocs / pymdown-extensions / plantuml_markdown) are missing
-## when building via CMake, the `core_doc` target is silently skipped with only a warning
-## (see documentation/CMakeLists.txt).
+## Note: when building via CMake, mkdocs and the extensions above are all looked up in the SAME
+## python environment (the first interpreter able to import them all). If no environment has the
+## full set, the `core_doc` target is skipped with a warning listing what was missing where; pass
+## -DBDK_DOC_PYTHON_EXECUTABLE=/path/to/python to select an interpreter explicitly.
+## (see documentation/CMakeLists.txt and cmake/modules/FindPythonHelper.cmake).
 ##
 site_name: Bitcoin Development Kit
 

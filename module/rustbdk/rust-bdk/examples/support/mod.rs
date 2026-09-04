@@ -28,7 +28,9 @@ pub fn decode_hex(hex: &str) -> Result<Vec<u8>, Box<dyn Error>> {
 
     trimmed
         .as_bytes()
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|pair| Ok((hex_nibble(pair[0])? << 4) | hex_nibble(pair[1])?))
         .collect()
 }
