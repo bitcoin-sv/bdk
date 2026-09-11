@@ -1,29 +1,28 @@
-## To build this documentation using mkdocs :
-##    python -m pip install mkdocs pymdown-extensions plantuml_markdown
-##    mkdocs build --clean --strict ; mkdocs serve
-##    # Open the browser at http://localhost:8000
+## Build and view from the BDK repository root, using the Python environment
+## prepared in documentation/docs/build.md (BDK_DOC_PYTHON is its interpreter):
+##   "$BDK_DOC_PYTHON" -m mkdocs build --config-file documentation/mkdocs.yml --clean --strict --site-dir "$(cd .. && pwd)/build/generated/core_doc"
+##   "$BDK_DOC_PYTHON" -m http.server --directory ../build/generated/core_doc 8000
+## Open http://localhost:8000 and stop the server with Ctrl-C after inspection.
+## These commands match the Development Build page; verify both there and here
+## when changing the documentation toolchain.
 ##
-## Diagrams: the current pages use Mermaid, which renders client-side and needs no extra tooling.
-## The plantuml_markdown extension is enabled and the CMake core_doc target stages plantuml.jar,
-## so a Java runtime is needed ONLY if you add PlantUML (@startuml) diagrams. To enable that, put
-## the plantuml launcher (cmake/doc_tools/) on PATH:
-##    Linux  : chmod +x plantuml ; export PATH=$PATH:/path/to/dir/containing/plantuml
-##    Windows: set PATH=%PATH%;C:\path\to\dir\containing\plantuml
+## Mermaid diagrams render in the browser and require no Java build tooling.
+## plantuml_markdown remains enabled; Java and the cmake/doc_tools launcher
+## are needed only if PlantUML diagrams are added. Current pages use Mermaid.
 ##
-## Note: when building via CMake, mkdocs and the extensions above are all looked up in the SAME
-## python environment (the first interpreter able to import them all). If no environment has the
-## full set, the `core_doc` target is skipped with a warning listing what was missing where; pass
-## -DBDK_DOC_PYTHON_EXECUTABLE=/path/to/python to select an interpreter explicitly.
-## (see documentation/CMakeLists.txt and cmake/modules/FindPythonHelper.cmake).
-##
+## CMake discovers MkDocs and all enabled extensions in one Python environment.
+## Select an interpreter with -DBDK_DOC_PYTHON_EXECUTABLE=/path/to/python.
+## If no candidate has all extensions, core_doc is omitted with a warning.
+## See documentation/CMakeLists.txt and cmake/modules/FindPythonHelper.cmake.
+
 site_name: Bitcoin Development Kit
 
 nav:
     - About : index.md
+    - Architecture : architecture.md
     - Directory Structure : directories.md
     - Development Build : build.md
-    - Architecture : architecture.md
-    - Rust Binding : rust_binding.md
+    - Debugging transaction validation : debug_transaction.md
     - VerifyScript : verify_script.md
     - Versioning strategy : versioning.md
     - Object Model : ObjectModel.md

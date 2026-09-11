@@ -6,10 +6,10 @@ curated subset of the Bitcoin SV sources, and additional **modules** add feature
 bindings (e.g. the Go binding under `module/gobdk`). Users can extend the functionality by writing
 their own modules.
 
-- [Directory Structure](directories.md)
-- [Development build](build.md)
 - [Architecture overview](architecture.md)
-- [Rust Binding](rust_binding.md)
+- [Directory Structure](directories.md)
+- [Development Build](build.md)
+- [Debugging transaction validation](debug_transaction.md)
 - [VerifyScript](verify_script.md)
 - [Versioning](versioning.md)
 - [Object Model](ObjectModel.md)
@@ -18,14 +18,15 @@ their own modules.
 
 ## Install layout
 
-After installing/unpacking a BDK package, the layout looks like this (rooted at the install prefix):
+The native install rules define the following layout under the install prefix. Optional content depends on the enabled build and install targets; inspect a packaged archive separately before assuming it contains the same components:
 
 ```
 |-- include
 |       |-- <bsv headers>          # bitcoin-sv headers, kept in their src/ subdirectory structure
 |       |                          #   (e.g. crypto/, script/, primitives/, consensus/, ...)
 |       |-- config                 # generated bitcoin config header
-|       |-- core                   # extra BDK core headers + the single-include umbrella header `bdk`
+|       |-- <BDK headers>          # BDK .h/.hpp files currently installed directly under include/
+|       |-- core                   # generated umbrella header `bdk`
 |       |-- secp256k1
 |       |       |-- include        # secp256k1 public headers
 |       |-- univalue               # univalue public headers
@@ -34,42 +35,61 @@ After installing/unpacking a BDK package, the layout looks like this (rooted at 
 |       |-- core_doc               # this documentation, built as HTML
 ```
 
-- `include/core/BDKVersion.h` declares the version symbols recording how and when the package was
+- `include/BDKVersion.h` declares the version symbols recording how and when the package was
   built (values generated at build time; see [Versioning](versioning.md)).
 - `lib/` contains the static (and any shared) libraries.
 - `Documentation/core_doc/` contains the HTML documentation.
 
-(These paths are taken from the install rules in `core/CMakeLists.txt`, `core/setting-secp256k1.cmake`
-and `core/setting-univalue.cmake`, and the components packaged by `cmake/BDKCPackConfig.cpack.in`.)
+These paths come from the install rules in `core/CMakeLists.txt`,
+`core/setting-secp256k1.cmake`, `core/setting-univalue.cmake` and
+`documentation/CMakeLists.txt`. CPack component selection is defined separately in
+`cmake/BDKCPackConfig.cpack.in`.
 
 ## Usage
 
-BDK is a multi-language library; it supports `C++` and `Golang`.
+BDK provides a C++ core, a Go (cgo) binding, a TypeScript/JavaScript binding through WebAssembly, and an experimental Rust binding. Their APIs differ; consult each module's documentation for the operations it exposes.
 
 ### C++
 
-To build a C++ program against an installed BDK, add these include directories:
+The C++ API is implemented by `bdk_core`; see [Object Model](ObjectModel.md).
+Build and run the repository's C++ examples using the
+[Development Build](build.md) instructions. The
+[transaction debugging guide](debug_transaction.md) uses `example_txvalidator`.
 
-- `/path/to/bdk_install/include`
-- `/path/to/bdk_install/include/core`
-- `/path/to/bdk_install/include/secp256k1/include`
-- `/path/to/bdk_install/include/univalue`
+An installed package provides headers under `include/`, `include/core/`,
+`include/secp256k1/include/` and `include/univalue/`, with archives under `lib/`.
+The generated umbrella header is installed as `include/core/bdk`.
 
-and link against the libraries in `/path/to/bdk_install/lib`.
-
-For convenience there is a single umbrella header (installed at `include/core/bdk`):
-
-```c++
-#include <bdk>
-```
-
-This pulls in every header delivered by the package. It is simple but not optimal for compilation
-time.
+The installed umbrella is not currently a usable consumer shortcut: installed
+`serialize.h` requires `compat/endian.h`, which is missing from the install. A
+syntax-only `#include <bdk>` check fails with `fatal error: compat/endian.h: No such
+file or directory`. The install rules also put BDK's extra headers directly under
+`include/`, while the umbrella refers to them under `core/`. The source-tree
+examples remain the reference for building native consumers.
 
 ### Golang
 
 See [Consuming the GoBDK module (cgo)](build.md#consuming-the-gobdk-module-cgo) for the cgo
 environment setup.
+
+### TypeScript / JavaScript (WebAssembly)
+
+`module/typesbdk/wasm` supplies WebAssembly binaries and JavaScript loaders for
+Node.js and browsers. See the
+[WASM module layout](https://github.com/bitcoin-sv/bdk/blob/master/module/typesbdk/wasm/README.md),
+[API examples](https://github.com/bitcoin-sv/bdk/blob/master/module/typesbdk/examples/README.md),
+and [standalone WASM build](build.md#the-standalone-wasm-build).
+The committed artifacts are refreshed on demand and may lag the source.
+
+### Rust (experimental)
+
+The experimental binding lives in `module/rustbdk`. Its safe package is `rust-bdk`,
+imported as `rust_bdk`; `bdk-sys` owns the raw FFI. Build the `MergeBDKFFI` target
+before compiling Rust consumers, or explicitly provide a compatible archive via
+`BDK_LIB_DIR`. Cargo does not download the archive automatically.
+See [building the Rust binding](build.md#building-the-rust-binding-experimental),
+the [Rust README](https://github.com/bitcoin-sv/bdk/blob/master/module/rustbdk/README.md),
+and [module independence rules](architecture.md#module-independence-rules).
 
 ### Viewing the documentation
 

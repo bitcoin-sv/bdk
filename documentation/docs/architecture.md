@@ -7,6 +7,38 @@ building the whole node.
 
 ## The big picture
 
+A module must never modify source files in BDK's `core/`. If the core does not
+provide something a module needs, the module must handle it inside its own module
+directory. Modules may carry extra files for their special features there.
+Module-specific handling must never be implemented at core level: do not add
+language-specific branches such as “if rust then ...” to core sources, or
+module-specific special cases to the core build. Language adapters belong in
+their modules and consume the common validation implementation.
+
+BDK also keeps the checked-out `bitcoin-sv` C++ sources unchanged. Shared additions,
+such as the extended-transaction representation, belong in BDK's `core/` and
+must be reviewed for compatibility with upstream behavior. This shared-core
+extension work must not introduce module-specific handling. Selecting which
+modules to build at the repository root does not authorize changing core sources
+or core behavior for a particular module.
+
+WASM is permitted a dedicated build mechanism for aggressive browser optimization.
+It uses the common recipe to create its own `bdk_core_wasm` target inside its
+module build. Its extra bigint, memory-cleansing and secp256k1 runtime-table
+implementations belong to `module/typesbdk/wasm/`; they do not modify core source
+files, the checked-out upstream files or the canonical native `bdk_core` target.
+Changes must preserve the behavior of the corresponding native operations and
+pass the relevant parity tests.
+
+The WASM parity suite is another example of the correct module-local pattern.
+Its generator and adaptations live under `module/typesbdk/wasm/`, and it generates
+a patched copy of upstream secp256k1 `tests.c` under that module's binary directory,
+`<build>/module/typesbdk/wasm/wasm_tests_patched/tests.c`. The module solves its own
+need with its own files; it does not modify core sources or the upstream checkout.
+This follows the strong module/core boundary rule.
+
+<style>.mermaid { overflow-x: auto; }</style>
+
 ```mermaid
 graph TD
     BSV[bitcoin-sv source<br/>pinned commit] -->|curated subset| CORE
@@ -28,10 +60,10 @@ graph TD
   they are not purely linking core. The WASM/TypeScript verifier also lives under `module/`, but
   it is a **standalone build** that assembles its own core variant instead of linking the shared
   `bdk_core` (see [The typesbdk WASM verifier](#the-typesbdk-wasm-verifier)).
-- **`test/`** holds the C++ (`test/core`, via `ctest`) and Go (`test/golang`) test suites.
+- **`test/`** holds C++ core tests, Go tests, Rust linkage tests, and WASM tests in `test/core`, `test/golang`, `test/rust`, and `test/types`, respectively. CTest registers the applicable suites for each build.
 
 The CMake build (root `CMakeLists.txt`, minimum version 3.16) assembles `bdk_core`, builds the
-language-binding modules, runs the tests via `ctest`, and builds this documentation via the
+language-binding modules, registers tests for execution via `ctest`, and builds this documentation via the
 `core_doc` target. See [Development Build](build.md).
 
 ## The curated bitcoin-sv source subset
@@ -40,33 +72,24 @@ BDK does **not** compile all of bitcoin-sv. It compiles an explicitly-listed sub
 paths, declared in `cmake/modules/FindBSVSourceHelper.cmake` and split into **two sets** whose
 compilation targets differ:
 
-| Set | Function | `.cpp` files | Compiles into |
-|-----|----------|-------------:|---------------|
-| **Minimal** | `bdkSetMinimumListBSVSource` (`FindBSVSourceHelper.cmake:85-201`) | **36** | the `bdk_core` library |
-| **Application** | `bdkSetApplicationListBSVSource` (`FindBSVSourceHelper.cmake:204-296`) | **15** | examples, the GoBDK cgo lib, the Rust `bdkffi` lib, and the core tests — **not** `bdk_core` |
+| Set | CMake function | Listed `.cpp` paths | Consumers |
+|-----|----------------|--------------------:|-----------|
+| Minimal | `bdkSetMinimumListBSVSource` | 37 | Canonical `bdk_core`; the WASM variant applies explicit exclusions |
+| Application | `bdkSetApplicationListBSVSource` | 15 | C++ examples, GoBDK cgo library, Rust `bdkffi` library, and core tests |
 
-That is **36 + 15 = 51** BSV `.cpp` files in total (plus their headers).
+The lists contain 52 entries but 51 distinct paths: `src/support/cleanse.cpp`
+appears in both. These counts describe the lists, not every translation unit in
+the complete build, which also includes BDK sources and bundled libraries.
 
-- The **minimal** set is a **superset of bitcoin-sv's `libconsensus`**. It is what actually links
-  into the library: `core/CMakeLists.txt:62` sets
-  `BDK_CORE_SRC_FILES = <core/*.cpp> + BSV_MINIMAL_SRC_FILES`, and `core/CMakeLists.txt:71` builds
-  `add_library(bdk_core … ${BDK_CORE_SRC_FILES})`. So `bdk_core` = the 36 minimal BSV sources +
-  BDK's own `core/*.cpp` + the generated `BDKVersion.cpp`.
-- The **application** set (`BSV_APPLICATION_SRC_FILES`) is **not** linked into `bdk_core`. It is
-  compiled directly into the consumer targets instead: the C++ examples
-  (`module/example/CMakeLists.txt`), the **GoBDK** cgo static library
-  (`module/gobdk/bdkcgo/CMakeLists.txt`), the Rust `bdkffi` static library
-  (`module/rustbdk/capi/CMakeLists.txt`), and the `test/core` executables
-  (`test/core/CMakeLists.txt`).
+`core/CMakeLists.txt` calls `bdk_add_core_library(bdk_core ...)`. That factory,
+in `core/bdk-core-recipe.cmake`, combines the minimal list with BDK's `core/*.cpp`
+files and generated `BDKVersion.cpp`. The application list is supplied directly
+by the consumer CMake files; it is not appended to the canonical core's source list.
 
 ## The validation engine: a single `ValidateTransaction` entry point
 
 The heart of `bdk_core` is `bsv::CTxValidator` (`core/txvalidator.hpp` / `core/txvalidator.cpp`).
-Its public C++ API exposes `ValidateTransaction`, `VerifyScript` (which takes an optional
-`customFlags` span — `core/txvalidator.hpp:202`), `GetSigOpCount`, `CalculateFlags`, `ValidateBatch`,
-and a large family of `Set*`/`Get*` policy accessors. (The Go binding splits the single C++
-`VerifyScript` into two convenience methods, `VerifyScript` and `VerifyScriptWithCustomFlags` —
-see [the cgo boundary](#the-cgo-boundary-gobdk).)
+Its public C++ API includes `ValidateTransaction`, `VerifyScript` with an optional `customFlags` span, `VerifySpend` for a single input with an explicitly supplied previous output, `GetSigOpCount`, `CalculateFlags`, `ValidateBatch`, individual transaction-check helpers, and policy accessors. See [Object Model](ObjectModel.md). The Go binding exposes both `VerifyScript` and `VerifyScriptWithCustomFlags` over the C++ `VerifyScript` method.
 
 In legacy bitcoin-sv, transaction validation lives in **two separate functions** depending on where
 the transaction came from:
@@ -99,15 +122,37 @@ So:
   policy sigops, fee).
 - `consensus = true` → **block** context: consensus checks only.
 
-This is the same consensus-vs-policy distinction documented in detail (with the flag sets and the
-"up to three `CheckInputs` calls" peer path) in [VerifyScript](verify_script.md). Consumers that
-need block-vs-peer behaviour simply pass the appropriate `consensus` value.
+This boolean selects BDK's transaction-checking context. The upstream node also performs chain-state, mempool and block-management work outside this API. See [VerifyScript](verify_script.md) for upstream flag handling and [Debugging transaction validation](debug_transaction.md) for a reproducible BDK replay.
+
+## Module independence rules
+
+`module/rustbdk` is an independent BDK module. The binding follows these rules:
+
+1. It depends on `bdk_core`, its public headers, and the shared third-party and
+   bitcoin-sv link-closure inputs that `bdk_core` needs.
+2. It must not include, link, copy, symlink, read at build time, or edit files
+   from sibling modules such as `module/gobdk`, `module/typesbdk`, or
+   `module/example`.
+3. Its C ABI is defined inside `module/rustbdk` and uses the distinct
+   `bdkffi_` symbol prefix.
+4. Its static archive is `libbdkffi_<os_arch>.a`; it must never fall back to a
+   GoBDK archive.
+5. Consensus and policy logic remain in `bdk_core`; Rust wraps that logic rather
+   than reimplementing it.
+6. The crates stay layered: `bdk-sys` owns raw FFI, and `rust-bdk` exposes the
+   safe public API.
+7. Validation parity comes from calling the same `bdk_core`
+   `ValidateTransaction(..., consensus)` implementation. `consensus=true` means
+   block/consensus rules, while `consensus=false` means peer/mempool policy
+   rules.
+
+These rules keep language adapters independent while sharing validation behavior. Rust's C ABI and archive are owned by its module; the canonical core must not acquire Rust-specific validation branches. See [Rust usage](index.md#rust-experimental) and [Rust build instructions](build.md#building-the-rust-binding-experimental).
 
 ## The cgo boundary (GoBDK)
 
 The Go binding (`module/gobdk`, import path `github.com/bitcoin-sv/bdk/module/gobdk`) wraps the C++
 `CTxValidator` through cgo. The Go `script.TxValidator` (`module/gobdk/script/txvalidator.go`) holds
-an opaque pointer to a C++ `TxValidator` created via `TxValidator_Create`, sets a finalizer to call
+an opaque pointer to a C++ `CTxValidator` created via `TxValidator_Create`, sets a finalizer to call
 `TxValidator_Destroy` on GC, and forwards each call (`ValidateTransaction`, `VerifyScript`,
 `GetSigOpCount`, the policy setters, …) across the cgo boundary. The `consensus` boolean described
 above is passed straight through:
@@ -129,13 +174,15 @@ committed static archives — one per supported platform/arch:
 - `libGoBDK_darwin_arm64.a`
 - `libGoBDK_darwin_x86_64.a`
 
+The native CI matrix refreshes Linux x86_64, Linux aarch64 and macOS arm64; the committed macOS x86_64 archive is not part of that matrix.
+
 There is **no Windows archive** (Windows is experimental/unsupported — see
 [build.md](build.md#windows-experimental-unsupported)).
 
 CI can rebuild and **auto-commit** these archives, but only under a specific gate — **not** on
 every build. The gate lives in the single `commit-built-artifacts` job of `build_bdk.yaml`, which
 handles both committed-binary families (the gobdk archives and the typesbdk WASM artifacts) so
-that two jobs can never race to push the same branch.
+that the two artifact families share one push job within a workflow run.
 
 `build_bdk.yaml` is the only manually dispatchable workflow in this pipeline. Its dispatch form
 carries **two independent checkboxes** — `commit-gobdk-archives` and `commit-wasm-artifacts` — and
@@ -155,7 +202,7 @@ Inside the job:
    further wasm commit — each family breaks only its own rebuild loop;
 3. **"did it change" is decided per family by a staged `git diff --cached --quiet`**, never by a
    build leg's job output. `build-bdk` is a three-leg matrix and all legs write one job-level
-   `modified` output, so last-writer-wins would silently drop a changed, uploaded archive whenever
+   `modified` output, so relying on that output could hide a changed archive when
    the platforms disagree;
 4. because the job now runs even when nothing changed, each Unix matrix leg uploads a small
    `gobdk-status-<os_arch>` marker on **every** dispatch stating whether its archive changed. That
@@ -164,8 +211,9 @@ Inside the job:
    download when the set is empty, and **fails hard** when an expected archive does not arrive. No
    step in the job uses `continue-on-error`, precisely so a real artifact-service failure goes red
    instead of quietly committing nothing;
-5. the two families are committed **sequentially, as two commits** — each carrying its own marker
-   and independently revertable — and there is exactly **one push, at the end**.
+5. the commit steps run **sequentially**, creating a separate commit for each selected,
+   unsuppressed family whose staged files changed. Each commit carries its own marker and
+   can be reverted independently. There is exactly **one push step, at the end**.
 
 The bot commits with `[bot] [GoBDKUpdate] …` and `[bot] [WasmBDKUpdate] …` subjects.
 
@@ -174,8 +222,7 @@ The bot commits with `[bot] [GoBDKUpdate] …` and `[bot] [WasmBDKUpdate] …` s
 `module/typesbdk` provides the JavaScript/WebAssembly binding for `CTxValidator::VerifyScript`.
 
 The WASM verifier requires aggressive size optimization to be deployable in browsers and SDKs:
-no OpenSSL (which forces substituting the OpenSSL-backed `big_int.cpp`/`random.cpp` with a
-Boost-based bigint backend and a wasm-safe cleanse), runtime-reconstructed secp256k1
+no OpenSSL (the build excludes `big_int.cpp`, `random.cpp`, and `support/cleanse.cpp`, adds a Boost-based bigint backend and a WASM memory-cleanse implementation), runtime-reconstructed secp256k1
 verification tables, and a minimal runtime. Threading those deviations through the shared build
 would deform the regular build architecture — core is the upstream-tracking trunk that
 gobdk/rustbdk link, and its build must stay canonical. The WASM build is therefore a fully
@@ -203,6 +250,9 @@ Build inputs, tests and publishing are three separate places:
   decisions of its own: the bitcoin-sv commit, the Boost 1.85.0 package and the Emscripten 4.0.23
   SDK are pinned by the environment (CI, or the developer's local install).
 
+CI publishes the WASM artifacts only when publication is requested and the selected
+bitcoin-sv commit equals the workflow's default pin.
+
 The eight committed artifacts are a **refreshed-on-demand convenience**, not a build-reproducibility
 contract: `cmake --build build-wasm --target bdk_wasm_install_insource` is the only thing that
 writes them, and only the CI commit path (a `build_bdk.yaml` dispatch with `commit-wasm-artifacts`
@@ -211,7 +261,7 @@ no longer byte-compare the tracked artifacts against a fresh pinned build, and n
 difference: drift between a source change and the next refresh is expected and allowed, so a pull
 request that touches wasm sources does not have to carry regenerated binaries.
 
-See `module/typesbdk/wasm/README.md` for the directory layout, `test/types/README.md` for the
+See [module/typesbdk/wasm/README.md](https://github.com/bitcoin-sv/bdk/blob/master/module/typesbdk/wasm/README.md) for the directory layout, [test/types/README.md](https://github.com/bitcoin-sv/bdk/blob/master/test/types/README.md) for the
 twelve CTest entries and the toolchain-free node runner,
-`module/typesbdk/examples/README.md` for the ABI and the native/WASM benchmark controls, and
+[module/typesbdk/examples/README.md](https://github.com/bitcoin-sv/bdk/blob/master/module/typesbdk/examples/README.md) for the ABI and the native/WASM benchmark controls, and
 [Development Build](build.md) for the flags and the prebuilt Boost package.
