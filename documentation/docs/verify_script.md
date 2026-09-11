@@ -4,28 +4,28 @@
 graph TD
     A[Transaction to validate] --> B{Origin?}
     B -->|From a peer<br/>mempool admission| C[GetScriptVerifyFlags era]
-    B -->|From a block<br/>block connection| D[GetBlockScriptFlags blockHeight]
+    B -->|From a block<br/>block connection| D[GetBlockScriptFlags parent height + era]
     C --> E[VerifyScript consensus=false<br/>policy + consensus rules]
     D --> F[VerifyScript consensus=true<br/>consensus rules only]
 ```
 
-In Bitcoin SV the `VerifyScript` function is called in many places with different context and argument. It can be confusing if we don't have a clear picture of how it works. This document section is for `bdk` developers to understand how it works in `bitcoin-sv`.
+Bitcoin SV calls `VerifyScript` from several contexts with different flags and policy settings. This page explains the pinned upstream implementation for BDK developers. For a practical replay, see [Debugging transaction validation](debug_transaction.md).
 
 Generally speaking, `VerifyScript` is called in two main contexts:
 
-- Then a transaction comes from a peer
-- Then a transaction comes from a block
+- A transaction arrives from a peer for mempool admission.
+- A transaction is checked while connecting a block.
 
-When a transaction comes from a block, we verify the script with `consensus=true`, skipping all the policy settings check, while a transaction comes from a peer, we might verify if it complies with all the policies settings.
+Block-context script checks use `consensus=true`. Peer/mempool checks use `consensus=false`, which also applies policy limits. This describes the validation context; BDK does not perform the node's peer-management or chain-state operations.
 
-As there are two different contexts, there are two different ways of calculating flags to used as input for `VerifyScript` function.
+The two contexts use different base-flag calculations:
 
-- [GetScriptVerifyFlags](https://github.com/bitcoin-sv/bitcoin-sv/blob/879fc8b42168dd0e608dafd51b39c6dabad37d4d/src/verify_script_flags.h#L9) is to be used when verify a transaction coming from a peer
-- [GetBlockScriptFlags](https://github.com/bitcoin-sv/bitcoin-sv/blob/879fc8b42168dd0e608dafd51b39c6dabad37d4d/src/verify_script_flags.h#L19) is to be used when verify a transaction coming from a block
+- [GetScriptVerifyFlags](https://github.com/bitcoin-sv/bitcoin-sv/blob/879fc8b42168dd0e608dafd51b39c6dabad37d4d/src/verify_script_flags.h#L9) computes base flags for peer/mempool validation
+- [GetBlockScriptFlags](https://github.com/bitcoin-sv/bitcoin-sv/blob/879fc8b42168dd0e608dafd51b39c6dabad37d4d/src/verify_script_flags.h#L19) computes base flags for block validation
 
-## Flags calculations
+## Flag calculation
 
-Flags are canonical combination of individual flags
+A flag set is a bitwise combination of individual flags. `SCRIPT_VERIFY_NONE` is zero; `SCRIPT_FLAG_LAST` is a boundary marker rather than a verification rule.
 
 ```
     SCRIPT_VERIFY_NONE
@@ -51,7 +51,7 @@ Flags are canonical combination of individual flags
     SCRIPT_FLAG_LAST
 ```
 
-When we flatten out the flags calculation of in the two different contexts as mentioned above, we have
+The following lists expand the base flag calculations for the two contexts.
 
 `GetScriptVerifyFlags` can have these flags, depending on the era (derived from chain tip + 1)
 
@@ -70,17 +70,19 @@ When we flatten out the flags calculation of in the two different contexts as me
     SCRIPT_ENABLE_SIGHASH_FORKID
     SCRIPT_GENESIS   // If genesis is activated (regardless of Chronicle)
     SCRIPT_CHRONICLE // If Chronicle is activated (both SCRIPT_GENESIS and SCRIPT_CHRONICLE are set when both eras are active)
-    // On non-mainnet only (require_standard = false):
+    // When require_standard = false:
     //   If promiscuous mempool flags are set, the entire flag set is replaced by
     //   prom_mempool_flags, then SCRIPT_ENABLE_SIGHASH_FORKID is unconditionally re-added.
 ```
 
-Note: `SCRIPT_VERIFY_SIGPUSHONLY` is **not** part of the base flags here — it is added per-input (see Per-input flags below).
+`SCRIPT_VERIFY_SIGPUSHONLY` is absent from the default base flags above and is added
+per input after Genesis. An explicit promiscuous-mempool override can also include it.
 
-`GetBlockScriptFlags` can have these flags, depending on the actual block height (height-based hard-fork activation)
+`GetBlockScriptFlags` takes consensus parameters, the parent block height, and the spending protocol era. In the list below, `height` is the parent height, not the containing block height. BDK passes `blockHeight - 1` in consensus mode and derives the spending era from the containing block's height.
 
 ```
-GetBlockScriptFlags(blockHeight)
+GetBlockScriptFlags(consensusParams, parentHeight, spendingEra)
+    // height below means parentHeight
     SCRIPT_VERIFY_NONE                 // starting value (= 0), not a real flag
     SCRIPT_VERIFY_P2SH                 // height >= p2shHeight
     SCRIPT_VERIFY_STRICTENC            // height >= uahfHeight (UAHF)
@@ -95,9 +97,12 @@ GetBlockScriptFlags(blockHeight)
     SCRIPT_CHRONICLE                   // Chronicle protocol active for this block height
 ```
 
-Notable absences vs `GetScriptVerifyFlags`: no `SCRIPT_VERIFY_NULLDUMMY`, `SCRIPT_VERIFY_CLEANSTACK`, `SCRIPT_VERIFY_MINIMALDATA`, `SCRIPT_VERIFY_DISCOURAGE_UPGRADABLE_NOPS` — these are policy-only flags, not consensus rules.
+Unlike the default `GetScriptVerifyFlags` result, `GetBlockScriptFlags` does not add
+`SCRIPT_VERIFY_NULLDUMMY`, `SCRIPT_VERIFY_CLEANSTACK`, `SCRIPT_VERIFY_MINIMALDATA` or
+`SCRIPT_VERIFY_DISCOURAGE_UPGRADABLE_NOPS`. This compares the flags selected by these
+functions; it is not a complete list of consensus rules enforced by the interpreter.
 
-There are some _predefined_ combined flags to be used for convenient (being flattened out):
+The predefined flag combinations expand as follows:
 
 ```
 PRE_CHRONICLE_MANDATORY_SCRIPT_VERIFY_FLAGS
@@ -172,7 +177,7 @@ POST_CHRONICLE_STANDARD_NOT_MANDATORY_VERIFY_FLAGS
     SCRIPT_VERIFY_CHECKSEQUENCEVERIFY
 ```
 
-These _predefined_ flags are original defined in a nested approach:
+The same combinations are defined compositionally as follows:
 
 ```
 PRE_CHRONICLE_MANDATORY_SCRIPT_VERIFY_FLAGS =
@@ -228,160 +233,48 @@ This means a transaction spending old (pre-Genesis) UTXOs and new (post-Chronicl
 
 ---
 
-## Two Transaction Validation Paths
+## Two transaction validation paths
 
 A transaction is validated differently depending on whether it arrives **from a peer** (mempool admission) or **from a block** (block connection). Understanding this distinction is key to interpreting any `VerifyScript` call.
 
-### Path 1 — Transaction from a block (`BlockValidateTxns`)
+### Block validation
 
-- **Flags function:** `GetBlockScriptFlags(parentBlockHeight)` — height-based, hard-fork activation only
-- **consensus parameter:** `true` — skips policy checks inside `VerifyScript`
-- **Calls:** exactly one `CheckInputs` per transaction
-- **Failure:** block rejected; peer banned (DoS=100), except for locally-configured frozen TXOs
+`BlockConnector::checkScripts` computes flags using the parent block, then
+`BlockValidateTxns` calls `CheckInputs` with `consensus=true`. Block acceptance,
+coinbase checks, frozen-output handling and peer consequences also involve node
+code outside `VerifyScript`; a BDK `TxError` does not itself implement those actions.
 
-This path is strict and simple: the transaction either passes the consensus rules or the whole block is rejected.
+### Peer/mempool validation
 
-### Path 2 — Transaction from a peer (`TxnValidation`)
+`TxnValidation` first checks inputs using `GetScriptVerifyFlags`. During the
+Chronicle grace period a failed check can be retried with inverse-era flags.
+The later `CheckInputsFromMempoolAndCache` call uses block-tip flags and can
+reuse the script cache. If that check fails and the policy flag set omitted
+block-required flags, the code performs a mandatory-flags fallback.
 
-- **Flags function:** `GetScriptVerifyFlags(era)` — era-based, includes policy flags
-- **consensus parameter:** `false` — policy rules (standardness) are enforced
-- **Calls:** up to **three** `CheckInputs` calls
+It is incorrect to say that the second call only runs on non-mainnet: the call
+site is present on the successful first-check path. Cache hits and early returns
+mean call sites are not a count of actual script executions. It is also incorrect
+to promise a peer ban from a script error alone; the node interprets validation
+state elsewhere. BDK uses one `ValidateTransaction` entry point and its own
+transaction checks rather than reproducing this entire node control flow.
 
-#### Why up to three calls?
+## Source map for script validation
 
-| Call | Flags used | Purpose |
-|------|-----------|---------|
-| **1** | `GetScriptVerifyFlags` (full policy set) | Primary validation — enforce all policy rules |
-| **2** | `GetBlockScriptFlags(chainTip)` | Sanity check — would this tx be valid in the next block? |
-| **3** | `MandatoryScriptVerifyFlags(era)` | Last resort — does it pass at least the consensus-mandatory rules? |
+The following locations refer to bitcoin-sv commit
+`879fc8b42168dd0e608dafd51b39c6dabad37d4d`:
 
-Calls 2 and 3 only run when `require_standard = false` (non-mainnet) **and** the promiscuous mempool config dropped flags that the block tip enforces. On mainnet (`require_standard = true`) Call 1's flag set is always a strict superset of the block-tip set, so Calls 2 and 3 always pass trivially.
+| Location | Role |
+|----------|------|
+| `src/verify_script_flags.cpp`, `GetScriptVerifyFlags` | Policy base flags, including the optional promiscuous-mempool override |
+| `src/verify_script_flags.cpp`, `GetBlockScriptFlags` | Block base flags from parent height and spending era |
+| `src/validation.cpp`, `TxnValidation` | Peer/mempool validation and Chronicle retry |
+| `src/validation.cpp`, `CheckInputsFromMempoolAndCache` | Block-tip flag check with cache support |
+| `src/validation.cpp`, `BlockConnector::checkScripts` and `BlockValidateTxns` | Block-context script checks |
+| `src/validation.cpp`, `CheckInputs` and `CheckInputScripts` | Input checks and per-input script-check construction |
+| `src/script/interpreter.cpp`, `VerifyScript` and `EvalScript` | Script evaluation |
 
-#### Chronicle grace period (Call 1 only)
-
-During the Chronicle activation grace period, if Call 1 fails, the validation is **retried once** with the inverse-era flags (pre-Chronicle flags). If the retry passes, the transaction is rejected with **no peer ban** — the peer may simply not have activated Chronicle yet.
-
-#### Failure outcomes (peer path)
-
-| Situation | Consequence |
-|-----------|-------------|
-| Fails on a policy-only flag | Rejected, **no ban** |
-| Fails on a consensus flag | Rejected, peer **banned** |
-| Timeout (script ran too long) | Rejected, **no ban** |
-| Fails Call 1 during Chronicle grace period, passes retry | Rejected, **no ban** |
-| Fails Call 3 (mandatory fallback) | Rejected, peer **banned** |
-| Passes Call 3 with promiscuous config | Accepted, warning logged |
-
-### Key differences at a glance
-
-| Aspect | From a block | From a peer |
-|--------|-------------|-------------|
-| Flags function | `GetBlockScriptFlags` | `GetScriptVerifyFlags` |
-| Flag basis | Hard-fork height thresholds | Era-based standard/mandatory sets |
-| `consensus` to `VerifyScript` | `true` | `false` |
-| Policy flags (`NULLDUMMY`, `CLEANSTACK`, etc.) | **No** | **Yes** |
-| `SCRIPT_VERIFY_SIGPUSHONLY` | In base flags (Genesis) | Per-input only |
-| Number of `CheckInputs` calls | 1 | Up to 3 |
-| Grace period retry | No | Yes (Chronicle only) |
-| Failure consequence | Block rejected + peer banned | Depends on which flag failed |
-
----
-
-## Detail VerifyScript Call stack
-
-Below is a summary of analysis `VerifyScript` caller
-
-```
-BlockConnector::Connect --> BlockConnector::checkScripts --> BlockConnector::BlockValidateTxns
-src/Validation.cpp:TxnValidation --> CheckInputsFromMempoolAndCache
-
-CheckInputsFromMempoolAndCache       -->  CheckInputs (consensus false)
-TxnValidation                        -->  CheckInputs (consensus false)   [the most sophisticated]
-BlockConnector::BlockValidateTxns    -->  CheckInputs (consensus  true)
-
-CheckInputs                            --> CheckInputScripts --> CScriptCheck::operator() --> VerifyScript
-DSAttemptHandler::ValidateDoubleSpend -- > CheckInputScripts --> CScriptCheck::operator() --> VerifyScript  (consensus false)
-
-src/script/sign.cpp:SignAndVerify  --> VerifyScript
-```
-
-SignAndVerify is mostly called with consensus true, except in src/script/sign.cpp:SignSignature which call it with consensus false
-
-### Other path to VerifyScript
-```
-rawtransaction.cpp:signrawtransaction --> VerifyScript
-bitcoinconcensus.cpp:verify_script --> VerifyScript
-bitcoin-tx.cpp:MutateTx --> MutateTx --> MutateTxSign --> SignAndVerify --> VerifyScript
-bitcoin-tx.cpp:MutateTx --> MutateTx --> MutateTxSign --> VerifyScript
-src/rpc/misc.cpp:verifyscript --> CScriptCheck::operator() --> VerifyScript (consensus false)
-```
-All have config object (global) so don't need to mention here
-
-#### Analyse of VerifyScript
-```
-CScriptCheck::operator(consensusIn, flagsIn)
-    VerifyScript(){consensus=consensusIn, flags = flagsIn}
-
-src/script/sign.cpp:SignAndVerify(consensusIn, eraIn, utxoEraIn)
-    VerifyScript(){consensus=consensusIn, flags = StandardScriptVerifyFlags(eraIn) | InputScriptVerifyFlags(eraIn, utxoEraIn)}
-
-src/bitcoin-tx.cpp:MutateTxSign() // end of chain call
-    SignAndVerify(ActiveEra,utxoEra){consensus=true}
-    VerifyScript(){consensus=true, flags = StandardScriptVerifyFlags(ActiveEra) | InputScriptVerifyFlags(ActiveEra, utxoEra)}
-
-src/rpc/rawtransaction.cpp:signrawtransaction() // end of chain call
-    VerifyScript(){consensus=true, flags = StandardScriptVerifyFlags(ActiveEra) | InputScriptVerifyFlags(ActiveEra, utxoEra)}
-
-src/script/bitcoinconsensus.cpp:verify_script(flagsIn) // Export to library, don't need to care
-    VerifyScript(){consensus=true, flags = flagsIn}
-```
-#### Analyse of CScriptCheck::CScriptCheck
-```
-src/validation.cpp:CheckInputScripts(consensusIn, flagsIn)
-    CScriptCheck(){consensus = consensusIn, flags = flagsIn | InputScriptVerifyFlags(era, utxoEra) }
-    There are check2, check3 to handle grace periode, we don't care
-```
-#### Analyse of CheckInputScripts
-```
-src/validation.cpp:CheckInputs(consensusIn, flagsIn)
-    CheckInputScripts(){consensus = consensusIn, flags = flagsIn}
-
-src/double_spend/dsattempt_handler.cpp:ValidateDoubleSpend() // end of chain call
-    CheckInputScripts(){consensus = false, flags = GetScriptVerifyFlags(era)}
-```
-#### Analyse of CheckInputs
-```
-src/validation.cpp:TxnValidation() // end of chain call
-    CheckInputs(){consensus = false, flags = GetScriptVerifyFlags(era)}
-    CheckInputs(){consensus = false, flags = MandatoryScriptVerifyFlags(era)}
-
-src/validation.cpp:BlockValidateTxns(flagsIn)
-    CheckInputs(){consensus = true, flags = flagsIn}
-
-src/validation.cpp:CheckInputsFromMempoolAndCache(flagsIn)
-    CheckInputs(){consensus = false, flags = flagsIn}
-```
-#### Analyse of BlockValidateTxns
-```
-src/validation.cpp:checkScripts() // End of chain call
-    BlockValidateTxns(){flags = GetBlockScriptFlags(blockHeight-1)}
-```
-#### Analyse of CheckInputsFromMempoolAndCache
-```
-src/validation.cpp:TxnValidation() // end of chain call
-    CheckInputsFromMempoolAndCache(){flags =  GetBlockScriptFlags(chainTip)}
-```
-#### Analyse of SignAndVerify
-```
-src/bitcoin-tx.cpp:MutateTxSign()
-    SignAndVerify(ActiveEra,utxoEra){consensus=true}
-
-src/rpc/minter_info.cpp:FundAndSignMinerInfoTx()
-    SignAndVerify(){consensus=true, ProtocolEra::PostGenesis, ProtocolEra::PostGenesis}
-
-src/rpc/rawtransaction.cpp:signrawtransaction()
-    SignAndVerify(){consensus=true, era, utxoEra}
-
-src/script/ismine.cpp:IsMine()
-    SignAndVerify(){consensus=true, ProtocolEra::PostGenesis, utxoEra}
-```
+In BDK, `core/txvalidator.cpp` computes flags in `CalculateFlags`, selects each
+input's previous-output data in `implVerifyScript`, and forwards to the upstream
+interpreter through `bsvVerifyScript`. See [Architecture](architecture.md) for
+module boundaries and [Object Model](ObjectModel.md) for the public API.

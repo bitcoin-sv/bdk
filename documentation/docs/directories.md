@@ -9,10 +9,11 @@ out-of-tree `build` directory:
 |-- bitcoin-sv            # external BSV checkout, pinned to the CI commit (see build.md)
 |-- bdk
      |-- core             # the BDK C++ library (bdk_core) + curated BSV-subset sources
-     |-- module           # language-binding / extension modules (link bdk_core; examples & gobdk also compile the BSV "application" sources)
+     |-- module           # language-binding / extension modules (link bdk_core; examples, gobdk & rustbdk also compile the BSV "application" sources)
      |    |-- gobdk       # Go (cgo) binding: github.com/bitcoin-sv/bdk/module/gobdk
+     |    |-- rustbdk     # experimental Rust binding: bdk-sys + rust-bdk, own bdkffi C ABI
      |    |-- example     # C++ examples & benchmarks
-     |    |-- typesbdk    # opt-in, validated WASM transaction-script verifier
+     |    |-- typesbdk    # opt-in WASM transaction-script verifier
      |-- test
      |    |-- core        # C++ (ctest) tests
      |    |-- golang      # Go tests
@@ -30,12 +31,11 @@ out-of-tree `build` directory:
   `doserror`, `extendedTx`, `txerror`, `validatearg`, and the generated `BDKVersion`).
 - **`module`** (note: **singular**) contains language wrappers / extension applications for the
   BDK component. The design intent is that modules build on `core` and stay independent of each
-  other. In practice they link `bdk_core`, and the C++ examples and the GoBDK cgo library also
+  other. Native modules link `bdk_core`; WASM builds its own core variant. The C++ examples,
+  the GoBDK cgo library, and the Rust C ABI library also
   compile in a small set of additional BSV "application" sources directly (see
   [Architecture overview](architecture.md#the-curated-bitcoin-sv-source-subset)).
 
 #### Adding functionality to core
 
-To add functionality to core, drop `*.h`/`*.hpp` and `*.cpp` files into the `core/` directory.
-CMake globs them in automatically (`core/CMakeLists.txt`). Don't forget to add a corresponding test
-under `test/core`.
+Add shared C++ functionality under `core/` and a corresponding test under `test/core/`. The shared recipe in `core/bdk-core-recipe.cmake` discovers `*.h`, `*.hpp`, and `*.cpp` recursively. Re-run CMake after adding files, because these globs do not use `CONFIGURE_DEPENDS`. Keep language adapters in their modules and follow the [architecture rules](architecture.md#the-big-picture).
