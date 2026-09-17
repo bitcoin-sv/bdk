@@ -152,7 +152,7 @@ These rules keep language adapters independent while sharing validation behavior
 
 The Go binding (`module/gobdk`, import path `github.com/bitcoin-sv/bdk/module/gobdk`) wraps the C++
 `CTxValidator` through cgo. The Go `script.TxValidator` (`module/gobdk/script/txvalidator.go`) holds
-an opaque pointer to a C++ `CTxValidator` created via `TxValidator_Create`, sets a finalizer to call
+an opaque pointer to a C++ `CTxValidator` created via `TxValidator_CreateV2`, sets a finalizer to call
 `TxValidator_Destroy` on GC, and forwards each call (`ValidateTransaction`, `VerifyScript`,
 `GetSigOpCount`, the policy setters, …) across the cgo boundary. The `consensus` boolean described
 above is passed straight through:

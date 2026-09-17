@@ -22,14 +22,22 @@ type TxValidator struct {
 }
 
 // NewTxValidator creates a new TxValidator, and set the Finalizer to call C++ destructor
+//
+// This constructor has no error channel: a network name whose length cannot cross the
+// C ABI is reported the same way a rejected network name already is, by returning nil.
 func NewTxValidator(netName string) *TxValidator {
 	netNameLen := len(netName)
+	cNetNameLen, err := toABILen(netNameLen)
+	if err != nil {
+		return nil
+	}
+
 	netNameCstr := C.CString(netName)
 	defer C.free(unsafe.Pointer(netNameCstr))
 
 	// Create a new C++ TxValidator and bind it to the go struct
 	goSE := &TxValidator{
-		cSEPtr: C.TxValidator_Create(netNameCstr, C.int(netNameLen)),
+		cSEPtr: C.TxValidator_CreateV2(netNameCstr, cNetNameLen),
 	}
 
 	// If C is not able to create the TxValidator, then return nil
@@ -53,23 +61,21 @@ func NewTxValidator(netName string) *TxValidator {
 // aggregate counting, or true for policy/mempool use.
 // consensus=false uses blockHeight+1 era (policy); consensus=true uses blockHeight era (block validation).
 func (se *TxValidator) GetSigOpCount(extendedTX []byte, utxoHeights []int32, blockHeight int32, countP2SHSigOps bool, consensus bool) (uint64, error) {
-	lenTx := len(extendedTX)
-	var txPtr *C.char
-
-	if lenTx > 0 {
-		txPtr = (*C.char)(unsafe.Pointer(&extendedTX[0]))
+	txPtr, lenTx, err := abiBuffer(extendedTX)
+	if err != nil {
+		return 0, err
 	}
 
-	lenUtxo := len(utxoHeights)
-
-	var utxoPtr *C.int32_t
-	if lenUtxo > 0 {
-		utxoPtr = (*C.int32_t)(unsafe.Pointer(&utxoHeights[0]))
+	utxoPtr, lenUtxo, err := abiInt32Buffer(utxoHeights)
+	if err != nil {
+		return 0, err
 	}
 
 	var errMsg *C.char
-	sigOpCount := C.TxValidator_GetSigOpCount(se.cSEPtr, txPtr, C.int(lenTx), utxoPtr, C.int(lenUtxo), C.int32_t(blockHeight), C.bool(countP2SHSigOps), C.bool(consensus), &errMsg)
+	sigOpCount := C.TxValidator_GetSigOpCount(se.cSEPtr, txPtr, lenTx, utxoPtr, lenUtxo, C.int32_t(blockHeight), C.bool(countP2SHSigOps), C.bool(consensus), &errMsg)
 	runtime.KeepAlive(se)
+	runtime.KeepAlive(extendedTX)
+	runtime.KeepAlive(utxoHeights)
 
 	if errMsg != nil {
 		defer C.free(unsafe.Pointer(errMsg))
@@ -92,46 +98,46 @@ func (se *TxValidator) CalculateFlags(utxoHeight int32, blockHeight int32, conse
 //   - The current block height
 //   - The consensus parameter
 func (se *TxValidator) VerifyScript(extendedTX []byte, utxoHeights []int32, blockHeight int32, consensus bool) error {
-	lenTx := len(extendedTX)
-	var txPtr *C.char
-	if lenTx > 0 {
-		txPtr = (*C.char)(unsafe.Pointer(&extendedTX[0]))
+	txPtr, lenTx, err := abiBuffer(extendedTX)
+	if err != nil {
+		return err
 	}
 
-	lenUtxo := len(utxoHeights)
-	var utxoPtr *C.int32_t
-	if lenUtxo > 0 {
-		utxoPtr = (*C.int32_t)(unsafe.Pointer(&utxoHeights[0]))
+	utxoPtr, lenUtxo, err := abiInt32Buffer(utxoHeights)
+	if err != nil {
+		return err
 	}
 
-	result := C.TxValidator_VerifyScript(se.cSEPtr, txPtr, C.int(lenTx), utxoPtr, C.int(lenUtxo), C.int32_t(blockHeight), C.bool(consensus))
+	result := C.TxValidator_VerifyScript(se.cSEPtr, txPtr, lenTx, utxoPtr, lenUtxo, C.int32_t(blockHeight), C.bool(consensus))
 	runtime.KeepAlive(se)
+	runtime.KeepAlive(extendedTX)
+	runtime.KeepAlive(utxoHeights)
 	return translateTxError(result)
 }
 
 // VerifyScriptWithCustomFlags calls VerifyScript with an additional custom flags array.
 // This is usually used in tests or to experiment with flags other than the implicitly calculated ones.
 func (se *TxValidator) VerifyScriptWithCustomFlags(extendedTX []byte, utxoHeights []int32, blockHeight int32, consensus bool, customFlags []uint32) error {
-	lenTx := len(extendedTX)
-	var txPtr *C.char
-	if lenTx > 0 {
-		txPtr = (*C.char)(unsafe.Pointer(&extendedTX[0]))
+	txPtr, lenTx, err := abiBuffer(extendedTX)
+	if err != nil {
+		return err
 	}
 
-	lenUtxo := len(utxoHeights)
-	var utxoPtr *C.int32_t
-	if lenUtxo > 0 {
-		utxoPtr = (*C.int32_t)(unsafe.Pointer(&utxoHeights[0]))
+	utxoPtr, lenUtxo, err := abiInt32Buffer(utxoHeights)
+	if err != nil {
+		return err
 	}
 
-	lenFlags := len(customFlags)
-	var flagsPtr *C.uint32_t
-	if lenFlags > 0 {
-		flagsPtr = (*C.uint32_t)(unsafe.Pointer(&customFlags[0]))
+	flagsPtr, lenFlags, err := abiUint32Buffer(customFlags)
+	if err != nil {
+		return err
 	}
 
-	result := C.TxValidator_VerifyScriptWithCustomFlags(se.cSEPtr, txPtr, C.int(lenTx), utxoPtr, C.int(lenUtxo), C.int32_t(blockHeight), C.bool(consensus), flagsPtr, C.int(lenFlags))
+	result := C.TxValidator_VerifyScriptWithCustomFlags(se.cSEPtr, txPtr, lenTx, utxoPtr, lenUtxo, C.int32_t(blockHeight), C.bool(consensus), flagsPtr, lenFlags)
 	runtime.KeepAlive(se)
+	runtime.KeepAlive(extendedTX)
+	runtime.KeepAlive(utxoHeights)
+	runtime.KeepAlive(customFlags)
 	return translateTxError(result)
 }
 
@@ -462,7 +468,8 @@ func (se *TxValidator) GetPermitBareMultisig() bool {
 
 // ValidateBatch processes a batch of transaction validations.
 // Returns a slice of errors, one per batch entry, in the same order.
-// Each element may be nil (success), a ScriptError, a DoSError, or a generic exception error.
+// Each element may be nil (success), a ScriptError, a DoSError, an ABIError, or a
+// generic exception error.
 //
 // NOT CONCURRENT-SAFE: Must be called from the same goroutine that built the batch
 // via ValidateBatch.Add (or externally serialized). See ValidateBatch for details.
@@ -471,7 +478,7 @@ func (se *TxValidator) ValidateBatch(batch *ValidateBatch) []error {
 		return nil
 	}
 
-	var resultSize C.int
+	var resultSize C.uint64_t
 	resultsPtr := C.TxValidator_ValidateBatch(se.cSEPtr, batch.cBatchPtr, &resultSize)
 	runtime.KeepAlive(se)
 	runtime.KeepAlive(batch)
@@ -482,7 +489,13 @@ func (se *TxValidator) ValidateBatch(batch *ValidateBatch) []error {
 
 	defer C.free(unsafe.Pointer(resultsPtr))
 
-	size := int(resultSize)
+	// The count is bounded by the batch size, but it arrives in the ABI length type:
+	// convert it rather than assume it fits.
+	size, err := abiToGoLen(resultSize)
+	if err != nil {
+		return []error{err}
+	}
+
 	results := make([]error, size)
 
 	cResults := unsafe.Slice((*C.TxError)(resultsPtr), size)
@@ -496,23 +509,32 @@ func (se *TxValidator) ValidateBatch(batch *ValidateBatch) []error {
 // ValidateTransaction runs all tx-level checks then script verification.
 // consensus=false → peer context (policy + consensus checks)
 // consensus=true  → block context (consensus checks only)
-// Returns nil on success, DoSError or ScriptError on failure.
+// Returns nil on success, DoSError or ScriptError on failure, and ABIError when an
+// argument could not be expressed across the C boundary — a local fault of this
+// binding, not a verdict on the transaction.
 func (se *TxValidator) ValidateTransaction(extendedTX []byte, utxoHeights []int32, blockHeight int32, consensus bool) error {
-	lenTx := len(extendedTX)
-	var txPtr *C.char
-	if lenTx > 0 {
-		txPtr = (*C.char)(unsafe.Pointer(&extendedTX[0]))
+	txPtr, lenTx, err := abiBuffer(extendedTX)
+	if err != nil {
+		return err
 	}
 
-	lenUtxo := len(utxoHeights)
-	var utxoPtr *C.int32_t
-	if lenUtxo > 0 {
-		utxoPtr = (*C.int32_t)(unsafe.Pointer(&utxoHeights[0]))
+	utxoPtr, lenUtxo, err := abiInt32Buffer(utxoHeights)
+	if err != nil {
+		return err
 	}
 
-	result := C.TxValidator_ValidateTransaction(se.cSEPtr, txPtr, C.int(lenTx), utxoPtr, C.int(lenUtxo), C.int32_t(blockHeight), C.bool(consensus))
+	result := C.TxValidator_ValidateTransaction(se.cSEPtr, txPtr, lenTx, utxoPtr, lenUtxo, C.int32_t(blockHeight), C.bool(consensus))
 	runtime.KeepAlive(se)
+	runtime.KeepAlive(extendedTX)
+	runtime.KeepAlive(utxoHeights)
 	return translateTxError(result)
+}
+
+// ABIEchoLength returns the length it was given, after a round trip through the C ABI.
+// It exists so a test can prove that a buffer length crosses the boundary unchanged,
+// for values a C int could never have carried.
+func ABIEchoLength(n uint64) uint64 {
+	return uint64(C.TxValidator_ABI_EchoLength(C.uint64_t(n)))
 }
 
 // translateTxError converts a C TxError into a Go error. Returns nil on success.
@@ -526,6 +548,8 @@ func translateTxError(r C.TxError) error {
 		return NewDoSError(DoSErrorCode(r.code))
 	case C.TX_ERR_DOMAIN_EXCEPTION:
 		return NewScriptError(SCRIPT_ERR_CGO_EXCEPTION)
+	case C.TX_ERR_DOMAIN_ABI:
+		return NewABIError(ABIErrorCode(r.code))
 	default:
 		return fmt.Errorf("unknown TxError domain=%d code=%d", r.domain, r.code)
 	}

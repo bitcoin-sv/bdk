@@ -8,8 +8,8 @@ package script
 import "C"
 
 import (
+	"math"
 	"runtime"
-	"unsafe"
 
 	_ "github.com/bitcoin-sv/bdk/module/gobdk/bdkcgo"
 )
@@ -33,7 +33,7 @@ type ValidateBatch struct {
 func NewValidateBatch(capacity ...int) *ValidateBatch {
 	// Create a new C++ ValidateBatch and bind it to the go struct
 	goBatch := &ValidateBatch{
-		cBatchPtr: C.ValidateBatch_Create(),
+		cBatchPtr: C.ValidateBatch_CreateV2(),
 	}
 
 	// If C is not able to create the ValidateBatch, then return nil
@@ -41,9 +41,12 @@ func NewValidateBatch(capacity ...int) *ValidateBatch {
 		return nil
 	}
 
-	// Reserve capacity if provided
+	// Reserve capacity if provided. Reserving is best effort, so a capacity that
+	// cannot cross the ABI is simply not passed on.
 	if len(capacity) > 0 && capacity[0] > 0 {
-		C.ValidateBatch_Reserve(goBatch.cBatchPtr, C.int(capacity[0]))
+		if cCapacity, err := toABILen(capacity[0]); err == nil {
+			C.ValidateBatch_Reserve(goBatch.cBatchPtr, cCapacity)
+		}
 	}
 
 	// Set finalizer to delete C++ ValidateBatch when GC collects this struct
@@ -66,27 +69,33 @@ func NewValidateBatch(capacity ...int) *ValidateBatch {
 //
 // All validation arguments are collected and will be processed together
 // when the batch is submitted to TxValidator for validation
-func (vb *ValidateBatch) Add(extendedTX []byte, utxoHeights []int32, blockHeight int32, consensus bool) {
-	lenTx := len(extendedTX)
-	var txPtr *C.char
-	if lenTx > 0 {
-		txPtr = (*C.char)(unsafe.Pointer(&extendedTX[0]))
+//
+// Add returns nil when the entry was appended. On a non-nil error nothing was
+// appended: batch results are positional, so a caller that keeps filling the batch
+// after a failed Add would silently shift every later result against its own input
+// list. Abandon the batch instead.
+func (vb *ValidateBatch) Add(extendedTX []byte, utxoHeights []int32, blockHeight int32, consensus bool) error {
+	txPtr, lenTx, err := abiBuffer(extendedTX)
+	if err != nil {
+		return err
 	}
 
-	lenUtxo := len(utxoHeights)
-	var utxoPtr *C.int32_t
-	if lenUtxo > 0 {
-		utxoPtr = (*C.int32_t)(unsafe.Pointer(&utxoHeights[0]))
+	utxoPtr, lenUtxo, err := abiInt32Buffer(utxoHeights)
+	if err != nil {
+		return err
 	}
 
-	C.ValidateBatch_Add(
+	result := C.ValidateBatch_Add(
 		vb.cBatchPtr,
-		txPtr, C.int(lenTx),
-		utxoPtr, C.int(lenUtxo),
+		txPtr, lenTx,
+		utxoPtr, lenUtxo,
 		C.int32_t(blockHeight),
 		C.bool(consensus),
 	)
 	runtime.KeepAlive(vb)
+	runtime.KeepAlive(extendedTX)
+	runtime.KeepAlive(utxoHeights)
+	return translateTxError(result)
 }
 
 // Clear removes all elements from the batch
@@ -97,10 +106,19 @@ func (vb *ValidateBatch) Clear() {
 }
 
 // Size returns the number of elements in the batch
+//
+// The C ABI reports the size as uint64_t. A batch large enough to exceed a Go int
+// cannot be built in the first place, so the conversion is clamped rather than
+// allowed to wrap.
 func (vb *ValidateBatch) Size() int {
 	result := C.ValidateBatch_Size(vb.cBatchPtr)
 	runtime.KeepAlive(vb)
-	return int(result)
+
+	size, err := abiToGoLen(result)
+	if err != nil {
+		return math.MaxInt
+	}
+	return size
 }
 
 // Empty checks if the batch is empty
@@ -113,9 +131,12 @@ func (vb *ValidateBatch) Empty() bool {
 
 // Reserve pre-allocates capacity for the specified number of elements
 // This is an optimization to avoid multiple reallocations when batch size is known in advance
+// Reserving is best effort: a capacity that cannot cross the ABI is not passed on.
 func (vb *ValidateBatch) Reserve(capacity int) {
 	if capacity > 0 {
-		C.ValidateBatch_Reserve(vb.cBatchPtr, C.int(capacity))
-		runtime.KeepAlive(vb)
+		if cCapacity, err := toABILen(capacity); err == nil {
+			C.ValidateBatch_Reserve(vb.cBatchPtr, cCapacity)
+			runtime.KeepAlive(vb)
+		}
 	}
 }

@@ -28,6 +28,6 @@ func CallCGoSumBytes(data []byte) C.longlong {
 	// which adds the data copying overhead.
 	return C.C_SumBytes(
 		(*C.uchar)(unsafe.Pointer(&data[0])),
-		C.int(len(data)),
+		C.uint64_t(len(data)),
 	)
 }

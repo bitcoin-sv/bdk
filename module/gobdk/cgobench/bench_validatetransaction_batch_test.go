@@ -13,7 +13,9 @@ func benchmarkValidateBatchSize(b *testing.B, batchSize int) {
 	// Pre-construct the batch ONCE (outside of timing)
 	batch := bdkscript.NewValidateBatch(batchSize)
 	for j := 0; j < batchSize; j++ {
-		batch.Add(txBinExtended, dataUTXOHeights, blockHeight, true)
+		if err := batch.Add(txBinExtended, dataUTXOHeights, blockHeight, true); err != nil {
+			b.Fatalf("Add failed at index %d: %v", j, err)
+		}
 	}
 
 	// Warmup
@@ -26,7 +28,7 @@ func benchmarkValidateBatchSize(b *testing.B, batchSize int) {
 			b.Fatalf("ValidateBatch returned wrong number of results during warmup: got %d, want %d", len(results), batchSize)
 		}
 		for idx, err := range results {
-			if err != nil && err.Code() != bdkscript.SCRIPT_ERR_OK {
+			if err != nil {
 				b.Fatalf("ValidateBatch failed during warmup at index %d: %v", idx, err)
 			}
 		}
@@ -79,7 +81,9 @@ func BenchmarkValidateBatch_NoConsensus(b *testing.B) {
 	// Pre-construct the batch ONCE (outside of timing)
 	batch := bdkscript.NewValidateBatch(batchSize)
 	for j := 0; j < batchSize; j++ {
-		batch.Add(txBinExtended, dataUTXOHeights, blockHeight, false)
+		if err := batch.Add(txBinExtended, dataUTXOHeights, blockHeight, false); err != nil {
+			b.Fatalf("Add failed at index %d: %v", j, err)
+		}
 	}
 
 	// Warmup
@@ -92,7 +96,7 @@ func BenchmarkValidateBatch_NoConsensus(b *testing.B) {
 			b.Fatalf("ValidateBatch returned wrong number of results during warmup: got %d, want %d", len(results), batchSize)
 		}
 		for idx, err := range results {
-			if err != nil && err.Code() != bdkscript.SCRIPT_ERR_OK {
+			if err != nil {
 				b.Fatalf("ValidateBatch failed during warmup at index %d: %v", idx, err)
 			}
 		}
