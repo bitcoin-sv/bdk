@@ -1,10 +1,28 @@
 #include <bdkcgo/txvalidator_cgo.h>
+#include <bdkcgo/src/abiguard.hpp>
 #include <core/txvalidator.hpp>
 #include <core/validatearg.hpp>
 
 
 int TxValidator_CPP_SCRIPT_ERR_ERROR_COUNT(){
     return bsv::CPP_SCRIPT_ERR_ERROR_COUNT();
+}
+
+uint64_t TxValidator_ABI_EchoLength(uint64_t len){
+    return len;
+}
+
+// Internal helper to emit a diagnostic from a catch handler.
+// Stream insertion and the flush in std::endl can allocate, so they can throw — and a
+// catch handler that throws leaves an extern "C" function with an exception already in
+// flight, which is undefined behaviour. The emission is therefore best effort: if it
+// fails, the diagnostic is dropped and the caller still gets its documented result.
+static void _helper_log_cgo_exception(const char* where, const char* what) noexcept {
+    try {
+        std::cout << "CGO EXCEPTION : " << where << " " << what << std::endl;
+    }
+    catch (...) {
+    }
 }
 
 // Internal helper to convert std::string to const char*
@@ -19,13 +37,23 @@ const char* _helper_string2char(const std::string& stdStr) {
     return charPtr;
 }
 
-TxValidatorCGO TxValidator_Create(const char* networkNamePtr, int networkNameLen){
+TxValidatorCGO TxValidator_CreateV2(const char* networkNamePtr, uint64_t networkNameLen){
     try {
-        const std::string networkName(networkNamePtr, networkNameLen);
+        const std::span<const uint8_t> nameSpan = bdkcgo::byte_span(networkNamePtr, networkNameLen);
+        std::string networkName;
+        if (!nameSpan.empty()) {
+            networkName.assign(reinterpret_cast<const char*>(nameSpan.data()), nameSpan.size());
+        }
         return new bsv::CTxValidator(networkName);
     }
     catch (const std::exception& e) {
-        std::cout << "CGO EXCEPTION : " << __FILE__ << ":" << __LINE__ << "    at " << __func__ << e.what() << std::endl;
+        _helper_log_cgo_exception(__FILE__ " at TxValidator_CreateV2", e.what());
+        return nullptr;
+    }
+    catch (...) {
+        // Nothing may cross the extern "C" boundary; a non-std exception takes the
+        // same channel as any other construction failure.
+        _helper_log_cgo_exception(__FILE__ " at TxValidator_CreateV2", "unknown exception");
         return nullptr;
     }
 }
@@ -256,20 +284,26 @@ bool TxValidator_GetPermitBareMultisig(TxValidatorCGO cgoEngine)
     return static_cast<bsv::CTxValidator*>(cgoEngine)->GetPermitBareMultisig();
 }
 
-uint64_t TxValidator_GetSigOpCount(TxValidatorCGO cgoEngine, const char* extendedTxPtr, int extendedTxLen, const int32_t* hUTXOsPtr, int hUTXOsLen, int32_t blockHeight, bool countP2SHSigOps, bool consensus, char** errStr) {
+uint64_t TxValidator_GetSigOpCount(TxValidatorCGO cgoEngine, const char* extendedTxPtr, uint64_t extendedTxLen, const int32_t* hUTXOsPtr, uint64_t hUTXOsLen, int32_t blockHeight, bool countP2SHSigOps, bool consensus, char** errStr) {
     try {
-        std::span<const uint8_t> extendedTx;
-        if (extendedTxPtr != nullptr && extendedTxLen > 0) {
-            const uint8_t* pTX = static_cast<const uint8_t*>(reinterpret_cast<const void*>(extendedTxPtr));
-            extendedTx = std::span<const uint8_t>(pTX, extendedTxLen);
-        }
-
-        std::span<const int32_t> hUTXOs{ hUTXOsPtr, (size_t)hUTXOsLen };
+        const std::span<const uint8_t> extendedTx = bdkcgo::byte_span(extendedTxPtr, extendedTxLen);
+        const std::span<const int32_t> hUTXOs = bdkcgo::int32_span(hUTXOsPtr, hUTXOsLen);
 
         return static_cast<bsv::CTxValidator*>(cgoEngine)->GetSigOpCount(extendedTx, hUTXOs, blockHeight, countP2SHSigOps, consensus);
     }
     catch (const std::exception& e) {
-        *errStr = strdup(e.what());
+        // This entry point has no TxError channel: an ABI rejection is reported as a
+        // diagnostic string with a count of 0, like any other failure here.
+        if (errStr != nullptr) {
+            *errStr = strdup(e.what());
+        }
+        return uint64_t{0};
+    }
+    catch (...) {
+        // Same channel for an exception carrying no message, so that nothing escapes.
+        if (errStr != nullptr) {
+            *errStr = strdup("unknown exception at the cgo boundary");
+        }
         return uint64_t{0};
     }
 }
@@ -279,60 +313,105 @@ uint32_t TxValidator_CalculateFlags(TxValidatorCGO cgoEngine, int32_t utxoHeight
     return static_cast<bsv::CTxValidator*>(cgoEngine)->CalculateFlags(utxoHeight, blockHeight, consensus);
 }
 
-TxError TxValidator_VerifyScript(TxValidatorCGO cgoEngine, const char* extendedTxPtr, int extendedTxLen, const int32_t* hUTXOsPtr, int hUTXOsLen, int32_t blockHeight, bool consensus){
-    std::span<const uint8_t> extendedTx;
-    if (extendedTxPtr != nullptr && extendedTxLen > 0) {
-        const uint8_t* pTX = static_cast<const uint8_t*>(reinterpret_cast<const void*>(extendedTxPtr));
-        extendedTx = std::span<const uint8_t>(pTX, extendedTxLen);
-    }
-    std::span<const int32_t> hUTXOs{ hUTXOsPtr, (size_t)hUTXOsLen };
-    return static_cast<bsv::CTxValidator*>(cgoEngine)->VerifyScript(extendedTx, hUTXOs, blockHeight, consensus);
-}
-
-TxError TxValidator_VerifyScriptWithCustomFlags(TxValidatorCGO cgoEngine, const char* extendedTxPtr, int extendedTxLen, const int32_t* hUTXOsPtr, int hUTXOsLen, int32_t blockHeight, bool consensus, const uint32_t* cFlagsPtr, int cFlagsLen){
-    std::span<const uint8_t> extendedTx;
-    if (extendedTxPtr != nullptr && extendedTxLen > 0) {
-        const uint8_t* pTX = static_cast<const uint8_t*>(reinterpret_cast<const void*>(extendedTxPtr));
-        extendedTx = std::span<const uint8_t>(pTX, extendedTxLen);
-    }
-    std::span<const int32_t> hUTXOs{ hUTXOsPtr, (size_t)hUTXOsLen };
-    std::span<const uint32_t> cFlags{ cFlagsPtr, (size_t)cFlagsLen };
-    return static_cast<bsv::CTxValidator*>(cgoEngine)->VerifyScript(extendedTx, hUTXOs, blockHeight, consensus, cFlags);
-}
-
-TxError TxValidator_ValidateTransaction(TxValidatorCGO cgoEngine, const char* extendedTxPtr, int extendedTxLen, const int32_t* hUTXOsPtr, int hUTXOsLen, int32_t blockHeight, bool consensus) {
+TxError TxValidator_VerifyScript(TxValidatorCGO cgoEngine, const char* extendedTxPtr, uint64_t extendedTxLen, const int32_t* hUTXOsPtr, uint64_t hUTXOsLen, int32_t blockHeight, bool consensus){
     try {
-        std::span<const uint8_t> extendedTx;
-        if (extendedTxPtr != nullptr && extendedTxLen > 0) {
-            const uint8_t* pTX = static_cast<const uint8_t*>(reinterpret_cast<const void*>(extendedTxPtr));
-            extendedTx = std::span<const uint8_t>(pTX, extendedTxLen);
-        }
-        std::span<const int32_t> hUTXOs{ hUTXOsPtr, (size_t)hUTXOsLen };
-        return static_cast<bsv::CTxValidator*>(cgoEngine)->ValidateTransaction(extendedTx, hUTXOs, blockHeight, consensus);
+        const std::span<const uint8_t> extendedTx = bdkcgo::byte_span(extendedTxPtr, extendedTxLen);
+        const std::span<const int32_t> hUTXOs = bdkcgo::int32_span(hUTXOsPtr, hUTXOsLen);
+        return static_cast<bsv::CTxValidator*>(cgoEngine)->VerifyScript(extendedTx, hUTXOs, blockHeight, consensus);
     }
-    catch (const std::exception&) {
+    catch (const bdkcgo::AbiArgumentError& e) {
+        return bsv::AbiErrorToTxError(e.code());
+    }
+    catch (...) {
         return bsv::TxErrorException();
     }
 }
 
-TxError* TxValidator_ValidateBatch(TxValidatorCGO cgoEngine, ValidateBatchCGO cgoBatch, int* resultSize) {
-    bsv::CTxValidator* engine = static_cast<bsv::CTxValidator*>(cgoEngine);
-    bsv::ValidateBatch* batch = static_cast<bsv::ValidateBatch*>(cgoBatch);
+TxError TxValidator_VerifyScriptWithCustomFlags(TxValidatorCGO cgoEngine, const char* extendedTxPtr, uint64_t extendedTxLen, const int32_t* hUTXOsPtr, uint64_t hUTXOsLen, int32_t blockHeight, bool consensus, const uint32_t* cFlagsPtr, uint64_t cFlagsLen){
+    try {
+        const std::span<const uint8_t> extendedTx = bdkcgo::byte_span(extendedTxPtr, extendedTxLen);
+        const std::span<const int32_t> hUTXOs = bdkcgo::int32_span(hUTXOsPtr, hUTXOsLen);
+        const std::span<const uint32_t> cFlags = bdkcgo::uint32_span(cFlagsPtr, cFlagsLen);
+        return static_cast<bsv::CTxValidator*>(cgoEngine)->VerifyScript(extendedTx, hUTXOs, blockHeight, consensus, cFlags);
+    }
+    catch (const bdkcgo::AbiArgumentError& e) {
+        return bsv::AbiErrorToTxError(e.code());
+    }
+    catch (...) {
+        return bsv::TxErrorException();
+    }
+}
 
-    std::vector<TxError> results = engine->ValidateBatch(*batch);
+TxError TxValidator_ValidateTransaction(TxValidatorCGO cgoEngine, const char* extendedTxPtr, uint64_t extendedTxLen, const int32_t* hUTXOsPtr, uint64_t hUTXOsLen, int32_t blockHeight, bool consensus) {
+    try {
+        const std::span<const uint8_t> extendedTx = bdkcgo::byte_span(extendedTxPtr, extendedTxLen);
+        const std::span<const int32_t> hUTXOs = bdkcgo::int32_span(hUTXOsPtr, hUTXOsLen);
+        return static_cast<bsv::CTxValidator*>(cgoEngine)->ValidateTransaction(extendedTx, hUTXOs, blockHeight, consensus);
+    }
+    catch (const bdkcgo::AbiArgumentError& e) {
+        return bsv::AbiErrorToTxError(e.code());
+    }
+    catch (...) {
+        return bsv::TxErrorException();
+    }
+}
 
-    const size_t size = results.size();
-    *resultSize = static_cast<int>(size);
-
-    TxError* resultArray = static_cast<TxError*>(malloc(size * sizeof(TxError)));
+// Internal helper building the single-element array TxValidator_ValidateBatch uses to
+// report a failure that has no per-entry result to attach itself to.
+static TxError* _helper_single_result(TxError result, uint64_t* resultSize) {
+    TxError* resultArray = static_cast<TxError*>(malloc(sizeof(TxError)));
     if (resultArray == nullptr) {
         *resultSize = 0;
         return nullptr;
     }
-
-    for (size_t i = 0; i < size; ++i) {
-        resultArray[i] = results[i];
-    }
-
+    resultArray[0] = result;
+    *resultSize = 1;
     return resultArray;
+}
+
+TxError* TxValidator_ValidateBatch(TxValidatorCGO cgoEngine, ValidateBatchCGO cgoBatch, uint64_t* resultSize) {
+    if (resultSize == nullptr) {
+        return nullptr;
+    }
+    *resultSize = 0;
+
+    // The whole operation is inside the try: reserving and filling the result vector
+    // can throw bad_alloc, and an exception leaving an extern "C" function is
+    // undefined behaviour. Anything that escapes is reported through this function's
+    // own single-result convention.
+    try {
+        bsv::CTxValidator* engine = static_cast<bsv::CTxValidator*>(cgoEngine);
+        bsv::ValidateBatch* batch = static_cast<bsv::ValidateBatch*>(cgoBatch);
+
+        std::vector<TxError> results = engine->ValidateBatch(*batch);
+
+        const size_t size = results.size();
+        if (size == 0) {
+            return nullptr;
+        }
+
+        // The result count comes from the batch, but the allocation is sized by it: check
+        // the multiplication before performing it.
+        if (size > SIZE_MAX / sizeof(TxError)) {
+            return _helper_single_result(bsv::AbiErrorToTxError(bsv::AbiError_t::LengthOverflow), resultSize);
+        }
+
+        TxError* resultArray = static_cast<TxError*>(malloc(size * sizeof(TxError)));
+        if (resultArray == nullptr) {
+            return nullptr;
+        }
+        *resultSize = static_cast<uint64_t>(size);
+
+        for (size_t i = 0; i < size; ++i) {
+            resultArray[i] = results[i];
+        }
+
+        return resultArray;
+    }
+    catch (const bdkcgo::AbiArgumentError& e) {
+        return _helper_single_result(bsv::AbiErrorToTxError(e.code()), resultSize);
+    }
+    catch (...) {
+        return _helper_single_result(bsv::TxErrorException(), resultSize);
+    }
 }

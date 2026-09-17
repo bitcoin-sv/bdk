@@ -19,6 +19,13 @@ extern "C" {
 int TxValidator_CPP_SCRIPT_ERR_ERROR_COUNT();
 
 /**
+ * TxValidator_ABI_EchoLength returns the length it was given, unchanged.
+ * This is for the testing purpose: it lets a binding prove that a buffer length
+ * crosses this ABI without being narrowed, for every value up to UINT64_MAX.
+ */
+uint64_t TxValidator_ABI_EchoLength(uint64_t len);
+
+/**
  * TxValidatorCGO implement the cgo handler for TxValidator class
  */
 typedef void* TxValidatorCGO;
@@ -30,8 +37,14 @@ typedef void* ValidateBatchCGO;
 
 /**
  * Handle constructor and destructor
+ *
+ * The V2 suffix is this surface's ABI generation marker. Every other call below
+ * takes a TxValidatorCGO, which only this constructor produces, so a consumer
+ * built against an archive predating the uint64_t length ABI fails to link here
+ * instead of silently reading a narrowed length. Do not drop the suffix; bump it
+ * whenever a length type on this surface changes again.
  */
-TxValidatorCGO TxValidator_Create(const char* networkNamePtr, int networkNameLen);
+TxValidatorCGO TxValidator_CreateV2(const char* networkNamePtr, uint64_t networkNameLen);
 void TxValidator_Destroy(TxValidatorCGO cgoEngine);
 
 /**
@@ -92,10 +105,13 @@ uint64_t TxValidator_GetChronicleGracefulPeriod(TxValidatorCGO cgoEngine);
  *     aggregate counting; pass true for policy/mempool use.
  *
  * Caller must free errStr
+ *
+ * A length this boundary cannot express is reported through errStr, with a
+ * returned count of 0.
  */
 uint64_t TxValidator_GetSigOpCount(TxValidatorCGO cgoEngine,
-	const char* extendedTxPtr, int extendedTxLen,
-	const int32_t* hUTXOsPtr, int hUTXOsLen,
+	const char* extendedTxPtr, uint64_t extendedTxLen,
+	const int32_t* hUTXOsPtr, uint64_t hUTXOsLen,
 	int32_t blockHeight,
 	bool countP2SHSigOps,
 	bool consensus,
@@ -118,8 +134,8 @@ uint32_t TxValidator_CalculateFlags(TxValidatorCGO cgoEngine, int32_t utxoHeight
  *   - Consensus toggle
  */
 TxError TxValidator_VerifyScript(TxValidatorCGO cgoEngine,
-	const char* extendedTxPtr, int extendedTxLen,
-	const int32_t* hUTXOsPtr, int hUTXOsLen,
+	const char* extendedTxPtr, uint64_t extendedTxLen,
+	const int32_t* hUTXOsPtr, uint64_t hUTXOsLen,
 	int32_t blockHeight, bool consensus
 );
 
@@ -128,10 +144,10 @@ TxError TxValidator_VerifyScript(TxValidatorCGO cgoEngine,
  * additional custom flags array.
  */
 TxError TxValidator_VerifyScriptWithCustomFlags(TxValidatorCGO cgoEngine,
-	const char* extendedTxPtr, int extendedTxLen,
-	const int32_t* hUTXOsPtr, int hUTXOsLen,
+	const char* extendedTxPtr, uint64_t extendedTxLen,
+	const int32_t* hUTXOsPtr, uint64_t hUTXOsLen,
 	int32_t blockHeight, bool consensus,
-	const uint32_t* cFlagsPtr, int cFlagsLen
+	const uint32_t* cFlagsPtr, uint64_t cFlagsLen
 );
 
 /*
@@ -140,8 +156,11 @@ TxError TxValidator_VerifyScriptWithCustomFlags(TxValidatorCGO cgoEngine,
  * Returns a pointer to a malloc'd array of TxError structs, one per batch entry.
  * The caller must free the returned array using free().
  * resultSize is set to the number of elements.
+ *
+ * If the batch result cannot be expressed at this boundary, the returned array holds
+ * a single { TX_ERR_DOMAIN_ABI, AbiError_t } element and resultSize is set to 1.
  */
-TxError* TxValidator_ValidateBatch(TxValidatorCGO cgoEngine, ValidateBatchCGO cgoBatch, int* resultSize);
+TxError* TxValidator_ValidateBatch(TxValidatorCGO cgoEngine, ValidateBatchCGO cgoBatch, uint64_t* resultSize);
 
 /*
  * TxValidator_ValidateTransaction runs all tx-level checks then script verification.
@@ -150,10 +169,11 @@ TxError* TxValidator_ValidateBatch(TxValidatorCGO cgoEngine, ValidateBatchCGO cg
  *
  * Returns a TxError struct: { domain, code }.
  * domain=TX_ERR_DOMAIN_OK on success.
+ * domain=TX_ERR_DOMAIN_ABI when an argument could not be expressed at this boundary.
  */
 TxError TxValidator_ValidateTransaction(TxValidatorCGO cgoEngine,
-    const char* extendedTxPtr, int extendedTxLen,
-    const int32_t* hUTXOsPtr, int hUTXOsLen,
+    const char* extendedTxPtr, uint64_t extendedTxLen,
+    const int32_t* hUTXOsPtr, uint64_t hUTXOsLen,
     int32_t blockHeight, bool consensus);
 
 #ifdef __cplusplus

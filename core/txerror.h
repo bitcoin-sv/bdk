@@ -14,7 +14,8 @@ typedef enum {
     TX_ERR_DOMAIN_OK        = 0,  /* success, code is irrelevant */
     TX_ERR_DOMAIN_SCRIPT    = 1,  /* code is ScriptError_t (script execution failure) */
     TX_ERR_DOMAIN_DOS       = 2,  /* code is DoSError_t (transaction validation failure) */
-    TX_ERR_DOMAIN_EXCEPTION = 3   /* C++ exception caught at CGO boundary */
+    TX_ERR_DOMAIN_EXCEPTION = 3,  /* C++ exception caught at CGO boundary */
+    TX_ERR_DOMAIN_ABI       = 4   /* code is AbiError_t (the call could not be expressed) */
 } TxErrorDomain_t;
 
 /**
@@ -26,6 +27,12 @@ typedef enum {
  * Script failure: { domain=TX_ERR_DOMAIN_SCRIPT,    code=ScriptError_t value }
  * DoS failure:    { domain=TX_ERR_DOMAIN_DOS,        code=DoSError_t value }
  * Exception:      { domain=TX_ERR_DOMAIN_EXCEPTION, code=0 }
+ * ABI failure:    { domain=TX_ERR_DOMAIN_ABI,       code=AbiError_t value }
+ *
+ * TX_ERR_DOMAIN_SCRIPT and TX_ERR_DOMAIN_DOS are verdicts about the transaction.
+ * TX_ERR_DOMAIN_EXCEPTION and TX_ERR_DOMAIN_ABI are not: they report a failure of
+ * this process to carry out the call, and a consumer must classify them as a local
+ * fault rather than as an invalid transaction.
  */
 typedef struct {
     int32_t domain;  /* TxErrorDomain_t */
@@ -45,6 +52,7 @@ namespace bsv {
     inline TxError TxErrorScript(ScriptError e)   { return { TX_ERR_DOMAIN_SCRIPT,    static_cast<int32_t>(e) }; }
     inline TxError TxErrorDoS(int32_t e)          { return { TX_ERR_DOMAIN_DOS,        e }; }
     inline TxError TxErrorException()             { return { TX_ERR_DOMAIN_EXCEPTION, 0 }; }
+    inline TxError TxErrorAbi(int32_t e)          { return { TX_ERR_DOMAIN_ABI,       e }; }
     inline bool    TxErrorIsOk(TxError r)         { return r.domain == TX_ERR_DOMAIN_OK; }
 }
 #endif

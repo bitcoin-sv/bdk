@@ -145,10 +145,14 @@ func runBatchVerification(se *bdkscript.TxValidator, csvData []CsvDataRecord, ba
 	batchIndices := make([]int, 0, batchSize)
 
 	for i, record := range csvData {
-		// Add to batch
+		// Add to batch. Batch results are positional, so an entry that was not
+		// appended would shift every later result against batchIndices.
 		addStart := time.Now()
-		batch.Add(record.TxBinExtended, record.DataUTXOHeights, record.BlockHeight, true)
+		addErr := batch.Add(record.TxBinExtended, record.DataUTXOHeights, record.BlockHeight, true)
 		batchAddElapsed += time.Since(addStart)
+		if addErr != nil {
+			log.Fatalf("ERROR adding record %v to the batch: %v", i, addErr)
+		}
 		batchIndices = append(batchIndices, i)
 
 		// Process batch when full or at end of data

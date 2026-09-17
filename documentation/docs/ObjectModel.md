@@ -63,7 +63,9 @@ classDiagram
     CTxValidator ..> ValidateBatch : consumes
 ```
 
-`TxError` contains two 32-bit integers: `domain` and `code`. Domain values are `OK` (0), `SCRIPT` (1), `DOS` (2), and `EXCEPTION` (3). Go maps success to `nil`, script errors to `ScriptError`, DoS errors to `DoSError`, and exception results to `ScriptError` with `SCRIPT_ERR_CGO_EXCEPTION`. An unknown domain produces a generic Go error. Inspect both fields when debugging.
+`TxError` contains two 32-bit integers: `domain` and `code`. Domain values are `OK` (0), `SCRIPT` (1), `DOS` (2), `EXCEPTION` (3), and `ABI` (4). Go maps success to `nil`, script errors to `ScriptError`, DoS errors to `DoSError`, exception results to `ScriptError` with `SCRIPT_ERR_CGO_EXCEPTION`, and ABI results to `ABIError`. An unknown domain produces a generic Go error. Inspect both fields when debugging.
+
+`SCRIPT` and `DOS` are verdicts about the transaction. `EXCEPTION` and `ABI` are not: they report that this process could not carry out the call, and a consumer must classify them as a local fault rather than as an invalid transaction. `ABI` is produced only by the language bindings, never by the core validator, and means a buffer length could not be expressed at the C boundary.
 
 ## Go binding
 

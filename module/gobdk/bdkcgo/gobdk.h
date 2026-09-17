@@ -12,6 +12,7 @@
 #include <bdkcgo/validatebatch_cgo.h>
 #include <bdkcgo/txerror_cgo.h>
 #include <bdkcgo/doserror_cgo.h>
+#include <bdkcgo/abierror_cgo.h>
 #include <bdkcgo/txvalidator_cgo.h>
 
 #endif /* __GO_BDK_H__ */

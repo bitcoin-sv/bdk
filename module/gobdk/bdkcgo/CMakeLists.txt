@@ -39,6 +39,7 @@ set(_GO_MODULE_CGO_PUBLIC_HEADER_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/script_error_cgo.h
     ${CMAKE_CURRENT_SOURCE_DIR}/txerror_cgo.h
     ${CMAKE_CURRENT_SOURCE_DIR}/doserror_cgo.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/abierror_cgo.h
     ${CMAKE_CURRENT_SOURCE_DIR}/txvalidator_cgo.h
     ${CMAKE_CURRENT_SOURCE_DIR}/validatebatch_cgo.h
     ${CMAKE_CURRENT_SOURCE_DIR}/version_cgo.h
@@ -53,6 +54,7 @@ set(_GO_MODULE_SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/asm_cgo.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/script_error_cgo.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/doserror_cgo.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/abierror_cgo.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/txvalidator_cgo.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/validatebatch_cgo.cpp
 )
