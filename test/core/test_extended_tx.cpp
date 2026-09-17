@@ -52,4 +52,62 @@ BOOST_AUTO_TEST_CASE(serialization)
     BOOST_CHECK_EQUAL(TxHex, recovTxHex);
 }
 
+// CompactSizeWidth is the number of bytes bitcoin uses to encode a byte count.
+static size_t CompactSizeWidth(size_t n)
+{
+    if (n < 253) {
+        return 1;
+    }
+    if (n <= 0xffff) {
+        return 3;
+    }
+    if (n <= 0xffffffff) {
+        return 5;
+    }
+    return 9;
+}
+
+// The extended representation is the bare transaction, plus six marker bytes, plus per
+// input eight amount bytes, the CompactSize length of the previous locking script, and
+// the script itself. That identity is what turns a small transaction into a
+// multi-gigabyte buffer, so it is asserted here for bdk's own serialiser, with the
+// script sizes straddling every CompactSize threshold.
+BOOST_AUTO_TEST_CASE(extended_length_identity_across_compactsize_thresholds)
+{
+    const std::vector<size_t> scriptSizes{ 1, 252, 253, 0xffff, 0x10000 };
+
+    bsv::CMutableTransactionExtended eTX;
+    eTX.mtx.nVersion = 2;
+    eTX.mtx.nLockTime = 0;
+    eTX.mtx.vin.resize(scriptSizes.size());
+    eTX.vutxo.resize(scriptSizes.size());
+
+    for (size_t i = 0; i < scriptSizes.size(); ++i) {
+        eTX.mtx.vin[i].prevout = COutPoint(uint256S("01"), static_cast<uint32_t>(i));
+        eTX.mtx.vin[i].nSequence = 0xffffffff;
+        eTX.vutxo[i].nValue = Amount(1000);
+
+        const std::vector<uint8_t> raw(scriptSizes[i], uint8_t{ 0x01 });
+        eTX.vutxo[i].scriptPubKey = CScript(raw.begin(), raw.end());
+        BOOST_REQUIRE_EQUAL(scriptSizes[i], static_cast<size_t>(eTX.vutxo[i].scriptPubKey.size()));
+    }
+
+    eTX.mtx.vout.resize(1);
+    eTX.mtx.vout[0].nValue = Amount(1);
+    eTX.mtx.vout[0].scriptPubKey = CScript() << OP_TRUE;
+
+    CDataStream bare(SER_NETWORK, PROTOCOL_VERSION);
+    bare << eTX.mtx;
+
+    CDataStream extended(SER_NETWORK, PROTOCOL_VERSION);
+    extended << eTX;
+
+    size_t expected = bare.size() + 6;
+    for (const size_t scriptSize : scriptSizes) {
+        expected += 8 + CompactSizeWidth(scriptSize) + scriptSize;
+    }
+
+    BOOST_CHECK_EQUAL(expected, extended.size());
+}
+
 BOOST_AUTO_TEST_SUITE_END()

@@ -38,6 +38,8 @@ endif()
 ## Test binding modules
 if(BUILD_MODULE_GOLANG AND NOT MSVC)
   add_subdirectory(golang)
+  ## The cgo shim itself, exercised natively against the static-GoBDK target
+  add_subdirectory(gobdkshim)
 else()
   message(STATUS "Testing Golang module has been disabled")
 endif()
