@@ -704,4 +704,91 @@ BOOST_AUTO_TEST_CASE(check_fee_free_consolidation_bypass)
         "qualifying as a dust-return donation.");
 }
 
+// The ABI error domain belongs to the cgo shim, not to the core validator. An empty
+// extended transaction is a parse failure and must keep returning the exception
+// domain: nothing moved out of TX_ERR_DOMAIN_EXCEPTION when TX_ERR_DOMAIN_ABI was
+// added.
+BOOST_AUTO_TEST_CASE(empty_extended_tx_stays_in_the_exception_domain)
+{
+    const std::span<const uint8_t> emptyEtx;
+    const std::span<const int32_t> utxo;
+
+    bsv::CTxValidator se("main");
+    const auto status = se.ValidateTransaction(emptyEtx, utxo, /*blockHeight=*/632099, /*consensus=*/true);
+    BOOST_CHECK_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_EXCEPTION), status.domain);
+}
+
+// Builds the low-opcount spendable form that places bulk data in an unexecuted
+// conditional: OP_FALSE OP_IF OP_PUSHDATA4 <payload> OP_ENDIF OP_TRUE, sized to
+// exactly totalSize bytes. The push is written by hand because the payload size, not
+// the encoding, is what the test is about.
+static CScript MakeConditionalDataScript(size_t totalSize)
+{
+    constexpr size_t wrapper = 9; // OP_FALSE OP_IF OP_PUSHDATA4 <4 length bytes> ... OP_ENDIF OP_TRUE
+    const size_t payload = totalSize - wrapper;
+
+    std::vector<uint8_t> raw;
+    raw.reserve(totalSize);
+    raw.push_back(OP_FALSE);
+    raw.push_back(OP_IF);
+    raw.push_back(OP_PUSHDATA4);
+    for (size_t i = 0; i < 4; ++i) {
+        raw.push_back(static_cast<uint8_t>((payload >> (8 * i)) & 0xff));
+    }
+    raw.insert(raw.end(), payload, uint8_t{ 0x01 });
+    raw.push_back(OP_ENDIF);
+    raw.push_back(OP_TRUE);
+
+    return CScript(raw.begin(), raw.end());
+}
+
+// A transaction whose bare size is a couple of hundred bytes but whose aggregate
+// previous locking scripts are megabytes — the shape the issue describes, bounded so
+// the test costs about 8 MB rather than 2.16 GB. The validator must reach a verdict in
+// both modes: neither the exception domain nor the ABI domain may appear.
+BOOST_AUTO_TEST_CASE(small_bare_large_aggregate_previous_scripts)
+{
+    // Sizes crossing the 0xfc / 0xfd / 0xffff / 0x10000 CompactSize thresholds, plus
+    // one multi-megabyte script.
+    const std::array<size_t, 5> scriptSizes{ 252, 253, 0xffff, 0x10000, 8000000 };
+    constexpr int32_t blockHeight = 800000;  // post-Genesis on mainnet
+    constexpr int32_t utxoHeight = 700000;
+
+    bsv::CMutableTransactionExtended eTx;
+    eTx.mtx.nVersion = 2;
+    eTx.mtx.nLockTime = 0;
+    eTx.mtx.vin.resize(scriptSizes.size());
+    eTx.vutxo.resize(scriptSizes.size());
+
+    for (size_t i = 0; i < scriptSizes.size(); ++i) {
+        eTx.mtx.vin[i].prevout = COutPoint(uint256S("01"), static_cast<uint32_t>(i));
+        eTx.mtx.vin[i].nSequence = 0xffffffff;
+        eTx.vutxo[i].nValue = Amount(1000);
+        eTx.vutxo[i].scriptPubKey = MakeConditionalDataScript(scriptSizes[i]);
+        BOOST_REQUIRE_EQUAL(scriptSizes[i], static_cast<size_t>(eTx.vutxo[i].scriptPubKey.size()));
+    }
+
+    eTx.mtx.vout.resize(1);
+    eTx.mtx.vout[0].nValue = Amount(1);
+    eTx.mtx.vout[0].scriptPubKey = CScript() << OP_TRUE;
+
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << eTx;
+    const std::vector<uint8_t> etxBin(ss.begin(), ss.end());
+    const std::span<const uint8_t> etx(etxBin.data(), etxBin.size());
+
+    const std::vector<int32_t> utxoHeights(scriptSizes.size(), utxoHeight);
+    const std::span<const int32_t> utxo(utxoHeights);
+
+    bsv::CTxValidator se("main");
+    for (const bool consensus : { true, false }) {
+        const auto status = se.ValidateTransaction(etx, utxo, blockHeight, consensus);
+        BOOST_CHECK_MESSAGE(status.domain != static_cast<int32_t>(TX_ERR_DOMAIN_EXCEPTION),
+            "consensus=" << consensus << ": a large aggregate of previous scripts must give a "
+            "verdict, not the exception domain");
+        BOOST_CHECK_MESSAGE(status.domain != static_cast<int32_t>(TX_ERR_DOMAIN_ABI),
+            "consensus=" << consensus << ": the ABI domain must never appear in the core validator");
+    }
+}
+
 BOOST_AUTO_TEST_SUITE_END()
