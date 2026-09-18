@@ -166,15 +166,14 @@ func (se *TxValidator) ValidateTransaction(extendedTX []byte, utxoHeights []int3
 
 ### GoBDK prebuilt static libraries
 
-To make `go get` "just work" without a local C++ build, `module/gobdk/bdkcgo/` ships **four**
+To make `go get` "just work" without a local C++ build, `module/gobdk/bdkcgo/` ships **three**
 committed static archives — one per supported platform/arch:
 
 - `libGoBDK_linux_x86_64.a`
 - `libGoBDK_linux_aarch64.a`
 - `libGoBDK_darwin_arm64.a`
-- `libGoBDK_darwin_x86_64.a`
 
-The native CI matrix refreshes Linux x86_64, Linux aarch64 and macOS arm64; the committed macOS x86_64 archive is not part of that matrix.
+The native CI matrix refreshes all three: Linux x86_64, Linux aarch64 and macOS arm64. The GoBDK module no longer ships a macOS Intel (x86_64) archive.
 
 There is **no Windows archive** (Windows is experimental/unsupported — see
 [build.md](build.md#windows-experimental-unsupported)).

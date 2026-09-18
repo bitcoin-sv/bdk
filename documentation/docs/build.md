@@ -369,7 +369,7 @@ this priority order:
 
 The Golang binding is built with cgo and links against a prebuilt static library
 (`libGoBDK_<os>_<arch>.a`) committed under `module/gobdk/bdkcgo/` for every supported
-platform/arch — Linux (`x86_64`, `aarch64`) and macOS (`arm64`, `x86_64`). Because those archives
+platform/arch — Linux (`x86_64`, `aarch64`) and macOS (`arm64`). Because those archives
 are checked into git, downstream consumers can simply `go get` the module without building C++
 themselves. See [Architecture overview](architecture.md#gobdk-prebuilt-static-libraries) for how
 those archives are regenerated.
