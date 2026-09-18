@@ -348,7 +348,7 @@ jobs:
       - name: Stage and commit the gobdk static libraries
         if: github.event.inputs.commit-gobdk-archives == 'true' && steps.markers.outputs.gobdk_marker != 'true'
         run: |
-          # The glob always matches the four tracked archives, whatever was downloaded
+          # The glob always matches the three tracked archives, whatever was downloaded
           # (a `git add` glob matching nothing is an error).
           git add ./module/gobdk/bdkcgo/libGoBDK_*_*.a
           git status

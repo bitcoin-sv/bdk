@@ -144,10 +144,9 @@ if(UNIX)
   # merge all object files to a single archive file #######################
   # OsArch variable is used to define the static libraries used in CGo build
   # By default, it reads from the system by $CMAKE_SYSTEM_NAME and $CMAKE_SYSTEM_PROCESSOR
-  # Though in special case (e.g macos arm but forced to build x86_64), user might need to
-  # be able to customize this os_arch. In that case, add the -DCUSTOM_GOBDK_OS_ARCH= to define it.
-  # For example, on macos-15, add to cmake command -DCUSTOM_GOBDK_OS_ARCH=darwin_x86_64 to build
-  # x86_64 file
+  # Though in special cross-build cases, the user might need to customize this os_arch rather
+  # than let it be read from the host. In that case, add -DCUSTOM_GOBDK_OS_ARCH= to the cmake
+  # command to name the target explicitly (for example -DCUSTOM_GOBDK_OS_ARCH=linux_aarch64).
   if(DEFINED CUSTOM_GOBDK_OS_ARCH)
     set(OsArch "${CUSTOM_GOBDK_OS_ARCH}")
     message("OsArch=${CUSTOM_GOBDK_OS_ARCH} was used by custom value")
