@@ -94,8 +94,10 @@ function(bdkSetMinimumListBSVSource)############################################
   set(_minimal_hdr_files
       "src/amount.h"  ##  Used by [amount.cpp], [base58.cpp], [block.cpp], [chainparams.cpp], [config.cpp], [core_read.cpp], [core_write.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [merkle.cpp], [scriptcache.cpp], [sigcache.cpp], [standard.cpp], [transaction.cpp], [utilmoneystr.cpp]
       "src/arith_uint256.h"  ##  Used by [config.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [key.cpp], [scriptcache.cpp]
+      "src/attributes.h"  ##  Used by [sha256d64_shani.cpp]
       "src/base58.h"  ##  Used by [base58.cpp], [dstencode.cpp], [interpreter.cpp]
       "src/big_int.h"  ##  Used by [big_int.cpp], [block.cpp], [chainparams.cpp], [core_write.cpp], [interpreter.cpp], [script.cpp], [script_num.cpp], [standard.cpp]
+      "src/binary_counter.h"  ##  Used by [merkle.cpp]
       "src/chainparams.h"  ##  Used by [base58.cpp], [chainparams.cpp], [config.cpp], [dstencode.cpp], [interpreter.cpp]
       "src/chainparamsbase.h"  ##  Used by [base58.cpp], [chainparams.cpp], [chainparamsbase.cpp], [config.cpp], [dstencode.cpp], [interpreter.cpp], [util.cpp]
       "src/configscriptpolicy.h"  ##  Used by [config.cpp], [dstencode.cpp], [interpreter.cpp]
@@ -109,6 +111,11 @@ function(bdkSetMinimumListBSVSource)############################################
       "src/crypto/ripemd160.h"  ##  Used by [base58.cpp], [block.cpp], [config.cpp], [core_write.cpp], [dstencode.cpp], [fRequireStandard.cpp], [hash.cpp], [interpreter.cpp], [key.cpp], [limitedstack.cpp], [merkle.cpp], [pubkey.cpp], [ripemd160.cpp], [scriptcache.cpp], [sigcache.cpp], [standard.cpp], [transaction.cpp]
       "src/crypto/sha1.h"  ##  Used by [interpreter.cpp], [limitedstack.cpp], [sha1.cpp]
       "src/crypto/sha256.h"  ##  Used by [base58.cpp], [block.cpp], [config.cpp], [core_write.cpp], [dstencode.cpp], [fRequireStandard.cpp], [hash.cpp], [hmac_sha256.cpp], [interpreter.cpp], [key.cpp], [limitedstack.cpp], [merkle.cpp], [pubkey.cpp], [scriptcache.cpp], [sha256.cpp], [sigcache.cpp], [standard.cpp], [transaction.cpp]
+      "src/crypto/sha256_dispatch.h"  ##  Used by [merkle.cpp], [sha256.cpp], [sha256_dispatch.cpp]
+      "src/crypto/sha256_shani.h"  ##  Used by [sha256_dispatch.cpp], [sha256_shani_shim.cpp]
+      "src/crypto/sha256_stream_scalar.h"  ##  Used by [sha256_dispatch.cpp], [sha256_stream_scalar.cpp]
+      "src/crypto/sha256d64_scalar.h"  ##  Used by [sha256_dispatch.cpp], [sha256d64_scalar.cpp]
+      "src/crypto/sha256d64_shani.h"  ##  Used by [sha256_dispatch.cpp], [sha256d64_shani_shim.cpp]
       "src/crypto/sha512.h"  ##  Used by [hash.cpp], [hmac_sha512.cpp], [key.cpp], [random.cpp], [sha512.cpp]
       "src/cuckoocache.h"  ##  Used by [scriptcache.cpp], [sigcache.cpp]
       "src/enum_cast.h"  ##  Used by [config.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [scriptcache.cpp]
@@ -171,7 +178,13 @@ function(bdkSetMinimumListBSVSource)############################################
       "src/crypto/ripemd160.cpp"
       "src/crypto/sha1.cpp"
       "src/crypto/sha256.cpp"
+      "src/crypto/sha256_dispatch.cpp"
+      "src/crypto/sha256_shani_shim.cpp"
       "src/crypto/sha256_sse4.cpp"
+      "src/crypto/sha256_stream_scalar.cpp"
+      "src/crypto/sha256d64_scalar.cpp"
+      "src/crypto/sha256d64_shani.cpp"  ##  SHA-NI flags set per source in bdk_add_core_library
+      "src/crypto/sha256d64_shani_shim.cpp"
       "src/crypto/sha512.cpp"
       "src/hash.cpp"
       "src/key.cpp"
@@ -223,6 +236,7 @@ function(bdkSetApplicationListBSVSource)########################################
     "src/consensus/validation.h"  ##  Used by [config.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [scriptcache.cpp]
     "src/core_io.h"  ##  Used by [assembler.cpp], [core_read.cpp], [core_write.cpp], [interpreter.cpp]
     "src/core_memusage.h"  ##  Used by [config.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [scriptcache.cpp]
+    "src/dbwrapper_limits.h"  ##  Used by [config.cpp]
     "src/dstencode.h"  ##  Used by [core_write.cpp], [dstencode.cpp]
     "src/fs.h"  ##  Used by [chainparams.cpp], [chainparamsbase.cpp], [config.cpp], [core_read.cpp], [core_write.cpp], [dstencode.cpp], [fRequireStandard.cpp], [fs.cpp], [interpreter.cpp], [random.cpp], [scriptcache.cpp], [sigcache.cpp], [standard.cpp], [util.cpp]
     "src/keystore.h"  ##  Manual fix the build
@@ -236,6 +250,7 @@ function(bdkSetApplicationListBSVSource)########################################
     "src/net/netaddress.h"  ##  Used by [base58.cpp], [chainparams.cpp], [config.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [scriptcache.cpp]
     "src/net/node_stats.h"  ##  Used by [config.cpp], [dstencode.cpp], [interpreter.cpp]
     "src/net/send_queue_bytes.h"  ##  Used by [config.cpp], [dstencode.cpp], [interpreter.cpp]
+    "src/net/socket_wait_set.h"  ##  Used by [net.h], [stream.h]
     "src/net/stream.h"  ##  Used by [config.cpp], [dstencode.cpp], [interpreter.cpp]
     "src/orphan_txns.h"  ##  Used by [config.cpp], [dstencode.cpp], [interpreter.cpp]
     "src/rpc/jsonwriter.h"  ##  Used by [assembler.cpp], [core_read.cpp], [core_write.cpp], [interpreter.cpp]

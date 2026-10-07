@@ -21,6 +21,7 @@
 
 #include "config.h"
 #include "core_io.h"
+#include "crypto/sha256_dispatch.h"
 #include "key.h"
 #include "keystore.h"
 #include "overload.h"
@@ -71,7 +72,7 @@ struct BasicTestingSetup {
     ConfigInit& testConfig;
     BasicTestingSetup():testConfig(GlobalConfig::GetModifiableGlobalConfig())
     {
-        SHA256AutoDetect();
+        sha256_dispatch::AutoDetect();
         RandomInit();
         SetupEnvironment();
         SetupNetworking();
@@ -6670,6 +6671,23 @@ BOOST_AUTO_TEST_CASE(verify_script_minimal_if)
         BOOST_REQUIRE(status);
         BOOST_CHECK_EQUAL(exp_error, status.value());
     }
+}
+
+BOOST_AUTO_TEST_CASE(script_can_append_self)
+{
+    CScript s, d;
+
+    s = ScriptFromHex("00");
+    s += s;
+    d = ScriptFromHex("0000");
+    BOOST_CHECK(s == d);
+
+    // check doubling a script that's large enough to require reallocation
+    static const char hex[] = "04678afdb0fe5548271967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4cef38c4f35504e51ec112de5c384df7ba0b8d578a4c702b6bf11d5f";
+    s = CScript() << ParseHex(hex) << OP_CHECKSIG;
+    d = CScript() << ParseHex(hex) << OP_CHECKSIG << ParseHex(hex) << OP_CHECKSIG;
+    s += s;
+    BOOST_CHECK(s == d);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

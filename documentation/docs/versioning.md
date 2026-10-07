@@ -28,7 +28,7 @@ BDK carries several distinct version numbers:
 ### Relationship to the bitcoin-sv version
 
 BDK is built against a **pinned bitcoin-sv commit** — CI pins
-`879fc8b42168dd0e608dafd51b39c6dabad37d4d` (`build_bdk.yaml`, `DEFAULT_BITCOIN_SV_COMMIT`; see
+`6504a3aff65ba97c0f6c80962b033e35ecbfed4b` (`build_bdk.yaml`, `DEFAULT_BITCOIN_SV_COMMIT`; see
 [Dependencies & pinned versions](build.md#dependencies-pinned-versions)). That commit does **not**
 mechanically determine the BDK version number. CMake writes the selected checkout's metadata
 into generated `BDKVersion.cpp`. The Git hash is abbreviated and gains a `_dirty` suffix

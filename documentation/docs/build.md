@@ -31,7 +31,7 @@ a build. A newer version is not automatically a tested version.
 
 | Input | Repository selection | Evidence |
 |-------|----------------------|----------|
-| bitcoin-sv | `879fc8b42168dd0e608dafd51b39c6dabad37d4d` | `build_bdk.yaml`, `DEFAULT_BITCOIN_SV_COMMIT` |
+| bitcoin-sv | `6504a3aff65ba97c0f6c80962b033e35ecbfed4b` | `build_bdk.yaml`, `DEFAULT_BITCOIN_SV_COMMIT` |
 | Boost | 1.85.0 | `prebuild_dependancies.yaml`, `BOOST_VERSION` |
 | OpenSSL, native only | 3.4.0 | `prebuild_dependancies.yaml`, `OPENSSL_VERSION` |
 | Go | CI requests 1.24.9 except on ubuntu-22.04, where it assumes the runner supplies it; `go.mod` declares 1.24.0 | `build_bdk.yaml`, `Set up Go 1.24.9`; `module/gobdk/go.mod` |
@@ -349,7 +349,7 @@ this priority order:
 
 > ⚠️ The last-resort auto-clone uses **SSH** (`git@github.com:bitcoin-sv/bitcoin-sv.git`) and checks out the remote default branch at clone time — there is **no commit pin**
 > (`FindBSVSourceHelper.cmake:69-75`). This silently diverges from CI, which clones over **HTTPS**
-> and checks out the pinned commit `879fc8b42168dd0e608dafd51b39c6dabad37d4d`
+> and checks out the pinned commit `6504a3aff65ba97c0f6c80962b033e35ecbfed4b`
 > (`build_bdk.yaml`, `Check out bitcoin-sv`).
 >
 > **Recommendation:** always supply your own `bitcoin-sv` checkout pinned to that commit and point
@@ -359,7 +359,7 @@ this priority order:
 >
 > ```bash
 > git clone https://github.com/bitcoin-sv/bitcoin-sv.git ../bitcoin-sv
-> git -C ../bitcoin-sv checkout --detach 879fc8b42168dd0e608dafd51b39c6dabad37d4d
+> git -C ../bitcoin-sv checkout --detach 6504a3aff65ba97c0f6c80962b033e35ecbfed4b
 > export BSV_ROOT="$(cd ../bitcoin-sv && pwd)"
 > ```
 > On a correct configuration CMake prints `Found Bitcoin SV source code at BDK_BSV_ROOT_DIR=[…]`
