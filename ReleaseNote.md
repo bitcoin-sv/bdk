@@ -26,6 +26,11 @@ installed alongside the package (`CMakeLists.txt`).
   now throws `scriptnum_overflow_error` for non-big-int numbers that overflow `int64_t`,
   `OP_SPLIT` rejects split positions above `INT32_MAX`, and `CScriptBase` grows from 28
   to 32 inline bytes. `sizeof(CScript)` stays 40 on 64-bit and wasm32.
+- **Builds with clang before 21.** bitcoin-sv 1.2.3's thread-safety annotations put parameter
+  packs inside attributes, which clang 19 and 20 and AppleClang 17 reject. CMake now probes
+  for this and, when the compiler fails, force-includes a generated header that expands the
+  annotations to nothing, as upstream already does for non-clang compilers. The annotations
+  only feed `-Wthread-safety`, so generated code is unchanged.
 - **typesbdk build/test split, and the WASM artifacts are now refreshed on demand.** The node
   test, benchmark and vector files moved out of `module/typesbdk/wasm/` into the new
   **`test/types/`**, which now owns every wasm CTest registration (`test/golang` and `test/rust`
