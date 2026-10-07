@@ -111,11 +111,15 @@ function(bdkCalculateBSVVersion clientversionFile)##############################
 endfunction()
 
 function(bdkSetBuildVersion)
-  if(BDK_SET_BUILD_VERSION_DONE)
+  ## Recompute on every configure. A cached guard froze the version strings and
+  ## the git metadata at a build dir's first configure; a GLOBAL property resets
+  ## each configure and still stops a second call within one.
+  get_property(_build_version_done GLOBAL PROPERTY BDK_SET_BUILD_VERSION_DONE)
+  if(_build_version_done)
     return()
-  else()
-    set(BDK_SET_BUILD_VERSION_DONE TRUE CACHE BOOL "Protect to call twices")
   endif()
+  set_property(GLOBAL PROPERTY BDK_SET_BUILD_VERSION_DONE TRUE)
+  unset(BDK_SET_BUILD_VERSION_DONE CACHE)## left behind by configures that used the cached guard
 
   if(NOT DEFINED BDK_VERSION_MAJOR)
     set(BDK_VERSION_MAJOR "1" CACHE INTERNAL "framework major version")
