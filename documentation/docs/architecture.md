@@ -221,7 +221,7 @@ The bot commits with `[bot] [GoBDKUpdate] …` and `[bot] [WasmBDKUpdate] …` s
 `module/typesbdk` provides the JavaScript/WebAssembly binding for `CTxValidator::VerifyScript`.
 
 The WASM verifier requires aggressive size optimization to be deployable in browsers and SDKs:
-no OpenSSL (the build excludes `big_int.cpp`, `random.cpp`, and `support/cleanse.cpp`, adds a Boost-based bigint backend and a WASM memory-cleanse implementation), runtime-reconstructed secp256k1
+no OpenSSL (the build excludes `big_int.cpp`, `random.cpp`, and `support/cleanse.cpp`, adds a Boost-based bigint backend and a WASM memory-cleanse implementation), `crypto/sha256.cpp` compiled outside LTO so `CSHA256::Write` is not inlined into every hashing call site, runtime-reconstructed secp256k1
 verification tables, and a minimal runtime. Threading those deviations through the shared build
 would deform the regular build architecture — core is the upstream-tracking trunk that
 gobdk/rustbdk link, and its build must stay canonical. The WASM build is therefore a fully

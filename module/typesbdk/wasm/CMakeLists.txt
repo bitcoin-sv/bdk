@@ -93,6 +93,17 @@ bdk_add_core_library(bdk_core_wasm
     "${CMAKE_CURRENT_SOURCE_DIR}/memory_cleanse_wasm.cpp"
   COMPILE_DEFINITIONS BOOST_HAS_PTHREADS DISABLE_LOGGING)
 
+# Keep CSHA256::Write out of line. Since bitcoin-sv 1.2.3 it calls the block
+# transform through the sha256_dispatch::stream function pointer, which makes it
+# cheap enough for LTO to inline into every CHashWriter call site (sighash
+# serialization, CheckSig), adding about 6 KB of code and pushing the bundles
+# over the size gate. Compiling sha256.cpp outside LTO restores the 1.2.2 call
+# structure: the bundles end up below their 1.2.2 size and test/types/benchmark.mjs
+# is unchanged within noise. The source property is directory-scoped and the
+# recipe built bdk_core_wasm in this directory, so it applies to that variant only.
+set_source_files_properties("${BDK_BSV_ROOT_DIR}/src/crypto/sha256.cpp"
+  PROPERTIES COMPILE_OPTIONS "-fno-lto")
+
 # Reconstruct the large fixed-base verification table at runtime while
 # preserving the full W15 hot path and the compact signing table. The recipe
 # instantiated secp256k1 from this directory's scope, so the module rewires
