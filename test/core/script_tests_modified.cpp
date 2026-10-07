@@ -21,7 +21,6 @@
 
 #include "config.h"
 #include "core_io.h"
-#include "crypto/sha256_dispatch.h"
 #include "key.h"
 #include "keystore.h"
 #include "overload.h"
@@ -72,7 +71,8 @@ struct BasicTestingSetup {
     ConfigInit& testConfig;
     BasicTestingSetup():testConfig(GlobalConfig::GetModifiableGlobalConfig())
     {
-        sha256_dispatch::AutoDetect();
+        // No sha256_dispatch::AutoDetect(): the bindings never call it, so they run
+        // the scalar transform, and this suite must cover the path they ship.
         RandomInit();
         SetupEnvironment();
         SetupNetworking();
