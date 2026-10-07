@@ -11,6 +11,16 @@ installed alongside the package (`CMakeLists.txt`).
 
 ## Recent changes
 
+- **Built against bitcoin-sv 1.2.3** (`6504a3aff65ba97c0f6c80962b033e35ecbfed4b`, tag `v1.2.3`),
+  up from 1.2.2. `BSV_CLIENT_VERSION_REVISION` is now `3`. The curated source list gains the
+  new SHA-256 dispatcher (`src/crypto/sha256_dispatch.cpp` plus its scalar and SHA-NI
+  transforms and shims). On x86_64 `sha256d64_shani.cpp` is compiled with
+  `-msha -msse4.1 -mssse3` and `ENABLE_X86_SHANI`, as upstream does; elsewhere it compiles
+  empty. BDK does not call `sha256_dispatch::AutoDetect()`, so hashing stays on the scalar
+  path, as it did before. Behaviour changes from upstream that reach BDK: `CScriptNum`
+  now throws `scriptnum_overflow_error` for non-big-int numbers that overflow `int64_t`,
+  `OP_SPLIT` rejects split positions above `INT32_MAX`, and `CScriptBase` grows from 28
+  to 32 inline bytes. `sizeof(CScript)` stays 40 on 64-bit and wasm32.
 - **typesbdk build/test split, and the WASM artifacts are now refreshed on demand.** The node
   test, benchmark and vector files moved out of `module/typesbdk/wasm/` into the new
   **`test/types/`**, which now owns every wasm CTest registration (`test/golang` and `test/rust`

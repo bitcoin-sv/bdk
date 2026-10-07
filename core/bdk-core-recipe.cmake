@@ -119,6 +119,14 @@ function(bdk_add_core_library target)
     set_source_files_properties("${BDK_BSV_ROOT_DIR}/src/script/sign.cpp"
       PROPERTIES COMPILE_FLAGS "-Wno-stringop-overread")
   endif()
+  ## SHA-NI transform, mirroring bitcoin-sv's src/crypto/CMakeLists.txt. On
+  ## x86_64 the sha256 dispatcher links the shims, which call into this TU, so it
+  ## must be built with the SHA-NI flags. Elsewhere it compiles empty.
+  if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$")
+    set_source_files_properties("${BDK_BSV_ROOT_DIR}/src/crypto/sha256d64_shani.cpp"
+      PROPERTIES COMPILE_OPTIONS "-msha;-msse4.1;-mssse3;-Wno-cast-align"
+                 COMPILE_DEFINITIONS "ENABLE_X86_SHANI")
+  endif()
   if(WIN32)
     target_link_libraries(${target} PRIVATE Crypt32.lib Ws2_32)
   endif()

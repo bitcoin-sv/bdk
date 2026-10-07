@@ -20,8 +20,8 @@ Block-context script checks use `consensus=true`. Peer/mempool checks use `conse
 
 The two contexts use different base-flag calculations:
 
-- [GetScriptVerifyFlags](https://github.com/bitcoin-sv/bitcoin-sv/blob/879fc8b42168dd0e608dafd51b39c6dabad37d4d/src/verify_script_flags.h#L9) computes base flags for peer/mempool validation
-- [GetBlockScriptFlags](https://github.com/bitcoin-sv/bitcoin-sv/blob/879fc8b42168dd0e608dafd51b39c6dabad37d4d/src/verify_script_flags.h#L19) computes base flags for block validation
+- [GetScriptVerifyFlags](https://github.com/bitcoin-sv/bitcoin-sv/blob/6504a3aff65ba97c0f6c80962b033e35ecbfed4b/src/verify_script_flags.h#L9) computes base flags for peer/mempool validation
+- [GetBlockScriptFlags](https://github.com/bitcoin-sv/bitcoin-sv/blob/6504a3aff65ba97c0f6c80962b033e35ecbfed4b/src/verify_script_flags.h#L19) computes base flags for block validation
 
 ## Flag calculation
 
@@ -262,7 +262,7 @@ transaction checks rather than reproducing this entire node control flow.
 ## Source map for script validation
 
 The following locations refer to bitcoin-sv commit
-`879fc8b42168dd0e608dafd51b39c6dabad37d4d`:
+`6504a3aff65ba97c0f6c80962b033e35ecbfed4b`:
 
 | Location | Role |
 |----------|------|
