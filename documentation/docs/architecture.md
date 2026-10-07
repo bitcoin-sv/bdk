@@ -74,10 +74,10 @@ compilation targets differ:
 
 | Set | CMake function | Listed `.cpp` paths | Consumers |
 |-----|----------------|--------------------:|-----------|
-| Minimal | `bdkSetMinimumListBSVSource` | 37 | Canonical `bdk_core`; the WASM variant applies explicit exclusions |
+| Minimal | `bdkSetMinimumListBSVSource` | 43 | Canonical `bdk_core`; the WASM variant applies explicit exclusions |
 | Application | `bdkSetApplicationListBSVSource` | 15 | C++ examples, GoBDK cgo library, Rust `bdkffi` library, and core tests |
 
-The lists contain 52 entries but 51 distinct paths: `src/support/cleanse.cpp`
+The lists contain 58 entries but 57 distinct paths: `src/support/cleanse.cpp`
 appears in both. These counts describe the lists, not every translation unit in
 the complete build, which also includes BDK sources and bundled libraries.
 
