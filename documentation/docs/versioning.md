@@ -39,7 +39,7 @@ in [build.md](build.md) accordingly.
 
 ## Versioning policy (semver)
 
-The following [semantic-versioning](https://semver.org/) rules describe the project's policy. Only the maximum rule is enforced by the build: configuring fails if the Go or Rust version derived from the overall version would exceed it. The bump rules are applied by hand.
+The following [semantic-versioning](https://semver.org/) rules describe the project's policy. They are applied by hand. The Go and Rust versions are derived from the overall version with zero increments, so today they always equal it. The configure-time check that the overall version is the maximum can only fail if someone gives a binding a non-zero increment.
 
 BDK consists of a "core" (code taken from SV plus common code shared by bindings) and the language
 bindings. Each binding (module) and the core may be assigned a semver number, and the SDK as a whole
@@ -52,7 +52,7 @@ numbers to 0. The rules:
 - If core's version is bumped, the language bindings are also bumped (to avoid detailed dependency
   analysis, a binding may be bumped even when a core change does not directly affect it).
 - Only a single "most significant" bump is ever applied to the SDK.
-- The SDK version is greater than or equal to every component version. CMake checks this at configure time.
+- The SDK version is greater than or equal to every component version. Zero-increment derivation keeps this true; the configure-time check catches a non-zero increment.
 
 Internal builds against development branches may append `-develop` or `-RC<n>` to the version, e.g.
 `1.5.6-RC2` is the 2nd release candidate for `1.5.6`.
