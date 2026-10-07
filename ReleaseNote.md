@@ -1,6 +1,6 @@
 # Release Notes
 
-**Current version: BDK 1.2.2** (`BDK_VERSION_MAJOR/MINOR/PATCH` in `CMakeLists.txt`).
+**Current version: BDK 1.3.0** (`BDK_VERSION_MAJOR/MINOR/PATCH` in `CMakeLists.txt`).
 
 BDK is built against a pinned `bitcoin-sv` commit; the exact source commit and toolchain versions
 are recorded in [documentation/docs/build.md](documentation/docs/build.md) and captured into the
@@ -11,6 +11,11 @@ installed alongside the package (`CMakeLists.txt`).
 
 ## Recent changes
 
+- **The Go binding version equals the BDK version again.** The `+2` patch offset is gone, so
+  this release's Go module is `1.3.0` rather than `1.3.2`, and it sorts after the last published
+  `module/gobdk/v1.2.4`. The configure-time check that the overall version is the maximum of
+  all component versions never fired: it compared dotted versions with the numeric `LESS`. It
+  now uses `VERSION_LESS`, fails the configure, and covers the Rust C ABI version as well.
 - **Built against bitcoin-sv 1.2.3** (`6504a3aff65ba97c0f6c80962b033e35ecbfed4b`, tag `v1.2.3`),
   up from 1.2.2. `BSV_CLIENT_VERSION_REVISION` is now `3`. The curated source list gains the
   new SHA-256 dispatcher (`src/crypto/sha256_dispatch.cpp` plus its scalar and SHA-NI
