@@ -31,6 +31,10 @@ installed alongside the package (`CMakeLists.txt`).
   for this and, when the compiler fails, force-includes a generated header that expands the
   annotations to nothing, as upstream already does for non-clang compilers. The annotations
   only feed `-Wthread-safety`, so generated code is unchanged.
+- **WASM bundles stay under the 300 KB ceiling.** bitcoin-sv 1.2.3 routes `CSHA256::Write`
+  through a function pointer, and LTO then inlined it into every hashing call site, adding about
+  6 KB. The wasm variant now compiles `crypto/sha256.cpp` outside LTO. `bdk-core` is 292,174
+  bytes (295,284 at 1.2.2), and `test/types/benchmark.mjs` is unchanged within noise.
 - **typesbdk build/test split, and the WASM artifacts are now refreshed on demand.** The node
   test, benchmark and vector files moved out of `module/typesbdk/wasm/` into the new
   **`test/types/`**, which now owns every wasm CTest registration (`test/golang` and `test/rust`
