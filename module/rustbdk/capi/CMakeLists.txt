@@ -25,6 +25,12 @@ createIncrementVersion(BDK_RUST_VERSION_MINOR ${BDK_VERSION_MINOR} 0 "BDK Rust m
 createIncrementVersion(BDK_RUST_VERSION_PATCH ${BDK_VERSION_PATCH} 0 "BDK Rust patch version")
 set(BDK_RUST_VERSION_STRING "${BDK_RUST_VERSION_MAJOR}.${BDK_RUST_VERSION_MINOR}.${BDK_RUST_VERSION_PATCH}")
 
+## Global version must be the maximum of all version numbers
+if(BDK_VERSION_STRING VERSION_LESS BDK_RUST_VERSION_STRING)
+  message(FATAL_ERROR "Bitcoin Development Kit global version must be the max of all version numbers: "
+                      "BDK_VERSION_STRING=${BDK_VERSION_STRING} while BDK_RUST_VERSION_STRING=${BDK_RUST_VERSION_STRING}")
+endif()
+
 set(BDK_VERSION_RUST_CPP_IN ${CMAKE_CURRENT_SOURCE_DIR}/src/version.cpp.in CACHE INTERNAL "Template file for Rust C ABI version")
 set(BDK_VERSION_RUST_CPP ${BDK_GENERATED_CPP_DIR}/rustbdk/capi/version.cpp CACHE INTERNAL "Source file for Rust C ABI version")
 get_filename_component(BDK_VERSION_RUST_CPP_DIR "${BDK_VERSION_RUST_CPP}" DIRECTORY)
