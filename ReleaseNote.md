@@ -16,10 +16,14 @@ installed alongside the package (`CMakeLists.txt`).
   `module/gobdk/v1.2.4`. The configure-time check that the overall version is the maximum of
   all component versions never fired: it compared dotted versions with the numeric `LESS`. It
   now uses `VERSION_LESS`, fails the configure, and covers the Rust C ABI version as well.
-- **Build metadata is recomputed on every configure.** The BDK and bitcoin-sv version strings,
-  the git commit details and the build time used to be frozen at a build directory's first
-  configure by a cached guard, so a reused directory reported stale versions after a bump or a
-  bitcoin-sv checkout change. A reused directory now picks up the current values.
+- **Build metadata stays current.** The BDK and bitcoin-sv version strings and git details used
+  to be frozen at a build directory's first configure by a cached guard, so a reused directory
+  reported stale versions after a bump or a bitcoin-sv checkout change. They are now recomputed
+  on every configure, and the configure re-runs by itself when the BDK or bitcoin-sv checkout
+  moves or bitcoin-sv's `clientversion.h` changes; uncommitted edits do not trigger it.
+  `BDK_BUILD_DATETIME_UTC` is now the last commit's time in UTC, or `SOURCE_DATE_EPOCH` when
+  set, instead of the configure time (which was local time despite the name), so a cmake rerun
+  with nothing changed rebuilds nothing.
 - **Built against bitcoin-sv 1.2.3** (`6504a3aff65ba97c0f6c80962b033e35ecbfed4b`, tag `v1.2.3`),
   up from 1.2.2. `BSV_CLIENT_VERSION_REVISION` is now `3`. The curated source list gains the
   new SHA-256 dispatcher (`src/crypto/sha256_dispatch.cpp` plus its scalar and SHA-NI

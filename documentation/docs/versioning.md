@@ -23,7 +23,11 @@ BDK carries several distinct version numbers:
   re-exported in Go through `module/gobdk/version.go` — `BSV_VERSION_STRING()`,
   `BSV_GIT_COMMIT_HASH()`, `BSV_GIT_COMMIT_TAG_OR_BRANCH()`, `BSV_GIT_COMMIT_DATETIME()`, plus the
   BDK source's own `SOURCE_GIT_COMMIT_HASH()` / `SOURCE_GIT_COMMIT_DATETIME()` and
-  `BDK_BUILD_DATETIME_UTC()`.
+  `BDK_BUILD_DATETIME_UTC()`. These values are recomputed on every configure, and the configure
+  re-runs by itself when the BDK or BSV checkout moves (its `HEAD` or branch ref) or BSV's
+  `clientversion.h` changes; uncommitted edits do not trigger it. `BDK_BUILD_DATETIME_UTC()` is
+  the last BDK commit's time in UTC, or `SOURCE_DATE_EPOCH` when the environment sets it, so the
+  same commit always reports the same value.
 
 ### Relationship to the bitcoin-sv version
 

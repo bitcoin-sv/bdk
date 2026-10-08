@@ -425,12 +425,84 @@ function(bdkGetGitCommitDateTime)
     set(${result} ${_Source_commit_datetime} PARENT_SCOPE)
 endfunction()############################################################################
 
-#### Get date time of the current moment
+#### Get the build date time in UTC, reproducibly: SOURCE_DATE_EPOCH when the
+#### environment sets it, otherwise the time of the last commit in ${CMAKE_SOURCE_DIR}.
+#### Stamping the configure time instead would rewrite the generated version sources,
+#### and rebuild everything that depends on them, on every cmake rerun. Falls back to
+#### the current time only when there is no git metadata.
 #### Usage :
 ####     bdkGetBuildDateTime(myVar)
 function(bdkGetBuildDateTime result)
-    string(TIMESTAMP _build_datetime_UTD "%d-%m-%Y %H:%M:%S")
-    set(${result} ${_build_datetime_UTD} PARENT_SCOPE)
+    if(NOT DEFINED ENV{SOURCE_DATE_EPOCH})
+      execute_process(
+        COMMAND git log -1 --format=%ct
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        OUTPUT_VARIABLE _commit_epoch
+        RESULT_VARIABLE _git_result
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+      )
+      if(_git_result EQUAL 0 AND _commit_epoch MATCHES "^[0-9]+$")
+        set(ENV{SOURCE_DATE_EPOCH} ${_commit_epoch})   ## string(TIMESTAMP) honours it
+        set(_unset_epoch TRUE)
+      endif()
+    endif()
+    string(TIMESTAMP _build_datetime_UTC "%d-%m-%Y %H:%M:%S" UTC)
+    if(_unset_epoch)
+      unset(ENV{SOURCE_DATE_EPOCH})
+    endif()
+    set(${result} ${_build_datetime_UTC} PARENT_SCOPE)
+endfunction()############################################################################
+
+#### Re-run the configure when a git checkout moves: its HEAD, and the branch ref it
+#### points to (plus packed-refs, where git keeps refs it has packed). Only existing
+#### files are added, since a missing configure dependency breaks the Makefile
+#### generator. A tree without git metadata adds nothing.
+#### Usage :
+####     bdkConfigureDependsOnGitHead("${SOME_REPO_DIR}")
+function(bdkConfigureDependsOnGitHead repo_dir)
+    execute_process(
+      COMMAND git rev-parse --git-path HEAD
+      WORKING_DIRECTORY ${repo_dir}
+      OUTPUT_VARIABLE _head_file
+      RESULT_VARIABLE _git_result
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      ERROR_QUIET
+    )
+    if(NOT _git_result EQUAL 0)
+      return()
+    endif()
+    set(_files "${_head_file}")
+
+    execute_process(
+      COMMAND git symbolic-ref -q HEAD
+      WORKING_DIRECTORY ${repo_dir}
+      OUTPUT_VARIABLE _head_ref
+      RESULT_VARIABLE _symref_result
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      ERROR_QUIET
+    )
+    if(_symref_result EQUAL 0)  ## on a branch, not detached
+      foreach(_path "${_head_ref}" packed-refs)
+        execute_process(
+          COMMAND git rev-parse --git-path ${_path}
+          WORKING_DIRECTORY ${repo_dir}
+          OUTPUT_VARIABLE _ref_file
+          OUTPUT_STRIP_TRAILING_WHITESPACE
+          ERROR_QUIET
+        )
+        list(APPEND _files "${_ref_file}")
+      endforeach()
+    endif()
+
+    foreach(_file ${_files})
+      if(NOT IS_ABSOLUTE "${_file}")
+        set(_file "${repo_dir}/${_file}")
+      endif()
+      if(EXISTS "${_file}")
+        set_property(DIRECTORY "${CMAKE_SOURCE_DIR}" APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_file}")
+      endif()
+    endforeach()
 endfunction()############################################################################
 
 #### Print a property value of a TARGET
