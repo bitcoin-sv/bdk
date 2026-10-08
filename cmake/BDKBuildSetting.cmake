@@ -169,6 +169,13 @@ function(bdkSetBuildVersion)
   set(BSV_GIT_COMMIT_DATETIME ${_BSV_GIT_COMMIT_DATETIME} CACHE INTERNAL "BSV commit datetime")
 
   bdkCalculateBSVVersion("${BDK_BSV_ROOT_DIR}/src/clientversion.h")
+
+  ## Re-run the configure, and so recompute all of the above, when either checkout
+  ## moves or the BSV version changes
+  bdkConfigureDependsOnGitHead("${CMAKE_SOURCE_DIR}")
+  bdkConfigureDependsOnGitHead("${BDK_BSV_ROOT_DIR}")
+  set_property(DIRECTORY "${CMAKE_SOURCE_DIR}" APPEND PROPERTY
+    CMAKE_CONFIGURE_DEPENDS "${BDK_BSV_ROOT_DIR}/src/clientversion.h")
 endfunction()
 
 #### bitcoin-sv's threadsafety.h puts parameter packs inside clang thread-safety
