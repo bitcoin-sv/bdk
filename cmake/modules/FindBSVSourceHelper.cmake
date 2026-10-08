@@ -94,7 +94,6 @@ function(bdkSetMinimumListBSVSource)############################################
   set(_minimal_hdr_files
       "src/amount.h"  ##  Used by [amount.cpp], [base58.cpp], [block.cpp], [chainparams.cpp], [config.cpp], [core_read.cpp], [core_write.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [merkle.cpp], [scriptcache.cpp], [sigcache.cpp], [standard.cpp], [transaction.cpp], [utilmoneystr.cpp]
       "src/arith_uint256.h"  ##  Used by [config.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [key.cpp], [scriptcache.cpp]
-      "src/attributes.h"  ##  Used by [sha256d64_shani.cpp]
       "src/base58.h"  ##  Used by [base58.cpp], [dstencode.cpp], [interpreter.cpp]
       "src/big_int.h"  ##  Used by [big_int.cpp], [block.cpp], [chainparams.cpp], [core_write.cpp], [interpreter.cpp], [script.cpp], [script_num.cpp], [standard.cpp]
       "src/binary_counter.h"  ##  Used by [merkle.cpp]
@@ -111,11 +110,9 @@ function(bdkSetMinimumListBSVSource)############################################
       "src/crypto/ripemd160.h"  ##  Used by [base58.cpp], [block.cpp], [config.cpp], [core_write.cpp], [dstencode.cpp], [fRequireStandard.cpp], [hash.cpp], [interpreter.cpp], [key.cpp], [limitedstack.cpp], [merkle.cpp], [pubkey.cpp], [ripemd160.cpp], [scriptcache.cpp], [sigcache.cpp], [standard.cpp], [transaction.cpp]
       "src/crypto/sha1.h"  ##  Used by [interpreter.cpp], [limitedstack.cpp], [sha1.cpp]
       "src/crypto/sha256.h"  ##  Used by [base58.cpp], [block.cpp], [config.cpp], [core_write.cpp], [dstencode.cpp], [fRequireStandard.cpp], [hash.cpp], [hmac_sha256.cpp], [interpreter.cpp], [key.cpp], [limitedstack.cpp], [merkle.cpp], [pubkey.cpp], [scriptcache.cpp], [sha256.cpp], [sigcache.cpp], [standard.cpp], [transaction.cpp]
-      "src/crypto/sha256_dispatch.h"  ##  Used by [merkle.cpp], [sha256.cpp], [sha256_dispatch.cpp]
-      "src/crypto/sha256_shani.h"  ##  Used by [sha256_dispatch.cpp], [sha256_shani_shim.cpp]
-      "src/crypto/sha256_stream_scalar.h"  ##  Used by [sha256_dispatch.cpp], [sha256_stream_scalar.cpp]
-      "src/crypto/sha256d64_scalar.h"  ##  Used by [sha256_dispatch.cpp], [sha256d64_scalar.cpp]
-      "src/crypto/sha256d64_shani.h"  ##  Used by [sha256_dispatch.cpp], [sha256d64_shani_shim.cpp]
+      "src/crypto/sha256_dispatch.h"  ##  Used by [merkle.cpp], [sha256.cpp]
+      "src/crypto/sha256_stream_scalar.h"  ##  Used by [sha256_dispatch.h], [sha256_stream_scalar.cpp]
+      "src/crypto/sha256d64_scalar.h"  ##  Used by [sha256_dispatch.h], [sha256d64_scalar.cpp]
       "src/crypto/sha512.h"  ##  Used by [hash.cpp], [hmac_sha512.cpp], [key.cpp], [random.cpp], [sha512.cpp]
       "src/cuckoocache.h"  ##  Used by [scriptcache.cpp], [sigcache.cpp]
       "src/enum_cast.h"  ##  Used by [config.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [scriptcache.cpp]
@@ -177,14 +174,12 @@ function(bdkSetMinimumListBSVSource)############################################
       "src/crypto/hmac_sha512.cpp"
       "src/crypto/ripemd160.cpp"
       "src/crypto/sha1.cpp"
-      "src/crypto/sha256.cpp"
-      "src/crypto/sha256_dispatch.cpp"
-      "src/crypto/sha256_shani_shim.cpp"
+      "src/crypto/sha256.cpp"  ##  The dispatcher's AutoDetect() (sha256_dispatch.cpp) and the SHA-NI
+                               ##  transforms it installs are not built: BDK never calls it, so the
+                               ##  header's scalar defaults are the only transforms in use
       "src/crypto/sha256_sse4.cpp"
       "src/crypto/sha256_stream_scalar.cpp"
       "src/crypto/sha256d64_scalar.cpp"
-      "src/crypto/sha256d64_shani.cpp"  ##  SHA-NI flags set per source in bdk_add_core_library
-      "src/crypto/sha256d64_shani_shim.cpp"
       "src/crypto/sha512.cpp"
       "src/hash.cpp"
       "src/key.cpp"
@@ -312,6 +307,13 @@ function(bdkSetApplicationListBSVSource)########################################
 endfunction() ## bdkSetMinimumListBSVSource
 
 macro(HelpFindBSVSource)########################################################################################
+  ## These lists are cache variables built by appending, so start every configure
+  ## from empty: otherwise a file dropped from the lists, or the paths of a previous
+  ## BSV_ROOT, stay in a reused build dir
+  foreach(_bsv_list BSV_INCLUDE_DIRS BSV_MINIMAL_HDR_FILES BSV_MINIMAL_SRC_FILES
+                    BSV_APPLICATION_HDR_FILES BSV_APPLICATION_SRC_FILES)
+    unset(${_bsv_list} CACHE)
+  endforeach()
   bdkFindBSVDir()
   bdkSetMinimumListBSVSource()
   bdkSetApplicationListBSVSource()
