@@ -57,6 +57,10 @@ pub fn source_git_commit_datetime() -> &'static str {
     static_str(bdk_sys::bdkffi_source_git_commit_datetime)
 }
 
+/// Time of the last BDK commit in UTC, or `SOURCE_DATE_EPOCH` when the build set
+/// it, so the same commit always reports the same value. It is not the wall-clock
+/// build time; [`source_git_commit_hash`] carries a `_dirty` suffix for builds of a
+/// modified tree.
 pub fn bdk_build_datetime_utc() -> &'static str {
     static_str(bdk_sys::bdkffi_bdk_build_datetime_utc)
 }
