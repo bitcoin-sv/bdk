@@ -21,7 +21,7 @@ on:
   workflow_dispatch:
 
 env:
-  DEFAULT_BITCOIN_SV_COMMIT: 879fc8b42168dd0e608dafd51b39c6dabad37d4d
+  DEFAULT_BITCOIN_SV_COMMIT: 6504a3aff65ba97c0f6c80962b033e35ecbfed4b
 
 jobs:
   clippy-on-floating-stable:

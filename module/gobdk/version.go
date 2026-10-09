@@ -32,7 +32,12 @@ func SOURCE_GIT_COMMIT_TAG_OR_BRANCH() string {
 }
 func SOURCE_GIT_COMMIT_HASH() string     { return C.GoString(C.CGO_SOURCE_GIT_COMMIT_HASH) }
 func SOURCE_GIT_COMMIT_DATETIME() string { return C.GoString(C.CGO_SOURCE_GIT_COMMIT_DATETIME) }
-func BDK_BUILD_DATETIME_UTC() string     { return C.GoString(C.CGO_BDK_BUILD_DATETIME_UTC) }
+
+// BDK_BUILD_DATETIME_UTC returns the time of the last BDK commit in UTC, or
+// SOURCE_DATE_EPOCH when the build set it, so the same commit always reports the
+// same value. It is not the wall-clock build time; SOURCE_GIT_COMMIT_HASH carries a
+// "_dirty" suffix for builds of a modified tree.
+func BDK_BUILD_DATETIME_UTC() string { return C.GoString(C.CGO_BDK_BUILD_DATETIME_UTC) }
 
 // // /!  Version of Golang Bitcoin Development Kit
 func BDK_GOLANG_VERSION_MAJOR() int     { return int(C.BDK_GOLANG_VERSION_MAJOR) }

@@ -7,28 +7,32 @@ This page describes both the **versioning scheme as currently implemented** in t
 
 BDK carries several distinct version numbers:
 
-- **Overall BDK version — `1.2.2`.** The root `CMakeLists.txt` sets
-  `BDK_VERSION_MAJOR/MINOR/PATCH` to `1`, `2` and `2`, respectively.
+- **Overall BDK version — `1.3.0`.** The root `CMakeLists.txt` sets
+  `BDK_VERSION_MAJOR/MINOR/PATCH` to `1`, `3` and `0`, respectively.
   CPack uses these values for its package version.
-- **Go-binding version — `1.2.4`.** A separate `BDK_GOLANG_VERSION_{MAJOR,MINOR,PATCH}`, exposed
+- **Go-binding version — `1.3.0`.** A separate `BDK_GOLANG_VERSION_{MAJOR,MINOR,PATCH}`, exposed
   from Go via `module/gobdk/version.go` (`BDK_GOLANG_VERSION_STRING()` and friends). It is
-  **derived** from the overall version in `module/gobdk/bdkcgo/CMakeLists.txt:19-22`: major and
-  minor are taken as-is (`1`, `2`) and the patch is the overall patch **plus 2**
-  (`createIncrementVersion(BDK_GOLANG_VERSION_PATCH ${BDK_VERSION_PATCH} 2 …)`), i.e. `2 + 2 = 4` —
-  giving `1.2.4` for the current overall `1.2.2`.
-- **Rust C ABI version — `1.2.2`.** `module/rustbdk/capi/CMakeLists.txt` derives all three components from the overall BDK version with zero increments. This records the C ABI build version, not a promise that every Cargo package manifest uses the same number.
+  **derived** from the overall version in `module/gobdk/bdkcgo/CMakeLists.txt` with zero
+  increments, so it equals the overall version. Releases tag it as `module/gobdk/v<version>`.
+  Up to `module/gobdk/v1.2.4` the patch carried a `+2` offset, which is why that tag pairs with
+  BDK `1.2.2`.
+- **Rust C ABI version — `1.3.0`.** `module/rustbdk/capi/CMakeLists.txt` derives all three components from the overall BDK version with zero increments. This records the C ABI build version, not a promise that every Cargo package manifest uses the same number.
 - **Captured bitcoin-sv (BSV) version / commit.** Version and Git metadata from the selected
   BSV checkout are captured when CMake configures the build: `core/BDKVersion.h` is the static declaration of the version symbols, and
   their concrete values are generated into `BDKVersion.cpp` from `core/BDKVersion.cpp.in`. They are
   re-exported in Go through `module/gobdk/version.go` — `BSV_VERSION_STRING()`,
   `BSV_GIT_COMMIT_HASH()`, `BSV_GIT_COMMIT_TAG_OR_BRANCH()`, `BSV_GIT_COMMIT_DATETIME()`, plus the
   BDK source's own `SOURCE_GIT_COMMIT_HASH()` / `SOURCE_GIT_COMMIT_DATETIME()` and
-  `BDK_BUILD_DATETIME_UTC()`.
+  `BDK_BUILD_DATETIME_UTC()`. These values are recomputed on every configure, and the configure
+  re-runs by itself when the BDK or BSV checkout moves (its `HEAD` or branch ref) or BSV's
+  `clientversion.h` changes; uncommitted edits do not trigger it. `BDK_BUILD_DATETIME_UTC()` is
+  the last BDK commit's time in UTC, or `SOURCE_DATE_EPOCH` when the environment sets it, so the
+  same commit always reports the same value.
 
 ### Relationship to the bitcoin-sv version
 
 BDK is built against a **pinned bitcoin-sv commit** — CI pins
-`879fc8b42168dd0e608dafd51b39c6dabad37d4d` (`build_bdk.yaml`, `DEFAULT_BITCOIN_SV_COMMIT`; see
+`6504a3aff65ba97c0f6c80962b033e35ecbfed4b` (`build_bdk.yaml`, `DEFAULT_BITCOIN_SV_COMMIT`; see
 [Dependencies & pinned versions](build.md#dependencies-pinned-versions)). That commit does **not**
 mechanically determine the BDK version number. CMake writes the selected checkout's metadata
 into generated `BDKVersion.cpp`. The Git hash is abbreviated and gains a `_dirty` suffix
@@ -39,7 +43,7 @@ in [build.md](build.md) accordingly.
 
 ## Versioning policy (semver)
 
-The following [semantic-versioning](https://semver.org/) rules describe the project's intended policy. They are not all enforced by the current version-generation code: the overall version is `1.2.2`, while the Go binding derives `1.2.4`, so the stated overall-version maximum rule is currently violated. This documentation task records that discrepancy; it does not change version numbers.
+The following [semantic-versioning](https://semver.org/) rules describe the project's policy. They are applied by hand. The Go and Rust versions are derived from the overall version with zero increments, so today they always equal it. The configure-time check that the overall version is the maximum can only fail if someone gives a binding a non-zero increment.
 
 BDK consists of a "core" (code taken from SV plus common code shared by bindings) and the language
 bindings. Each binding (module) and the core may be assigned a semver number, and the SDK as a whole
@@ -52,11 +56,11 @@ numbers to 0. The rules:
 - If core's version is bumped, the language bindings are also bumped (to avoid detailed dependency
   analysis, a binding may be bumped even when a core change does not directly affect it).
 - Only a single "most significant" bump is ever applied to the SDK.
-- The intended policy is for the SDK version to be greater than or equal to every component version; the current Go-version derivation does not satisfy this rule.
+- The SDK version is greater than or equal to every component version. Zero-increment derivation keeps this true; the configure-time check catches a non-zero increment.
 
 Internal builds against development branches may append `-develop` or `-RC<n>` to the version, e.g.
 `1.5.6-RC2` is the 2nd release candidate for `1.5.6`.
 
 ## When should I upgrade?
 
-Review the release notes and commit history for changes affecting your APIs and linked BSV revision. The current version derivation does not enforce every policy rule above, so unchanged version numbers alone are not sufficient evidence that an upgrade has no relevant changes.
+Review the release notes and commit history for changes affecting your APIs and linked BSV revision. The bump rules above are applied by hand, so unchanged version numbers alone are not sufficient evidence that an upgrade has no relevant changes.

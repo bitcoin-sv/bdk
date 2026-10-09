@@ -1,6 +1,6 @@
 # Release Notes
 
-**Current version: BDK 1.2.2** (`BDK_VERSION_MAJOR/MINOR/PATCH` in `CMakeLists.txt`).
+**Current version: BDK 1.3.0** (`BDK_VERSION_MAJOR/MINOR/PATCH` in `CMakeLists.txt`).
 
 BDK is built against a pinned `bitcoin-sv` commit; the exact source commit and toolchain versions
 are recorded in [documentation/docs/build.md](documentation/docs/build.md) and captured into the
@@ -11,6 +11,42 @@ installed alongside the package (`CMakeLists.txt`).
 
 ## Recent changes
 
+- **The Go binding version equals the BDK version again.** The `+2` patch offset is gone, so
+  this release's Go module is `1.3.0` rather than `1.3.2`, and it sorts after the last published
+  `module/gobdk/v1.2.4`. The configure-time check that the overall version is the maximum of
+  all component versions never fired: it compared dotted versions with the numeric `LESS`. It
+  now uses `VERSION_LESS`, fails the configure, and covers the Rust C ABI version as well.
+- **Build metadata stays current.** The BDK and bitcoin-sv version strings and git details used
+  to be frozen at a build directory's first configure by a cached guard, so a reused directory
+  reported stale versions after a bump or a bitcoin-sv checkout change. They are now recomputed
+  on every configure, and the configure re-runs by itself when the BDK or bitcoin-sv checkout
+  moves or bitcoin-sv's `clientversion.h` changes; uncommitted edits do not trigger it.
+  **API change:** `BDK_BUILD_DATETIME_UTC` (Go `BDK_BUILD_DATETIME_UTC()`, Rust
+  `bdk_build_datetime_utc()`, C++ `BDK_BUILD_DATETIME_UTC`) is now the last commit's time in
+  UTC, or `SOURCE_DATE_EPOCH` when set, instead of the configure time (which was local time
+  despite the name). Two builds of the same commit, dirty or not, now report the same value;
+  tell them apart by `SOURCE_GIT_COMMIT_HASH`, which carries a `_dirty` suffix. In exchange a
+  cmake rerun with nothing changed rebuilds nothing.
+- **Built against bitcoin-sv 1.2.3** (`6504a3aff65ba97c0f6c80962b033e35ecbfed4b`, tag `v1.2.3`),
+  up from 1.2.2. `BSV_CLIENT_VERSION_REVISION` is now `3`. The curated source list gains the
+  new SHA-256 dispatcher's header and its scalar stream and 2-way transforms. The dispatcher's
+  `AutoDetect()` (`src/crypto/sha256_dispatch.cpp`) and the SSE4 and SHA-NI transforms it would
+  install are not built: BDK never calls it, so hashing stays on the scalar path, as it did
+  before. Behaviour changes from upstream that reach BDK: `CScriptNum`
+  now throws `scriptnum_overflow_error` for non-big-int numbers that overflow `int64_t`,
+  `OP_SPLIT` rejects split positions above `INT32_MAX`, and `CScriptBase` grows from 28
+  to 32 inline bytes. `sizeof(CScript)` stays 40 on 64-bit and wasm32.
+- **Builds with clang before 21.** bitcoin-sv 1.2.3's thread-safety annotations put parameter
+  packs inside attributes, which clang 19 and 20 and AppleClang 17 reject. CMake now probes
+  for this and, when the compiler fails, force-includes a generated header that expands the
+  annotations to nothing, as upstream already does for non-clang compilers. The annotations
+  only feed `-Wthread-safety`, so generated code is unchanged. This covers BDK's own build only:
+  C++ projects that include the installed bitcoin-sv headers (anything pulling in `sync.h`, such
+  as `config.h` or `script/interpreter.h`) need clang 21 or later, or GCC.
+- **WASM bundles stay under the 300 KB ceiling.** bitcoin-sv 1.2.3 routes `CSHA256::Write`
+  through a function pointer, and LTO then inlined it into every hashing call site, adding about
+  6 KB. The wasm variant now compiles `crypto/sha256.cpp` outside LTO. `bdk-core` is 292,174
+  bytes (295,284 at 1.2.2), and `test/types/benchmark.mjs` is unchanged within noise.
 - **typesbdk build/test split, and the WASM artifacts are now refreshed on demand.** The node
   test, benchmark and vector files moved out of `module/typesbdk/wasm/` into the new
   **`test/types/`**, which now owns every wasm CTest registration (`test/golang` and `test/rust`

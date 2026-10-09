@@ -18,13 +18,13 @@ endforeach()
 #### BDK Go module version as increment of core version
 createIncrementVersion(BDK_GOLANG_VERSION_MAJOR ${BDK_VERSION_MAJOR} 0 "BDK golang major version")
 createIncrementVersion(BDK_GOLANG_VERSION_MINOR ${BDK_VERSION_MINOR} 0 "BDK golang minor version")
-createIncrementVersion(BDK_GOLANG_VERSION_PATCH ${BDK_VERSION_PATCH} 2 "BDK golang patch version")
+createIncrementVersion(BDK_GOLANG_VERSION_PATCH ${BDK_VERSION_PATCH} 0 "BDK golang patch version")
 set(BDK_GOLANG_VERSION_STRING "${BDK_GOLANG_VERSION_MAJOR}.${BDK_GOLANG_VERSION_MINOR}.${BDK_GOLANG_VERSION_PATCH}")
 
-## Test maximum of global version
-if(${BDK_VERSION_STRING} LESS ${BDK_GOLANG_VERSION_STRING})
-  message("Bitcoin Development Kit global version should be the max of all version numbers")
-  message("BDK_VERSION_STRING=${BDK_VERSION_STRING} while BDK_GOLANG_VERSION_STRING=${BDK_GOLANG_VERSION_STRING}")
+## Global version must be the maximum of all version numbers
+if(BDK_VERSION_STRING VERSION_LESS BDK_GOLANG_VERSION_STRING)
+  message(FATAL_ERROR "Bitcoin Development Kit global version must be the max of all version numbers: "
+                      "BDK_VERSION_STRING=${BDK_VERSION_STRING} while BDK_GOLANG_VERSION_STRING=${BDK_GOLANG_VERSION_STRING}")
 endif()
 
 #### Generate version golang binding #####
