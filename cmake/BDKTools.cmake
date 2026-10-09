@@ -454,10 +454,13 @@ function(bdkGetBuildDateTime result)
     set(${result} ${_build_datetime_UTC} PARENT_SCOPE)
 endfunction()############################################################################
 
-#### Re-run the configure when a git checkout moves: its HEAD, and the branch ref it
-#### points to (plus packed-refs, where git keeps refs it has packed). Only existing
-#### files are added, since a missing configure dependency breaks the Makefile
-#### generator. A tree without git metadata adds nothing.
+#### Re-run the configure when a git checkout moves: its HEAD, its reflog logs/HEAD
+#### (appended on every commit, checkout, reset, rebase or merge, and never removed by
+#### packing, so it still catches commits on a branch whose ref git has packed), and
+#### the branch ref it points to plus packed-refs. Only existing regular files are
+#### added: a missing configure dependency breaks the Makefile generator, and a
+#### directory would re-run the configure whenever an entry in it changes. A tree
+#### without git metadata adds nothing.
 #### Usage :
 ####     bdkConfigureDependsOnGitHead("${SOME_REPO_DIR}")
 function(bdkConfigureDependsOnGitHead repo_dir)
@@ -473,6 +476,7 @@ function(bdkConfigureDependsOnGitHead repo_dir)
       return()
     endif()
     set(_files "${_head_file}")
+    set(_paths logs/HEAD)
 
     execute_process(
       COMMAND git symbolic-ref -q HEAD
@@ -483,23 +487,28 @@ function(bdkConfigureDependsOnGitHead repo_dir)
       ERROR_QUIET
     )
     if(_symref_result EQUAL 0)  ## on a branch, not detached
-      foreach(_path "${_head_ref}" packed-refs)
-        execute_process(
-          COMMAND git rev-parse --git-path ${_path}
-          WORKING_DIRECTORY ${repo_dir}
-          OUTPUT_VARIABLE _ref_file
-          OUTPUT_STRIP_TRAILING_WHITESPACE
-          ERROR_QUIET
-        )
-        list(APPEND _files "${_ref_file}")
-      endforeach()
+      list(APPEND _paths "${_head_ref}" packed-refs)
     endif()
+
+    foreach(_path ${_paths})
+      execute_process(
+        COMMAND git rev-parse --git-path ${_path}
+        WORKING_DIRECTORY ${repo_dir}
+        OUTPUT_VARIABLE _ref_file
+        RESULT_VARIABLE _ref_result
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+      )
+      if(_ref_result EQUAL 0 AND NOT _ref_file STREQUAL "")
+        list(APPEND _files "${_ref_file}")
+      endif()
+    endforeach()
 
     foreach(_file ${_files})
       if(NOT IS_ABSOLUTE "${_file}")
         set(_file "${repo_dir}/${_file}")
       endif()
-      if(EXISTS "${_file}")
+      if(EXISTS "${_file}" AND NOT IS_DIRECTORY "${_file}")
         set_property(DIRECTORY "${CMAKE_SOURCE_DIR}" APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_file}")
       endif()
     endforeach()
