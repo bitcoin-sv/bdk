@@ -21,9 +21,12 @@ installed alongside the package (`CMakeLists.txt`).
   reported stale versions after a bump or a bitcoin-sv checkout change. They are now recomputed
   on every configure, and the configure re-runs by itself when the BDK or bitcoin-sv checkout
   moves or bitcoin-sv's `clientversion.h` changes; uncommitted edits do not trigger it.
-  `BDK_BUILD_DATETIME_UTC` is now the last commit's time in UTC, or `SOURCE_DATE_EPOCH` when
-  set, instead of the configure time (which was local time despite the name), so a cmake rerun
-  with nothing changed rebuilds nothing.
+  **API change:** `BDK_BUILD_DATETIME_UTC` (Go `BDK_BUILD_DATETIME_UTC()`, Rust
+  `bdk_build_datetime_utc()`, C++ `BDK_BUILD_DATETIME_UTC`) is now the last commit's time in
+  UTC, or `SOURCE_DATE_EPOCH` when set, instead of the configure time (which was local time
+  despite the name). Two builds of the same commit, dirty or not, now report the same value;
+  tell them apart by `SOURCE_GIT_COMMIT_HASH`, which carries a `_dirty` suffix. In exchange a
+  cmake rerun with nothing changed rebuilds nothing.
 - **Built against bitcoin-sv 1.2.3** (`6504a3aff65ba97c0f6c80962b033e35ecbfed4b`, tag `v1.2.3`),
   up from 1.2.2. `BSV_CLIENT_VERSION_REVISION` is now `3`. The curated source list gains the
   new SHA-256 dispatcher's header and its scalar stream and 2-way transforms. The dispatcher's
@@ -37,7 +40,9 @@ installed alongside the package (`CMakeLists.txt`).
   packs inside attributes, which clang 19 and 20 and AppleClang 17 reject. CMake now probes
   for this and, when the compiler fails, force-includes a generated header that expands the
   annotations to nothing, as upstream already does for non-clang compilers. The annotations
-  only feed `-Wthread-safety`, so generated code is unchanged.
+  only feed `-Wthread-safety`, so generated code is unchanged. This covers BDK's own build only:
+  C++ projects that include the installed bitcoin-sv headers (anything pulling in `sync.h`, such
+  as `config.h` or `script/interpreter.h`) need clang 21 or later, or GCC.
 - **WASM bundles stay under the 300 KB ceiling.** bitcoin-sv 1.2.3 routes `CSHA256::Write`
   through a function pointer, and LTO then inlined it into every hashing call site, adding about
   6 KB. The wasm variant now compiles `crypto/sha256.cpp` outside LTO. `bdk-core` is 292,174
