@@ -55,8 +55,9 @@ function(bdkFindBSVDir)#########################################################
 
   ## Keep the root an earlier configure resolved. The configure re-runs by itself
   ## on commits and checkouts, possibly from a shell without BSV_ROOT set, and must
-  ## not then switch to another checkout or clone a fresh one. Pass -DBSV_ROOT, or
-  ## set BSV_ROOT, to move a build dir to a different checkout.
+  ## not then switch to another checkout or clone a fresh one. Pass -DBSV_ROOT to
+  ## move a build dir to a different checkout. A -DBSV_ROOT stays in the cache and
+  ## beats the BSV_ROOT environment variable until -UBSV_ROOT removes it.
   if(DEFINED CACHE{BDK_BSV_ROOT_DIR} AND EXISTS "${BDK_BSV_ROOT_DIR}")
     _checkprint_BDK_BSV_ROOT_DIR()
     return()

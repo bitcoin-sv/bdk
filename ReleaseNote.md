@@ -22,11 +22,13 @@ installed alongside the package (`CMakeLists.txt`).
   on every configure, and the configure re-runs by itself when the BDK or bitcoin-sv checkout
   moves or is tagged, or bitcoin-sv's `clientversion.h` changes. Uncommitted edits do not
   trigger it, so the `_dirty` suffix on the commit hashes reflects the tree at the last
-  configure: run cmake again after editing if the hash must say `_dirty`. A re-run configure
+  configure: run cmake again after editing if the hash must say `_dirty`. The committed
+  GoBDK archives and wasm artifacts, which local builds overwrite in source, do not count. A re-run configure
   keeps the bitcoin-sv checkout it resolved before, even from a shell without `BSV_ROOT`.
   `BDK_BUILD_DATETIME_UTC` is now in UTC (it was local time despite the name) and honours
   `SOURCE_DATE_EPOCH`. It is stamped once per source revision, the BDK and bitcoin-sv commits
-  as of the configure, so a cmake rerun with nothing changed rebuilds nothing.
+  as of the configure, and again when `SOURCE_DATE_EPOCH` is set, changed or unset, so a
+  cmake rerun with nothing changed rebuilds nothing.
 - **Built against bitcoin-sv 1.2.3** (`6504a3aff65ba97c0f6c80962b033e35ecbfed4b`, tag `v1.2.3`),
   up from 1.2.2. `BSV_CLIENT_VERSION_REVISION` is now `3`. The curated source list gains the
   new SHA-256 dispatcher's header, its scalar stream transform and its scalar 1-way double-SHA-256

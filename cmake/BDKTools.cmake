@@ -373,8 +373,13 @@ function(bdkGetGitCommitHash)
     endif()
 
      # check if the working directory is dirty. If it is, set the commit hash to the string "dirty"
+     # The committed GoBDK archives and wasm artifacts are left out: local builds overwrite
+     # them in source (BUILD_MODULE_GOLANG_INSTALL_INSOURCE, bdk_wasm_install_insource), and
+     # build outputs are not source edits. The paths match nothing in other repositories.
      execute_process(
-       COMMAND git status --untracked-files=no --porcelain
+       COMMAND git status --untracked-files=no --porcelain -- .
+               ":(exclude)module/gobdk/bdkcgo/libGoBDK_*.a"
+               ":(exclude)module/typesbdk/wasm/bdk-core*"
        WORKING_DIRECTORY ${_REPO_DIR}
        OUTPUT_VARIABLE _is_Dirty_Working_Source
        OUTPUT_STRIP_TRAILING_WHITESPACE
@@ -437,12 +442,13 @@ endfunction()###################################################################
 #### Re-run the configure when a git checkout moves or is tagged: its HEAD, its reflog
 #### logs/HEAD (appended on every commit, checkout, reset, rebase or merge, and never
 #### removed by packing, so it still catches commits on a branch whose ref git has
-#### packed), the branch ref HEAD points to, packed-refs, and the refs/tags directory
-#### (a new loose tag adds an entry, which changes the directory's mtime; packed tags
-#### land in packed-refs). Only existing paths are added, since a missing configure
-#### dependency breaks the Makefile generator, and refs/tags is the only directory: any
-#### other would re-run the configure on unrelated changes. A tree without git
-#### metadata adds nothing.
+#### packed), the branch ref HEAD points to, packed-refs, and refs/tags with every
+#### directory below it (a new loose tag adds an entry to the directory it lands in,
+#### which changes that directory's mtime but not its parents'; a new subdirectory
+#### changes its parent's; packed tags land in packed-refs). Only existing paths are
+#### added, since a missing configure dependency breaks the Makefile generator, and
+#### refs/tags and its subdirectories are the only directories: any other would re-run
+#### the configure on unrelated changes. A tree without git metadata adds nothing.
 #### Usage :
 ####     bdkConfigureDependsOnGitHead("${SOME_REPO_DIR}")
 function(bdkConfigureDependsOnGitHead repo_dir)
@@ -508,7 +514,15 @@ function(bdkConfigureDependsOnGitHead repo_dir)
         set(_tags_dir "${repo_dir}/${_tags_dir}")
       endif()
       if(IS_DIRECTORY "${_tags_dir}")
-        set_property(DIRECTORY "${CMAKE_SOURCE_DIR}" APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_tags_dir}")
+        ## Release tags are namespaced (module/gobdk/vX), so watch the subdirectories too
+        file(GLOB_RECURSE _tag_entries LIST_DIRECTORIES true "${_tags_dir}/*")
+        set(_tag_dirs "${_tags_dir}")
+        foreach(_entry ${_tag_entries})
+          if(IS_DIRECTORY "${_entry}")
+            list(APPEND _tag_dirs "${_entry}")
+          endif()
+        endforeach()
+        set_property(DIRECTORY "${CMAKE_SOURCE_DIR}" APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS ${_tag_dirs})
       endif()
     endif()
 endfunction()############################################################################

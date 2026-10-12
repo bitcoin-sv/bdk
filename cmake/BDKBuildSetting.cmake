@@ -167,12 +167,12 @@ function(bdkSetBuildVersion)
   bdkCalculateBSVVersion("${BDK_BSV_ROOT_DIR}/src/clientversion.h")
 
   ## Stamp the build time once per source revision: the BDK and BSV commits, including
-  ## their _dirty state as of this configure. Re-stamping on every configure would
-  ## rewrite the generated version sources, and rebuild everything that depends on
-  ## them, on every cmake rerun.
-  set(_revision "${SOURCE_GIT_COMMIT_HASH}/${BSV_GIT_COMMIT_HASH}")
-  if(DEFINED ENV{SOURCE_DATE_EPOCH}
-     OR NOT DEFINED CACHE{BDK_BUILD_DATETIME_UTC}
+  ## their _dirty state as of this configure, and SOURCE_DATE_EPOCH, so setting,
+  ## changing or unsetting it re-stamps. Re-stamping on every configure would rewrite
+  ## the generated version sources, and rebuild everything that depends on them, on
+  ## every cmake rerun.
+  set(_revision "${SOURCE_GIT_COMMIT_HASH}/${BSV_GIT_COMMIT_HASH}/$ENV{SOURCE_DATE_EPOCH}")
+  if(NOT DEFINED CACHE{BDK_BUILD_DATETIME_UTC}
      OR NOT "${BDK_BUILD_DATETIME_REVISION}" STREQUAL "${_revision}")
     bdkGetBuildDateTime(_BDK_BUILD_DATETIME_UTC)
     set(BDK_BUILD_DATETIME_UTC ${_BDK_BUILD_DATETIME_UTC} CACHE INTERNAL "Build datetime UTC")
@@ -219,6 +219,8 @@ function(bdkSetThreadSafetyAnnotations)
   ## Take the macro list from upstream's own non-clang branch so it tracks upstream
   set(_upstream_hdr "${BDK_BSV_ROOT_DIR}/src/threadsafety.h")
   file(READ "${_upstream_hdr}" _content)
+  set_property(DIRECTORY "${CMAKE_SOURCE_DIR}" APPEND PROPERTY
+    CMAKE_CONFIGURE_DEPENDS "${_upstream_hdr}")
   string(FIND "${_content}" "#else" _else_pos)
   if(_else_pos EQUAL -1)
     message(FATAL_ERROR "No non-clang branch found in ${_upstream_hdr}")
