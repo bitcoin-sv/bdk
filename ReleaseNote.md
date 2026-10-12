@@ -35,8 +35,9 @@ installed alongside the package (`CMakeLists.txt`).
   transform; merkle hashing calls the 1-way transform twice, since the 2-way pointer stays null. The dispatcher's
   `AutoDetect()` (`src/crypto/sha256_dispatch.cpp`) and the SSE4 and SHA-NI transforms it would
   install are not built: BDK never calls it, so hashing stays on the scalar path, as it did
-  before. Behaviour changes from upstream that reach BDK: `CScriptNum`
-  now throws `scriptnum_overflow_error` for non-big-int numbers that overflow `int64_t`,
+  before. The installed `crypto/sha256_dispatch.h` still declares `sha256_dispatch::AutoDetect()`,
+  but `bdk_core` does not define it, so a C++ consumer that calls it fails to link. Behaviour
+  changes from upstream that reach BDK: `CScriptNum` now throws `scriptnum_overflow_error` for non-big-int numbers that overflow `int64_t`,
   `OP_SPLIT` rejects split positions above `INT32_MAX`, and `CScriptBase` grows from 28
   to 32 inline bytes. `sizeof(CScript)` stays 40 on 64-bit and wasm32.
 - **Builds with clang before 21.** bitcoin-sv 1.2.3's thread-safety annotations put parameter
