@@ -143,10 +143,6 @@ function(bdkSetBuildVersion)
   bdkGetGitCommitDateTime(_SOURCE_GIT_COMMIT_DATETIME "${CMAKE_SOURCE_DIR}")
   set(SOURCE_GIT_COMMIT_DATETIME ${_SOURCE_GIT_COMMIT_DATETIME} CACHE INTERNAL "Source commit datetime")
 
-  # Get the build date time
-  bdkGetBuildDateTime(_BDK_BUILD_DATETIME_UTC)
-  set(BDK_BUILD_DATETIME_UTC ${_BDK_BUILD_DATETIME_UTC} CACHE INTERNAL "Build datetime UTC")
-
 
   ## Go to "${BDK_BSV_ROOT_DIR}" and find bsv repository informations:
   ##   Repo url
@@ -169,6 +165,19 @@ function(bdkSetBuildVersion)
   set(BSV_GIT_COMMIT_DATETIME ${_BSV_GIT_COMMIT_DATETIME} CACHE INTERNAL "BSV commit datetime")
 
   bdkCalculateBSVVersion("${BDK_BSV_ROOT_DIR}/src/clientversion.h")
+
+  ## Stamp the build time once per source revision: the BDK and BSV commits, including
+  ## their _dirty state as of this configure. Re-stamping on every configure would
+  ## rewrite the generated version sources, and rebuild everything that depends on
+  ## them, on every cmake rerun.
+  set(_revision "${SOURCE_GIT_COMMIT_HASH}/${BSV_GIT_COMMIT_HASH}")
+  if(DEFINED ENV{SOURCE_DATE_EPOCH}
+     OR NOT DEFINED CACHE{BDK_BUILD_DATETIME_UTC}
+     OR NOT "${BDK_BUILD_DATETIME_REVISION}" STREQUAL "${_revision}")
+    bdkGetBuildDateTime(_BDK_BUILD_DATETIME_UTC)
+    set(BDK_BUILD_DATETIME_UTC ${_BDK_BUILD_DATETIME_UTC} CACHE INTERNAL "Build datetime UTC")
+    set(BDK_BUILD_DATETIME_REVISION "${_revision}" CACHE INTERNAL "Source revision BDK_BUILD_DATETIME_UTC was stamped for")
+  endif()
 
   ## Re-run the configure, and so recompute all of the above, when either checkout
   ## moves or the BSV version changes
