@@ -24,10 +24,12 @@ BDK carries several distinct version numbers:
   `BSV_GIT_COMMIT_HASH()`, `BSV_GIT_COMMIT_TAG_OR_BRANCH()`, `BSV_GIT_COMMIT_DATETIME()`, plus the
   BDK source's own `SOURCE_GIT_COMMIT_HASH()` / `SOURCE_GIT_COMMIT_DATETIME()` and
   `BDK_BUILD_DATETIME_UTC()`. These values are recomputed on every configure, and the configure
-  re-runs by itself when the BDK or BSV checkout moves (its `HEAD` or branch ref) or BSV's
-  `clientversion.h` changes; uncommitted edits do not trigger it. `BDK_BUILD_DATETIME_UTC()` is
-  the last BDK commit's time in UTC, or `SOURCE_DATE_EPOCH` when the environment sets it, so the
-  same commit always reports the same value.
+  re-runs by itself when the BDK or BSV checkout moves or is tagged (its `HEAD`, reflog, branch
+  ref, packed refs or tags) or BSV's `clientversion.h` changes. Uncommitted edits do not
+  trigger it, so the `_dirty` suffix reflects the tree at the last configure; re-run cmake
+  after editing if it must be accurate. `BDK_BUILD_DATETIME_UTC()` is the UTC time of the
+  configure that first saw the current source revision (the BDK and BSV commits, including
+  their `_dirty` state at that configure), or `SOURCE_DATE_EPOCH` when the environment sets it.
 
 ### Relationship to the bitcoin-sv version
 

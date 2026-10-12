@@ -425,42 +425,24 @@ function(bdkGetGitCommitDateTime)
     set(${result} ${_Source_commit_datetime} PARENT_SCOPE)
 endfunction()############################################################################
 
-#### Get the build date time in UTC, reproducibly: SOURCE_DATE_EPOCH when the
-#### environment sets it, otherwise the time of the last commit in ${CMAKE_SOURCE_DIR}.
-#### Stamping the configure time instead would rewrite the generated version sources,
-#### and rebuild everything that depends on them, on every cmake rerun. Falls back to
-#### the current time only when there is no git metadata.
+#### Get the current date time in UTC. string(TIMESTAMP) honours SOURCE_DATE_EPOCH
+#### from the environment, which gives a reproducible value when set.
 #### Usage :
 ####     bdkGetBuildDateTime(myVar)
 function(bdkGetBuildDateTime result)
-    if(NOT DEFINED ENV{SOURCE_DATE_EPOCH})
-      execute_process(
-        COMMAND git log -1 --format=%ct
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-        OUTPUT_VARIABLE _commit_epoch
-        RESULT_VARIABLE _git_result
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-        ERROR_QUIET
-      )
-      if(_git_result EQUAL 0 AND _commit_epoch MATCHES "^[0-9]+$")
-        set(ENV{SOURCE_DATE_EPOCH} ${_commit_epoch})   ## string(TIMESTAMP) honours it
-        set(_unset_epoch TRUE)
-      endif()
-    endif()
     string(TIMESTAMP _build_datetime_UTC "%d-%m-%Y %H:%M:%S" UTC)
-    if(_unset_epoch)
-      unset(ENV{SOURCE_DATE_EPOCH})
-    endif()
     set(${result} ${_build_datetime_UTC} PARENT_SCOPE)
 endfunction()############################################################################
 
-#### Re-run the configure when a git checkout moves: its HEAD, its reflog logs/HEAD
-#### (appended on every commit, checkout, reset, rebase or merge, and never removed by
-#### packing, so it still catches commits on a branch whose ref git has packed), and
-#### the branch ref it points to plus packed-refs. Only existing regular files are
-#### added: a missing configure dependency breaks the Makefile generator, and a
-#### directory would re-run the configure whenever an entry in it changes. A tree
-#### without git metadata adds nothing.
+#### Re-run the configure when a git checkout moves or is tagged: its HEAD, its reflog
+#### logs/HEAD (appended on every commit, checkout, reset, rebase or merge, and never
+#### removed by packing, so it still catches commits on a branch whose ref git has
+#### packed), the branch ref HEAD points to, packed-refs, and the refs/tags directory
+#### (a new loose tag adds an entry, which changes the directory's mtime; packed tags
+#### land in packed-refs). Only existing paths are added, since a missing configure
+#### dependency breaks the Makefile generator, and refs/tags is the only directory: any
+#### other would re-run the configure on unrelated changes. A tree without git
+#### metadata adds nothing.
 #### Usage :
 ####     bdkConfigureDependsOnGitHead("${SOME_REPO_DIR}")
 function(bdkConfigureDependsOnGitHead repo_dir)
@@ -476,7 +458,7 @@ function(bdkConfigureDependsOnGitHead repo_dir)
       return()
     endif()
     set(_files "${_head_file}")
-    set(_paths logs/HEAD)
+    set(_paths logs/HEAD packed-refs)
 
     execute_process(
       COMMAND git symbolic-ref -q HEAD
@@ -487,7 +469,7 @@ function(bdkConfigureDependsOnGitHead repo_dir)
       ERROR_QUIET
     )
     if(_symref_result EQUAL 0)  ## on a branch, not detached
-      list(APPEND _paths "${_head_ref}" packed-refs)
+      list(APPEND _paths "${_head_ref}")
     endif()
 
     foreach(_path ${_paths})
@@ -512,6 +494,23 @@ function(bdkConfigureDependsOnGitHead repo_dir)
         set_property(DIRECTORY "${CMAKE_SOURCE_DIR}" APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_file}")
       endif()
     endforeach()
+
+    execute_process(
+      COMMAND git rev-parse --git-path refs/tags
+      WORKING_DIRECTORY ${repo_dir}
+      OUTPUT_VARIABLE _tags_dir
+      RESULT_VARIABLE _tags_result
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      ERROR_QUIET
+    )
+    if(_tags_result EQUAL 0 AND NOT _tags_dir STREQUAL "")
+      if(NOT IS_ABSOLUTE "${_tags_dir}")
+        set(_tags_dir "${repo_dir}/${_tags_dir}")
+      endif()
+      if(IS_DIRECTORY "${_tags_dir}")
+        set_property(DIRECTORY "${CMAKE_SOURCE_DIR}" APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_tags_dir}")
+      endif()
+    endif()
 endfunction()############################################################################
 
 #### Print a property value of a TARGET

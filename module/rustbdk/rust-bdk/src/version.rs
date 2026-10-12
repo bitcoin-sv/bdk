@@ -57,10 +57,11 @@ pub fn source_git_commit_datetime() -> &'static str {
     static_str(bdk_sys::bdkffi_source_git_commit_datetime)
 }
 
-/// Time of the last BDK commit in UTC, or `SOURCE_DATE_EPOCH` when the build set
-/// it, so the same commit always reports the same value. It is not the wall-clock
-/// build time; [`source_git_commit_hash`] carries a `_dirty` suffix for builds of a
-/// modified tree.
+/// UTC time of the configure that first saw the current source revision (the BDK
+/// and bitcoin-sv commits, including their `_dirty` state at that configure), or
+/// `SOURCE_DATE_EPOCH` when the build set it. The `_dirty` suffix on
+/// [`source_git_commit_hash`] reflects the tree at the last configure, not edits made
+/// after it.
 pub fn bdk_build_datetime_utc() -> &'static str {
     static_str(bdk_sys::bdkffi_bdk_build_datetime_utc)
 }

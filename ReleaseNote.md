@@ -20,16 +20,17 @@ installed alongside the package (`CMakeLists.txt`).
   to be frozen at a build directory's first configure by a cached guard, so a reused directory
   reported stale versions after a bump or a bitcoin-sv checkout change. They are now recomputed
   on every configure, and the configure re-runs by itself when the BDK or bitcoin-sv checkout
-  moves or bitcoin-sv's `clientversion.h` changes; uncommitted edits do not trigger it.
-  **API change:** `BDK_BUILD_DATETIME_UTC` (Go `BDK_BUILD_DATETIME_UTC()`, Rust
-  `bdk_build_datetime_utc()`, C++ `BDK_BUILD_DATETIME_UTC`) is now the last commit's time in
-  UTC, or `SOURCE_DATE_EPOCH` when set, instead of the configure time (which was local time
-  despite the name). Two builds of the same commit, dirty or not, now report the same value;
-  tell them apart by `SOURCE_GIT_COMMIT_HASH`, which carries a `_dirty` suffix. In exchange a
-  cmake rerun with nothing changed rebuilds nothing.
+  moves or is tagged, or bitcoin-sv's `clientversion.h` changes. Uncommitted edits do not
+  trigger it, so the `_dirty` suffix on the commit hashes reflects the tree at the last
+  configure: run cmake again after editing if the hash must say `_dirty`. A re-run configure
+  keeps the bitcoin-sv checkout it resolved before, even from a shell without `BSV_ROOT`.
+  `BDK_BUILD_DATETIME_UTC` is now in UTC (it was local time despite the name) and honours
+  `SOURCE_DATE_EPOCH`. It is stamped once per source revision, the BDK and bitcoin-sv commits
+  as of the configure, so a cmake rerun with nothing changed rebuilds nothing.
 - **Built against bitcoin-sv 1.2.3** (`6504a3aff65ba97c0f6c80962b033e35ecbfed4b`, tag `v1.2.3`),
   up from 1.2.2. `BSV_CLIENT_VERSION_REVISION` is now `3`. The curated source list gains the
-  new SHA-256 dispatcher's header and its scalar stream and 2-way transforms. The dispatcher's
+  new SHA-256 dispatcher's header, its scalar stream transform and its scalar 1-way double-SHA-256
+  transform; merkle hashing calls the 1-way transform twice, since the 2-way pointer stays null. The dispatcher's
   `AutoDetect()` (`src/crypto/sha256_dispatch.cpp`) and the SSE4 and SHA-NI transforms it would
   install are not built: BDK never calls it, so hashing stays on the scalar path, as it did
   before. Behaviour changes from upstream that reach BDK: `CScriptNum`
