@@ -343,12 +343,15 @@ this priority order:
 
 1. `-DBSV_ROOT=<path>` on the CMake command line.
 2. The `BSV_ROOT` environment variable.
-3. `<bdk>/bitcoin-sv` (a checkout inside the BDK tree).
-4. `<bdk>/../bitcoin-sv` (a sibling checkout — the recommended local layout).
-5. **Last resort:** a `git clone` of the BSV repository.
+3. The checkout an earlier configure of the same build directory resolved, if it still exists.
+   The configure re-runs by itself on commits and checkouts, possibly from a shell without
+   `BSV_ROOT`; this keeps it on the same checkout. Use step 1 or 2 to move a build directory.
+4. `<bdk>/bitcoin-sv` (a checkout inside the BDK tree).
+5. `<bdk>/../bitcoin-sv` (a sibling checkout — the recommended local layout).
+6. **Last resort:** a `git clone` of the BSV repository.
 
 > ⚠️ The last-resort auto-clone uses **SSH** (`git@github.com:bitcoin-sv/bitcoin-sv.git`) and checks out the remote default branch at clone time — there is **no commit pin**
-> (`FindBSVSourceHelper.cmake:69-75`). This silently diverges from CI, which clones over **HTTPS**
+> (`FindBSVSourceHelper.cmake:78-84`). This silently diverges from CI, which clones over **HTTPS**
 > and checks out the pinned commit `6504a3aff65ba97c0f6c80962b033e35ecbfed4b`
 > (`build_bdk.yaml`, `Check out bitcoin-sv`).
 >
