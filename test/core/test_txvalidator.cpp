@@ -796,7 +796,9 @@ BOOST_AUTO_TEST_CASE(small_bare_large_aggregate_previous_scripts)
 
 // Synthetic P2PKH spends for the sighash tests below. Every input spends
 // COutPoint(01, i), worth P2PKH_INPUT_SATOSHIS and locked to one deterministic
-// key; every output pays P2PKH_OUTPUT_SATOSHIS back to the same key.
+// key; output j pays P2PKH_OUTPUT_SATOSHIS + j back to the same key. Output
+// values and nSequence differ by position, so sighash data built from a
+// reordered tx no longer hashes the same.
 constexpr int64_t P2PKH_INPUT_SATOSHIS = 100000;
 constexpr int64_t P2PKH_OUTPUT_SATOSHIS = 1000;
 constexpr int32_t P2PKH_BLOCK_HEIGHT = 700000;  // post-Genesis, pre-Chronicle on mainnet
@@ -840,14 +842,16 @@ static bsv::CMutableTransactionExtended MakeSignedP2PKHSpend(
     eTx.vutxo.resize(sigHashTypes.size());
     for (size_t i = 0; i < sigHashTypes.size(); ++i) {
         eTx.mtx.vin[i].prevout = COutPoint(uint256S("01"), static_cast<uint32_t>(i));
-        eTx.mtx.vin[i].nSequence = 0xffffffff;
+        // Bit 31 stays set, so BIP68 relative locktime never applies; nLockTime 0
+        // keeps the tx final whatever the sequence.
+        eTx.mtx.vin[i].nSequence = 0xffffffff - static_cast<uint32_t>(i % 3);
         eTx.vutxo[i].nValue = inputAmount;
         eTx.vutxo[i].scriptPubKey = lockingScript;
     }
     eTx.mtx.vout.resize(nOutputs);
-    for (auto& out : eTx.mtx.vout) {
-        out.nValue = Amount(P2PKH_OUTPUT_SATOSHIS);
-        out.scriptPubKey = lockingScript;
+    for (size_t j = 0; j < nOutputs; ++j) {
+        eTx.mtx.vout[j].nValue = Amount(P2PKH_OUTPUT_SATOSHIS + static_cast<int64_t>(j));
+        eTx.mtx.vout[j].scriptPubKey = lockingScript;
     }
 
     // BIP143 never commits to scriptSigs, so every input can be signed against
