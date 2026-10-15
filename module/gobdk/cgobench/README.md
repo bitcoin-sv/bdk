@@ -9,6 +9,7 @@ This package contains comprehensive benchmarks measuring:
 - **bench_cgosimple_test.go**: Simple CGO overhead benchmarks (no-op calls, byte summing)
 - **bench_verifyscript_test.go**: Go implementation of script verification benchmark
 - **../../example/bench_verifyscript.cpp**: C++ implementation of script verification benchmark
+- **bench_validatetransaction_inputs_test.go**: `ValidateTransaction` on synthetic P2PKH spends with 1,000, 2,000, 4,000 and 8,000 inputs, reporting `us/input`. Time per input should stay flat as the input count grows (see [Input-count scaling](#input-count-scaling))
 
 ## Test Data
 
@@ -147,6 +148,29 @@ The C code runs **96% slower** than equivalent Go code! This is because:
 | Batch | 1000 | Go | 10 | 10,000 | 47.46 | 21,072 |
 | Batch | 10000 | C++ | 1 | 10,000 | 47.75 | 20,943 |
 | Batch | 10000 | Go | 1 | 10,000 | 77.01 | 12,986 |
+
+---
+
+### Input-count scaling
+
+`BenchmarkValidateTransaction_Inputs` builds its transactions in Go at run time: every input spends a
+distinct outpoint of one fake previous tx with `SIGHASH_ALL|FORKID`, all locked to the key with private
+key 1, validated in consensus mode at block height 700,000. One 8,000-input iteration takes seconds if
+validation is quadratic, so use a fixed iteration count:
+
+```bash
+go test -run '^$' -bench BenchmarkValidateTransaction_Inputs -benchtime=3x -count=3
+```
+
+Before and after sharing one `PrecomputedTransactionData` per transaction (bitcoin-sv/bdk#64), Release
+build, Apple M3 Max, best of 3:
+
+| Inputs | Before (ms/tx) | Before (µs/input) | After (ms/tx) | After (µs/input) |
+|-------:|---------------:|------------------:|--------------:|-----------------:|
+| 1,000 | 118 | 118 | 22.7 | 22.7 |
+| 2,000 | 423 | 212 | 46.1 | 23.1 |
+| 4,000 | 1,596 | 399 | 92.0 | 23.0 |
+| 8,000 | 6,165 | 771 | 184 | 23.0 |
 
 ---
 
