@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <ctime>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -993,12 +994,12 @@ BOOST_AUTO_TEST_CASE(sighash_single_without_matching_output)
 // inputs) took about 26 minutes.
 //
 // The test times the same P2PKH shape at two input counts and bounds the ratio,
-// which cancels out the runner's absolute speed. Best of 3 per size absorbs
-// scheduling noise.
+// which cancels out the runner's absolute speed. It measures process CPU time,
+// not wall-clock: validation is single-threaded, and on an oversubscribed
+// runner wall-clock charges the large run for time spent descheduled. Best of
+// 3 per size absorbs the remaining noise (cache and frequency effects).
 BOOST_AUTO_TEST_CASE(validate_transaction_scales_linearly_with_input_count)
 {
-    using namespace std::chrono;
-
     constexpr size_t SMALL_N = 1000;
     constexpr size_t LARGE_N = 16000;
     constexpr int RUNS = 3;
@@ -1013,9 +1014,9 @@ BOOST_AUTO_TEST_CASE(validate_transaction_scales_linearly_with_input_count)
             MakeSignedP2PKHSpend(types, /*nOutputs=*/1, /*precomputeForSigning=*/true));
         double best = std::numeric_limits<double>::max();
         for (int run = 0; run < RUNS; ++run) {
-            const auto t0 = steady_clock::now();
+            const std::clock_t c0 = std::clock();
             const auto status = ValidateP2PKHSpend(se, etxBin, nInputs, /*consensus=*/true);
-            const double elapsed = duration<double, std::milli>(steady_clock::now() - t0).count();
+            const double elapsed = 1000.0 * static_cast<double>(std::clock() - c0) / CLOCKS_PER_SEC;
             BOOST_REQUIRE_MESSAGE(bsv::TxErrorIsOk(status),
                 "N=" << nInputs << ": domain=" << status.domain << " code=" << status.code);
             best = std::min(best, elapsed);
@@ -1029,12 +1030,12 @@ BOOST_AUTO_TEST_CASE(validate_transaction_scales_linearly_with_input_count)
 
     // stderr so ctest --output-on-failure shows the measurement on regression.
     std::cerr << "[validate_transaction_scales_linearly_with_input_count]"
-              << " N=" << SMALL_N << " best_ms=" << smallMs
-              << " N=" << LARGE_N << " best_ms=" << largeMs
+              << " N=" << SMALL_N << " best_cpu_ms=" << smallMs
+              << " N=" << LARGE_N << " best_cpu_ms=" << largeMs
               << " ratio=" << ratio << " max_ratio=" << MAX_RATIO << std::endl;
 
     BOOST_CHECK_MESSAGE(ratio < MAX_RATIO,
-        "ValidateTransaction time ratio " << ratio << " for " << LARGE_N / SMALL_N
+        "ValidateTransaction CPU time ratio " << ratio << " for " << LARGE_N / SMALL_N
         << "x the inputs exceeds " << MAX_RATIO << ": sighash work is growing with the square of the input count");
 }
 
