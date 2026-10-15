@@ -1,5 +1,7 @@
+#include <algorithm>
 #include <array>
 #include <chrono>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <string>
@@ -977,6 +979,59 @@ BOOST_AUTO_TEST_CASE(sighash_single_without_matching_output)
         BOOST_CHECK_MESSAGE(bsv::TxErrorIsOk(status),
             "consensus=" << consensus << ": domain=" << status.domain << " code=" << status.code);
     }
+}
+
+// Script verification must share one PrecomputedTransactionData across the
+// inputs of a tx, as SV Node does. Without it every FORKID signature check
+// re-hashes all outpoints and sequences, so ValidateTransaction grows with the
+// square of the input count: mainnet tx
+// 4201a692b7349e7d047274029317460449b1a30f734eb43991c44bf15fa4382a (86,584
+// inputs) took about 26 minutes.
+//
+// The test times the same P2PKH shape at two input counts and bounds the ratio,
+// which cancels out the runner's absolute speed. Best of 3 per size absorbs
+// scheduling noise.
+BOOST_AUTO_TEST_CASE(validate_transaction_scales_linearly_with_input_count)
+{
+    using namespace std::chrono;
+
+    constexpr size_t SMALL_N = 1000;
+    constexpr size_t LARGE_N = 16000;
+    constexpr int RUNS = 3;
+    constexpr double MAX_RATIO = 40.0;
+
+    const bsv::CTxValidator se("main");
+    const SigHashType allForkId = SigHashType().withForkId();
+
+    const auto bestTimeMs = [&](size_t nInputs) {
+        const std::vector<SigHashType> types(nInputs, allForkId);
+        const auto etxBin = SerializeExtended(
+            MakeSignedP2PKHSpend(types, /*nOutputs=*/1, /*precomputeForSigning=*/true));
+        double best = std::numeric_limits<double>::max();
+        for (int run = 0; run < RUNS; ++run) {
+            const auto t0 = steady_clock::now();
+            const auto status = ValidateP2PKHSpend(se, etxBin, nInputs, /*consensus=*/true);
+            const double elapsed = duration<double, std::milli>(steady_clock::now() - t0).count();
+            BOOST_REQUIRE_MESSAGE(bsv::TxErrorIsOk(status),
+                "N=" << nInputs << ": domain=" << status.domain << " code=" << status.code);
+            best = std::min(best, elapsed);
+        }
+        return best;
+    };
+
+    const double smallMs = bestTimeMs(SMALL_N);
+    const double largeMs = bestTimeMs(LARGE_N);
+    const double ratio = largeMs / smallMs;
+
+    // stderr so ctest --output-on-failure shows the measurement on regression.
+    std::cerr << "[validate_transaction_scales_linearly_with_input_count]"
+              << " N=" << SMALL_N << " best_ms=" << smallMs
+              << " N=" << LARGE_N << " best_ms=" << largeMs
+              << " ratio=" << ratio << " max_ratio=" << MAX_RATIO << std::endl;
+
+    BOOST_CHECK_MESSAGE(ratio < MAX_RATIO,
+        "ValidateTransaction time ratio " << ratio << " for " << LARGE_N / SMALL_N
+        << "x the inputs exceeds " << MAX_RATIO << ": sighash work is growing with the square of the input count");
 }
 
 BOOST_AUTO_TEST_SUITE_END()
