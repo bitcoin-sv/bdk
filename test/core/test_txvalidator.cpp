@@ -805,14 +805,18 @@ constexpr int64_t P2PKH_OUTPUT_SATOSHIS = 1000;
 constexpr int32_t P2PKH_BLOCK_HEIGHT = 700000;  // post-Genesis, pre-Chronicle on mainnet
 constexpr int32_t P2PKH_UTXO_HEIGHT = 699999;
 
-static CKey MakeP2PKHTestKey()
+static CKey MakeDeterministicTestKey(uint8_t lastByte)
 {
-    constexpr std::array<uint8_t, 32> rawKey = {
-        0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0,
-        0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0x64 };
+    std::array<uint8_t, 32> rawKey{};
+    rawKey[31] = lastByte;
     CKey key;
     key.Set(rawKey.begin(), rawKey.end(), /*fCompressedIn=*/true);
     return key;
+}
+
+static CKey MakeP2PKHTestKey()
+{
+    return MakeDeterministicTestKey(0x64);
 }
 
 static CScript MakeP2PKHScript(const CPubKey& pubkey)
@@ -983,6 +987,111 @@ BOOST_AUTO_TEST_CASE(sighash_single_without_matching_output)
         const auto status = ValidateP2PKHSpend(se, etxBin, types.size(), consensus);
         BOOST_CHECK_MESSAGE(bsv::TxErrorIsOk(status),
             "consensus=" << consensus << ": domain=" << status.domain << " code=" << status.code);
+    }
+}
+
+// The guard txs above with input `index` re-locked to a bare 2-of-3
+// OP_CHECKMULTISIG and signed by the first two of its three keys, ALL|FORKID.
+// BIP143 commits only to an input's own scriptCode and amount, so the other
+// inputs' P2PKH signatures stay valid.
+struct MultisigSpend {
+    bsv::CMutableTransactionExtended eTx;
+    size_t index;
+};
+
+static MultisigSpend MakeSpendWithMultisigInput(size_t nInputs, size_t index, size_t nOutputs)
+{
+    const SigHashType allForkId = SigHashType().withForkId();
+    MultisigSpend spend{ MakeSignedP2PKHSpend(std::vector<SigHashType>(nInputs, allForkId), nOutputs), index };
+
+    const std::array<CKey, 3> keys{ MakeDeterministicTestKey(0x65), MakeDeterministicTestKey(0x66),
+                                    MakeDeterministicTestKey(0x67) };
+    CScript multisig = CScript() << OP_2;
+    for (const CKey& key : keys)
+        multisig << ToByteVector(key.GetPubKey());
+    multisig << OP_3 << OP_CHECKMULTISIG;
+    spend.eTx.vutxo[index].scriptPubKey = multisig;
+
+    const CTransaction unsignedTx(spend.eTx.mtx);
+    const uint256 sighash = SignatureHash(multisig, unsignedTx, static_cast<unsigned int>(index),
+        allForkId, spend.eTx.vutxo[index].nValue);
+    CScript scriptSig = CScript() << OP_0;  // CHECKMULTISIG's extra pop; NULLDUMMY wants it empty
+    for (size_t k = 0; k < 2; ++k) {
+        std::vector<uint8_t> sig;
+        BOOST_REQUIRE(keys[k].Sign(sighash, sig));
+        sig.push_back(static_cast<uint8_t>(allForkId.getRawSigHashType()));
+        scriptSig << sig;
+    }
+    spend.eTx.mtx.vin[index].scriptSig = scriptSig;
+    return spend;
+}
+
+// Flips the low bit of the last byte of r in the second multisig signature,
+// keeping it strict-DER and low-S.
+static void CorruptSecondMultisigSignature(MultisigSpend& spend)
+{
+    const CScript& scriptSig = spend.eTx.mtx.vin[spend.index].scriptSig;
+    CScript::const_iterator pc = scriptSig.begin();
+    opcodetype opcode;
+    std::vector<uint8_t> dummy, sig1, sig2;
+    BOOST_REQUIRE(scriptSig.GetOp(pc, opcode, dummy));
+    BOOST_REQUIRE(scriptSig.GetOp(pc, opcode, sig1));
+    BOOST_REQUIRE(scriptSig.GetOp(pc, opcode, sig2));
+    BOOST_REQUIRE(sig2.size() > 5 && sig2[0] == 0x30 && sig2[2] == 0x02);
+    sig2[4 + sig2[3] - 1] ^= 0x01;
+    spend.eTx.mtx.vin[spend.index].scriptSig = CScript() << OP_0 << sig1 << sig2;
+}
+
+static TxError VerifyMultisigSpend(const bsv::CTxValidator& se, const MultisigSpend& spend, bool consensus)
+{
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << spend.eTx.mtx;
+    const std::vector<uint8_t> txBin(ss.begin(), ss.end());
+    const CTxOut& source = spend.eTx.vutxo[spend.index];
+    return se.VerifySpend(std::span<const uint8_t>(txBin), static_cast<uint32_t>(spend.index),
+        std::span<const uint8_t>(source.scriptPubKey.data(), source.scriptPubKey.size()),
+        source.nValue.GetSatoshis(), P2PKH_UTXO_HEIGHT, P2PKH_BLOCK_HEIGHT, consensus);
+}
+
+// Several FORKID checks in one input: a 2-of-3 bare multisig among P2PKH
+// inputs, through VerifySpend on that input and ValidateTransaction on the tx.
+BOOST_AUTO_TEST_CASE(multisig_input_validates_through_verify_spend_and_validate_transaction)
+{
+    constexpr size_t nInputs = 4;
+    const bsv::CTxValidator se("main");
+    for (const size_t index : { size_t{ 0 }, nInputs - 1 }) {
+        const MultisigSpend spend = MakeSpendWithMultisigInput(nInputs, index, /*nOutputs=*/3);
+        const auto etxBin = SerializeExtended(spend.eTx);
+        for (const bool consensus : { true, false }) {
+            const auto spendStatus = VerifyMultisigSpend(se, spend, consensus);
+            BOOST_CHECK_MESSAGE(bsv::TxErrorIsOk(spendStatus),
+                "VerifySpend index=" << index << " consensus=" << consensus
+                << ": domain=" << spendStatus.domain << " code=" << spendStatus.code);
+            const auto txStatus = ValidateP2PKHSpend(se, etxBin, nInputs, consensus);
+            BOOST_CHECK_MESSAGE(bsv::TxErrorIsOk(txStatus),
+                "ValidateTransaction index=" << index << " consensus=" << consensus
+                << ": domain=" << txStatus.domain << " code=" << txStatus.code);
+        }
+    }
+}
+
+// One bad signature among the multisig's two fails the spend with the script
+// error, through both entry points.
+BOOST_AUTO_TEST_CASE(multisig_input_with_corrupted_signature_fails)
+{
+    constexpr size_t nInputs = 4;
+    const bsv::CTxValidator se("main");
+    MultisigSpend spend = MakeSpendWithMultisigInput(nInputs, /*index=*/1, /*nOutputs=*/3);
+    CorruptSecondMultisigSignature(spend);
+    const auto etxBin = SerializeExtended(spend.eTx);
+    for (const bool consensus : { true, false }) {
+        for (const auto& [entry, status] : { std::pair{ "VerifySpend", VerifyMultisigSpend(se, spend, consensus) },
+                                             std::pair{ "ValidateTransaction", ValidateP2PKHSpend(se, etxBin, nInputs, consensus) } }) {
+            BOOST_CHECK_MESSAGE(status.domain == static_cast<int32_t>(TX_ERR_DOMAIN_SCRIPT),
+                entry << " consensus=" << consensus << ": domain=" << status.domain << " code=" << status.code);
+            BOOST_CHECK_MESSAGE(status.code == static_cast<int32_t>(SCRIPT_ERR_SIG_NULLFAIL),
+                entry << " consensus=" << consensus << ": code=" << status.code);
+        }
     }
 }
 
