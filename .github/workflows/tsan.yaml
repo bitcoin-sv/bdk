@@ -26,6 +26,9 @@ on:
       - 'test/core/**'
       - '.github/workflows/tsan.yaml'
 
+permissions:
+  contents: read
+
 env:
   DEFAULT_BITCOIN_SV_COMMIT: 6504a3aff65ba97c0f6c80962b033e35ecbfed4b
 
@@ -38,6 +41,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Check out bitcoin-sv
         run: |
@@ -67,6 +72,23 @@ jobs:
 
       - name: Build the tsan tests
         run: cmake --build build-tsan --target bdk_tsan_tests --parallel 4
+
+        ## Without the launcher everything still builds and passes, uninstrumented.
+        ## __tsan_func_entry is referenced only by code compiled with
+        ## -fsanitize=thread, so require it in the core library and in every test
+        ## binary the target built.
+      - name: Check the build is instrumented
+        run: |
+          out=build-tsan/x64/relwithdebinfo
+          nm "$out/libbdk_core.a" 2>/dev/null | grep -c __tsan_func_entry > /dev/null || { echo "libbdk_core.a is not instrumented"; exit 1; }
+          found=0
+          for bin in "$out"/test_*; do
+            [ -f "$bin" ] && [ -x "$bin" ] || continue
+            found=1
+            nm "$bin" | grep -c __tsan_func_entry > /dev/null || { echo "$bin is not instrumented"; exit 1; }
+            echo "instrumented: $bin"
+          done
+          [ "$found" = 1 ] || { echo "no test binary in $out"; exit 1; }
 
       - name: Run the tsan tests
         run: |
