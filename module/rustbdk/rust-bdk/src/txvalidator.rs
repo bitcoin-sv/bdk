@@ -1,6 +1,7 @@
 use std::os::raw::{c_char, c_int};
 use std::ptr;
 
+use crate::cancel::CancelFlag;
 use crate::error::{TxError, take_owned_c_string, translate};
 use crate::validatebatch::ValidateBatch;
 
@@ -150,6 +151,109 @@ impl TxValidator {
         let mut result_len: c_int = 0;
         let raw_results = unsafe {
             bdk_sys::bdkffi_txvalidator_validate_batch(self.ptr, batch.as_raw(), &mut result_len)
+        };
+
+        copy_batch_results(raw_results, result_len, expected_len)
+    }
+
+    /// [`validate_transaction`](Self::validate_transaction), stopped by `cancel`.
+    /// See [`CancelFlag`].
+    pub fn validate_transaction_cancellable(
+        &self,
+        extended_tx: &[u8],
+        utxo_heights: &[i32],
+        block_height: i32,
+        consensus: bool,
+        cancel: &CancelFlag,
+    ) -> Result<(), TxError> {
+        let (tx_len, utxo_len) = slice_lengths(extended_tx, utxo_heights)?;
+        let raw = unsafe {
+            bdk_sys::bdkffi_txvalidator_validate_transaction_cancellable(
+                self.ptr,
+                extended_tx.as_ptr().cast(),
+                tx_len,
+                utxo_heights.as_ptr(),
+                utxo_len,
+                block_height,
+                consensus,
+                cancel.as_c_ptr(),
+            )
+        };
+        translate(raw)
+    }
+
+    /// [`verify_script`](Self::verify_script), stopped by `cancel`. See
+    /// [`CancelFlag`].
+    pub fn verify_script_cancellable(
+        &self,
+        extended_tx: &[u8],
+        utxo_heights: &[i32],
+        block_height: i32,
+        consensus: bool,
+        cancel: &CancelFlag,
+    ) -> Result<(), TxError> {
+        self.verify_script_with_custom_flags_cancellable(
+            extended_tx,
+            utxo_heights,
+            block_height,
+            consensus,
+            &[],
+            cancel,
+        )
+    }
+
+    /// [`verify_script_with_custom_flags`](Self::verify_script_with_custom_flags),
+    /// stopped by `cancel`. Empty `custom_flags` means the calculated flags. See
+    /// [`CancelFlag`].
+    pub fn verify_script_with_custom_flags_cancellable(
+        &self,
+        extended_tx: &[u8],
+        utxo_heights: &[i32],
+        block_height: i32,
+        consensus: bool,
+        custom_flags: &[u32],
+        cancel: &CancelFlag,
+    ) -> Result<(), TxError> {
+        let (tx_len, utxo_len) = slice_lengths(extended_tx, utxo_heights)?;
+        let flags_len = len_to_c_int(custom_flags.len()).map_err(|_| TxError::Exception)?;
+        let raw = unsafe {
+            bdk_sys::bdkffi_txvalidator_verify_script_cancellable(
+                self.ptr,
+                extended_tx.as_ptr().cast(),
+                tx_len,
+                utxo_heights.as_ptr(),
+                utxo_len,
+                block_height,
+                consensus,
+                custom_flags.as_ptr(),
+                flags_len,
+                cancel.as_c_ptr(),
+            )
+        };
+        translate(raw)
+    }
+
+    /// [`validate_batch`](Self::validate_batch), stopped by `cancel`: entries
+    /// finished before the cancel keep their results, the rest are
+    /// [`TxError::Cancelled`]. See [`CancelFlag`].
+    pub fn validate_batch_cancellable(
+        &self,
+        batch: &ValidateBatch,
+        cancel: &CancelFlag,
+    ) -> Vec<Result<(), TxError>> {
+        let expected_len = batch.len();
+        if batch.has_shim_mismatch() {
+            return exception_results(expected_len);
+        }
+
+        let mut result_len: c_int = 0;
+        let raw_results = unsafe {
+            bdk_sys::bdkffi_txvalidator_validate_batch_cancellable(
+                self.ptr,
+                batch.as_raw(),
+                &mut result_len,
+                cancel.as_c_ptr(),
+            )
         };
 
         copy_batch_results(raw_results, result_len, expected_len)
