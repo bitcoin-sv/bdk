@@ -311,9 +311,12 @@ private:
  * CTxValidator's settings. Each input gets its own CachingScriptChecker.
  */
 
-// Inputs from which a tx's inputs are verified in parallel. Measured on ARM64
-// and x86-64; see the parallel input benchmark in test_txvalidator.
-constexpr size_t DEFAULT_PARALLEL_INPUT_THRESHOLD = 64;
+// Inputs from which a tx's inputs are verified in parallel. From the
+// threshold_sweep benchmark in test_txvalidator (SIGHASH_ALL|FORKID P2PKH, about
+// 20-50 us per input): at 16 inputs parallel was 1.56x-1.84x faster on
+// ubuntu-22.04 (x86-64, 4 vCPU), ubuntu-22.04-arm (4 cores), macos-15 CI
+// (3 vCPU) and an Apple M3 Max; at 2-4 inputs the macos-15 runner was slower.
+constexpr size_t DEFAULT_PARALLEL_INPUT_THRESHOLD = 16;
 std::atomic<size_t> parallelInputThreshold{ DEFAULT_PARALLEL_INPUT_THRESHOLD };
 std::atomic<uint64_t> helperVerifiedInputs{ 0 };
 
@@ -321,7 +324,7 @@ std::atomic<uint64_t> helperVerifiedInputs{ 0 };
 
 // Each extra participant is worth at least this many inputs (fewer when the
 // threshold is lower, so a tx at the threshold always gets a helper).
-constexpr size_t MIN_INPUTS_PER_PARTICIPANT = 16;
+constexpr size_t MIN_INPUTS_PER_PARTICIPANT = 8;
 
 // One transaction's inputs [0, n), shared by its caller and the helpers that join.
 class InputJob {
