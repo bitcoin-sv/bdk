@@ -185,6 +185,10 @@ const std::vector<bsv::Sha256Backend>& bsv::Sha256SupportedBackends()
 
 const std::string& bsv::SelectSha256Backend()
 {
+#if defined(__EMSCRIPTEN__)
+    // Scalar only, and kept minimal: the wasm bundles have a size ceiling
+    static const std::string selected{"standard"};
+#else
     static const std::string selected = [] () -> std::string {
         if(ForceScalar())
             return "standard(forced)";
@@ -203,5 +207,6 @@ const std::string& bsv::SelectSha256Backend()
         return ret;
 #endif
     }();
+#endif
     return selected;
 }

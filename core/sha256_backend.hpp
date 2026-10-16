@@ -36,7 +36,7 @@ const std::vector<Sha256Backend>& Sha256SupportedBackends();
  *
  * Setting the environment variable BDK_SHA256_FORCE_SCALAR to anything other
  * than "" or "0" before the first call keeps the scalar transforms, and the
- * result is "standard(forced)".
+ * result is "standard(forced)". The WASM build is always "standard".
  *
  * A program that hashes on several threads before it constructs any
  * CTxValidator should call this once at startup.
