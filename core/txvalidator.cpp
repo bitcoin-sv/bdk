@@ -304,8 +304,9 @@ private:
  * Oversubscription: busyThreads counts every thread inside implVerifyScript
  * plus every helper on a job. A helper joins only while that count is below
  * the core count, so when callers already occupy every core a large tx gets no
- * helpers and runs serially on its own thread. hardware_concurrency() reports
- * the machine's cores, not a container's CPU quota.
+ * helpers and runs serially on its own thread. The core count is
+ * EffectiveCpuCount(): on Linux it respects the affinity mask and a
+ * container's cgroup CPU limit, rounded as Go sets GOMAXPROCS.
  *
  * Shared by all participants, read only: the CTransaction, its
  * PrecomputedTransactionData, the previous outputs, heights and flags, and the
@@ -480,7 +481,9 @@ private:
 
     static InputVerifyPool* Create()
     {
-        const size_t cores = std::thread::hardware_concurrency();
+        // hardware_concurrency(), lowered on Linux to the affinity mask and
+        // the container's cgroup CPU limit.
+        const size_t cores = bsv::detail::EffectiveCpuCount();
         if (cores < 2)
             return nullptr;
         auto* pool = new (std::nothrow) InputVerifyPool(cores);

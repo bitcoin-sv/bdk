@@ -1517,6 +1517,72 @@ BOOST_AUTO_TEST_CASE(concurrent_callers_share_the_pool)
 
 BOOST_AUTO_TEST_SUITE_END()
 
+// The helper pool sizes itself from the CPUs this process may use. On Linux a
+// container's CPU limit comes from its cgroup; these tests read fixture trees
+// under test/core/data/cgroup, each laid out as a root with proc/self/cgroup,
+// proc/self/mountinfo and the cgroup files, never the live system.
+BOOST_AUTO_TEST_SUITE(container_cpu_limit)
+
+static std::optional<double> FixtureCpuLimit(const std::string& name)
+{
+    return bsv::detail::CgroupCpuLimit(std::string(BDK_CGROUP_FIXTURE_DIR) + "/" + name);
+}
+
+BOOST_AUTO_TEST_CASE(cgroup_v2_quota_in_a_container)
+{
+    const auto limit = FixtureCpuLimit("v2_quota");
+    BOOST_REQUIRE(limit.has_value());
+    BOOST_CHECK_CLOSE(*limit, 2.5, 1e-9);
+}
+
+BOOST_AUTO_TEST_CASE(cgroup_v2_quota_of_a_nested_cgroup)
+{
+    // The process's own cgroup has the limit; the root's cpu.max says max.
+    const auto limit = FixtureCpuLimit("v2_nested");
+    BOOST_REQUIRE(limit.has_value());
+    BOOST_CHECK_CLOSE(*limit, 1.5, 1e-9);
+}
+
+BOOST_AUTO_TEST_CASE(cgroup_v2_max_is_no_limit)
+{
+    BOOST_CHECK(!FixtureCpuLimit("v2_max").has_value());
+}
+
+BOOST_AUTO_TEST_CASE(cgroup_v1_quota_in_a_container)
+{
+    const auto limit = FixtureCpuLimit("v1_quota");
+    BOOST_REQUIRE(limit.has_value());
+    BOOST_CHECK_CLOSE(*limit, 2.0, 1e-9);
+}
+
+BOOST_AUTO_TEST_CASE(cgroup_v1_quota_minus_one_is_no_limit)
+{
+    BOOST_CHECK(!FixtureCpuLimit("v1_unlimited").has_value());
+}
+
+BOOST_AUTO_TEST_CASE(unreadable_cgroup_files_give_no_limit)
+{
+    for (const char* name : { "garbage", "garbage_cgroup", "missing", "missing_cpu_max", "no_such_fixture" })
+        BOOST_CHECK_MESSAGE(!FixtureCpuLimit(name).has_value(), name);
+}
+
+// Go 1.25's default GOMAXPROCS rule (runtime/cgroup_linux.go,
+// adjustCgroupGOMAXPROCS): the CPUs available to the process, lowered to the
+// cgroup limit rounded up, and never below 2 because of the limit.
+BOOST_AUTO_TEST_CASE(cpu_count_rounds_the_limit_like_gomaxprocs)
+{
+    using bsv::detail::LimitCpuCount;
+    BOOST_CHECK_EQUAL(LimitCpuCount(16, std::nullopt), 16u);
+    BOOST_CHECK_EQUAL(LimitCpuCount(16, 4.0), 4u);
+    BOOST_CHECK_EQUAL(LimitCpuCount(16, 2.5), 3u);
+    BOOST_CHECK_EQUAL(LimitCpuCount(16, 1.01), 2u);
+    BOOST_CHECK_EQUAL(LimitCpuCount(16, 0.5), 2u);
+    BOOST_CHECK_EQUAL(LimitCpuCount(4, 8.0), 4u);
+    BOOST_CHECK_EQUAL(LimitCpuCount(1, 0.5), 1u);
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+
 // Throughput numbers for choosing and checking the parallel input threshold.
 // Disabled by default; ctest runs it on its own (RUN_SERIAL) as
 // test_txvalidator_parallel_input_benchmark and the numbers land in the log.

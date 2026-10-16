@@ -180,6 +180,7 @@ bdk_add_unit_test(test_big_int_boost)
 
 add_executable(test_txvalidator "${CMAKE_CURRENT_SOURCE_DIR}/test_txvalidator.cpp" "${BSV_APPLICATION_HDR_FILES}" "${BSV_APPLICATION_SRC_FILES}")
 target_link_libraries(test_txvalidator PRIVATE bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono ${CMAKE_DL_LIBS})
+target_compile_definitions(test_txvalidator PRIVATE BDK_CGROUP_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data/cgroup")
 bdk_add_unit_test(test_txvalidator)
 ## The same suite with every multi-input transaction verified on several threads
 add_test(NAME test_txvalidator_parallel_inputs
