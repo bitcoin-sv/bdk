@@ -1583,9 +1583,11 @@ BOOST_AUTO_TEST_CASE(cpu_count_rounds_the_limit_like_gomaxprocs)
 
 BOOST_AUTO_TEST_SUITE_END()
 
-// Throughput numbers for choosing and checking the parallel input threshold.
-// Disabled by default; ctest runs it on its own (RUN_SERIAL) as
-// test_txvalidator_parallel_input_benchmark and the numbers land in the log.
+// Throughput numbers for choosing and checking the parallel input threshold,
+// about 45 s. Disabled by default and not registered with ctest; run it alone
+// on an otherwise idle machine:
+//   test_txvalidator --run_test=test_txvalidator/parallel_input_benchmark
+// CI runs it in an optional step (workflow_dispatch input run-benchmarks).
 // It asserts only that every tx validates.
 BOOST_AUTO_TEST_SUITE(parallel_input_benchmark, *boost::unit_test::disabled())
 
