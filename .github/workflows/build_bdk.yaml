@@ -144,6 +144,7 @@ jobs:
           uname -m
           if [[ -r /proc/cpuinfo ]]; then
             lscpu | grep 'Model name' || true
+            grep -m1 'CPU part' /proc/cpuinfo || true  ## ARM: 0xd0c Neoverse N1, 0xd40 V1, 0xd49 N2, 0xd4f V2
             grep -o -m1 -w -E 'sha_ni|sha2' /proc/cpuinfo || echo "cpuinfo: no sha_ni / sha2 flag"
           else
             sysctl -n machdep.cpu.brand_string
