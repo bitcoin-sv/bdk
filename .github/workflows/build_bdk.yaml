@@ -138,6 +138,18 @@ jobs:
           cmake --build build --parallel 4
           ctest --output-on-failure --test-dir build
 
+      - name: Report SHA-256 backend and throughput
+        if: runner.os != 'Windows'
+        run: |
+          uname -m
+          if [[ -r /proc/cpuinfo ]]; then
+            lscpu | grep 'Model name' || true
+            grep -o -m1 -w -E 'sha_ni|sha2' /proc/cpuinfo || echo "cpuinfo: no sha_ni / sha2 flag"
+          else
+            sysctl -n machdep.cpu.brand_string
+          fi
+          ctest --test-dir build -R '^test_sha256_backends$' --verbose
+
       - name: Check GoBDK has changed
         id: gobdk_change
         if: runner.os != 'Windows' && github.event_name == 'workflow_dispatch'
