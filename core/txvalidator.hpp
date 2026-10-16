@@ -392,6 +392,19 @@ class CTxValidator {
 // export the value of SCRIPT_ERR_ERROR_COUNT
 int CPP_SCRIPT_ERR_ERROR_COUNT();
 
+// Test-only hooks for the parallel input verification in implVerifyScript.
+// Not part of any language binding; production code must not call them.
+namespace detail {
+    // Sets the input count from which a transaction's inputs are verified on
+    // several threads, process-wide, and returns the previous value.
+    // SIZE_MAX forces the serial path; 2 forces the parallel path for every
+    // multi-input transaction.
+    size_t SetParallelInputThresholdForTesting(size_t minInputs);
+
+    // Number of inputs verified on pool helper threads since process start.
+    uint64_t HelperVerifiedInputCountForTesting();
+} // namespace detail
+
 } // namespace bsv
 
 #endif /* __TXVALIDATOR_HPP__ */

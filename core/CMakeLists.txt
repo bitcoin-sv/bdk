@@ -28,9 +28,10 @@ if(BDK_BUILD_LEVELDB)
 endif()
 
 ## Canonical native core: OpenSSL-linked, no exclusions, no extra definitions
-## (OpenSSL discovery runs at root scope, visible to core/, module/ and test/)
+## (OpenSSL discovery runs at root scope, visible to core/, module/ and test/).
+## Threads: implVerifyScript verifies a large tx's inputs on a helper pool.
 bdk_add_core_library(bdk_core
-  LINK_LIBRARIES OpenSSL::Crypto OpenSSL::SSL)
+  LINK_LIBRARIES OpenSSL::Crypto OpenSSL::SSL Threads::Threads)
 
 ## Install the binary library
 if(BDK_INSTALL_CORE_ARCHIVE)
