@@ -15,6 +15,7 @@ use std::sync::atomic::{AtomicI32, Ordering};
 pub struct CancelFlag(AtomicI32);
 
 impl CancelFlag {
+    /// A flag that is not cancelled.
     pub const fn new() -> Self {
         Self(AtomicI32::new(0))
     }
@@ -24,6 +25,7 @@ impl CancelFlag {
         self.0.store(1, Ordering::Relaxed);
     }
 
+    /// Whether [`cancel`](Self::cancel) has been called.
     pub fn is_cancelled(&self) -> bool {
         self.0.load(Ordering::Relaxed) != 0
     }

@@ -136,24 +136,61 @@ fn cancelled_before_start_returns_cancelled_from_every_entry_point() {
     }
 }
 
+// One entry per input of the mainnet fixture: P2SH evaluation without the
+// post-Genesis flags. The fixture's inputs spend P2SH outputs whose redeem scripts
+// the calculated (post-Genesis) flags never run; with these flags they fail.
+const P2SH_ONLY_FLAGS: &[u32] = &[1, 1];
+
 #[test]
 fn unset_flag_gives_the_uncancelled_result() {
     let _guard = policy_guard();
     let validator = TxValidator::new("main").expect("main validator");
-    let tx = common::decode_hex(common::MAINNET_TX_HEX);
+    let valid = common::decode_hex(common::MAINNET_TX_HEX);
+    let mut invalid = valid.clone();
+    invalid[60] ^= 0x01; // first input's script
     let utxo = common::MAINNET_UTXO_HEIGHTS;
     let height = common::MAINNET_BLOCK_HEIGHT;
     let flag = CancelFlag::new();
 
-    for consensus in [true, false] {
-        assert_eq!(
-            validator.validate_transaction(&tx, utxo, height, consensus),
-            validator.validate_transaction_cancellable(&tx, utxo, height, consensus, &flag)
-        );
-        assert_eq!(
-            validator.verify_script(&tx, utxo, height, consensus),
-            validator.verify_script_cancellable(&tx, utxo, height, consensus, &flag)
-        );
+    // The fixtures keep the properties the comparisons rely on.
+    assert!(matches!(
+        validator.validate_transaction(&invalid, utxo, height, true),
+        Err(TxError::Script(_))
+    ));
+    assert_eq!(validator.verify_script(&valid, utxo, height, true), Ok(()));
+    assert!(matches!(
+        validator.verify_script_with_custom_flags(&valid, utxo, height, true, P2SH_ONLY_FLAGS),
+        Err(TxError::Script(_))
+    ));
+
+    for tx in [&valid, &invalid] {
+        for consensus in [true, false] {
+            assert_eq!(
+                validator.validate_transaction(tx, utxo, height, consensus),
+                validator.validate_transaction_cancellable(tx, utxo, height, consensus, &flag)
+            );
+            assert_eq!(
+                validator.verify_script(tx, utxo, height, consensus),
+                validator.verify_script_cancellable(tx, utxo, height, consensus, &flag)
+            );
+            for flags in [common::MAINNET_CUSTOM_FLAGS, P2SH_ONLY_FLAGS, &[]] {
+                assert_eq!(
+                    validator.verify_script_with_custom_flags(tx, utxo, height, consensus, flags),
+                    validator.verify_script_with_custom_flags_cancellable(
+                        tx, utxo, height, consensus, flags, &flag
+                    ),
+                    "flags={flags:?}"
+                );
+            }
+
+            let mut batch = ValidateBatch::new();
+            batch.add(&valid, utxo, height, consensus);
+            batch.add(tx, utxo, height, consensus);
+            assert_eq!(
+                validator.validate_batch(&batch),
+                validator.validate_batch_cancellable(&batch, &flag)
+            );
+        }
     }
 }
 

@@ -137,8 +137,8 @@ bdkffi_TxError* bdkffi_txvalidator_validate_batch(
 /*
  * Cancellable variants.
  *
- * cancel_flag points to an int32_t owned by the caller: store a non-zero value with an
- * atomic store, from any thread, to cancel the call. The call only reads it, and only
+ * cancel_flag points to a 4-byte aligned int32_t owned by the caller: store a non-zero
+ * value with an atomic store, from any thread, to cancel the call. The call only reads it, and only
  * until it returns. NULL means never cancelled.
  *
  * A cancelled call returns {BDKFFI_TX_ERR_DOMAIN_CANCELLED, 0}: no verdict about the

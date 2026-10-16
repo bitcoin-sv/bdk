@@ -618,6 +618,21 @@ impl TxValidator {
     }
 }
 
+// TxValidator must stay !Send and !Sync (see its docs). Were it to implement either,
+// `AmbiguousIfImpl<_>` below would have two candidate impls for it and this would
+// stop compiling.
+trait AmbiguousIfImpl<A> {
+    fn some_item() {}
+}
+impl<T: ?Sized> AmbiguousIfImpl<()> for T {}
+struct ImplementsSend;
+impl<T: ?Sized + Send> AmbiguousIfImpl<ImplementsSend> for T {}
+struct ImplementsSync;
+impl<T: ?Sized + Sync> AmbiguousIfImpl<ImplementsSync> for T {}
+const _: fn() = || {
+    let _ = <TxValidator as AmbiguousIfImpl<_>>::some_item;
+};
+
 impl Drop for TxValidator {
     fn drop(&mut self) {
         unsafe { bdk_sys::bdkffi_txvalidator_destroy(self.ptr) };
