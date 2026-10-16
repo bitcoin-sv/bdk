@@ -52,8 +52,9 @@ func newCancelledError(ctx context.Context) error {
 //
 // The flag is an int32 on the Go heap. C reads it only during the call, as cgo
 // allows for a pointer to Go memory holding no Go pointers. context.AfterFunc stores
-// to it from its own goroutine, started only if ctx is done; stop() unregisters the
-// callback once the call has returned. A store that races with the return lands in
+// to it from its own goroutine, started only if ctx is done (for a Context the context
+// package did not build, AfterFunc also watches it with a goroutine until stop());
+// stop() unregisters the callback once the call has returned. A store that races with the return lands in
 // memory BDK no longer reads, and the closure keeps the flag alive until then.
 func withCancelFlag[R any](ctx context.Context, call func(flag *C.int32_t) R) R {
 	flag := new(int32)

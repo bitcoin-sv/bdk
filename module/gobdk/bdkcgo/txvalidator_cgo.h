@@ -179,8 +179,8 @@ TxError TxValidator_ValidateTransaction(TxValidatorCGO cgoEngine,
 /*
  * Cancellable variants.
  *
- * cancelFlag points to an int32_t owned by the caller: store a non-zero value with an
- * atomic store, from any thread, to cancel the call. BDK only reads it, and only until
+ * cancelFlag points to a 4-byte aligned int32_t owned by the caller: store a non-zero
+ * value with an atomic store, from any thread, to cancel the call. BDK only reads it, and only until
  * the call returns. NULL means never cancelled.
  *
  * A cancelled call returns { TX_ERR_DOMAIN_CANCELLED, 0 }: no verdict about the

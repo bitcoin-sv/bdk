@@ -10,6 +10,7 @@ import (
 	"math/rand"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -187,40 +188,101 @@ func TestContextCancelCauseIsCarried(t *testing.T) {
 	assert.False(t, errors.Is(err, context.DeadlineExceeded))
 }
 
+// errShape names a result by its type, domain and code, so two results compare equal
+// only when a caller would classify them the same way.
+func errShape(err error) string {
+	var scriptErr goscript.ScriptError
+	var dosErr goscript.DoSError
+	var abiErr goscript.ABIError
+	switch {
+	case err == nil:
+		return "ok"
+	case errors.Is(err, goscript.ErrCancelled):
+		return "cancelled"
+	case errors.As(err, &abiErr):
+		return fmt.Sprintf("abi:%d", abiErr.Code())
+	case errors.As(err, &dosErr):
+		return fmt.Sprintf("dos:%d", dosErr.Code())
+	case errors.As(err, &scriptErr):
+		return fmt.Sprintf("script:%d", scriptErr.Code())
+	default:
+		return fmt.Sprintf("other:%T:%v", err, err)
+	}
+}
+
+func errShapes(errs []error) []string {
+	if errs == nil {
+		return nil
+	}
+	shapes := make([]string, len(errs))
+	for i, err := range errs {
+		shapes[i] = errShape(err)
+	}
+	return shapes
+}
+
+// nilDoneContext can never be cancelled: Done returns nil, as context.Background's does.
+type nilDoneContext struct{ context.Context }
+
+func (nilDoneContext) Done() <-chan struct{} { return nil }
+
+// cancelTestP2SHOnlyFlags, one entry per input of the valid fixture, enable P2SH
+// evaluation without the post-Genesis flags. The fixture's inputs spend P2SH outputs
+// whose redeem scripts the calculated (post-Genesis) flags never run; run with these
+// flags, they fail.
+var cancelTestP2SHOnlyFlags = []uint32{1, 1}
+
 // A context that is never cancelled, or cancelled only after the call returned, gives
-// exactly the result of the non-context function.
+// exactly the result of the non-context function, compared by error type, domain and
+// code.
 func TestContextResultsMatchWhenNotCancelled(t *testing.T) {
 	se := goscript.NewTxValidator("main")
-	flags := []uint32{869935, 869935}
+	customFlags := map[string][]uint32{
+		"nil": nil, "empty": {}, "calculated-equivalent": {869935, 869935}, "p2sh-only": cancelTestP2SHOnlyFlags,
+	}
 
 	for name, tx := range map[string][]byte{"valid": cancelTestValidTx(t), "invalid": cancelTestInvalidTx(t)} {
 		for _, consensus := range []bool{true, false} {
 			live, cancelLive := context.WithCancel(context.Background())
-			for ctxName, ctx := range map[string]context.Context{"background": context.Background(), "live": live} {
-				msg := name + "/" + ctxName
-				assert.Equal(t, fmt.Sprint(se.ValidateTransaction(tx, cancelTestValidUtxo, cancelTestValidHeight, consensus)),
-					fmt.Sprint(se.ValidateTransactionContext(ctx, tx, cancelTestValidUtxo, cancelTestValidHeight, consensus)), msg)
-				assert.Equal(t, fmt.Sprint(se.VerifyScript(tx, cancelTestValidUtxo, cancelTestValidHeight, consensus)),
-					fmt.Sprint(se.VerifyScriptContext(ctx, tx, cancelTestValidUtxo, cancelTestValidHeight, consensus)), msg)
-				assert.Equal(t, fmt.Sprint(se.VerifyScriptWithCustomFlags(tx, cancelTestValidUtxo, cancelTestValidHeight, consensus, flags)),
-					fmt.Sprint(se.VerifyScriptWithCustomFlagsContext(ctx, tx, cancelTestValidUtxo, cancelTestValidHeight, consensus, flags)), msg)
+			contexts := map[string]context.Context{
+				"background": context.Background(), "live": live, "nil-done": nilDoneContext{context.Background()},
+			}
+			for ctxName, ctx := range contexts {
+				msg := fmt.Sprintf("%s/%s/consensus=%v", name, ctxName, consensus)
+				assert.Equal(t, errShape(se.ValidateTransaction(tx, cancelTestValidUtxo, cancelTestValidHeight, consensus)),
+					errShape(se.ValidateTransactionContext(ctx, tx, cancelTestValidUtxo, cancelTestValidHeight, consensus)), msg)
+				assert.Equal(t, errShape(se.VerifyScript(tx, cancelTestValidUtxo, cancelTestValidHeight, consensus)),
+					errShape(se.VerifyScriptContext(ctx, tx, cancelTestValidUtxo, cancelTestValidHeight, consensus)), msg)
+				for flagsName, flags := range customFlags {
+					assert.Equal(t, errShape(se.VerifyScriptWithCustomFlags(tx, cancelTestValidUtxo, cancelTestValidHeight, consensus, flags)),
+						errShape(se.VerifyScriptWithCustomFlagsContext(ctx, tx, cancelTestValidUtxo, cancelTestValidHeight, consensus, flags)),
+						msg+" flags="+flagsName)
+				}
 
 				batch := goscript.NewValidateBatch()
 				require.NoError(t, batch.Add(tx, cancelTestValidUtxo, cancelTestValidHeight, consensus))
-				assert.Equal(t, fmt.Sprint(se.ValidateBatch(batch)), fmt.Sprint(se.ValidateBatchContext(ctx, batch)), msg)
+				assert.Equal(t, errShapes(se.ValidateBatch(batch)), errShapes(se.ValidateBatchContext(ctx, batch)), msg)
+				empty := goscript.NewValidateBatch()
+				assert.Equal(t, errShapes(se.ValidateBatch(empty)), errShapes(se.ValidateBatchContext(ctx, empty)), msg+" empty batch")
+				assert.Nil(t, se.ValidateBatchContext(ctx, nil), msg+" nil batch")
 			}
 
 			// Cancelled after the call returned: the verdict stands.
 			err := se.ValidateTransactionContext(live, tx, cancelTestValidUtxo, cancelTestValidHeight, consensus)
 			cancelLive()
-			assert.False(t, errors.Is(err, goscript.ErrCancelled))
-			assert.Equal(t, fmt.Sprint(se.ValidateTransaction(tx, cancelTestValidUtxo, cancelTestValidHeight, consensus)), fmt.Sprint(err))
+			assert.Equal(t, errShape(se.ValidateTransaction(tx, cancelTestValidUtxo, cancelTestValidHeight, consensus)), errShape(err))
 		}
 	}
 
+	// The fixtures keep the properties the comparisons rely on.
 	var scriptErr goscript.ScriptError
 	require.True(t, errors.As(se.ValidateTransaction(cancelTestInvalidTx(t), cancelTestValidUtxo, cancelTestValidHeight, true), &scriptErr),
 		"the invalid fixture must fail with a script error")
+	require.NoError(t, se.VerifyScript(cancelTestValidTx(t), cancelTestValidUtxo, cancelTestValidHeight, true))
+	require.True(t, errors.As(se.VerifyScriptWithCustomFlags(cancelTestValidTx(t), cancelTestValidUtxo, cancelTestValidHeight, true, cancelTestP2SHOnlyFlags), &scriptErr),
+		"the P2SH-only flags must change the valid fixture's verdict")
+	// A pre-cancelled context on an empty batch gives what the plain call gives.
+	assert.Nil(t, se.ValidateBatchContext(cancelledContext(), goscript.NewValidateBatch()))
 }
 
 func TestValidateBatchContextCancelledPartWay(t *testing.T) {
@@ -247,8 +309,10 @@ func TestValidateBatchContextCancelledPartWay(t *testing.T) {
 }
 
 // Many goroutines share one validator, each with its own context cancelled at a random
-// moment. Every result is the verdict or a cancellation, never anything else. Run
-// with -race.
+// moment. Every result is the verdict or a cancellation, never anything else, and some
+// calls are cancelled while they run. Under -race this checks the Go side (the
+// AfterFunc store, the flag's lifetime); the race detector does not see the C++ read
+// of the flag, which the ThreadSanitizer CI job covers.
 func TestContextConcurrentCancellation(t *testing.T) {
 	mainSE := goscript.NewTxValidator("main")
 	longSE := longRunningValidator(t)
@@ -257,13 +321,16 @@ func TestContextConcurrentCancellation(t *testing.T) {
 	longUtxo := []int32{cancelTestLongUtxoHeight}
 
 	var wg sync.WaitGroup
+	var cancelled atomic.Int64
 	for g := 0; g < 16; g++ {
 		wg.Add(1)
 		go func(seed int64) {
 			defer wg.Done()
 			rng := rand.New(rand.NewSource(seed))
 			for i := 0; i < 40; i++ {
-				ctx, cancel := context.WithTimeout(context.Background(), time.Duration(rng.Intn(3000))*time.Microsecond)
+				// At least 1 ms, so the call has started before the deadline; the long
+				// transaction takes tens of ms.
+				ctx, cancel := context.WithTimeout(context.Background(), time.Duration(1000+rng.Intn(3000))*time.Microsecond)
 				var err error
 				if i%2 == 0 {
 					err = mainSE.ValidateTransactionContext(ctx, valid, cancelTestValidUtxo, cancelTestValidHeight, i%4 == 0)
@@ -271,13 +338,16 @@ func TestContextConcurrentCancellation(t *testing.T) {
 					err = longSE.ValidateTransactionContext(ctx, long, longUtxo, cancelTestLongBlockHeight, i%3 == 0)
 				}
 				cancel()
-				if err != nil && !errors.Is(err, goscript.ErrCancelled) {
+				if errors.Is(err, goscript.ErrCancelled) {
+					cancelled.Add(1)
+				} else if err != nil {
 					t.Errorf("unexpected result %v", err)
 				}
 			}
 		}(int64(g))
 	}
 	wg.Wait()
+	assert.Positive(t, cancelled.Load(), "no call was cancelled while it ran")
 }
 
 // chanContext is a cancellable context the context package does not recognise, so

@@ -566,7 +566,7 @@ func (se *TxValidator) ValidateBatchContext(ctx context.Context, batch *Validate
 	if ctx.Done() == nil {
 		return se.ValidateBatch(batch)
 	}
-	if batch == nil || batch.cBatchPtr == nil {
+	if batch == nil || batch.cBatchPtr == nil || batch.Empty() {
 		return nil
 	}
 	if ctx.Err() != nil {
@@ -598,9 +598,11 @@ func (se *TxValidator) ValidateBatchContext(ctx context.Context, batch *Validate
 // If ctx is done after BDK's last check, the verdict is returned as usual: use the
 // result, not ctx.Err(), as the outcome.
 //
-// A context that can never be cancelled (context.Background, context.TODO) costs
-// nothing over ValidateTransaction. Otherwise the call registers a callback with
-// context.AfterFunc; no goroutine runs unless ctx is cancelled.
+// A context that can never be cancelled (Done returns nil, as for context.Background
+// and context.TODO) costs nothing over ValidateTransaction. Otherwise the call
+// registers a callback with context.AfterFunc. For contexts built by the context
+// package no goroutine runs unless ctx is cancelled; for another Context
+// implementation AfterFunc watches it with one goroutine until the call returns.
 func (se *TxValidator) ValidateTransactionContext(ctx context.Context, extendedTX []byte, utxoHeights []int32, blockHeight int32, consensus bool) error {
 	if ctx.Done() == nil {
 		return se.ValidateTransaction(extendedTX, utxoHeights, blockHeight, consensus)
