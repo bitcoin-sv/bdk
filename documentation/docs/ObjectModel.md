@@ -71,13 +71,22 @@ classDiagram
 
 Long-running validation can be cancelled. `ValidateTransaction`, `VerifyScript`, `VerifySpend`,
 `ValidateBatch` and `CheckStandardness` each have an overload that takes a
-`task::CCancellationToken`. The call polls the token at entry, between its transaction checks and
-before every opcode the interpreter runs (SV Node's own check); once the token has fired it returns
-`CANCELLED` with code 0, in consensus and policy mode alike. A step that has already started, such as
-deserialising the transaction, one signature hash, or one hash or arithmetic opcode, finishes before
-the next poll. A token that fires after the last poll leaves the call to return its verdict, so
-callers must act on the result rather than on whether they cancelled. A cancelled `ValidateBatch`
-keeps the results of the entries it finished and returns `CANCELLED` for the rest.
+`task::CCancellationToken`; once the token has fired the call returns `CANCELLED` with code 0, in
+consensus and policy mode alike. The token is polled only at fixed points:
+
+| Call | Polls | Not polled (each linear in the transaction size) |
+|---|---|---|
+| `ValidateTransaction` | entry; after deserialising; after the transaction-level, prevout and output checks; in policy mode when inputs are checked for standardness (non-standard outputs not accepted), before each input; before script verification | deserialising and hashing; the transaction-level, prevout and output checks; the output standardness, sigop, input-value and fee checks |
+| `VerifyScript`, `VerifySpend` | entry; after deserialising | deserialising and hashing |
+| `CheckStandardness` | entry; after deserialising; before each input's check when inputs are checked | deserialising and hashing; the output standardness check |
+| `ValidateBatch` | as `ValidateTransaction`, per entry | as `ValidateTransaction` |
+
+On top of these, the interpreter polls before every opcode it runs (SV Node's own check), before each
+signature of `OP_CHECKMULTISIG` and each chunk of `OP_LSHIFT` / `OP_RSHIFT`. A step that has
+started finishes before the next poll: one signature hash, one hash or big-number opcode, or any
+phase in the right-hand column. A token that fires after the last poll leaves the call to return its
+verdict, so callers must act on the result rather than on whether they cancelled. A cancelled
+`ValidateBatch` keeps the results of the entries it finished and returns `CANCELLED` for the rest.
 
 The token belongs to the call, not to the `CTxValidator`, so concurrent calls on one validator
 cancel independently. The C bindings take a pointer to a caller-owned `int32_t` instead of a token
@@ -99,7 +108,9 @@ the returned `TxError` into a Go `error` (`nil` on success, otherwise the error 
 `*CancelledError`: `errors.Is(err, script.ErrCancelled)` is true and it unwraps to
 `context.Cause(ctx)`, so `context.Canceled`, `context.DeadlineExceeded` or a custom cause can be told
 apart. It is never a `ScriptError`, `DoSError` or `ABIError`. The context sets a heap `int32` through
-`context.AfterFunc`, so no goroutine runs unless the context is cancelled; `context.Background()` and
-`context.TODO()` take the plain path at no extra cost.
+`context.AfterFunc`. For contexts built by the `context` package no goroutine runs unless the context
+is cancelled; for another `Context` implementation `AfterFunc` watches it with one goroutine until the
+call returns. A context whose `Done()` is nil, such as `context.Background()` or `context.TODO()`,
+takes the plain path at no extra cost.
 
 `ValidateTransaction` rejects coinbase transactions. The caller must supply accurate previous-output data and heights; this API does not look up the node's UTXO set. See [Debugging transaction validation](debug_transaction.md).
