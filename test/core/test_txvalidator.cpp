@@ -1782,6 +1782,109 @@ BOOST_AUTO_TEST_CASE(participants_stop_above_the_lowest_failure)
         << " inputs were verified in every call after input 0 failed");
 }
 
+// Spends of a bare 1-of-N multisig signed by its first key. CHECKMULTISIG
+// walks the keys from the last pushed, so each input checks the signature
+// against N - 1 wrong keys first and takes on the order of tens of
+// milliseconds. Verified with VerifyScript in consensus
+// mode (no post-Genesis key-count limit).
+static bsv::CMutableTransactionExtended MakeSlowMultisigSpend(size_t nInputs, size_t nKeys)
+{
+    const SigHashType allForkId = SigHashType().withForkId();
+    std::vector<CKey> keys(nKeys);
+    CScript lockingScript = CScript() << OP_1;
+    for (size_t k = 0; k < nKeys; ++k) {
+        std::array<uint8_t, 32> raw{};
+        raw[29] = 0x5a;
+        raw[30] = static_cast<uint8_t>((k + 1) >> 8);
+        raw[31] = static_cast<uint8_t>(k + 1);
+        keys[k].Set(raw.begin(), raw.end(), /*fCompressedIn=*/true);
+        lockingScript << ToByteVector(keys[k].GetPubKey());
+    }
+    lockingScript << static_cast<int64_t>(nKeys) << OP_CHECKMULTISIG;
+
+    bsv::CMutableTransactionExtended eTx;
+    eTx.mtx.nVersion = 2;
+    eTx.mtx.vin.resize(nInputs);
+    eTx.vutxo.resize(nInputs);
+    for (size_t i = 0; i < nInputs; ++i) {
+        eTx.mtx.vin[i].prevout = COutPoint(uint256S("02"), static_cast<uint32_t>(i));
+        eTx.vutxo[i].nValue = Amount(P2PKH_INPUT_SATOSHIS);
+        eTx.vutxo[i].scriptPubKey = lockingScript;
+    }
+    eTx.mtx.vout.resize(1);
+    eTx.mtx.vout[0].nValue = Amount(P2PKH_OUTPUT_SATOSHIS);
+    eTx.mtx.vout[0].scriptPubKey = MakeP2PKHScript(MakeP2PKHTestKey().GetPubKey());
+    const CTransaction unsignedTx(eTx.mtx);
+    const PrecomputedTransactionData txdata(unsignedTx);
+    for (size_t i = 0; i < nInputs; ++i) {
+        const uint256 sighash = SignatureHash(lockingScript, unsignedTx, static_cast<unsigned int>(i), allForkId,
+            eTx.vutxo[i].nValue, &txdata);
+        std::vector<uint8_t> sig;
+        BOOST_REQUIRE(keys.front().Sign(sighash, sig));
+        sig.push_back(static_cast<uint8_t>(allForkId.getRawSigHashType()));
+        eTx.mtx.vin[i].scriptSig = CScript() << OP_0 << sig;
+    }
+    return eTx;
+}
+
+// A finished job queued behind a job that still has inputs left is not left
+// in the queue: its caller withdraws it. NextJob only drops finished jobs
+// from the front, so without the withdrawal it would wait for the live one.
+// A, at the threshold, is offered one helper; B, started while A runs, is
+// offered helpers too, but they join A at the front, and B's caller finishes
+// B alone. Needs a free core for B to be offered, so 4 or more cores, and at
+// most 8: with more, enough helpers join A to claim all its inputs and A
+// leaves the queue early. ctest's test_txvalidator_parallel_inputs runs it
+// with the pool capped at 4.
+BOOST_AUTO_TEST_CASE(finished_job_behind_a_live_one_leaves_the_queue)
+{
+    if (!PoolHasHelpers())
+        return;
+    const size_t cores = bsv::detail::InputPoolHelperCountForTesting() + 1;
+    if (cores < 4 || cores > 8) {
+        BOOST_TEST_MESSAGE(cores << " cores: the queue order this test needs cannot be set up; nothing to check");
+        return;
+    }
+    const InputThresholdGuard defaults(bsv::detail::DEFAULT_PARALLEL_INPUT_THRESHOLD);
+    const size_t slowInputs = bsv::detail::DEFAULT_PARALLEL_INPUT_THRESHOLD;
+    const auto slow = SerializeExtended(MakeSlowMultisigSpend(slowInputs, 200));
+    const std::vector<int32_t> slowHeights(slowInputs, P2PKH_UTXO_HEIGHT);
+    constexpr size_t fastInputs = 400;
+    const auto fast = SignedP2PKHBin(fastInputs);
+    const bsv::CTxValidator se("main");
+    BOOST_REQUIRE(PoolIsIdle());
+    std::atomic<bool> slowDone{ false };
+    TxError slowStatus = bsv::TxErrorOk();
+    std::thread slowCaller([&] {
+        slowStatus = se.VerifyScript(std::span<const uint8_t>(slow), std::span<const int32_t>(slowHeights),
+            P2PKH_BLOCK_HEIGHT, /*consensus=*/true);
+        slowDone.store(true);
+    });
+    BOOST_REQUIRE(WaitFor([&] { return bsv::detail::BusyThreadCountForTesting() > 1 || slowDone.load(); }));
+
+    std::atomic<bool> fastDone{ false };
+    TxError fastStatus = bsv::TxErrorOk();
+    std::thread fastCaller([&] {
+        fastStatus = ValidateP2PKHSpend(se, fast, fastInputs, /*consensus=*/true);
+        fastDone.store(true);
+    });
+    size_t mostQueued = 0;
+    while (!fastDone.load()) {
+        mostQueued = std::max(mostQueued, bsv::detail::QueuedJobCountForTesting());
+        std::this_thread::sleep_for(std::chrono::microseconds(20));
+    }
+    fastCaller.join();
+    const size_t queuedAfterFast = bsv::detail::QueuedJobCountForTesting();
+    const bool slowStillRunning = !slowDone.load();
+    slowCaller.join();
+
+    BOOST_CHECK(bsv::TxErrorIsOk(slowStatus));
+    BOOST_CHECK(bsv::TxErrorIsOk(fastStatus));
+    BOOST_REQUIRE_MESSAGE(slowStillRunning, "the slow job finished before the fast one");
+    BOOST_REQUIRE_MESSAGE(mostQueued >= 2, "the fast job was never queued behind the slow one");
+    BOOST_CHECK_MESSAGE(queuedAfterFast == 1, queuedAfterFast << " jobs queued after the fast call returned; expected only the slow one");
+}
+
 // A tx without outputs is verified with BaseSignatureChecker; the parallel
 // path returns what the serial one does.
 BOOST_AUTO_TEST_CASE(tx_without_outputs_matches_serial)
@@ -1951,10 +2054,12 @@ BOOST_AUTO_TEST_CASE(effective_cpu_count_applies_the_affinity_mask)
     cpu_set_t one;
     CPU_ZERO(&one);
     CPU_SET(pinned, &one);
+    struct RestoreAffinity {
+        const cpu_set_t& mask;
+        ~RestoreAffinity() { sched_setaffinity(0, sizeof(mask), &mask); }
+    } restore{ original };
     BOOST_REQUIRE_EQUAL(sched_setaffinity(0, sizeof(one), &one), 0);
-    const size_t effective = bsv::detail::EffectiveCpuCount(FixtureRoot("v2_max"));
-    BOOST_REQUIRE_EQUAL(sched_setaffinity(0, sizeof(original), &original), 0);
-    BOOST_CHECK_EQUAL(effective, 1u);
+    BOOST_CHECK_EQUAL(bsv::detail::EffectiveCpuCount(FixtureRoot("v2_max")), 1u);
 }
 #endif
 
