@@ -212,6 +212,10 @@ class CTxValidator {
         // instead of the implicitly calculated flags
         TxError VerifyScript(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool consensus, std::span<const uint32_t> customFlags = std::span<const uint32_t>()) const;
 
+        // Cancellable form of VerifyScript; an empty customFlags span means the
+        // calculated flags. Cancellation semantics as for ValidateTransaction below.
+        TxError VerifyScript(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool consensus, std::span<const uint32_t> customFlags, const task::CCancellationToken& token) const;
+
         // VerifySpend executes one input against an explicitly supplied source
         // output. This avoids constructing an extended transaction when a caller
         // already has the ordinary transaction bytes and is validating a single
@@ -227,6 +231,20 @@ class CTxValidator {
             std::optional<uint32_t> customFlags = std::nullopt
         ) const;
 
+        // Cancellable form of VerifySpend. Cancellation semantics as for
+        // ValidateTransaction below.
+        TxError VerifySpend(
+            std::span<const uint8_t> transaction,
+            uint32_t inputIndex,
+            std::span<const uint8_t> lockingScript,
+            int64_t sourceSatoshis,
+            int32_t utxoHeight,
+            int32_t blockHeight,
+            bool consensus,
+            std::optional<uint32_t> customFlags,
+            const task::CCancellationToken& token
+        ) const;
+
         // ValidateBatch processes multiple transaction validations in a batch.
         // Returns a vector of TxError results, one for each ValidateArg in the input.
         //
@@ -234,6 +252,11 @@ class CTxValidator {
         // the same thread. ValidateArg entries hold non-owning spans into caller memory;
         // concurrent access from another thread is a data race.
         std::vector<TxError> ValidateBatch(const ValidateBatch& batch) const;
+
+        // Cancellable form of ValidateBatch: one token for the whole batch. Entries
+        // finished before the token fired keep their results; every later entry
+        // returns TxErrorCancelled(). Same threading rule as above.
+        std::vector<TxError> ValidateBatch(const bsv::ValidateBatch& batch, const task::CCancellationToken& token) const;
 
         // ValidateTransaction runs all tx-level checks then script verification.
         // consensus=false → peer/mempool context (all checks including policy)
@@ -249,11 +272,30 @@ class CTxValidator {
                                  int32_t blockHeight,
                                  bool consensus) const;
 
+        // Cancellable form of ValidateTransaction. The call polls token at entry,
+        // between its checks, and before every opcode the interpreter runs, and
+        // returns TxErrorCancelled() (TX_ERR_DOMAIN_CANCELLED) once it has fired:
+        // no verdict, in either mode. A step that has started (deserialisation, one
+        // signature hash, one hash or arithmetic opcode) finishes before the next
+        // poll. The token may be cancelled from any thread while the call runs.
+        TxError ValidateTransaction(std::span<const uint8_t> extendedTX,
+                                 std::span<const int32_t> utxoHeights,
+                                 int32_t blockHeight,
+                                 bool consensus,
+                                 const task::CCancellationToken& token) const;
+
         // CheckStandardness verifies IsStandardTx + AreInputsStandard.
         // Policy-path check only (not applicable in block/consensus context).
         TxError CheckStandardness(std::span<const uint8_t> extendedTX,
                                   std::span<const int32_t> utxoHeights,
                                   int32_t blockHeight) const;
+
+        // Cancellable form of CheckStandardness (it runs the input scripts' pushes).
+        // Cancellation semantics as for ValidateTransaction.
+        TxError CheckStandardness(std::span<const uint8_t> extendedTX,
+                                  std::span<const int32_t> utxoHeights,
+                                  int32_t blockHeight,
+                                  const task::CCancellationToken& token) const;
 
         // CheckPrevOutputs rejects any input with a null prevout (all-zero txid + 0xFFFFFFFF index).
         // Both peer and block context.
@@ -312,7 +354,8 @@ class CTxValidator {
             const CScript& locking_script,
             const bool consensus,
             const unsigned int flags,
-            BaseSignatureChecker& sig_checker
+            BaseSignatureChecker& sig_checker,
+            const task::CCancellationToken& token
         ) const;
 
         TxError implCheckInputValues(
@@ -327,14 +370,16 @@ class CTxValidator {
             std::span<const int32_t> utxoHeights,
             int32_t blockHeight,
             bool consensus,
-            std::span<const uint32_t> customFlags = std::span<const uint32_t>()
+            std::span<const uint32_t> customFlags,
+            const task::CCancellationToken& token
         ) const;
 
         TxError implCheckStandardness(
             const CTransaction& tx,
             const std::vector<CTxOut>& prevUTXO,
             std::span<const int32_t> utxoHeights,
-            int32_t blockHeight
+            int32_t blockHeight,
+            const task::CCancellationToken& token
         ) const;
 
         TxError implCheckTransactionCommon(
