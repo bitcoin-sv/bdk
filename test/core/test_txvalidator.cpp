@@ -39,6 +39,7 @@
 #include "chainparamsbase.h"
 
 #include "txvalidator.hpp"
+#include "internal/txvalidator_internal.hpp"
 #include "chainparams_bdk.hpp"
 #include "extendedTx.hpp"
 #include "txerror.h"

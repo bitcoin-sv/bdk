@@ -13,6 +13,7 @@
 #include <chainparams_bdk.hpp>
 #include <extendedTx.hpp>
 #include <txvalidator.hpp>
+#include <internal/txvalidator_internal.hpp>
 
 #include <atomic>
 #include <cstddef>
