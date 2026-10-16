@@ -184,6 +184,11 @@ bdk_add_unit_test(test_txvalidator)
 ## The same suite with every multi-input transaction verified on several threads
 add_test(NAME test_txvalidator_parallel_inputs
          COMMAND $<TARGET_FILE:test_txvalidator> --report_level=detailed -- --parallel-input-threshold=2)
+## Serial vs parallel input verification numbers, printed to the log. Alone on
+## the machine so other tests don't skew them.
+add_test(NAME test_txvalidator_parallel_input_benchmark
+         COMMAND $<TARGET_FILE:test_txvalidator> --run_test=test_txvalidator/parallel_input_benchmark)
+set_tests_properties(test_txvalidator_parallel_input_benchmark PROPERTIES RUN_SERIAL TRUE)
 
 add_executable(test_chronicle "${CMAKE_CURRENT_SOURCE_DIR}/test_chronicle.cpp" "${BSV_APPLICATION_HDR_FILES}" "${BSV_APPLICATION_SRC_FILES}")
 target_link_libraries(test_chronicle PRIVATE bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono ${CMAKE_DL_LIBS})
