@@ -161,27 +161,32 @@ std::vector<uint8_t> PreGenesisP2SHTx()
     return { ss.begin(), ss.end() };
 }
 
-// A source a test cancels by hand, which counts its polls and records when each
-// poll happened.
+// A source that counts its polls and records when each happened. With cancelAfter
+// set, it cancels itself right after answering that poll, so the cancel lands in
+// whatever the call does between that poll and the next one.
 class RecordingSource final : public task::CCancellationSource {
 public:
     using clock = std::chrono::steady_clock;
-    static std::shared_ptr<RecordingSource> Make()
+    static std::shared_ptr<RecordingSource> Make(uint64_t cancelAfter = UINT64_MAX)
     {
-        return std::shared_ptr<RecordingSource>(new RecordingSource());
+        return std::shared_ptr<RecordingSource>(new RecordingSource(cancelAfter));
     }
     bool IsCanceled() override
     {
         const uint64_t n = ++polls_;
         if (n < times_.size())
             times_[n] = clock::now();
-        return CCancellationSource::IsCanceled();
+        const bool cancelled = CCancellationSource::IsCanceled();
+        if (n == cancelAfter_)
+            Cancel();
+        return cancelled;
     }
     uint64_t polls() const { return polls_; }
     clock::time_point pollTime(uint64_t n) const { return times_.at(n); }
 
 private:
-    RecordingSource() : times_(64) {}
+    explicit RecordingSource(uint64_t cancelAfter) : cancelAfter_{ cancelAfter }, times_(64) {}
+    const uint64_t cancelAfter_;
     std::atomic<uint64_t> polls_{ 0 };
     std::vector<clock::time_point> times_;
 };
@@ -392,8 +397,8 @@ BOOST_AUTO_TEST_CASE(cancel_at_every_poll_gives_cancelled_or_the_uncancelled_res
 
 // One signature hash over a large locking script is a single step with no poll
 // inside. A cancel that lands during input 0's OP_CHECKSIG waits for that step, then
-// stops at input 1's first poll: Cancelled, with a latency of about one OP_CHECKSIG,
-// not two.
+// stops at input 1's first poll: Cancelled, with input 1's OP_CHECKSIG never run. The source cancels itself right after the
+// poll before input 0's OP_CHECKSIG, so the cancel always lands inside it.
 BOOST_AUTO_TEST_CASE(cancelled_during_a_signature_hash_stops_at_the_next_input)
 {
     const std::vector<uint8_t> tx = LargeSighashTx(20u << 20);
@@ -414,19 +419,9 @@ BOOST_AUTO_TEST_CASE(cancelled_during_a_signature_hash_stops_at_the_next_input)
     BOOST_REQUIRE_EQUAL(kPrefixPolls + 2 * kPollsPerInput, reference->polls());
     const auto checksig = reference->pollTime(kInput1First) - reference->pollTime(kInput0Checksig);
 
-    const auto source = RecordingSource::Make();
-    std::atomic<int64_t> cancelledAtNs{ 0 };
-    std::thread canceller([&] {
-        while (source->polls() < kInput0Checksig)
-            std::this_thread::yield();
-        std::this_thread::sleep_for(checksig / 4);
-        cancelledAtNs = RecordingSource::clock::now().time_since_epoch().count();
-        source->Cancel();
-    });
+    const auto source = RecordingSource::Make(kInput0Checksig);
     const TxError result = validator.ValidateTransaction(etx, kSighashUtxoHeights, kSighashBlockHeight, true, source->GetToken());
-    const auto returnedAt = RecordingSource::clock::now();
-    canceller.join();
-    const auto latency = returnedAt - RecordingSource::clock::time_point(RecordingSource::clock::duration(cancelledAtNs.load()));
+    const auto latency = RecordingSource::clock::now() - source->pollTime(kInput0Checksig);
 
     using std::chrono::duration_cast;
     using std::chrono::microseconds;
@@ -434,8 +429,10 @@ BOOST_AUTO_TEST_CASE(cancelled_during_a_signature_hash_stops_at_the_next_input)
               << " latency_us=" << duration_cast<microseconds>(latency).count()
               << " polls=" << source->polls() << " domain=" << result.domain << std::endl;
     BOOST_CHECK_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_CANCELLED), result.domain);
+    // Stopped at input 1's first poll: input 1's OP_CHECKSIG never ran. The latency
+    // is printed, not asserted: it is one OP_CHECKSIG, and a loaded machine stretches
+    // that step itself.
     BOOST_CHECK_EQUAL(kInput1First, source->polls());
-    BOOST_CHECK_LT(duration_cast<microseconds>(latency).count(), duration_cast<microseconds>(checksig).count() + 20000);
 }
 
 // The flag-backed token is what the C bindings pass in: an int32_t the caller owns,
