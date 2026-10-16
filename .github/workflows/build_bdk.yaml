@@ -137,6 +137,10 @@ jobs:
           cmake -B build -S "." -DBUILD_MODULE_GOLANG_INSTALL_INSOURCE=ON
           cmake --build build --parallel 4
           ctest --output-on-failure --test-dir build
+          ## ctest hides a passing test's output; print the input verification
+          ## benchmark's numbers for this runner from ctest's own log
+          echo "nproc=$(getconf _NPROCESSORS_ONLN)"
+          grep -E '^\[(threshold_sweep|large_tx_serial_vs_parallel|concurrent_callers_throughput)\]' build/Testing/Temporary/LastTest.log || true
 
       - name: Check GoBDK has changed
         id: gobdk_change
