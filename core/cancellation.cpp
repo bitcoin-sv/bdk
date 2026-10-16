@@ -15,10 +15,10 @@ public:
         return std::shared_ptr<task::CCancellationSource>{ new CFlagCancellationSource{ flag } };
     }
 
+    // Nothing outside this file can reach the source to call Cancel() on it, so the
+    // flag is the only state to read.
     bool IsCanceled() override
     {
-        if (CCancellationSource::IsCanceled())
-            return true;
         // atomic_ref needs a non-const object; it is only ever loaded here.
         return flag_ != nullptr
             && std::atomic_ref<int32_t>(*const_cast<int32_t*>(flag_)).load(std::memory_order_relaxed) != 0;

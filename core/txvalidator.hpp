@@ -32,9 +32,21 @@ enum class TxValidationNetwork {
 };
 
 /**
- * CTxValidator holds its own ConfigScriptPolicy, consensus parameters and
- * CCancellationSource in order to execute the script fully. It forwards the
- * node's settings to its own ConfigScriptPolicy instance through all setters.
+ * CTxValidator holds its own ConfigScriptPolicy and consensus parameters. It forwards
+ * the node's settings to its own ConfigScriptPolicy instance through all setters. It
+ * also holds a CCancellationSource that is never cancelled: the overloads without a
+ * token use it, so they always run to a verdict.
+ *
+ * Cancellation. The overloads that take a task::CCancellationToken return
+ * TxErrorCancelled() (TX_ERR_DOMAIN_CANCELLED) once the token has fired: no verdict,
+ * in either mode. The token is polled only at the points each overload lists, and by
+ * the interpreter before every opcode it runs (also before each signature of
+ * OP_CHECKMULTISIG and each chunk of OP_LSHIFT / OP_RSHIFT). Work between two polls
+ * finishes before a cancel is seen: deserialising and hashing the transaction, the
+ * linear transaction checks, one signature hash, one hash or big-number opcode. A
+ * token that fires after the call's last poll leaves it to return its verdict. The
+ * token may be cancelled from any thread while the call runs; each call takes its own
+ * token, so concurrent calls on one validator cancel independently.
  *
  * Checks present in bitcoin-sv's TxnValidation / BlockValidateTxns that are intentionally
  * absent here. In every case BDK is missing the chain / mempool / node-state context the
@@ -213,7 +225,9 @@ class CTxValidator {
         TxError VerifyScript(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool consensus, std::span<const uint32_t> customFlags = std::span<const uint32_t>()) const;
 
         // Cancellable form of VerifyScript; an empty customFlags span means the
-        // calculated flags. Cancellation semantics as for ValidateTransaction below.
+        // calculated flags. Polls (see Cancellation above): at entry, after
+        // deserialising, then the interpreter's polls. Not polled: deserialising and
+        // hashing the transaction.
         TxError VerifyScript(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool consensus, std::span<const uint32_t> customFlags, const task::CCancellationToken& token) const;
 
         // VerifySpend executes one input against an explicitly supplied source
@@ -231,8 +245,9 @@ class CTxValidator {
             std::optional<uint32_t> customFlags = std::nullopt
         ) const;
 
-        // Cancellable form of VerifySpend. Cancellation semantics as for
-        // ValidateTransaction below.
+        // Cancellable form of VerifySpend. Polls (see Cancellation above): at entry,
+        // after deserialising, then the interpreter's polls. Not polled: deserialising
+        // and hashing the transaction.
         TxError VerifySpend(
             std::span<const uint8_t> transaction,
             uint32_t inputIndex,
@@ -253,9 +268,10 @@ class CTxValidator {
         // concurrent access from another thread is a data race.
         std::vector<TxError> ValidateBatch(const ValidateBatch& batch) const;
 
-        // Cancellable form of ValidateBatch: one token for the whole batch. Entries
-        // finished before the token fired keep their results; every later entry
-        // returns TxErrorCancelled(). Same threading rule as above.
+        // Cancellable form of ValidateBatch: one token for the whole batch, polled as
+        // ValidateTransaction polls it for each entry. Entries finished before the
+        // token fired keep their results; every later entry returns
+        // TxErrorCancelled(). Same threading rule as above.
         std::vector<TxError> ValidateBatch(const bsv::ValidateBatch& batch, const task::CCancellationToken& token) const;
 
         // ValidateTransaction runs all tx-level checks then script verification.
@@ -272,12 +288,16 @@ class CTxValidator {
                                  int32_t blockHeight,
                                  bool consensus) const;
 
-        // Cancellable form of ValidateTransaction. The call polls token at entry,
-        // between its checks, and before every opcode the interpreter runs, and
-        // returns TxErrorCancelled() (TX_ERR_DOMAIN_CANCELLED) once it has fired:
-        // no verdict, in either mode. A step that has started (deserialisation, one
-        // signature hash, one hash or arithmetic opcode) finishes before the next
-        // poll. The token may be cancelled from any thread while the call runs.
+        // Cancellable form of ValidateTransaction. Polls (see Cancellation above):
+        //   - at entry;
+        //   - after deserialising;
+        //   - after the transaction-level, prevout and output checks;
+        //   - policy mode, when inputs are checked for standardness: before each input;
+        //   - before script verification;
+        //   - the interpreter's polls.
+        // Not polled, each linear in the transaction size: deserialising and hashing;
+        // the transaction-level, prevout and output checks; the output standardness,
+        // sigop, input-value and fee checks; setting up each input's script check.
         TxError ValidateTransaction(std::span<const uint8_t> extendedTX,
                                  std::span<const int32_t> utxoHeights,
                                  int32_t blockHeight,
@@ -290,8 +310,11 @@ class CTxValidator {
                                   std::span<const int32_t> utxoHeights,
                                   int32_t blockHeight) const;
 
-        // Cancellable form of CheckStandardness (it runs the input scripts' pushes).
-        // Cancellation semantics as for ValidateTransaction.
+        // Cancellable form of CheckStandardness. Polls (see Cancellation above): at
+        // entry, after deserialising, before each input when inputs are checked (that
+        // is, when non-standard outputs are not accepted), then the interpreter's polls
+        // while it evaluates a P2SH input's unlocking script. Not polled: deserialising
+        // and hashing, and the output standardness check.
         TxError CheckStandardness(std::span<const uint8_t> extendedTX,
                                   std::span<const int32_t> utxoHeights,
                                   int32_t blockHeight,

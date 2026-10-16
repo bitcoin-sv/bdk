@@ -12,8 +12,8 @@ namespace bsv
  * MakeFlagCancellationToken returns a token for the cancellable CTxValidator calls
  * that reports cancelled once *flag is non-zero.
  *
- * The flag belongs to the caller. Any thread may set it at any time with an atomic
- * store; the token only reads it, with relaxed atomic loads. It must stay valid for
+ * The flag belongs to the caller and must be 4-byte aligned. Any thread may set it at
+ * any time with an atomic store; the token only reads it, with relaxed atomic loads. It must stay valid for
  * as long as the token or a call using it is alive. A null flag gives a token that is
  * never cancelled.
  *

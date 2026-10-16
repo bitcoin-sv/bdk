@@ -238,6 +238,89 @@ std::vector<uint8_t> LargeSighashTx(size_t scriptCodeBytes)
     return { ss.begin(), ss.end() };
 }
 
+// One input, one output per entry of outputValues, mainnet post-Genesis heights
+// (kSimpleBlockHeight / kSimpleUtxoHeights). Scripts are given verbatim.
+constexpr int32_t kSimpleBlockHeight = 800000;
+const std::vector<int32_t> kSimpleUtxoHeights{ 700000 };
+
+std::vector<uint8_t> SimpleTx(const CScript& scriptSig, const CScript& lockingScript,
+                              int64_t inputValue, const std::vector<int64_t>& outputValues)
+{
+    bsv::CMutableTransactionExtended eTx;
+    eTx.mtx.nVersion = 2;
+    eTx.mtx.vin.resize(1);
+    eTx.mtx.vin[0].prevout = COutPoint(uint256S("01"), 0);
+    eTx.mtx.vin[0].scriptSig = scriptSig;
+    eTx.vutxo.resize(1);
+    eTx.vutxo[0].nValue = Amount(inputValue);
+    eTx.vutxo[0].scriptPubKey = lockingScript;
+    for (const int64_t value : outputValues) {
+        CTxOut out;
+        out.nValue = Amount(value);
+        out.scriptPubKey = CScript() << OP_TRUE;
+        eTx.mtx.vout.push_back(out);
+    }
+
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << eTx;
+    return { ss.begin(), ss.end() };
+}
+
+// A verdict from each phase of ValidateTransaction that has no poll inside it.
+// No outputs: rejected by the transaction-level checks right after deserialising.
+std::vector<uint8_t> NoOutputsTx() { return SimpleTx(CScript() << OP_TRUE, CScript(), 100000, {}); }
+// Outputs worth more than the input: rejected by the input-value check, after the
+// output checks.
+std::vector<uint8_t> InputsBelowOutputsTx() { return SimpleTx(CScript() << OP_TRUE, CScript(), 100, { 1000 }); }
+// Empty unlocking and locking scripts: the interpreter runs no opcode, so it never
+// polls, and script verification fails on the empty stack.
+std::vector<uint8_t> EmptyScriptsTx() { return SimpleTx(CScript(), CScript(), 100000, { 1000 }); }
+
+// Pre-Genesis standardness fixtures (regtest, block 5000, inputs from 4000), for a
+// validator with standardness required. P2PKH inputs need no script evaluation to be
+// standard, so the interpreter never polls while checking them.
+const std::vector<int32_t> kPreGenesisUtxoHeights2{ 4000, 4000 };
+CScript P2PKHScript()
+{
+    return CScript() << OP_DUP << OP_HASH160 << std::vector<uint8_t>(20, 0x11) << OP_EQUALVERIFY << OP_CHECKSIG;
+}
+
+std::vector<uint8_t> PreGenesisTwoP2PKHInputsTx(const CScript& outputScript)
+{
+    bsv::CMutableTransactionExtended eTx;
+    eTx.mtx.nVersion = 1;
+    eTx.mtx.vin.resize(2);
+    eTx.vutxo.resize(2);
+    for (uint32_t i = 0; i < 2; ++i) {
+        eTx.mtx.vin[i].prevout = COutPoint(uint256S("01"), i);
+        eTx.vutxo[i].nValue = Amount(100000);
+        eTx.vutxo[i].scriptPubKey = P2PKHScript();
+    }
+    eTx.mtx.vout.resize(1);
+    eTx.mtx.vout[0].nValue = Amount(90000);
+    eTx.mtx.vout[0].scriptPubKey = outputScript;
+
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << eTx;
+    return { ss.begin(), ss.end() };
+}
+
+// An ordinary (not extended) one-input transaction with an empty unlocking script.
+std::vector<uint8_t> PlainEmptyScriptSigTx()
+{
+    CMutableTransaction mtx;
+    mtx.nVersion = 2;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(uint256S("01"), 0);
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = Amount(1000);
+    mtx.vout[0].scriptPubKey = CScript() << OP_TRUE;
+
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << mtx;
+    return { ss.begin(), ss.end() };
+}
+
 } // namespace
 
 // A token that has already fired stops the call before it reads the transaction: the
@@ -346,8 +429,9 @@ BOOST_AUTO_TEST_CASE(cancelled_mid_script_returns_cancelled_promptly)
 // Every poll is a place the call can stop. For each k, a token that fires at poll
 // k+1 must give exactly Cancelled when the uncancelled run polls more than k times,
 // and the uncancelled result otherwise: a cancel never turns into a verdict, an
-// exception or a different verdict. The cases cover a verdict of OK, a script
-// failure, and policy mode running IsInputStandard on a P2SH input.
+// exception or a different verdict. The cases cover a verdict of OK, script
+// failures, transaction-level rejections, and policy mode running IsInputStandard
+// on a P2SH input.
 BOOST_AUTO_TEST_CASE(cancel_at_every_poll_gives_cancelled_or_the_uncancelled_result)
 {
     struct Case {
@@ -355,18 +439,22 @@ BOOST_AUTO_TEST_CASE(cancel_at_every_poll_gives_cancelled_or_the_uncancelled_res
         std::vector<uint8_t> tx;
         std::vector<int32_t> utxoHeights;
         int32_t blockHeight;
+        std::string chain;
         bool requireStandard;  // pre-Genesis, non-standard outputs are refused when true
     };
     std::vector<uint8_t> invalid = ParseHex(kValidTxHex);
     invalid[60] ^= 0x01;  // first input's signature
     const std::vector<Case> cases{
-        { "valid", ParseHex(kValidTxHex), kValidTxUtxoHeights, kValidTxBlockHeight, false },
-        { "bad-signature", invalid, kValidTxUtxoHeights, kValidTxBlockHeight, false },
-        { "pre-genesis-p2sh", PreGenesisP2SHTx(), { 4000 }, 5000, true },
+        { "valid", ParseHex(kValidTxHex), kValidTxUtxoHeights, kValidTxBlockHeight, CBaseChainParams::MAIN, false },
+        { "bad-signature", invalid, kValidTxUtxoHeights, kValidTxBlockHeight, CBaseChainParams::MAIN, false },
+        { "pre-genesis-p2sh", PreGenesisP2SHTx(), { 4000 }, 5000, CBaseChainParams::REGTEST, true },
+        { "no-outputs", NoOutputsTx(), kSimpleUtxoHeights, kSimpleBlockHeight, CBaseChainParams::MAIN, false },
+        { "inputs-below-outputs", InputsBelowOutputsTx(), kSimpleUtxoHeights, kSimpleBlockHeight, CBaseChainParams::MAIN, false },
+        { "empty-scripts", EmptyScriptsTx(), kSimpleUtxoHeights, kSimpleBlockHeight, CBaseChainParams::MAIN, false },
     };
 
     for (const auto& c : cases) {
-        bsv::CTxValidator validator(c.name == std::string("pre-genesis-p2sh") ? CBaseChainParams::REGTEST : CBaseChainParams::MAIN);
+        bsv::CTxValidator validator(c.chain);
         if (c.requireStandard)
             validator.SetRequireStandard(true);
         const std::span<const uint8_t> etx(c.tx.data(), c.tx.size());
@@ -392,6 +480,94 @@ BOOST_AUTO_TEST_CASE(cancel_at_every_poll_gives_cancelled_or_the_uncancelled_res
                 }
             }
         }
+    }
+}
+
+// ValidateTransaction polls at entry, after deserialising, after the output checks
+// and before the scripts. Each of the three polls after entry ends a phase that has
+// no poll inside it. A cancel that lands in such a phase must stop the call at the
+// poll that ends it, before the next phase can reach a verdict. Each case cancels
+// right after the poll that starts a phase (the 1st, 2nd or 3rd poll of the call)
+// and uses a transaction whose verdict comes from the phase after it, so dropping
+// the poll in between turns the expected Cancelled into that verdict.
+BOOST_AUTO_TEST_CASE(cancel_during_each_unpolled_phase_is_honoured_before_the_next_verdict)
+{
+    struct Case {
+        const char* phase;          // where the cancel lands
+        uint64_t cancelAfterPoll;   // the poll that starts that phase
+        std::vector<uint8_t> tx;    // its uncancelled verdict comes from the next phase
+        int32_t verdictDomain;
+    };
+    const std::vector<Case> cases{
+        { "deserialising", 1, NoOutputsTx(), static_cast<int32_t>(TX_ERR_DOMAIN_DOS) },
+        { "transaction and output checks", 2, InputsBelowOutputsTx(), static_cast<int32_t>(TX_ERR_DOMAIN_DOS) },
+        { "input value and fee checks", 3, EmptyScriptsTx(), static_cast<int32_t>(TX_ERR_DOMAIN_SCRIPT) },
+    };
+    const bsv::CTxValidator validator("main");
+
+    for (const auto& c : cases) {
+        const std::span<const uint8_t> etx(c.tx.data(), c.tx.size());
+        BOOST_TEST_CONTEXT("cancel during " << c.phase) {
+            // The uncancelled verdict, so a missing poll shows up as exactly that.
+            const TxError verdict = validator.ValidateTransaction(etx, kSimpleUtxoHeights, kSimpleBlockHeight, true);
+            BOOST_REQUIRE_EQUAL(c.verdictDomain, verdict.domain);
+
+            const auto source = RecordingSource::Make(c.cancelAfterPoll);
+            const TxError r = validator.ValidateTransaction(etx, kSimpleUtxoHeights, kSimpleBlockHeight, true, source->GetToken());
+            BOOST_CHECK_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_CANCELLED), r.domain);
+            BOOST_CHECK_EQUAL(c.cancelAfterPoll + 1, source->polls());
+        }
+    }
+}
+
+// The same property for VerifySpend and CheckStandardness: a cancel that lands while
+// they deserialise is seen right after, and in CheckStandardness one that lands
+// before an input's standardness check is seen before that check. Each case's
+// uncancelled result needs no further poll, so a missing poll turns the expected
+// Cancelled into that result.
+BOOST_AUTO_TEST_CASE(verify_spend_and_check_standardness_poll_after_deserialising_and_per_input)
+{
+    const bsv::CTxValidator mainValidator("main");
+    {
+        // Empty unlocking and locking scripts: no opcode, so no interpreter poll.
+        const std::vector<uint8_t> tx = PlainEmptyScriptSigTx();
+        const std::vector<uint8_t> emptyLock;
+        const auto verdict = mainValidator.VerifySpend(tx, 0, emptyLock, 1000, kSimpleUtxoHeights[0], kSimpleBlockHeight, true);
+        BOOST_REQUIRE_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_SCRIPT), verdict.domain);
+
+        const auto source = RecordingSource::Make(1);  // cancel lands while deserialising
+        const auto r = mainValidator.VerifySpend(tx, 0, emptyLock, 1000, kSimpleUtxoHeights[0], kSimpleBlockHeight, true, std::nullopt, source->GetToken());
+        BOOST_CHECK_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_CANCELLED), r.domain);
+        BOOST_CHECK_EQUAL(2u, source->polls());
+    }
+
+    bsv::CTxValidator validator(CBaseChainParams::REGTEST);
+    validator.SetRequireStandard(true);
+    {
+        // A non-standard output: rejected by the output check right after deserialising.
+        const std::vector<uint8_t> tx = PreGenesisTwoP2PKHInputsTx(CScript() << OP_TRUE);
+        const auto verdict = validator.CheckStandardness(tx, kPreGenesisUtxoHeights2, 5000);
+        BOOST_REQUIRE_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_DOS), verdict.domain);
+
+        const auto source = RecordingSource::Make(1);  // cancel lands while deserialising
+        BOOST_CHECK_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_CANCELLED),
+                          validator.CheckStandardness(tx, kPreGenesisUtxoHeights2, 5000, source->GetToken()).domain);
+        BOOST_CHECK_EQUAL(2u, source->polls());
+    }
+    {
+        // Standard, with two P2PKH inputs whose checks run no script.
+        const std::vector<uint8_t> tx = PreGenesisTwoP2PKHInputsTx(P2PKHScript());
+        BOOST_REQUIRE(bsv::TxErrorIsOk(validator.CheckStandardness(tx, kPreGenesisUtxoHeights2, 5000)));
+
+        const auto source = RecordingSource::Make(2);  // cancel lands in the output check
+        BOOST_CHECK_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_CANCELLED),
+                          validator.CheckStandardness(tx, kPreGenesisUtxoHeights2, 5000, source->GetToken()).domain);
+        BOOST_CHECK_EQUAL(3u, source->polls());
+
+        const auto second = RecordingSource::Make(3);  // cancel lands in input 0's check
+        BOOST_CHECK_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_CANCELLED),
+                          validator.CheckStandardness(tx, kPreGenesisUtxoHeights2, 5000, second->GetToken()).domain);
+        BOOST_CHECK_EQUAL(4u, second->polls());
     }
 }
 

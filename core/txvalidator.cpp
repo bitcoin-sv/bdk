@@ -852,6 +852,8 @@ TxError bsv::CTxValidator::VerifySpend(
             throw std::runtime_error("error serializing transaction");
 
         const CTransaction tx(std::move(mutableTx));
+        if (token.IsCanceled())
+            return bsv::TxErrorCancelled();
         if (inputIndex >= tx.vin.size())
             throw std::runtime_error("input index is out of range");
         if (consensus && utxoHeight == MEMPOOL_HEIGHT)
@@ -914,6 +916,8 @@ TxError bsv::CTxValidator::CheckStandardness(std::span<const uint8_t> extendedTX
         tx_stream >> eTX;
 
         const CTransaction ctx(eTX.mtx);
+        if (token.IsCanceled())
+            return bsv::TxErrorCancelled();
         return implCheckStandardness(ctx, eTX.vutxo, utxoHeights, blockHeight, token);
     }
     catch (const std::exception&) {
@@ -1059,6 +1063,8 @@ TxError bsv::CTxValidator::implCheckStandardness(
         const auto params = make_eval_script_params(policySettings, flags, consensus);
 
         for (size_t i = 0; i < tx.vin.size(); ++i) {
+            if (token.IsCanceled())
+                return bsv::TxErrorCancelled();
             const CScript& scriptSig = tx.vin[i].scriptSig;
             const CScript& prevScript = prevUTXO[i].scriptPubKey;
             const ProtocolEra utxoEra = GetProtocolEra(policySettings, resolveUtxoEraHeight(utxoHeights[i], blockHeight));
@@ -1134,8 +1140,11 @@ TxError bsv::CTxValidator::ValidateTransaction(std::span<const uint8_t> extended
 
         const CTransaction ctx(eTX.mtx);
 
-        // Deserialising and hashing are linear in the transaction size and have no
-        // poll of their own; check once they are done and between the checks below.
+        // Polled here and below between groups of checks. Within a group nothing
+        // polls: deserialising and hashing above, then the transaction-level, prevout
+        // and output checks, then the standardness (polled per input when inputs are
+        // checked), sigop, input-value and fee checks. Each is linear in the
+        // transaction size.
         if (token.IsCanceled())
             return bsv::TxErrorCancelled();
 
