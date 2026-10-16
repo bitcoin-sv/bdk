@@ -15,7 +15,8 @@ typedef enum {
     TX_ERR_DOMAIN_SCRIPT    = 1,
     TX_ERR_DOMAIN_DOS       = 2,
     TX_ERR_DOMAIN_EXCEPTION = 3,
-    TX_ERR_DOMAIN_ABI       = 4
+    TX_ERR_DOMAIN_ABI       = 4,
+    TX_ERR_DOMAIN_CANCELLED = 5
 } TxErrorDomain_t;
 
 typedef struct {

@@ -8,6 +8,7 @@ package script
 import "C"
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"runtime"
@@ -139,6 +140,51 @@ func (se *TxValidator) VerifyScriptWithCustomFlags(extendedTX []byte, utxoHeight
 	runtime.KeepAlive(utxoHeights)
 	runtime.KeepAlive(customFlags)
 	return translateTxError(result)
+}
+
+// VerifyScriptContext is VerifyScript, cancellable through ctx. See
+// ValidateTransactionContext for how cancellation behaves.
+func (se *TxValidator) VerifyScriptContext(ctx context.Context, extendedTX []byte, utxoHeights []int32, blockHeight int32, consensus bool) error {
+	return se.VerifyScriptWithCustomFlagsContext(ctx, extendedTX, utxoHeights, blockHeight, consensus, nil)
+}
+
+// VerifyScriptWithCustomFlagsContext is VerifyScriptWithCustomFlags, cancellable
+// through ctx. An empty customFlags means the calculated flags. See
+// ValidateTransactionContext for how cancellation behaves.
+func (se *TxValidator) VerifyScriptWithCustomFlagsContext(ctx context.Context, extendedTX []byte, utxoHeights []int32, blockHeight int32, consensus bool, customFlags []uint32) error {
+	if ctx.Done() == nil {
+		if len(customFlags) == 0 {
+			return se.VerifyScript(extendedTX, utxoHeights, blockHeight, consensus)
+		}
+		return se.VerifyScriptWithCustomFlags(extendedTX, utxoHeights, blockHeight, consensus, customFlags)
+	}
+	if ctx.Err() != nil {
+		return newCancelledError(ctx)
+	}
+
+	txPtr, lenTx, err := abiBuffer(extendedTX)
+	if err != nil {
+		return err
+	}
+
+	utxoPtr, lenUtxo, err := abiInt32Buffer(utxoHeights)
+	if err != nil {
+		return err
+	}
+
+	flagsPtr, lenFlags, err := abiUint32Buffer(customFlags)
+	if err != nil {
+		return err
+	}
+
+	result := withCancelFlag(ctx, func(flag *C.int32_t) C.TxError {
+		return C.TxValidator_VerifyScriptCancellable(se.cSEPtr, txPtr, lenTx, utxoPtr, lenUtxo, C.int32_t(blockHeight), C.bool(consensus), flagsPtr, lenFlags, flag)
+	})
+	runtime.KeepAlive(se)
+	runtime.KeepAlive(extendedTX)
+	runtime.KeepAlive(utxoHeights)
+	runtime.KeepAlive(customFlags)
+	return translateTxErrorContext(ctx, result)
 }
 
 // SetMaxOpsPerScriptPolicy set the MaxOpsPerScriptPolicy in the C++ TxValidator
@@ -483,6 +529,11 @@ func (se *TxValidator) ValidateBatch(batch *ValidateBatch) []error {
 	runtime.KeepAlive(se)
 	runtime.KeepAlive(batch)
 
+	return batchResults(resultsPtr, resultSize, translateTxError)
+}
+
+// batchResults copies a C batch result array into Go errors and frees it.
+func batchResults(resultsPtr *C.TxError, resultSize C.uint64_t, translate func(C.TxError) error) []error {
 	if resultsPtr == nil || resultSize == 0 {
 		return nil
 	}
@@ -500,10 +551,81 @@ func (se *TxValidator) ValidateBatch(batch *ValidateBatch) []error {
 
 	cResults := unsafe.Slice((*C.TxError)(resultsPtr), size)
 	for i := 0; i < size; i++ {
-		results[i] = translateTxError(cResults[i])
+		results[i] = translate(cResults[i])
 	}
 
 	return results
+}
+
+// ValidateBatchContext is ValidateBatch, cancellable through ctx. Entries BDK
+// finished before it saw the cancellation keep their results; every later entry is a
+// *CancelledError. See ValidateTransactionContext for how cancellation behaves.
+//
+// NOT CONCURRENT-SAFE, as ValidateBatch. ctx may be cancelled from any goroutine.
+func (se *TxValidator) ValidateBatchContext(ctx context.Context, batch *ValidateBatch) []error {
+	if ctx.Done() == nil {
+		return se.ValidateBatch(batch)
+	}
+	if batch == nil || batch.cBatchPtr == nil {
+		return nil
+	}
+	if ctx.Err() != nil {
+		results := make([]error, batch.Size())
+		for i := range results {
+			results[i] = newCancelledError(ctx)
+		}
+		return results
+	}
+
+	var resultSize C.uint64_t
+	resultsPtr := withCancelFlag(ctx, func(flag *C.int32_t) *C.TxError {
+		return C.TxValidator_ValidateBatchCancellable(se.cSEPtr, batch.cBatchPtr, &resultSize, flag)
+	})
+	runtime.KeepAlive(se)
+	runtime.KeepAlive(batch)
+
+	return batchResults(resultsPtr, resultSize, func(r C.TxError) error { return translateTxErrorContext(ctx, r) })
+}
+
+// ValidateTransactionContext is ValidateTransaction, cancellable through ctx.
+//
+// When ctx is done before BDK reaches a verdict, the result is a *CancelledError:
+// errors.Is(err, ErrCancelled) and errors.Is(err, context.Cause(ctx)) are true, and
+// it is never a ScriptError, DoSError or ABIError. It says nothing about the
+// transaction, in consensus and policy mode alike. BDK checks for cancellation at
+// entry, between its checks and before every script opcode; a step already started
+// (deserialising, one signature hash, one hash or arithmetic opcode) finishes first.
+// If ctx is done after BDK's last check, the verdict is returned as usual: use the
+// result, not ctx.Err(), as the outcome.
+//
+// A context that can never be cancelled (context.Background, context.TODO) costs
+// nothing over ValidateTransaction. Otherwise the call registers a callback with
+// context.AfterFunc; no goroutine runs unless ctx is cancelled.
+func (se *TxValidator) ValidateTransactionContext(ctx context.Context, extendedTX []byte, utxoHeights []int32, blockHeight int32, consensus bool) error {
+	if ctx.Done() == nil {
+		return se.ValidateTransaction(extendedTX, utxoHeights, blockHeight, consensus)
+	}
+	if ctx.Err() != nil {
+		return newCancelledError(ctx)
+	}
+
+	txPtr, lenTx, err := abiBuffer(extendedTX)
+	if err != nil {
+		return err
+	}
+
+	utxoPtr, lenUtxo, err := abiInt32Buffer(utxoHeights)
+	if err != nil {
+		return err
+	}
+
+	result := withCancelFlag(ctx, func(flag *C.int32_t) C.TxError {
+		return C.TxValidator_ValidateTransactionCancellable(se.cSEPtr, txPtr, lenTx, utxoPtr, lenUtxo, C.int32_t(blockHeight), C.bool(consensus), flag)
+	})
+	runtime.KeepAlive(se)
+	runtime.KeepAlive(extendedTX)
+	runtime.KeepAlive(utxoHeights)
+	return translateTxErrorContext(ctx, result)
 }
 
 // ValidateTransaction runs all tx-level checks then script verification.
@@ -550,7 +672,18 @@ func translateTxError(r C.TxError) error {
 		return NewScriptError(SCRIPT_ERR_CGO_EXCEPTION)
 	case C.TX_ERR_DOMAIN_ABI:
 		return NewABIError(ABIErrorCode(r.code))
+	case C.TX_ERR_DOMAIN_CANCELLED:
+		return newCancelledError(nil)
 	default:
 		return fmt.Errorf("unknown TxError domain=%d code=%d", r.domain, r.code)
 	}
+}
+
+// translateTxErrorContext is translateTxError for a call cancellable through ctx: a
+// cancelled result carries context.Cause(ctx).
+func translateTxErrorContext(ctx context.Context, r C.TxError) error {
+	if r.domain == C.TX_ERR_DOMAIN_CANCELLED {
+		return newCancelledError(ctx)
+	}
+	return translateTxError(r)
 }
