@@ -1198,6 +1198,10 @@ BOOST_AUTO_TEST_CASE(valid_tx_validates_with_inputs_spread_over_helpers)
         BOOST_CHECK_MESSAGE(bsv::TxErrorIsOk(status),
             "consensus=" << consensus << ": domain=" << status.domain << " code=" << status.code);
     }
+    // A loaded machine may not schedule a helper within one short call; a few
+    // more calls give one the chance without making the test slow.
+    for (int retry = 0; retry < 50 && bsv::detail::HelperVerifiedInputCountForTesting() == helperInputsBefore; ++retry)
+        BOOST_REQUIRE(bsv::TxErrorIsOk(ValidateP2PKHSpend(se, etxBin, nInputs, /*consensus=*/true)));
     BOOST_CHECK_MESSAGE(bsv::detail::HelperVerifiedInputCountForTesting() > helperInputsBefore,
         "no input was verified on a helper thread");
 }
