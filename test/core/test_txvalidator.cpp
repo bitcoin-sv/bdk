@@ -1,5 +1,7 @@
 #include <array>
 #include <chrono>
+#include <cstdlib>
+#include <iostream>
 #include <memory>
 #include <string>
 #include <vector>
@@ -33,6 +35,8 @@
 #include "chainparamsbase.h"
 
 #include "txvalidator.hpp"
+#include "sha256_backend.hpp"
+#include "crypto/sha256_dispatch.h"
 #include "chainparams_bdk.hpp"
 #include "extendedTx.hpp"
 #include "txerror.h"
@@ -56,6 +60,22 @@ const std::string MyParams::CustomName = "MyParams";
 
 // Registration custom chain params
 static bsv::RegisterCustomChainParams<MyParams> myParamsReg(MyParams::CustomName);
+
+// The first CTxValidator installs the fastest SHA-256 transforms this CPU
+// supports, so every test below validates through them. Only the pointers are
+// inspected before the log line, because SelectSha256Backend() would install
+// them itself.
+BOOST_AUTO_TEST_CASE(constructing_a_validator_installs_the_sha256_backend)
+{
+    const bsv::CTxValidator validator{bsv::TxValidationNetwork::Main};
+    const char* forced = std::getenv("BDK_SHA256_FORCE_SCALAR");
+    const auto& expected = (forced != nullptr && *forced != '\0' && std::string{forced} != "0")
+        ? bsv::Sha256SupportedBackends().front()
+        : bsv::Sha256SupportedBackends().back();
+    BOOST_TEST(sha256_dispatch::stream == expected.stream);
+    BOOST_TEST(sha256_dispatch::d_block_2way == expected.d_block_2way);
+    std::cout << "SHA-256 backend: " << bsv::SelectSha256Backend() << std::endl;
+}
 
 BOOST_AUTO_TEST_CASE(custom_chainparams)
 {
