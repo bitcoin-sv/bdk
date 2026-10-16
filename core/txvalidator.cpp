@@ -780,6 +780,14 @@ uint64_t bsv::CTxValidator::implGetSigOpCount(
 
 TxError bsv::CTxValidator::VerifyScript(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool consensus, std::span<const uint32_t> customFlags) const
 {
+    return VerifyScript(extendedTX, utxoHeights, blockHeight, consensus, customFlags, source->GetToken());
+}
+
+TxError bsv::CTxValidator::VerifyScript(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool consensus, std::span<const uint32_t> customFlags, const task::CCancellationToken& token) const
+{
+    if (token.IsCanceled())
+        return bsv::TxErrorCancelled();
+
     try {
         const char* begin{ reinterpret_cast<const char*>(extendedTX.data()) };
         const char* end{ reinterpret_cast<const char*>(extendedTX.data() + extendedTX.size()) };
@@ -791,7 +799,9 @@ TxError bsv::CTxValidator::VerifyScript(std::span<const uint8_t> extendedTX, std
             throw std::runtime_error("error serializing extended tx");
 
         const CTransaction ctx(eTX.mtx);
-        return implVerifyScript(ctx, eTX.vutxo, utxoHeights, blockHeight, consensus, customFlags);
+        if (token.IsCanceled())
+            return bsv::TxErrorCancelled();
+        return implVerifyScript(ctx, eTX.vutxo, utxoHeights, blockHeight, consensus, customFlags, token);
     }
     catch (const std::exception&) {
         return bsv::TxErrorException();
@@ -809,6 +819,25 @@ TxError bsv::CTxValidator::VerifySpend(
     std::optional<uint32_t> customFlags
 ) const
 {
+    return VerifySpend(transaction, inputIndex, lockingScript, sourceSatoshis, utxoHeight, blockHeight,
+                       consensus, customFlags, source->GetToken());
+}
+
+TxError bsv::CTxValidator::VerifySpend(
+    std::span<const uint8_t> transaction,
+    uint32_t inputIndex,
+    std::span<const uint8_t> lockingScript,
+    int64_t sourceSatoshis,
+    int32_t utxoHeight,
+    int32_t blockHeight,
+    bool consensus,
+    std::optional<uint32_t> customFlags,
+    const task::CCancellationToken& token
+) const
+{
+    if (token.IsCanceled())
+        return bsv::TxErrorCancelled();
+
     try {
         if (sourceSatoshis < 0)
             throw std::runtime_error("source satoshis cannot be negative");
@@ -823,6 +852,8 @@ TxError bsv::CTxValidator::VerifySpend(
             throw std::runtime_error("error serializing transaction");
 
         const CTransaction tx(std::move(mutableTx));
+        if (token.IsCanceled())
+            return bsv::TxErrorCancelled();
         if (inputIndex >= tx.vin.size())
             throw std::runtime_error("input index is out of range");
         if (consensus && utxoHeight == MEMPOOL_HEIGHT)
@@ -832,7 +863,7 @@ TxError bsv::CTxValidator::VerifySpend(
         const CScript script(lockingScript.begin(), lockingScript.end());
         const Amount amount{ sourceSatoshis };
         CachingScriptChecker checker(&tx, inputIndex, amount);
-        return bsvVerifyScript(tx.vin[inputIndex].scriptSig, script, consensus, flags, checker);
+        return bsvVerifyScript(tx.vin[inputIndex].scriptSig, script, consensus, flags, checker, token);
     }
     catch (const std::exception&) {
         return bsv::TxErrorException();
@@ -840,6 +871,11 @@ TxError bsv::CTxValidator::VerifySpend(
 }
 
 std::vector<TxError> bsv::CTxValidator::ValidateBatch(const bsv::ValidateBatch& batch) const
+{
+    return ValidateBatch(batch, source->GetToken());
+}
+
+std::vector<TxError> bsv::CTxValidator::ValidateBatch(const bsv::ValidateBatch& batch, const task::CCancellationToken& token) const
 {
     std::vector<TxError> results;
     results.reserve(batch.size());
@@ -849,7 +885,8 @@ std::vector<TxError> bsv::CTxValidator::ValidateBatch(const bsv::ValidateBatch& 
             elem.extendedTX,
             elem.utxoHeights,
             elem.blockHeight,
-            elem.consensus
+            elem.consensus,
+            token
         ));
     }
 
@@ -860,6 +897,17 @@ TxError bsv::CTxValidator::CheckStandardness(std::span<const uint8_t> extendedTX
                                               std::span<const int32_t> utxoHeights,
                                               int32_t blockHeight) const
 {
+    return CheckStandardness(extendedTX, utxoHeights, blockHeight, source->GetToken());
+}
+
+TxError bsv::CTxValidator::CheckStandardness(std::span<const uint8_t> extendedTX,
+                                              std::span<const int32_t> utxoHeights,
+                                              int32_t blockHeight,
+                                              const task::CCancellationToken& token) const
+{
+    if (token.IsCanceled())
+        return bsv::TxErrorCancelled();
+
     try {
         const char* begin{ reinterpret_cast<const char*>(extendedTX.data()) };
         const char* end{ reinterpret_cast<const char*>(extendedTX.data() + extendedTX.size()) };
@@ -868,7 +916,9 @@ TxError bsv::CTxValidator::CheckStandardness(std::span<const uint8_t> extendedTX
         tx_stream >> eTX;
 
         const CTransaction ctx(eTX.mtx);
-        return implCheckStandardness(ctx, eTX.vutxo, utxoHeights, blockHeight);
+        if (token.IsCanceled())
+            return bsv::TxErrorCancelled();
+        return implCheckStandardness(ctx, eTX.vutxo, utxoHeights, blockHeight, token);
     }
     catch (const std::exception&) {
         return bsv::TxErrorException();
@@ -881,7 +931,8 @@ TxError bsv::CTxValidator::implVerifyScript(
     std::span<const int32_t> utxoHeights,
     int32_t blockHeight,
     bool consensus,
-    std::span<const uint32_t> customFlags
+    std::span<const uint32_t> customFlags,
+    const task::CCancellationToken& token
 ) const
 {
     if (prevUTXO.size() != utxoHeights.size())
@@ -908,10 +959,10 @@ TxError bsv::CTxValidator::implVerifyScript(
         if (!ctx.vin.empty() && !ctx.vout.empty()) {
             const Amount amt{ amount };
             CachingScriptChecker sig_checker(&ctx, index, amt);
-            verifyResult = bsvVerifyScript(uscript, lscript, consensus, flags, sig_checker);
+            verifyResult = bsvVerifyScript(uscript, lscript, consensus, flags, sig_checker, token);
         } else {
             BaseSignatureChecker sig_checker;
-            verifyResult = bsvVerifyScript(uscript, lscript, consensus, flags, sig_checker);
+            verifyResult = bsvVerifyScript(uscript, lscript, consensus, flags, sig_checker, token);
         }
 
         if (!bsv::TxErrorIsOk(verifyResult))
@@ -925,19 +976,20 @@ TxError bsv::CTxValidator::bsvVerifyScript(
     const CScript& locking_script,
     const bool consensus,
     const unsigned int flags,
-    BaseSignatureChecker& sig_checker
+    BaseSignatureChecker& sig_checker,
+    const task::CCancellationToken& token
 ) const
 {
     const verify_script_params veriParams{make_verify_script_params(policySettings, flags, consensus)};
     const auto ret = ::VerifyScript(veriParams,
-        source->GetToken(),
+        token,
         unlocking_script,
         locking_script,
         flags,
         sig_checker);
 
     if (!ret.has_value())
-        return bsv::TxErrorException();  // cancellation token fired
+        return bsv::TxErrorCancelled();  // cancellation token fired
 
     if (ret.value() == SCRIPT_ERR_OK)
         return bsv::TxErrorOk();
@@ -979,7 +1031,8 @@ TxError bsv::CTxValidator::implCheckStandardness(
     const CTransaction& tx,
     const std::vector<CTxOut>& prevUTXO,
     std::span<const int32_t> utxoHeights,
-    int32_t blockHeight
+    int32_t blockHeight,
+    const task::CCancellationToken& token
 ) const
 {
     // Replicate TxnValidation standardness logic from bitcoin-sv validation.cpp.
@@ -1010,14 +1063,17 @@ TxError bsv::CTxValidator::implCheckStandardness(
         const auto params = make_eval_script_params(policySettings, flags, consensus);
 
         for (size_t i = 0; i < tx.vin.size(); ++i) {
+            if (token.IsCanceled())
+                return bsv::TxErrorCancelled();
             const CScript& scriptSig = tx.vin[i].scriptSig;
             const CScript& prevScript = prevUTXO[i].scriptPubKey;
             const ProtocolEra utxoEra = GetProtocolEra(policySettings, resolveUtxoEraHeight(utxoHeights[i], blockHeight));
 
-            auto result = IsInputStandard(source->GetToken(), params, scriptSig, prevScript, utxoEra, flags);
-            if (!result.has_value() || !result.value()){
+            auto result = IsInputStandard(token, params, scriptSig, prevScript, utxoEra, flags);
+            if (!result.has_value())
+                return bsv::TxErrorCancelled();  // cancellation token fired, no verdict
+            if (!result.value())
                 return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::NotStandard));
-            }
         }
     }
 
@@ -1060,6 +1116,18 @@ TxError bsv::CTxValidator::ValidateTransaction(std::span<const uint8_t> extended
                                              int32_t blockHeight,
                                              bool consensus) const
 {
+    return ValidateTransaction(extendedTX, utxoHeights, blockHeight, consensus, source->GetToken());
+}
+
+TxError bsv::CTxValidator::ValidateTransaction(std::span<const uint8_t> extendedTX,
+                                             std::span<const int32_t> utxoHeights,
+                                             int32_t blockHeight,
+                                             bool consensus,
+                                             const task::CCancellationToken& token) const
+{
+    if (token.IsCanceled())
+        return bsv::TxErrorCancelled();
+
     try {
         const char* begin{ reinterpret_cast<const char*>(extendedTX.data()) };
         const char* end{ reinterpret_cast<const char*>(extendedTX.data() + extendedTX.size()) };
@@ -1071,6 +1139,14 @@ TxError bsv::CTxValidator::ValidateTransaction(std::span<const uint8_t> extended
             throw std::runtime_error("error serializing extended tx");
 
         const CTransaction ctx(eTX.mtx);
+
+        // Polled here and below between groups of checks. Within a group nothing
+        // polls: deserialising and hashing above, then the transaction-level, prevout
+        // and output checks, then the standardness (polled per input when inputs are
+        // checked), sigop, input-value and fee checks. Each is linear in the
+        // transaction size.
+        if (token.IsCanceled())
+            return bsv::TxErrorCancelled();
 
         if (ctx.IsCoinBase())
             return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::CoinbaseNotAllowed));
@@ -1089,8 +1165,10 @@ TxError bsv::CTxValidator::ValidateTransaction(std::span<const uint8_t> extended
         if (auto r = implCheckTransactionCommon(ctx, checkHeight);                              !bsv::TxErrorIsOk(r)) return r;
         if (auto r = implCheckPrevOutputs(ctx);                                                 !bsv::TxErrorIsOk(r)) return r;
         if (auto r = implCheckOutputs(ctx, checkHeight);                                        !bsv::TxErrorIsOk(r)) return r;
+        if (token.IsCanceled())
+            return bsv::TxErrorCancelled();
         if (!consensus) {
-            if (auto r = implCheckStandardness(ctx, eTX.vutxo, utxoHeights, checkHeight);      !bsv::TxErrorIsOk(r)) return r;
+            if (auto r = implCheckStandardness(ctx, eTX.vutxo, utxoHeights, checkHeight, token); !bsv::TxErrorIsOk(r)) return r;
             if (auto r = implCheckSigOpsPolicy(ctx, eTX.vutxo, utxoHeights, blockHeight);      !bsv::TxErrorIsOk(r)) return r;
         } else {
             if (auto r = implCheckConsensusSigops(ctx, eTX.vutxo, utxoHeights, blockHeight);   !bsv::TxErrorIsOk(r)) return r;
@@ -1101,7 +1179,9 @@ TxError bsv::CTxValidator::ValidateTransaction(std::span<const uint8_t> extended
         if (!consensus) {
             if (auto r = implCheckFee(ctx, eTX.vutxo, utxoHeights, blockHeight);               !bsv::TxErrorIsOk(r)) return r;
         }
-        return implVerifyScript(ctx, eTX.vutxo, utxoHeights, blockHeight, consensus);
+        if (token.IsCanceled())
+            return bsv::TxErrorCancelled();
+        return implVerifyScript(ctx, eTX.vutxo, utxoHeights, blockHeight, consensus, {}, token);
     }
     catch (const std::exception&) {
         return bsv::TxErrorException();

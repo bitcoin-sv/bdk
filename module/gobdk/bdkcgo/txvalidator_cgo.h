@@ -176,6 +176,40 @@ TxError TxValidator_ValidateTransaction(TxValidatorCGO cgoEngine,
     const int32_t* hUTXOsPtr, uint64_t hUTXOsLen,
     int32_t blockHeight, bool consensus);
 
+/*
+ * Cancellable variants.
+ *
+ * cancelFlag points to a 4-byte aligned int32_t owned by the caller: store a non-zero
+ * value with an atomic store, from any thread, to cancel the call. BDK only reads it, and only until
+ * the call returns. NULL means never cancelled.
+ *
+ * A cancelled call returns { TX_ERR_DOMAIN_CANCELLED, 0 }: no verdict about the
+ * transaction. The flag is polled at entry, between the transaction checks and before
+ * every opcode; a step already started (deserialising, one signature hash, one hash or
+ * arithmetic opcode) finishes first. A flag set after the last poll leaves the call to
+ * return its verdict.
+ *
+ * TxValidator_VerifyScriptCancellable takes optional custom flags: cFlagsLen == 0
+ * means the calculated flags, as TxValidator_VerifyScript.
+ * TxValidator_ValidateBatchCancellable returns TX_ERR_DOMAIN_CANCELLED for every entry
+ * not finished when the flag was seen; finished entries keep their results.
+ */
+TxError TxValidator_VerifyScriptCancellable(TxValidatorCGO cgoEngine,
+    const char* extendedTxPtr, uint64_t extendedTxLen,
+    const int32_t* hUTXOsPtr, uint64_t hUTXOsLen,
+    int32_t blockHeight, bool consensus,
+    const uint32_t* cFlagsPtr, uint64_t cFlagsLen,
+    const int32_t* cancelFlag);
+
+TxError TxValidator_ValidateTransactionCancellable(TxValidatorCGO cgoEngine,
+    const char* extendedTxPtr, uint64_t extendedTxLen,
+    const int32_t* hUTXOsPtr, uint64_t hUTXOsLen,
+    int32_t blockHeight, bool consensus,
+    const int32_t* cancelFlag);
+
+TxError* TxValidator_ValidateBatchCancellable(TxValidatorCGO cgoEngine, ValidateBatchCGO cgoBatch, uint64_t* resultSize,
+    const int32_t* cancelFlag);
+
 #ifdef __cplusplus
 }
 #endif

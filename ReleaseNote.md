@@ -11,6 +11,14 @@ installed alongside the package (`CMakeLists.txt`).
 
 ## Recent changes
 
+- **Validation calls can be cancelled.** `CTxValidator` has overloads of `ValidateTransaction`,
+  `VerifyScript`, `VerifySpend`, `ValidateBatch` and `CheckStandardness` that take a cancellation
+  token; Go has `ValidateTransactionContext`, `VerifyScriptContext`,
+  `VerifyScriptWithCustomFlagsContext` and `ValidateBatchContext`; Rust has `*_cancellable`
+  methods with a `CancelFlag`. A cancelled call returns the new `TX_ERR_DOMAIN_CANCELLED` (5),
+  Go `*CancelledError` / `ErrCancelled`, Rust `TxError::Cancelled`: no verdict, never a script
+  or DoS error. Existing functions are unchanged. Rust's `TxError` is now `#[non_exhaustive]`.
+  See [ObjectModel](documentation/docs/ObjectModel.md#cancellation).
 - **The Go binding version equals the BDK version again.** The `+2` patch offset is gone, so
   this release's Go module is `1.3.0` rather than `1.3.2`, and it sorts after the last published
   `module/gobdk/v1.2.4`. The configure-time check that the overall version is the maximum of

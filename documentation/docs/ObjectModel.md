@@ -63,9 +63,36 @@ classDiagram
     CTxValidator ..> ValidateBatch : consumes
 ```
 
-`TxError` contains two 32-bit integers: `domain` and `code`. Domain values are `OK` (0), `SCRIPT` (1), `DOS` (2), `EXCEPTION` (3), and `ABI` (4). Go maps success to `nil`, script errors to `ScriptError`, DoS errors to `DoSError`, exception results to `ScriptError` with `SCRIPT_ERR_CGO_EXCEPTION`, and ABI results to `ABIError`. An unknown domain produces a generic Go error. Inspect both fields when debugging.
+`TxError` contains two 32-bit integers: `domain` and `code`. Domain values are `OK` (0), `SCRIPT` (1), `DOS` (2), `EXCEPTION` (3), `ABI` (4), and `CANCELLED` (5). Go maps success to `nil`, script errors to `ScriptError`, DoS errors to `DoSError`, exception results to `ScriptError` with `SCRIPT_ERR_CGO_EXCEPTION`, ABI results to `ABIError`, and cancelled results to `*CancelledError`. An unknown domain produces a generic Go error. Inspect both fields when debugging.
 
-`SCRIPT` and `DOS` are verdicts about the transaction. `EXCEPTION` and `ABI` are not: they report that this process could not carry out the call, and a consumer must classify them as a local fault rather than as an invalid transaction. `ABI` is produced only by the language bindings, never by the core validator, and means a buffer length could not be expressed at the C boundary.
+`SCRIPT` and `DOS` are verdicts about the transaction. `EXCEPTION` and `ABI` are not: they report that this process could not carry out the call, and a consumer must classify them as a local fault rather than as an invalid transaction. `ABI` is produced only by the language bindings, never by the core validator, and means a buffer length could not be expressed at the C boundary. `CANCELLED` is not a verdict either: the caller cancelled the call before it reached one (see below).
+
+### Cancellation
+
+Long-running validation can be cancelled. `ValidateTransaction`, `VerifyScript`, `VerifySpend`,
+`ValidateBatch` and `CheckStandardness` each have an overload that takes a
+`task::CCancellationToken`; once the token has fired the call returns `CANCELLED` with code 0, in
+consensus and policy mode alike. The token is polled only at fixed points:
+
+| Call | Polls | Not polled (each linear in the transaction size) |
+|---|---|---|
+| `ValidateTransaction` | entry; after deserialising; after the transaction-level, prevout and output checks; in policy mode when inputs are checked for standardness (non-standard outputs not accepted), before each input; before script verification | deserialising and hashing; the transaction-level, prevout and output checks; the output standardness, sigop, input-value and fee checks |
+| `VerifyScript`, `VerifySpend` | entry; after deserialising | deserialising and hashing |
+| `CheckStandardness` | entry; after deserialising; before each input's check when inputs are checked | deserialising and hashing; the output standardness check |
+| `ValidateBatch` | as `ValidateTransaction`, per entry | as `ValidateTransaction` |
+
+On top of these, the interpreter polls before every opcode it runs (SV Node's own check), before each
+signature of `OP_CHECKMULTISIG` and each chunk of `OP_LSHIFT` / `OP_RSHIFT`. A step that has
+started finishes before the next poll: one signature hash, one hash or big-number opcode, or any
+phase in the right-hand column. A token that fires after the last poll leaves the call to return its
+verdict, so callers must act on the result rather than on whether they cancelled. A cancelled
+`ValidateBatch` keeps the results of the entries it finished and returns `CANCELLED` for the rest.
+
+The token belongs to the call, not to the `CTxValidator`, so concurrent calls on one validator
+cancel independently. The C bindings take a pointer to a caller-owned `int32_t` instead of a token
+(`bsv::MakeFlagCancellationToken`, `core/cancellation.hpp`): any thread cancels by storing a non-zero
+value atomically, and the call reads it only until it returns. The existing signatures are
+unchanged and never return `CANCELLED`.
 
 ## Go binding
 
@@ -75,5 +102,15 @@ verification, batching, flag/sigop helpers and policy accessors. It provides bot
 and `VerifyScriptWithCustomFlags` over the single C++ `VerifyScript` method, but does not expose
 `VerifySpend` or the individual checks listed above. It translates
 the returned `TxError` into a Go `error` (`nil` on success, otherwise the error mapping described above). A finalizer calls the C++ destructor when the Go object is garbage-collected.
+
+`ValidateTransactionContext`, `VerifyScriptContext`, `VerifyScriptWithCustomFlagsContext` and
+`ValidateBatchContext` take a `context.Context` and stop when it is done. A cancelled call returns a
+`*CancelledError`: `errors.Is(err, script.ErrCancelled)` is true and it unwraps to
+`context.Cause(ctx)`, so `context.Canceled`, `context.DeadlineExceeded` or a custom cause can be told
+apart. It is never a `ScriptError`, `DoSError` or `ABIError`. The context sets a heap `int32` through
+`context.AfterFunc`. For contexts built by the `context` package no goroutine runs unless the context
+is cancelled; for another `Context` implementation `AfterFunc` watches it with one goroutine until the
+call returns. A context whose `Done()` is nil, such as `context.Background()` or `context.TODO()`,
+takes the plain path at no extra cost.
 
 `ValidateTransaction` rejects coinbase transactions. The caller must supply accurate previous-output data and heights; this API does not look up the node's UTXO set. See [Debugging transaction validation](debug_transaction.md).

@@ -1,5 +1,6 @@
 #include <bdkcgo/txvalidator_cgo.h>
 #include <bdkcgo/src/abiguard.hpp>
+#include <core/cancellation.hpp>
 #include <core/txvalidator.hpp>
 #include <core/validatearg.hpp>
 
@@ -356,6 +357,35 @@ TxError TxValidator_ValidateTransaction(TxValidatorCGO cgoEngine, const char* ex
     }
 }
 
+TxError TxValidator_VerifyScriptCancellable(TxValidatorCGO cgoEngine, const char* extendedTxPtr, uint64_t extendedTxLen, const int32_t* hUTXOsPtr, uint64_t hUTXOsLen, int32_t blockHeight, bool consensus, const uint32_t* cFlagsPtr, uint64_t cFlagsLen, const int32_t* cancelFlag){
+    try {
+        const std::span<const uint8_t> extendedTx = bdkcgo::byte_span(extendedTxPtr, extendedTxLen);
+        const std::span<const int32_t> hUTXOs = bdkcgo::int32_span(hUTXOsPtr, hUTXOsLen);
+        const std::span<const uint32_t> cFlags = bdkcgo::uint32_span(cFlagsPtr, cFlagsLen);
+        return static_cast<bsv::CTxValidator*>(cgoEngine)->VerifyScript(extendedTx, hUTXOs, blockHeight, consensus, cFlags, bsv::MakeFlagCancellationToken(cancelFlag));
+    }
+    catch (const bdkcgo::AbiArgumentError& e) {
+        return bsv::AbiErrorToTxError(e.code());
+    }
+    catch (...) {
+        return bsv::TxErrorException();
+    }
+}
+
+TxError TxValidator_ValidateTransactionCancellable(TxValidatorCGO cgoEngine, const char* extendedTxPtr, uint64_t extendedTxLen, const int32_t* hUTXOsPtr, uint64_t hUTXOsLen, int32_t blockHeight, bool consensus, const int32_t* cancelFlag) {
+    try {
+        const std::span<const uint8_t> extendedTx = bdkcgo::byte_span(extendedTxPtr, extendedTxLen);
+        const std::span<const int32_t> hUTXOs = bdkcgo::int32_span(hUTXOsPtr, hUTXOsLen);
+        return static_cast<bsv::CTxValidator*>(cgoEngine)->ValidateTransaction(extendedTx, hUTXOs, blockHeight, consensus, bsv::MakeFlagCancellationToken(cancelFlag));
+    }
+    catch (const bdkcgo::AbiArgumentError& e) {
+        return bsv::AbiErrorToTxError(e.code());
+    }
+    catch (...) {
+        return bsv::TxErrorException();
+    }
+}
+
 // Internal helper building the single-element array TxValidator_ValidateBatch uses to
 // report a failure that has no per-entry result to attach itself to.
 static TxError* _helper_single_result(TxError result, uint64_t* resultSize) {
@@ -370,6 +400,10 @@ static TxError* _helper_single_result(TxError result, uint64_t* resultSize) {
 }
 
 TxError* TxValidator_ValidateBatch(TxValidatorCGO cgoEngine, ValidateBatchCGO cgoBatch, uint64_t* resultSize) {
+    return TxValidator_ValidateBatchCancellable(cgoEngine, cgoBatch, resultSize, nullptr);
+}
+
+TxError* TxValidator_ValidateBatchCancellable(TxValidatorCGO cgoEngine, ValidateBatchCGO cgoBatch, uint64_t* resultSize, const int32_t* cancelFlag) {
     if (resultSize == nullptr) {
         return nullptr;
     }
@@ -383,7 +417,7 @@ TxError* TxValidator_ValidateBatch(TxValidatorCGO cgoEngine, ValidateBatchCGO cg
         bsv::CTxValidator* engine = static_cast<bsv::CTxValidator*>(cgoEngine);
         bsv::ValidateBatch* batch = static_cast<bsv::ValidateBatch*>(cgoBatch);
 
-        std::vector<TxError> results = engine->ValidateBatch(*batch);
+        std::vector<TxError> results = engine->ValidateBatch(*batch, bsv::MakeFlagCancellationToken(cancelFlag));
 
         const size_t size = results.size();
         if (size == 0) {

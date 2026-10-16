@@ -1,0 +1,99 @@
+name: ThreadSanitizer
+
+## Builds the core and the tests labelled `tsan` with -fsanitize=thread, then runs
+## them. Today that is test_cancellation, whose cancel flag is written by one thread
+## while validation reads it on another. To cover another test, label it `tsan` and
+## add its target to bdk_tsan_tests in test/core/CMakeLists.txt.
+##
+## BDK's CMake sets CMAKE_CXX_FLAGS itself, so -fsanitize=thread passed there is
+## silently dropped. A compiler launcher appends it to every compile instead.
+on:
+  pull_request:
+    paths:
+      - 'CMakeLists.txt'
+      - 'cmake/**'
+      - 'core/**'
+      - 'test/CMakeLists.txt'
+      - 'test/core/**'
+      - '.github/workflows/tsan.yaml'
+  push:
+    branches: [master]
+    paths:
+      - 'CMakeLists.txt'
+      - 'cmake/**'
+      - 'core/**'
+      - 'test/CMakeLists.txt'
+      - 'test/core/**'
+      - '.github/workflows/tsan.yaml'
+
+permissions:
+  contents: read
+
+env:
+  DEFAULT_BITCOIN_SV_COMMIT: 6504a3aff65ba97c0f6c80962b033e35ecbfed4b
+
+jobs:
+  tsan:
+    ## ARM64 orders memory more weakly than x86-64, so it is the stricter host for the
+    ## atomics these tests exercise.
+    runs-on: ubuntu-22.04-arm
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Check out bitcoin-sv
+        run: |
+          git clone https://github.com/bitcoin-sv/bitcoin-sv.git bitcoin-sv
+          git -C bitcoin-sv checkout ${{ env.DEFAULT_BITCOIN_SV_COMMIT }}
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential python3-dev wget
+          wget -q https://github.com/bitcoin-sv/bdk/releases/download/depcy/dependancies_linux_aarch64.tar.gz
+          tar -xzf dependancies_linux_aarch64.tar.gz
+
+      - name: Configure with ThreadSanitizer
+        run: |
+          printf '#!/bin/sh\nexec "$@" -fsanitize=thread -fno-omit-frame-pointer\n' > "$RUNNER_TEMP/tsan-compile"
+          chmod +x "$RUNNER_TEMP/tsan-compile"
+          cmake -S . -B build-tsan -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DBSV_ROOT="$PWD/bitcoin-sv" \
+            -DBOOST_ROOT="$PWD/dependancies_linux_aarch64/boost_1.85.0" \
+            -DOPENSSL_ROOT_DIR="$PWD/dependancies_linux_aarch64/openssl_3.4.0" \
+            -DBDK_BUILD_MODULES=OFF -DBUILD_MODULE_GOLANG=OFF -DBUILD_MODULE_RUST=OFF \
+            -DBUILD_MODULE_GOLANG_INSTALL_INSOURCE=OFF -DBUILD_MODULE_RUST_INSTALL_INSOURCE=OFF \
+            -DCMAKE_C_COMPILER_LAUNCHER="$RUNNER_TEMP/tsan-compile" \
+            -DCMAKE_CXX_COMPILER_LAUNCHER="$RUNNER_TEMP/tsan-compile" \
+            -DCMAKE_EXE_LINKER_FLAGS=-fsanitize=thread
+
+      - name: Build the tsan tests
+        run: cmake --build build-tsan --target bdk_tsan_tests --parallel 4
+
+        ## Without the launcher everything still builds and passes, uninstrumented.
+        ## __tsan_func_entry is referenced only by code compiled with
+        ## -fsanitize=thread, so require it in the core library and in every test
+        ## binary the target built.
+      - name: Check the build is instrumented
+        run: |
+          out=build-tsan/x64/relwithdebinfo
+          nm "$out/libbdk_core.a" 2>/dev/null | grep -c __tsan_func_entry > /dev/null || { echo "libbdk_core.a is not instrumented"; exit 1; }
+          found=0
+          for bin in "$out"/test_*; do
+            [ -f "$bin" ] && [ -x "$bin" ] || continue
+            found=1
+            nm "$bin" | grep -c __tsan_func_entry > /dev/null || { echo "$bin is not instrumented"; exit 1; }
+            echo "instrumented: $bin"
+          done
+          [ "$found" = 1 ] || { echo "no test binary in $out"; exit 1; }
+
+      - name: Run the tsan tests
+        run: |
+          ## The TSAN runtime cannot map its shadow memory with the address-space
+          ## randomisation recent runner kernels use.
+          sudo sysctl -w vm.mmap_rnd_bits=28
+          TSAN_OPTIONS="halt_on_error=1 second_deadlock_stack=1" \
+            ctest --test-dir build-tsan -L tsan --output-on-failure --no-tests=error
