@@ -1569,6 +1569,20 @@ BOOST_AUTO_TEST_CASE(unreadable_cgroup_files_give_no_limit)
 // Go 1.25's default GOMAXPROCS rule (runtime/cgroup_linux.go,
 // adjustCgroupGOMAXPROCS): the CPUs available to the process, lowered to the
 // cgroup limit rounded up, and never below 2 because of the limit.
+// On this machine, whatever its cgroup: at least one CPU, never more than
+// hardware_concurrency(). On Linux this reads the live affinity mask and cgroup.
+BOOST_AUTO_TEST_CASE(effective_cpu_count_is_within_the_machine)
+{
+    const size_t effective = bsv::detail::EffectiveCpuCount();
+    const size_t hardware = std::thread::hardware_concurrency();
+    const auto limit = bsv::detail::CgroupCpuLimit("/");
+    BOOST_TEST_MESSAGE("effective=" << effective << " hardware_concurrency=" << hardware
+        << " cgroup_limit=" << (limit ? std::to_string(*limit) : std::string("none")));
+    BOOST_CHECK_GE(effective, 1u);
+    if (hardware > 0)
+        BOOST_CHECK_LE(effective, hardware);
+}
+
 BOOST_AUTO_TEST_CASE(cpu_count_rounds_the_limit_like_gomaxprocs)
 {
     using bsv::detail::LimitCpuCount;
