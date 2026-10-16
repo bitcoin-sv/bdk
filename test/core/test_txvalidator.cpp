@@ -1,11 +1,13 @@
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <ctime>
 #include <limits>
 #include <memory>
 #include <optional>
 #include <string>
+#include <thread>
 #include <vector>
 
 /// Define test module name with debug postfix
@@ -45,6 +47,23 @@ namespace ba = boost::algorithm;
 
 using namespace std;
 using namespace bsv;
+
+// `test_txvalidator -- --parallel-input-threshold=N` runs every test with the
+// parallel input threshold set to N; ctest runs the suite once with 2, so every
+// multi-input tx is verified on several threads.
+struct ParallelInputThresholdFromArgs {
+    ParallelInputThresholdFromArgs()
+    {
+        const std::string prefix = "--parallel-input-threshold=";
+        const auto& suite = boost::unit_test::framework::master_test_suite();
+        for (int i = 1; i < suite.argc; ++i) {
+            const std::string arg = suite.argv[i];
+            if (arg.rfind(prefix, 0) == 0)
+                bsv::detail::SetParallelInputThresholdForTesting(std::stoull(arg.substr(prefix.size())));
+        }
+    }
+};
+BOOST_TEST_GLOBAL_FIXTURE(ParallelInputThresholdFromArgs);
 
 BOOST_AUTO_TEST_SUITE(test_txvalidator)
 
@@ -1147,5 +1166,350 @@ BOOST_AUTO_TEST_CASE(validate_transaction_scales_linearly_with_input_count)
         "ValidateTransaction CPU time ratio " << ratio << " for " << LARGE_N / SMALL_N
         << "x the inputs exceeds " << MAX_RATIO << ": sighash work is growing with the square of the input count");
 }
+
+// Sets the parallel input threshold for one test and restores it after.
+struct InputThresholdGuard {
+    explicit InputThresholdGuard(size_t minInputs)
+        : previous(bsv::detail::SetParallelInputThresholdForTesting(minInputs)) {}
+    ~InputThresholdGuard() { bsv::detail::SetParallelInputThresholdForTesting(previous); }
+    InputThresholdGuard(const InputThresholdGuard&) = delete;
+    InputThresholdGuard& operator=(const InputThresholdGuard&) = delete;
+    const size_t previous;
+};
+
+constexpr size_t FORCE_PARALLEL = 2;
+constexpr size_t FORCE_SERIAL = std::numeric_limits<size_t>::max();
+
+// Script verification of a tx with many inputs runs on several threads. These
+// tests pin that the parallel path returns exactly what the serial path does.
+BOOST_AUTO_TEST_SUITE(parallel_input_verification)
+
+BOOST_AUTO_TEST_CASE(valid_tx_validates_with_inputs_spread_over_helpers)
+{
+    constexpr size_t nInputs = 200;
+    const bsv::CTxValidator se("main");
+    const auto etxBin = SerializeExtended(MakeSignedP2PKHSpend(
+        std::vector<SigHashType>(nInputs, SigHashType().withForkId()), /*nOutputs=*/2, /*precomputeForSigning=*/true));
+
+    const InputThresholdGuard parallel(FORCE_PARALLEL);
+    const uint64_t helperInputsBefore = bsv::detail::HelperVerifiedInputCountForTesting();
+    for (const bool consensus : { true, false }) {
+        const auto status = ValidateP2PKHSpend(se, etxBin, nInputs, consensus);
+        BOOST_CHECK_MESSAGE(bsv::TxErrorIsOk(status),
+            "consensus=" << consensus << ": domain=" << status.domain << " code=" << status.code);
+    }
+    BOOST_CHECK_MESSAGE(bsv::detail::HelperVerifiedInputCountForTesting() > helperInputsBefore,
+        "no input was verified on a helper thread");
+}
+
+// The serial reference: VerifySpend on each input in order, the first failure wins.
+static TxError FirstFailingSpend(const bsv::CTxValidator& se,
+                                 const bsv::CMutableTransactionExtended& eTx,
+                                 const std::vector<int32_t>& utxoHeights,
+                                 bool consensus)
+{
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << eTx.mtx;
+    const std::vector<uint8_t> txBin(ss.begin(), ss.end());
+    for (size_t i = 0; i < eTx.vutxo.size(); ++i) {
+        const CTxOut& source = eTx.vutxo[i];
+        const TxError status = se.VerifySpend(std::span<const uint8_t>(txBin), static_cast<uint32_t>(i),
+            std::span<const uint8_t>(source.scriptPubKey.data(), source.scriptPubKey.size()),
+            source.nValue.GetSatoshis(), utxoHeights[i], P2PKH_BLOCK_HEIGHT, consensus);
+        if (!bsv::TxErrorIsOk(status))
+            return status;
+    }
+    return bsv::TxErrorOk();
+}
+
+static bool SameTxError(const TxError& a, const TxError& b)
+{
+    return a.domain == b.domain && a.code == b.code;
+}
+
+// ValidateTransaction forced parallel, forced serial, and the VerifySpend
+// reference all return `expected`, in both modes.
+static void CheckParallelMatchesSerial(const bsv::CTxValidator& se,
+                                       const bsv::CMutableTransactionExtended& eTx,
+                                       const std::vector<int32_t>& utxoHeights,
+                                       bool consensus,
+                                       const TxError& expected,
+                                       const std::string& label)
+{
+    const auto etxBin = SerializeExtended(eTx);
+    const auto validate = [&](size_t threshold) {
+        const InputThresholdGuard guard(threshold);
+        return se.ValidateTransaction(std::span<const uint8_t>(etxBin),
+            std::span<const int32_t>(utxoHeights), P2PKH_BLOCK_HEIGHT, consensus);
+    };
+    const TxError parallel = validate(FORCE_PARALLEL);
+    const TxError serial = validate(FORCE_SERIAL);
+    const TxError reference = FirstFailingSpend(se, eTx, utxoHeights, consensus);
+    BOOST_CHECK_MESSAGE(SameTxError(reference, expected),
+        label << " consensus=" << consensus << ": reference " << reference.domain << "/" << reference.code
+        << " expected " << expected.domain << "/" << expected.code);
+    BOOST_CHECK_MESSAGE(SameTxError(serial, expected),
+        label << " consensus=" << consensus << ": serial " << serial.domain << "/" << serial.code
+        << " expected " << expected.domain << "/" << expected.code);
+    BOOST_CHECK_MESSAGE(SameTxError(parallel, expected),
+        label << " consensus=" << consensus << ": parallel " << parallel.domain << "/" << parallel.code
+        << " expected " << expected.domain << "/" << expected.code);
+}
+
+// Replaces input `index`'s signature with an empty push: OP_CHECKSIG pushes
+// false without tripping NULLFAIL, so the input fails with EVAL_FALSE.
+static void EmptyP2PKHSignature(bsv::CMutableTransactionExtended& eTx, size_t index)
+{
+    CScript::const_iterator pc = eTx.mtx.vin[index].scriptSig.begin();
+    opcodetype opcode;
+    std::vector<uint8_t> sig;
+    std::vector<uint8_t> pubkey;
+    BOOST_REQUIRE(eTx.mtx.vin[index].scriptSig.GetOp(pc, opcode, sig));
+    BOOST_REQUIRE(eTx.mtx.vin[index].scriptSig.GetOp(pc, opcode, pubkey));
+    eTx.mtx.vin[index].scriptSig = CScript() << std::vector<uint8_t>() << pubkey;
+}
+
+constexpr size_t PARITY_INPUTS = 120;
+
+static bsv::CMutableTransactionExtended MakeParitySpend()
+{
+    return MakeSignedP2PKHSpend(std::vector<SigHashType>(PARITY_INPUTS, SigHashType().withForkId()),
+        /*nOutputs=*/2, /*precomputeForSigning=*/true);
+}
+
+BOOST_AUTO_TEST_CASE(bad_signature_at_first_middle_and_last_input)
+{
+    const bsv::CTxValidator se("main");
+    const std::vector<int32_t> utxoHeights(PARITY_INPUTS, P2PKH_UTXO_HEIGHT);
+    const auto base = MakeParitySpend();
+    for (const size_t k : { size_t{ 0 }, PARITY_INPUTS / 2, PARITY_INPUTS - 1 }) {
+        auto eTx = base;
+        CorruptP2PKHSignature(eTx, k);
+        for (const bool consensus : { true, false })
+            CheckParallelMatchesSerial(se, eTx, utxoHeights, consensus,
+                bsv::TxErrorScript(SCRIPT_ERR_SIG_NULLFAIL), "k=" + std::to_string(k));
+    }
+}
+
+// Two failing inputs with different errors: the lower index's error is the
+// result, whichever of them a thread reaches first.
+BOOST_AUTO_TEST_CASE(lowest_failing_input_wins)
+{
+    const bsv::CTxValidator se("main");
+    const std::vector<int32_t> utxoHeights(PARITY_INPUTS, P2PKH_UTXO_HEIGHT);
+    struct Case { size_t evalFalseAt; size_t nullFailAt; TxError expected; };
+    const std::array<Case, 3> cases{ {
+        { 10, 90, bsv::TxErrorScript(SCRIPT_ERR_EVAL_FALSE) },
+        { 90, 10, bsv::TxErrorScript(SCRIPT_ERR_SIG_NULLFAIL) },
+        { PARITY_INPUTS - 1, PARITY_INPUTS - 2, bsv::TxErrorScript(SCRIPT_ERR_SIG_NULLFAIL) },
+    } };
+    for (const Case& c : cases) {
+        auto eTx = MakeParitySpend();
+        EmptyP2PKHSignature(eTx, c.evalFalseAt);
+        CorruptP2PKHSignature(eTx, c.nullFailAt);
+        for (const bool consensus : { true, false })
+            CheckParallelMatchesSerial(se, eTx, utxoHeights, consensus, c.expected,
+                "evalFalseAt=" + std::to_string(c.evalFalseAt) + " nullFailAt=" + std::to_string(c.nullFailAt));
+    }
+}
+
+// A consensus-mode input with no confirmed height fails with
+// UnconfirmedInputInBlock at its index; a lower bad signature still wins.
+// In policy mode the unconfirmed input is valid and the signature decides.
+BOOST_AUTO_TEST_CASE(unconfirmed_input_in_block_competes_by_index)
+{
+    const bsv::CTxValidator se("main");
+    const TxError nullFail = bsv::TxErrorScript(SCRIPT_ERR_SIG_NULLFAIL);
+    const TxError unconfirmed = bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::UnconfirmedInputInBlock));
+    struct Case { size_t mempoolAt; size_t badSigAt; TxError expectedInBlock; };
+    for (const Case& c : { Case{ 30, 60, unconfirmed }, Case{ 60, 30, nullFail } }) {
+        auto eTx = MakeParitySpend();
+        CorruptP2PKHSignature(eTx, c.badSigAt);
+        std::vector<int32_t> utxoHeights(PARITY_INPUTS, P2PKH_UTXO_HEIGHT);
+        utxoHeights[c.mempoolAt] = MEMPOOL_HEIGHT;
+        const std::string label = "mempoolAt=" + std::to_string(c.mempoolAt) + " badSigAt=" + std::to_string(c.badSigAt);
+        CheckParallelMatchesSerial(se, eTx, utxoHeights, /*consensus=*/true, c.expectedInBlock, label);
+        CheckParallelMatchesSerial(se, eTx, utxoHeights, /*consensus=*/false, nullFail, label);
+    }
+}
+
+// An exception thrown while verifying inputs reaches the entry point's handler
+// from a helper thread as it does from the serial loop. A block height whose
+// next block is MEMPOOL_HEIGHT makes every input's flag calculation throw.
+BOOST_AUTO_TEST_CASE(exception_while_verifying_inputs_is_reported)
+{
+    const bsv::CTxValidator se("main");
+    const auto etxBin = SerializeExtended(MakeParitySpend());
+    const std::vector<int32_t> utxoHeights(PARITY_INPUTS, P2PKH_UTXO_HEIGHT);
+    for (const size_t threshold : { FORCE_PARALLEL, FORCE_SERIAL }) {
+        const InputThresholdGuard guard(threshold);
+        const TxError status = se.VerifyScript(std::span<const uint8_t>(etxBin),
+            std::span<const int32_t>(utxoHeights), MEMPOOL_HEIGHT - 1, /*consensus=*/false);
+        BOOST_CHECK_MESSAGE(SameTxError(status, bsv::TxErrorException()),
+            "threshold=" << threshold << ": domain=" << status.domain << " code=" << status.code);
+    }
+}
+
+// VerifyScript with per-input custom flags: input 70 loses SIGHASH_FORKID
+// support, input 25 has a bad signature. Each failure alone, then both
+// (lowest wins), against VerifySpend with the same flags.
+BOOST_AUTO_TEST_CASE(custom_flags_per_input_through_verify_script)
+{
+    const bsv::CTxValidator se("main");
+    const std::vector<int32_t> utxoHeights(PARITY_INPUTS, P2PKH_UTXO_HEIGHT);
+    for (const bool consensus : { true, false }) {
+        const uint32_t standard = se.CalculateFlags(P2PKH_UTXO_HEIGHT, P2PKH_BLOCK_HEIGHT, consensus);
+        std::vector<uint32_t> flags(PARITY_INPUTS, standard);
+        flags[70] = standard & ~SCRIPT_ENABLE_SIGHASH_FORKID;
+
+        for (const bool badSig : { false, true }) {
+            auto eTx = MakeParitySpend();
+            if (badSig)
+                CorruptP2PKHSignature(eTx, 25);
+            const auto etxBin = SerializeExtended(eTx);
+
+            CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+            ss << eTx.mtx;
+            const std::vector<uint8_t> txBin(ss.begin(), ss.end());
+            TxError reference = bsv::TxErrorOk();
+            for (size_t i = 0; i < PARITY_INPUTS && bsv::TxErrorIsOk(reference); ++i) {
+                const CTxOut& source = eTx.vutxo[i];
+                reference = se.VerifySpend(std::span<const uint8_t>(txBin), static_cast<uint32_t>(i),
+                    std::span<const uint8_t>(source.scriptPubKey.data(), source.scriptPubKey.size()),
+                    source.nValue.GetSatoshis(), utxoHeights[i], P2PKH_BLOCK_HEIGHT, consensus, flags[i]);
+            }
+            const TxError expected = badSig ? bsv::TxErrorScript(SCRIPT_ERR_SIG_NULLFAIL)
+                                            : bsv::TxErrorScript(SCRIPT_ERR_ILLEGAL_FORKID);
+            BOOST_CHECK_MESSAGE(SameTxError(reference, expected),
+                "consensus=" << consensus << " badSig=" << badSig << ": reference " << reference.domain << "/" << reference.code);
+
+            for (const size_t threshold : { FORCE_PARALLEL, FORCE_SERIAL }) {
+                const InputThresholdGuard guard(threshold);
+                const TxError status = se.VerifyScript(std::span<const uint8_t>(etxBin),
+                    std::span<const int32_t>(utxoHeights), P2PKH_BLOCK_HEIGHT, consensus,
+                    std::span<const uint32_t>(flags));
+                BOOST_CHECK_MESSAGE(SameTxError(status, expected),
+                    "consensus=" << consensus << " badSig=" << badSig << " threshold=" << threshold
+                    << ": " << status.domain << "/" << status.code);
+            }
+        }
+    }
+}
+
+// Mixed FORKID sighash types and a 2-of-3 multisig input on a large tx, valid
+// and with the multisig's second signature broken.
+BOOST_AUTO_TEST_CASE(mixed_sighash_types_and_multisig_input)
+{
+    const bsv::CTxValidator se("main");
+    std::vector<SigHashType> types;
+    for (size_t i = 0; i < PARITY_INPUTS; ++i)
+        types.push_back(FORKID_SIGHASH_TYPES[i % FORKID_SIGHASH_TYPES.size()]);
+    const auto mixed = MakeSignedP2PKHSpend(types, /*nOutputs=*/PARITY_INPUTS, /*precomputeForSigning=*/true);
+    const std::vector<int32_t> utxoHeights(PARITY_INPUTS, P2PKH_UTXO_HEIGHT);
+
+    MultisigSpend multisig = MakeSpendWithMultisigInput(PARITY_INPUTS, /*index=*/PARITY_INPUTS / 3, /*nOutputs=*/3);
+    MultisigSpend brokenMultisig = multisig;
+    CorruptSecondMultisigSignature(brokenMultisig);
+
+    for (const bool consensus : { true, false }) {
+        CheckParallelMatchesSerial(se, mixed, utxoHeights, consensus, bsv::TxErrorOk(), "mixed sighash");
+        CheckParallelMatchesSerial(se, multisig.eTx, utxoHeights, consensus, bsv::TxErrorOk(), "multisig");
+        CheckParallelMatchesSerial(se, brokenMultisig.eTx, utxoHeights, consensus,
+            bsv::TxErrorScript(SCRIPT_ERR_SIG_NULLFAIL), "broken multisig");
+    }
+}
+
+// ValidateBatch with small and large txs, good and bad: each result is that
+// tx's serial result.
+BOOST_AUTO_TEST_CASE(validate_batch_results_match_serial)
+{
+    const bsv::CTxValidator se("main");
+    const SigHashType allForkId = SigHashType().withForkId();
+    std::vector<bsv::CMutableTransactionExtended> txs;
+    txs.push_back(MakeSignedP2PKHSpend(std::vector<SigHashType>(3, allForkId), 2));
+    txs.push_back(MakeParitySpend());
+    txs.push_back(MakeParitySpend());
+    CorruptP2PKHSignature(txs.back(), 77);
+    txs.push_back(MakeSignedP2PKHSpend(std::vector<SigHashType>(3, allForkId), 2));
+    EmptyP2PKHSignature(txs.back(), 1);
+    txs.push_back(MakeParitySpend());
+    EmptyP2PKHSignature(txs.back(), 5);
+    CorruptP2PKHSignature(txs.back(), 4);
+
+    std::vector<std::vector<uint8_t>> bins;
+    std::vector<std::vector<int32_t>> heights;
+    for (const auto& tx : txs) {
+        bins.push_back(SerializeExtended(tx));
+        heights.emplace_back(tx.vutxo.size(), P2PKH_UTXO_HEIGHT);
+    }
+    for (const bool consensus : { true, false }) {
+        bsv::ValidateBatch batch;
+        for (size_t i = 0; i < txs.size(); ++i)
+            batch.add(bsv::ValidateArg(bins[i], heights[i], P2PKH_BLOCK_HEIGHT, consensus));
+        std::vector<TxError> parallel;
+        {
+            const InputThresholdGuard guard(FORCE_PARALLEL);
+            parallel = se.ValidateBatch(batch);
+        }
+        BOOST_REQUIRE_EQUAL(parallel.size(), txs.size());
+        for (size_t i = 0; i < txs.size(); ++i) {
+            const TxError reference = FirstFailingSpend(se, txs[i], heights[i], consensus);
+            BOOST_CHECK_MESSAGE(SameTxError(parallel[i], reference),
+                "tx " << i << " consensus=" << consensus << ": batch " << parallel[i].domain << "/" << parallel[i].code
+                << " reference " << reference.domain << "/" << reference.code);
+        }
+    }
+}
+
+// Many threads validate different large txs at once while sharing the helper
+// pool: every result equals that tx's serial result.
+BOOST_AUTO_TEST_CASE(concurrent_callers_share_the_pool)
+{
+    constexpr size_t CALLERS = 16;
+    constexpr size_t ROUNDS = 6;
+    const bsv::CTxValidator se("main");
+
+    std::vector<bsv::CMutableTransactionExtended> txs;
+    txs.push_back(MakeParitySpend());
+    for (const size_t k : { size_t{ 0 }, size_t{ 33 }, PARITY_INPUTS - 1 }) {
+        txs.push_back(MakeParitySpend());
+        CorruptP2PKHSignature(txs.back(), k);
+    }
+    txs.push_back(MakeParitySpend());
+    EmptyP2PKHSignature(txs.back(), 50);
+    CorruptP2PKHSignature(txs.back(), 49);
+    txs.push_back(MakeSignedP2PKHSpend(std::vector<SigHashType>(3, SigHashType().withForkId()), 2));
+
+    std::vector<std::vector<uint8_t>> bins;
+    std::vector<std::vector<int32_t>> heights;
+    std::vector<std::array<TxError, 2>> expected;  // [consensus]
+    for (const auto& tx : txs) {
+        bins.push_back(SerializeExtended(tx));
+        heights.emplace_back(tx.vutxo.size(), P2PKH_UTXO_HEIGHT);
+        expected.push_back({ FirstFailingSpend(se, tx, heights.back(), false),
+                             FirstFailingSpend(se, tx, heights.back(), true) });
+    }
+
+    const InputThresholdGuard parallel(FORCE_PARALLEL);
+    std::atomic<size_t> mismatches{ 0 };
+    std::vector<std::thread> callers;
+    for (size_t t = 0; t < CALLERS; ++t) {
+        callers.emplace_back([&, t] {
+            for (size_t r = 0; r < ROUNDS; ++r) {
+                const size_t i = (t + r) % txs.size();
+                const bool consensus = ((t + r) & 1) != 0;
+                const TxError status = se.ValidateTransaction(std::span<const uint8_t>(bins[i]),
+                    std::span<const int32_t>(heights[i]), P2PKH_BLOCK_HEIGHT, consensus);
+                if (!SameTxError(status, expected[i][consensus]))
+                    mismatches.fetch_add(1);
+            }
+        });
+    }
+    for (auto& caller : callers)
+        caller.join();
+    BOOST_CHECK_EQUAL(mismatches.load(), 0u);
+}
+
+BOOST_AUTO_TEST_SUITE_END()
 
 BOOST_AUTO_TEST_SUITE_END()
