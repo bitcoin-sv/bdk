@@ -1,10 +1,16 @@
 // CPUs available to this process, for sizing the input verification pool.
-// The cgroup lookup follows Go's internal/runtime/cgroup (Go 1.25) so BDK and
-// the Go runtime in the same process see the same limit.
+// The cgroup lookup follows Go 1.26's internal/runtime/cgroup (FindCPUCgroup,
+// FindCPUMountPoint: match the mount whose root contains the cgroup, strip
+// that root, skip paths outside the cgroup namespace, take the first match).
+// Go 1.25 ignored the mount root and kept the last cgroup2 mount. The rounding
+// is Go's default GOMAXPROCS rule, unchanged since go1.25.0. With GOMAXPROCS
+// unset and Go 1.26 or later, BDK and the Go runtime in one process derive the
+// same CPU count, except that Go re-reads the limit and BDK reads it once.
 
 #include <internal/txvalidator_internal.hpp>
 
 #include <algorithm>
+#include <cctype>
 #include <cerrno>
 #include <cmath>
 #include <cstdlib>
@@ -236,18 +242,38 @@ size_t bsv::detail::LimitCpuCount(size_t cpus, std::optional<double> cgroupLimit
     return limit < static_cast<double>(cpus) ? static_cast<size_t>(limit) : cpus;
 }
 
-size_t bsv::detail::EffectiveCpuCount()
+#if defined(__linux__) && !defined(__EMSCRIPTEN__)
+// CPUs in the calling thread's affinity mask, sized for any CPU count.
+static std::optional<size_t> AffinityCpuCount()
+{
+    for (int ncpus = 1024; ncpus <= (1 << 20); ncpus *= 2) {
+        cpu_set_t* mask = CPU_ALLOC(ncpus);
+        if (mask == nullptr)
+            return std::nullopt;
+        const size_t size = CPU_ALLOC_SIZE(ncpus);
+        CPU_ZERO_S(size, mask);
+        const int rc = sched_getaffinity(0, size, mask);
+        const int saved = errno;
+        const int count = rc == 0 ? CPU_COUNT_S(size, mask) : 0;
+        CPU_FREE(mask);
+        if (rc == 0)
+            return count > 0 ? std::optional<size_t>(static_cast<size_t>(count)) : std::nullopt;
+        if (saved != EINVAL)
+            return std::nullopt;  // EINVAL: the mask is too small, try a larger one
+    }
+    return std::nullopt;
+}
+#endif
+
+size_t bsv::detail::EffectiveCpuCount(const std::string& cgroupRoot)
 {
     size_t cpus = std::thread::hardware_concurrency();
 #if defined(__linux__) && !defined(__EMSCRIPTEN__)
-    cpu_set_t mask;
-    CPU_ZERO(&mask);
-    if (sched_getaffinity(0, sizeof(mask), &mask) == 0) {
-        const int allowed = CPU_COUNT(&mask);
-        if (allowed > 0)
-            cpus = cpus == 0 ? static_cast<size_t>(allowed) : std::min(cpus, static_cast<size_t>(allowed));
-    }
-    cpus = LimitCpuCount(cpus, CgroupCpuLimit("/"));
+    if (const auto allowed = AffinityCpuCount())
+        cpus = cpus == 0 ? *allowed : std::min(cpus, *allowed);
+    cpus = LimitCpuCount(cpus, CgroupCpuLimit(cgroupRoot));
+#else
+    (void)cgroupRoot;
 #endif
     return cpus;
 }
