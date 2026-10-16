@@ -482,12 +482,14 @@ private:
         const size_t cores = std::thread::hardware_concurrency();
         if (cores < 2)
             return nullptr;
-        auto* pool = new InputVerifyPool(cores);
+        auto* pool = new (std::nothrow) InputVerifyPool(cores);
+        if (pool == nullptr)
+            return nullptr;
         for (size_t i = 0; i + 1 < cores; ++i) {
             try {
                 std::thread([pool] { pool->Run(); }).detach();
                 ++pool->helpers_;
-            } catch (const std::system_error&) {
+            } catch (const std::exception&) {  // system_error, bad_alloc
                 break;
             }
         }
