@@ -11,11 +11,12 @@ installed alongside the package (`CMakeLists.txt`).
 
 ## Recent changes
 
-- **Hardware SHA-256 on x86-64 and ARM64.** Every SHA-256 BDK computes (sighash, txid,
-  merkle, the hashing opcodes) now runs on the fastest transform the CPU supports, chosen at
-  run time. On x86-64 BDK builds bitcoin-sv's SSE4 and SHA-NI transforms and lets bitcoin-sv's
-  own `sha256_dispatch::AutoDetect()` pick by CPUID. On 64-bit ARM it uses a new backend for the
-  ARMv8 SHA-2 instructions, vendored unchanged from Bitcoin Core v29.0
+- **Hardware SHA-256 on x86-64 and ARM64.** Every SHA-256 BDK computes during validation
+  (sighash, txid, the hashing opcodes) now runs on the fastest transform the CPU supports,
+  chosen at run time. The 2-way merkle-pair transform is installed too, but BDK validation never
+  computes a merkle root. On x86-64 BDK builds bitcoin-sv's SSE4 and SHA-NI transforms and lets
+  bitcoin-sv's own `sha256_dispatch::AutoDetect()` pick by CPUID. On 64-bit ARM it uses a new
+  backend for the ARMv8 SHA-2 instructions, vendored unchanged from Bitcoin Core v29.0
   (`core/sha256_arm_shani.cpp`, MIT), for both the streaming transform and the 2-way merkle-pair
   transform. It is enabled when Linux reports `HWCAP_SHA2` or macOS reports
   `hw.optional.arm.FEAT_SHA256`; other ARM operating systems, Windows and the WASM build keep
@@ -37,9 +38,10 @@ installed alongside the package (`CMakeLists.txt`).
       `bsv::SelectSha256Backend()` once at startup.
     - **`BDK_SHA256_FORCE_SCALAR=1`** in the environment keeps the scalar transforms, for
       debugging and for comparing backends.
-    - **`sha256_dispatch::AutoDetect()` now links.** `bdk_core` builds `sha256_dispatch.cpp`, so
-      C++ consumers that call the installed declaration no longer fail to link. On ARM it
-      installs nothing; call `bsv::SelectSha256Backend()` instead.
+    - **`bdk_core` now defines `sha256_dispatch::AutoDetect()`**, declared in the installed
+      `crypto/sha256_dispatch.h`, so the link gap is closed. Consumers must not call it: it
+      writes the dispatch pointers a second time, and on x86-64 it ignores
+      `BDK_SHA256_FORCE_SCALAR`. Call `bsv::SelectSha256Backend()` instead.
     - `test_sha256_backends` checks every backend the runner supports against FIPS 180-4
       vectors and a seeded differential run, and prints the selected backend and its
       throughput; CI logs it for each runner. `test_txvalidator`, `test_bsv` and
@@ -47,8 +49,10 @@ installed alongside the package (`CMakeLists.txt`).
       `test_sha256_select_race` makes the first selection while 16 threads enter BDK at
       once; a CI job runs it under GCC ThreadSanitizer on x86-64 and ARM64 Linux, with a
       positive control that must be reported.
-    - The committed `libGoBDK_*.a` archives predate `cgo_sha256_backend()` and the hardware
-      backends until the `[GoBDKUpdate]` refresh rebuilds them.
+    - **Dispatch `[GoBDKUpdate]` (commit-built-artifacts) straight after merge; until it runs,
+      Go consumers of untagged master fail to link.** The committed `libGoBDK_*.a` archives do
+      not define `cgo_sha256_backend()`, and cgo links its stub whether or not it is called.
+      Tagged releases are unaffected, since tags sit on refresh commits.
 - **The Go binding version equals the BDK version again.** The `+2` patch offset is gone, so
   this release's Go module is `1.3.0` rather than `1.3.2`, and it sorts after the last published
   `module/gobdk/v1.2.4`. The configure-time check that the overall version is the maximum of
