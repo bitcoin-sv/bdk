@@ -82,6 +82,18 @@ pub fn bdk_rust_version_string() -> &'static str {
     static_str(bdk_sys::bdkffi_bdk_rust_version_string)
 }
 
+/// The SHA-256 transforms BDK hashes with on this CPU, e.g. `shani,shani(2way)`,
+/// `sse4`, `arm_shani,arm_shani(2way)` or `standard`, and `standard(forced)` when
+/// `BDK_SHA256_FORCE_SCALAR` is set. The first call, or the first [`TxValidator`],
+/// makes the selection, so calling it at startup before any validation is safe and
+/// reports what validation will use.
+///
+/// [`TxValidator`]: crate::TxValidator
+pub fn sha256_backend() -> &'static str {
+    // Static storage too: the C++ selection keeps its result for the process lifetime
+    static_str(bdk_sys::bdkffi_sha256_backend)
+}
+
 fn static_str(ffi: unsafe extern "C" fn() -> *const c_char) -> &'static str {
     // Boundary contract: version externs return pointers to static storage from
     // capi/src/version.cpp.in. Unlike error strings, these are not malloc-owned

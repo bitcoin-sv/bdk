@@ -5,6 +5,7 @@
 #include <bdkffi/asm.h>
 #include <bdkffi/bench.h>
 #include <bdkffi/error_strings.h>
+#include <bdkffi/sha256.h>
 #include <bdkffi/txerror.h>
 #include <bdkffi/txvalidator.h>
 #include <bdkffi/validatebatch.h>
