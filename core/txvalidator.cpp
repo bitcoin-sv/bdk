@@ -352,10 +352,13 @@ public:
 
     // Verifies inputs until none below the lowest known failure is left, or,
     // for a helper (yieldAbove = the core count), until more threads than
-    // cores are busy. The budget is checked before claiming, never after: a
-    // claimed index is always verified. Returns how many inputs this call
-    // verified.
-    size_t Work(size_t yieldAbove = std::numeric_limits<size_t>::max())
+    // cores are busy. The budget is checked before claiming, never after, so
+    // leaving over budget never skips an index this thread claimed (claims at
+    // or above n_, or above the lowest failure, are skipped as always). A
+    // helper (`helperInputs` set) counts each input it verifies as it goes.
+    // Returns how many inputs this call verified.
+    size_t Work(size_t yieldAbove = std::numeric_limits<size_t>::max(),
+                std::atomic<uint64_t>* helperInputs = nullptr)
     {
         size_t verified = 0;
         for (;;) {
@@ -372,6 +375,8 @@ public:
             } catch (...) {
                 Fail(index, bsv::TxErrorException(), std::current_exception());
             }
+            if (helperInputs != nullptr)
+                helperInputs->fetch_add(1, std::memory_order_relaxed);
         }
     }
 
@@ -491,13 +496,15 @@ public:
         return jobs_.size();
     }
 
-    // A busy thread left: a helper over budget may now join. The caller's
+    // A busy thread left, leaving `busyAfter` busy: a helper over budget may
+    // now join. Nothing to do while the count is still at or above the core
+    // count; the decrement that takes it below does the check. The caller's
     // seq_cst decrement of busyThreads and this seq_cst load pair with Offer's
     // increment of openJobs_ and the helper's load of busyThreads, so either
     // this sees the job or the helper sees the freed core.
-    void ReleasedCore()
+    void ReleasedCore(size_t busyAfter)
     {
-        if (openJobs_.load(std::memory_order_seq_cst) == 0)
+        if (busyAfter >= cores_ || openJobs_.load(std::memory_order_seq_cst) == 0)
             return;
         { std::lock_guard lock{ mutex_ }; }  // a helper checking the budget is now waiting
         wake_.notify_one();
@@ -508,13 +515,18 @@ private:
 
     static InputVerifyPool* Create()
     {
-        // hardware_concurrency(), lowered on Linux to the affinity mask and
-        // the container's cgroup CPU limit.
+        // hardware_concurrency(), lowered on Linux to the container's cgroup
+        // CPU limit and to the affinity mask of the thread that creates the
+        // pool, i.e. of the first caller with a large tx; the size is kept for
+        // the life of the process.
         size_t cores = 0;
         try {
             cores = bsv::detail::EffectiveCpuCount();
         } catch (const std::exception&) {
-            return nullptr;  // e.g. bad_alloc reading the cgroup files: serial
+            // e.g. bad_alloc reading the cgroup files. Get() keeps this
+            // nullptr, so the process stays serial: a lost speed-up, never a
+            // failed call.
+            return nullptr;
         }
         if (const size_t cap = inputPoolCoresCap.load(); cap != 0)
             cores = std::min(cores, cap);
@@ -575,8 +587,7 @@ private:
                 });
             }
             if (job->TryJoin()) {
-                const size_t verified = job->Work(cores_);
-                helperVerifiedInputs.fetch_add(verified, std::memory_order_relaxed);
+                const size_t verified = job->Work(cores_, &helperVerifiedInputs);
                 jobVerifiedInputs.fetch_add(verified, std::memory_order_relaxed);
                 job->Leave();
             }
@@ -611,9 +622,9 @@ public:
         if (!counted_)
             return;
         threadIsBusy = false;
-        busyThreads.fetch_sub(1, std::memory_order_seq_cst);
+        const size_t busyAfter = busyThreads.fetch_sub(1, std::memory_order_seq_cst) - 1;
         if (InputVerifyPool* pool = InputVerifyPool::Existing())
-            pool->ReleasedCore();
+            pool->ReleasedCore(busyAfter);
     }
     BusyScope(const BusyScope&) = delete;
     BusyScope& operator=(const BusyScope&) = delete;
@@ -705,9 +716,9 @@ void bsv::detail::ReleaseBusyThreadsForTesting(size_t count)
 {
 #if BDK_PARALLEL_INPUTS
     for (size_t i = 0; i < count; ++i) {
-        busyThreads.fetch_sub(1);
+        const size_t busyAfter = busyThreads.fetch_sub(1) - 1;
         if (InputVerifyPool* pool = InputVerifyPool::Existing())
-            pool->ReleasedCore();
+            pool->ReleasedCore(busyAfter);
     }
 #else
     (void)count;

@@ -22,7 +22,8 @@ inline constexpr size_t DEFAULT_PARALLEL_INPUT_THRESHOLD = 16;
 // multi-input transaction. Tests only.
 size_t SetParallelInputThresholdForTesting(size_t minInputs);
 
-// Number of inputs verified on pool helper threads since process start. Tests only.
+// Number of inputs verified on pool helper threads since process start,
+// counted as each one finishes. Tests only.
 uint64_t HelperVerifiedInputCountForTesting();
 
 // Number of inputs verified inside parallel jobs, by callers and helpers,
@@ -84,7 +85,8 @@ std::optional<double> CgroupCpuLimit(const std::string& root);
 size_t LimitCpuCount(size_t cpus, std::optional<double> cgroupLimit);
 
 // CPUs this process may use: hardware_concurrency(), lowered on Linux to the
-// calling thread's sched_getaffinity mask and, by LimitCpuCount, to the cgroup
+// calling thread's sched_getaffinity mask (so the input pool takes the mask
+// of the thread that creates it, the first caller with a large tx) and, by LimitCpuCount, to the cgroup
 // limit read under `cgroupRoot` ("/" on a live system; tests pass a fixture
 // root). Reads the system on every call; the input pool calls it once.
 size_t EffectiveCpuCount(const std::string& cgroupRoot = "/");
