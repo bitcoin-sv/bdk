@@ -2,9 +2,13 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
+#include <cstdio>
+#include <cstdlib>
 #include <ctime>
 #include <limits>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <thread>
@@ -57,9 +61,15 @@ using namespace bsv;
 // parallel input threshold set to N; ctest runs the suite once with 2, so every
 // multi-input tx is verified on several threads. `--input-pool-cores=N` sizes
 // the input pool to at most N cores, to reproduce a CI-sized pool locally.
+// The parallel input threshold the library starts with, read before any
+// test or argument changes it.
+static size_t shippedParallelInputThreshold = 0;
+
 struct ParallelInputThresholdFromArgs {
     ParallelInputThresholdFromArgs()
     {
+        shippedParallelInputThreshold = bsv::detail::SetParallelInputThresholdForTesting(0);
+        bsv::detail::SetParallelInputThresholdForTesting(shippedParallelInputThreshold);
         const std::string threshold = "--parallel-input-threshold=";
         const std::string cores = "--input-pool-cores=";
         const auto& suite = boost::unit_test::framework::master_test_suite();
@@ -73,6 +83,69 @@ struct ParallelInputThresholdFromArgs {
     }
 };
 BOOST_TEST_GLOBAL_FIXTURE(ParallelInputThresholdFromArgs);
+
+// Ends the process (status 124) when one test case runs longer than
+// CASE_LIMIT, naming the case. A hung parallel job (a caller waiting for helpers that never
+// leave) would otherwise block the binary until ctest's TIMEOUT, and the
+// parallel suite's Boost timeouts don't cover the outer suite's cases. No
+// test case takes more than a few seconds normally, a minute under TSAN.
+struct HangWatchdog : boost::unit_test::test_observer {
+    static constexpr std::chrono::seconds CASE_LIMIT{ 120 };
+
+    HangWatchdog()
+    {
+        boost::unit_test::framework::register_observer(*this);
+        watcher = std::thread([this] {
+            std::unique_lock lock{ mutex };
+            while (!stop) {
+                woken.wait_for(lock, std::chrono::seconds(1));
+                if (running && std::chrono::steady_clock::now() - started > CASE_LIMIT) {
+                    // _Exit, not abort: Boost.Test catches SIGABRT.
+                    std::fprintf(stderr, "test case %s ran longer than %lld s: exiting with status 124\n",
+                        name.c_str(), static_cast<long long>(CASE_LIMIT.count()));
+                    std::fflush(nullptr);
+                    std::_Exit(124);
+                }
+            }
+        });
+    }
+    ~HangWatchdog()
+    {
+        {
+            std::lock_guard lock{ mutex };
+            stop = true;
+        }
+        woken.notify_one();
+        watcher.join();
+        boost::unit_test::framework::deregister_observer(*this);
+    }
+
+    void test_unit_start(const boost::unit_test::test_unit& unit) override
+    {
+        if (unit.p_type != boost::unit_test::TUT_CASE)
+            return;
+        std::lock_guard lock{ mutex };
+        running = true;
+        started = std::chrono::steady_clock::now();
+        name = unit.full_name();
+    }
+    void test_unit_finish(const boost::unit_test::test_unit& unit, unsigned long) override
+    {
+        if (unit.p_type != boost::unit_test::TUT_CASE)
+            return;
+        std::lock_guard lock{ mutex };
+        running = false;
+    }
+
+    std::mutex mutex;
+    std::condition_variable woken;
+    bool stop{ false };
+    bool running{ false };
+    std::chrono::steady_clock::time_point started;
+    std::string name;
+    std::thread watcher;
+};
+BOOST_TEST_GLOBAL_FIXTURE(HangWatchdog);
 
 BOOST_AUTO_TEST_SUITE(test_txvalidator)
 
@@ -1191,11 +1264,25 @@ constexpr size_t FORCE_SERIAL = std::numeric_limits<size_t>::max();
 
 // Script verification of a tx with many inputs runs on several threads. These
 // tests pin that the parallel path returns exactly what the serial path does.
-// A lost wakeup would hang a test; the timeout (seconds, per test case) turns
-// that into a failure, and ctest's TIMEOUT backs it up.
-BOOST_AUTO_TEST_SUITE(parallel_input_verification, *boost::unit_test::timeout(120))
+// A lost wakeup would hang a test. Each case has a timeout that turns a hang
+// into a failure (Boost.Test raises SIGALRM; ctest's TIMEOUT backs it up), and
+// every case after the first depends on it: a job that never closes hangs the
+// first case, which fails at the timeout, and the rest are skipped instead of
+// each hanging for its own timeout.
+BOOST_AUTO_TEST_SUITE(parallel_input_verification)
 
-BOOST_AUTO_TEST_CASE(valid_tx_validates_with_inputs_spread_over_helpers)
+constexpr unsigned PARALLEL_TEST_TIMEOUT_S = 60;
+#define PARALLEL_TEST_CASE_DECORATORS \
+    *boost::unit_test::timeout(PARALLEL_TEST_TIMEOUT_S) \
+    *boost::unit_test::depends_on("test_txvalidator/parallel_input_verification/valid_tx_validates_with_inputs_spread_over_helpers")
+
+// The library ships with parallel verification on, from the default threshold.
+BOOST_AUTO_TEST_CASE(shipped_threshold_is_the_default)
+{
+    BOOST_CHECK_EQUAL(shippedParallelInputThreshold, bsv::detail::DEFAULT_PARALLEL_INPUT_THRESHOLD);
+}
+
+BOOST_AUTO_TEST_CASE(valid_tx_validates_with_inputs_spread_over_helpers, *boost::unit_test::timeout(PARALLEL_TEST_TIMEOUT_S))
 {
     constexpr size_t nInputs = 200;
     const bsv::CTxValidator se("main");
@@ -1292,7 +1379,7 @@ static bsv::CMutableTransactionExtended MakeParitySpend()
         /*nOutputs=*/2, /*precomputeForSigning=*/true);
 }
 
-BOOST_AUTO_TEST_CASE(bad_signature_at_first_middle_and_last_input)
+BOOST_AUTO_TEST_CASE(bad_signature_at_first_middle_and_last_input, PARALLEL_TEST_CASE_DECORATORS)
 {
     const bsv::CTxValidator se("main");
     const std::vector<int32_t> utxoHeights(PARITY_INPUTS, P2PKH_UTXO_HEIGHT);
@@ -1308,7 +1395,7 @@ BOOST_AUTO_TEST_CASE(bad_signature_at_first_middle_and_last_input)
 
 // Two failing inputs with different errors: the lower index's error is the
 // result, whichever of them a thread reaches first.
-BOOST_AUTO_TEST_CASE(lowest_failing_input_wins)
+BOOST_AUTO_TEST_CASE(lowest_failing_input_wins, PARALLEL_TEST_CASE_DECORATORS)
 {
     const bsv::CTxValidator se("main");
     const std::vector<int32_t> utxoHeights(PARITY_INPUTS, P2PKH_UTXO_HEIGHT);
@@ -1331,7 +1418,7 @@ BOOST_AUTO_TEST_CASE(lowest_failing_input_wins)
 // A consensus-mode input with no confirmed height fails with
 // UnconfirmedInputInBlock at its index; a lower bad signature still wins.
 // In policy mode the unconfirmed input is valid and the signature decides.
-BOOST_AUTO_TEST_CASE(unconfirmed_input_in_block_competes_by_index)
+BOOST_AUTO_TEST_CASE(unconfirmed_input_in_block_competes_by_index, PARALLEL_TEST_CASE_DECORATORS)
 {
     const bsv::CTxValidator se("main");
     const TxError nullFail = bsv::TxErrorScript(SCRIPT_ERR_SIG_NULLFAIL);
@@ -1351,7 +1438,7 @@ BOOST_AUTO_TEST_CASE(unconfirmed_input_in_block_competes_by_index)
 // An exception thrown while verifying inputs reaches the entry point's handler
 // from a helper thread as it does from the serial loop. A block height whose
 // next block is MEMPOOL_HEIGHT makes every input's flag calculation throw.
-BOOST_AUTO_TEST_CASE(exception_while_verifying_inputs_is_reported)
+BOOST_AUTO_TEST_CASE(exception_while_verifying_inputs_is_reported, PARALLEL_TEST_CASE_DECORATORS)
 {
     const bsv::CTxValidator se("main");
     const auto etxBin = SerializeExtended(MakeParitySpend());
@@ -1368,7 +1455,7 @@ BOOST_AUTO_TEST_CASE(exception_while_verifying_inputs_is_reported)
 // VerifyScript with per-input custom flags: input 70 loses SIGHASH_FORKID
 // support, input 25 has a bad signature. Each failure alone, then both
 // (lowest wins), against VerifySpend with the same flags.
-BOOST_AUTO_TEST_CASE(custom_flags_per_input_through_verify_script)
+BOOST_AUTO_TEST_CASE(custom_flags_per_input_through_verify_script, PARALLEL_TEST_CASE_DECORATORS)
 {
     const bsv::CTxValidator se("main");
     const std::vector<int32_t> utxoHeights(PARITY_INPUTS, P2PKH_UTXO_HEIGHT);
@@ -1413,7 +1500,7 @@ BOOST_AUTO_TEST_CASE(custom_flags_per_input_through_verify_script)
 
 // Mixed FORKID sighash types and a 2-of-3 multisig input on a large tx, valid
 // and with the multisig's second signature broken.
-BOOST_AUTO_TEST_CASE(mixed_sighash_types_and_multisig_input)
+BOOST_AUTO_TEST_CASE(mixed_sighash_types_and_multisig_input, PARALLEL_TEST_CASE_DECORATORS)
 {
     const bsv::CTxValidator se("main");
     std::vector<SigHashType> types;
@@ -1436,7 +1523,7 @@ BOOST_AUTO_TEST_CASE(mixed_sighash_types_and_multisig_input)
 
 // ValidateBatch with small and large txs, good and bad: each result is that
 // tx's serial result.
-BOOST_AUTO_TEST_CASE(validate_batch_results_match_serial)
+BOOST_AUTO_TEST_CASE(validate_batch_results_match_serial, PARALLEL_TEST_CASE_DECORATORS)
 {
     const bsv::CTxValidator se("main");
     const SigHashType allForkId = SigHashType().withForkId();
@@ -1496,7 +1583,7 @@ static void EditP2PKHScriptSig(bsv::CMutableTransactionExtended& eTx, size_t ind
 // result. Fewer callers than cores leave helpers free, so a good share of the
 // inputs runs on helpers and a result leaking from one tx's job into
 // another's shows up as a wrong error.
-BOOST_AUTO_TEST_CASE(concurrent_callers_share_the_pool)
+BOOST_AUTO_TEST_CASE(concurrent_callers_share_the_pool, PARALLEL_TEST_CASE_DECORATORS)
 {
     constexpr size_t ROUNDS = 24;
     const size_t helpers = bsv::detail::InputPoolHelperCountForTesting();
@@ -1587,6 +1674,9 @@ BOOST_AUTO_TEST_CASE(concurrent_callers_share_the_pool)
     if (callerCount < helpers + 1)
         BOOST_CHECK_MESSAGE(helperInputs * 10 >= inputs.load(),
             "only " << helperInputs << " of " << inputs.load() << " inputs ran on helpers");
+    else
+        BOOST_TEST_MESSAGE(helpers << " helper(s): the callers fill the pool, so jobs rarely overlap and results "
+            "leaking between jobs could go unseen here");
 }
 
 // The pool's own behaviour, beyond results: when it is used, that the core
@@ -1636,7 +1726,7 @@ static uint64_t HelperInputsWithin(const bsv::CTxValidator& se, const std::vecto
 // At the default threshold: one input below it never touches the pool; a tx
 // exactly at it is offered a helper, and one takes inputs within a few calls.
 // The same at a raised threshold.
-BOOST_AUTO_TEST_CASE(threshold_boundary_decides_whether_the_pool_is_used)
+BOOST_AUTO_TEST_CASE(threshold_boundary_decides_whether_the_pool_is_used, PARALLEL_TEST_CASE_DECORATORS)
 {
     if (!PoolHasHelpers())
         return;
@@ -1656,7 +1746,7 @@ BOOST_AUTO_TEST_CASE(threshold_boundary_decides_whether_the_pool_is_used)
 // After many concurrent parallel calls the budget is back to zero and no job
 // is left queued: callers and helpers both give their core back, and each
 // caller withdraws its job before returning.
-BOOST_AUTO_TEST_CASE(budget_and_queue_return_to_idle_after_concurrent_calls)
+BOOST_AUTO_TEST_CASE(budget_and_queue_return_to_idle_after_concurrent_calls, PARALLEL_TEST_CASE_DECORATORS)
 {
     if (!PoolHasHelpers())
         return;
@@ -1690,7 +1780,7 @@ BOOST_AUTO_TEST_CASE(budget_and_queue_return_to_idle_after_concurrent_calls)
 }
 
 // A pool whose helpers are all asleep wakes for a new job.
-BOOST_AUTO_TEST_CASE(idle_pool_wakes_for_a_new_job)
+BOOST_AUTO_TEST_CASE(idle_pool_wakes_for_a_new_job, PARALLEL_TEST_CASE_DECORATORS)
 {
     if (!PoolHasHelpers())
         return;
@@ -1707,7 +1797,7 @@ BOOST_AUTO_TEST_CASE(idle_pool_wakes_for_a_new_job)
 // carries on alone. When the cores free up, helpers rejoin the same job.
 // Observed through the busy count, which counts the caller plus every helper
 // on the job.
-BOOST_AUTO_TEST_CASE(helpers_leave_an_oversubscribed_machine_and_return)
+BOOST_AUTO_TEST_CASE(helpers_leave_an_oversubscribed_machine_and_return, PARALLEL_TEST_CASE_DECORATORS)
 {
     if (!PoolHasHelpers())
         return;
@@ -1731,9 +1821,15 @@ BOOST_AUTO_TEST_CASE(helpers_leave_an_oversubscribed_machine_and_return)
 
     // Count every core as busy on top: helpers leave, so the count settles at
     // the caller plus the extra cores, and stays there while oversubscribed.
+    // Each helper on the job finishes at most the one input it is verifying or
+    // has just claimed, then sees the count over the cores before claiming
+    // again: helper inputs grow by at most the number of helpers on the job.
+    const size_t helpersOnJob = busy() - 1;
     bsv::detail::ScopedBusyThreadsForTesting oversubscribed(cores);
+    const uint64_t helperInputsAtTrip = bsv::detail::HelperVerifiedInputCountForTesting();
     const size_t alone = 1 + cores;
     const bool left = WaitFor([&] { return busy() == alone || done.load(); }) && !done.load();
+    const uint64_t helperInputsAfterTrip = bsv::detail::HelperVerifiedInputCountForTesting() - helperInputsAtTrip;
     size_t mostWhileOversubscribed = 0;
     for (int sample = 0; sample < 50 && !done.load(); ++sample) {
         mostWhileOversubscribed = std::max(mostWhileOversubscribed, busy());
@@ -1749,6 +1845,8 @@ BOOST_AUTO_TEST_CASE(helpers_leave_an_oversubscribed_machine_and_return)
     BOOST_CHECK(bsv::TxErrorIsOk(status));
     BOOST_REQUIRE_MESSAGE(joined, "no helper joined the job before it finished");
     BOOST_CHECK_MESSAGE(left, "helpers stayed on the job with more threads than cores busy");
+    BOOST_CHECK_MESSAGE(helperInputsAfterTrip <= helpersOnJob,
+        helperInputsAfterTrip << " helper inputs after the budget tripped, with " << helpersOnJob << " helpers on the job");
     BOOST_REQUIRE_MESSAGE(stillRunning, "the job finished during the oversubscribed window");
     BOOST_CHECK_MESSAGE(mostWhileOversubscribed == alone,
         "a helper came back while oversubscribed: busy reached " << mostWhileOversubscribed << ", expected " << alone);
@@ -1760,7 +1858,7 @@ BOOST_AUTO_TEST_CASE(helpers_leave_an_oversubscribed_machine_and_return)
 // fails fast (an empty signature needs no ECDSA), and the fewest over five
 // calls is what counts: a participant preempted while verifying input 0 lets
 // the others run on legitimately.
-BOOST_AUTO_TEST_CASE(participants_stop_above_the_lowest_failure)
+BOOST_AUTO_TEST_CASE(participants_stop_above_the_lowest_failure, PARALLEL_TEST_CASE_DECORATORS)
 {
     if (!PoolHasHelpers())
         return;
@@ -1836,7 +1934,7 @@ static bsv::CMutableTransactionExtended MakeSlowMultisigSpend(size_t nInputs, si
 // most 8: with more, enough helpers join A to claim all its inputs and A
 // leaves the queue early. ctest's test_txvalidator_parallel_inputs runs it
 // with the pool capped at 4.
-BOOST_AUTO_TEST_CASE(finished_job_behind_a_live_one_leaves_the_queue)
+BOOST_AUTO_TEST_CASE(finished_job_behind_a_live_one_leaves_the_queue, PARALLEL_TEST_CASE_DECORATORS)
 {
     if (!PoolHasHelpers())
         return;
@@ -1885,9 +1983,40 @@ BOOST_AUTO_TEST_CASE(finished_job_behind_a_live_one_leaves_the_queue)
     BOOST_CHECK_MESSAGE(queuedAfterFast == 1, queuedAfterFast << " jobs queued after the fast call returned; expected only the slow one");
 }
 
+// VerifySpend verifies its one input on the calling thread, but that thread
+// takes a core: the busy count is 1 while a slow spend runs and 0 after.
+BOOST_AUTO_TEST_CASE(verify_spend_counts_against_the_core_budget, PARALLEL_TEST_CASE_DECORATORS)
+{
+    BOOST_REQUIRE(PoolIsIdle());
+    const auto eTx = MakeSlowMultisigSpend(1, 1000);
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << eTx.mtx;
+    const std::vector<uint8_t> txBin(ss.begin(), ss.end());
+    const CTxOut& source = eTx.vutxo[0];
+    const bsv::CTxValidator se("main");
+
+    std::atomic<bool> done{ false };
+    TxError status = bsv::TxErrorOk();
+    std::thread spender([&] {
+        status = se.VerifySpend(std::span<const uint8_t>(txBin), 0,
+            std::span<const uint8_t>(source.scriptPubKey.data(), source.scriptPubKey.size()),
+            source.nValue.GetSatoshis(), P2PKH_UTXO_HEIGHT, P2PKH_BLOCK_HEIGHT, /*consensus=*/true);
+        done.store(true);
+    });
+    size_t most = 0;
+    while (!done.load()) {
+        most = std::max(most, bsv::detail::BusyThreadCountForTesting());
+        std::this_thread::sleep_for(std::chrono::microseconds(50));
+    }
+    spender.join();
+    BOOST_CHECK(bsv::TxErrorIsOk(status));
+    BOOST_CHECK_EQUAL(most, 1u);
+    BOOST_CHECK_MESSAGE(PoolIsIdle(), "busy count " << bsv::detail::BusyThreadCountForTesting() << " after VerifySpend");
+}
+
 // A tx without outputs is verified with BaseSignatureChecker; the parallel
 // path returns what the serial one does.
-BOOST_AUTO_TEST_CASE(tx_without_outputs_matches_serial)
+BOOST_AUTO_TEST_CASE(tx_without_outputs_matches_serial, PARALLEL_TEST_CASE_DECORATORS)
 {
     const bsv::CTxValidator se("main");
     auto eTx = MakeParitySpend();
@@ -1907,6 +2036,8 @@ BOOST_AUTO_TEST_CASE(tx_without_outputs_matches_serial)
         BOOST_CHECK(!bsv::TxErrorIsOk(results[1]));  // no checker can verify the signatures
     }
 }
+
+#undef PARALLEL_TEST_CASE_DECORATORS
 
 BOOST_AUTO_TEST_SUITE_END()
 
@@ -2001,7 +2132,7 @@ BOOST_AUTO_TEST_CASE(unreadable_cgroup_files_give_no_limit)
         BOOST_CHECK_MESSAGE(!FixtureCpuLimit(name).has_value(), name);
 }
 
-// Go 1.25's default GOMAXPROCS rule (runtime/cgroup_linux.go,
+// Go's default GOMAXPROCS rule (runtime/cgroup_linux.go, the same from go1.25.0 on,
 // adjustCgroupGOMAXPROCS): the CPUs available to the process, lowered to the
 // cgroup limit rounded up, and never below 2 because of the limit.
 // On this machine, whatever its cgroup: at least one CPU, never more than
