@@ -43,6 +43,7 @@ set(_GO_MODULE_CGO_PUBLIC_HEADER_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/txvalidator_cgo.h
     ${CMAKE_CURRENT_SOURCE_DIR}/validatebatch_cgo.h
     ${CMAKE_CURRENT_SOURCE_DIR}/version_cgo.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/sha256_cgo.h
     ${CMAKE_CURRENT_SOURCE_DIR}/secp256k1_cloned.h # added here to be installed but won't be include twice as it use the same guard SECP256K1_H
 )
 set(_GO_MODULE_HEADER_FILES
@@ -57,6 +58,7 @@ set(_GO_MODULE_SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/abierror_cgo.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/txvalidator_cgo.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/validatebatch_cgo.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/sha256_cgo.cpp
 )
 
 set(_GO_MODULE_SOURCE_FILES

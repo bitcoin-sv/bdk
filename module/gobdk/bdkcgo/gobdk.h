@@ -9,6 +9,7 @@
 #include <bdkcgo/asm_cgo.h>
 #include <bdkcgo/script_error_cgo.h>
 #include <bdkcgo/version_cgo.h>
+#include <bdkcgo/sha256_cgo.h>
 #include <bdkcgo/validatebatch_cgo.h>
 #include <bdkcgo/txerror_cgo.h>
 #include <bdkcgo/doserror_cgo.h>

@@ -1,5 +1,7 @@
 #include <array>
 #include <chrono>
+#include <cstdlib>
+#include <iostream>
 #include <memory>
 #include <string>
 #include <vector>
@@ -33,6 +35,9 @@
 #include "chainparamsbase.h"
 
 #include "txvalidator.hpp"
+#include "sha256_backend.hpp"
+#include "crypto/sha256_dispatch.h"
+#include "sha256_backend_expectations.h"
 #include "chainparams_bdk.hpp"
 #include "extendedTx.hpp"
 #include "txerror.h"
@@ -56,6 +61,28 @@ const std::string MyParams::CustomName = "MyParams";
 
 // Registration custom chain params
 static bsv::RegisterCustomChainParams<MyParams> myParamsReg(MyParams::CustomName);
+
+// The first CTxValidator installs the fastest SHA-256 transforms this CPU
+// supports, so every test below validates through them. The installed pointers
+// are checked before SelectSha256Backend() is called, because that call would
+// install them itself. In a full run this case is the first to construct a
+// validator; ctest also runs it alone, in its own process.
+BOOST_AUTO_TEST_CASE(constructing_a_validator_installs_the_sha256_backend)
+{
+    const bsv::CTxValidator validator{bsv::TxValidationNetwork::Main};
+    sha256_test::CheckInstalledBackend();
+    BOOST_TEST(bsv::SelectSha256Backend() == sha256_test::ExpectedSelection());
+    std::cout << "SHA-256 backend: " << bsv::SelectSha256Backend() << std::endl;
+}
+
+// The same through the chain-name constructor. Meaningful only in a fresh
+// process: ctest runs it alone (test_txvalidator_chain_name_selects).
+BOOST_AUTO_TEST_CASE(constructing_a_validator_by_chain_name_installs_the_sha256_backend)
+{
+    const bsv::CTxValidator validator{std::string{"main"}};
+    sha256_test::CheckInstalledBackend();
+    BOOST_TEST(bsv::SelectSha256Backend() == sha256_test::ExpectedSelection());
+}
 
 BOOST_AUTO_TEST_CASE(custom_chainparams)
 {

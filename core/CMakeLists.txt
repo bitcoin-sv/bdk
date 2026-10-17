@@ -32,6 +32,44 @@ endif()
 bdk_add_core_library(bdk_core
   LINK_LIBRARIES OpenSSL::Crypto OpenSSL::SSL)
 
+## Hardware SHA-256, native core only (the wasm variant stays scalar).
+## sha256_dispatch.cpp defines sha256_dispatch::AutoDetect(), declared in the
+## installed crypto/sha256_dispatch.h. bsv::SelectSha256Backend() (sha256_backend.cpp)
+## picks the transforms at run time; nothing is built with -march=native, only
+## the files holding the intrinsics get the ISA flags they need.
+## The source properties are directory-scoped, so they never reach the wasm
+## variant, which builds the same core/ files from its own directory.
+set(_bsv_crypto_dir "${BDK_BSV_ROOT_DIR}/src/crypto")
+target_sources(bdk_core PRIVATE "${_bsv_crypto_dir}/sha256_dispatch.cpp")
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$" AND NOT MSVC)
+  ## SV Node's SSE4 (GCC inline asm) and SHA-NI transforms, as SV's src/crypto/CMakeLists.txt builds them
+  target_sources(bdk_core PRIVATE
+    "${_bsv_crypto_dir}/sha256_sse4.cpp"
+    "${_bsv_crypto_dir}/sha256_sse4_shim.cpp"
+    "${_bsv_crypto_dir}/sha256_shani_shim.cpp"
+    "${_bsv_crypto_dir}/sha256d64_shani_shim.cpp"
+    "${_bsv_crypto_dir}/sha256d64_shani.cpp")
+  ## -Wno-cast-align: upstream's (__m128i*) casts on byte buffers, kept verbatim
+  set_source_files_properties("${_bsv_crypto_dir}/sha256d64_shani.cpp" PROPERTIES
+    COMPILE_OPTIONS "-msha;-msse4.1;-mssse3;-Wno-cast-align"
+    COMPILE_DEFINITIONS "ENABLE_X86_SHANI"
+    SKIP_LINTING TRUE)
+  ## SV defines USE_ASM per target rather than in bitcoin-config.h; without it
+  ## AutoDetect() silently skips SSE4
+  set_source_files_properties("${_bsv_crypto_dir}/sha256_dispatch.cpp" PROPERTIES
+    COMPILE_DEFINITIONS "USE_ASM")
+  set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/sha256_backend.cpp" PROPERTIES
+    COMPILE_DEFINITIONS "BDK_SHA256_X86_HW")
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64|ARM64)$" AND NOT MSVC)
+  ## BDK's ARMv8 SHA-2 backend, vendored from Bitcoin Core
+  set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/sha256_arm_shani.cpp" PROPERTIES
+    COMPILE_OPTIONS "-march=armv8-a+crypto"
+    COMPILE_DEFINITIONS "ENABLE_ARM_SHANI"
+    SKIP_LINTING TRUE)
+  set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/sha256_backend.cpp" PROPERTIES
+    COMPILE_DEFINITIONS "BDK_SHA256_ARM_HW")
+endif()
+
 ## Install the binary library
 if(BDK_INSTALL_CORE_ARCHIVE)
   install(TARGETS bdk_core DESTINATION "lib" COMPONENT bdk_core)

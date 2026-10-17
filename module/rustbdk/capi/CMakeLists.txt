@@ -42,6 +42,7 @@ set(_BDKFFI_HEADER_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/include/bdkffi/asm.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/bdkffi/bdkffi.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/bdkffi/error_strings.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/bdkffi/sha256.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/bdkffi/txerror.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/bdkffi/txvalidator.h
     ${CMAKE_CURRENT_SOURCE_DIR}/include/bdkffi/validatebatch.h
@@ -53,6 +54,7 @@ set(_BDKFFI_SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/alloc.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/asm.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/error_strings.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/sha256.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/txvalidator.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/validatebatch.cpp
     ${BDK_VERSION_RUST_CPP}
