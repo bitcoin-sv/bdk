@@ -228,9 +228,14 @@ jobs:
       fail-fast: false
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
+    ## Read-only token, set on this job only: commit-built-artifacts needs write
+    permissions:
+      contents: read
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Set up Python 3
         uses: actions/setup-python@v4
