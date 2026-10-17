@@ -90,14 +90,15 @@ pub fn bdk_rust_version_string() -> &'static str {
 ///
 /// [`TxValidator`]: crate::TxValidator
 pub fn sha256_backend() -> &'static str {
-    // Static storage too: the C++ selection keeps its result for the process lifetime
+    // The C++ selection keeps its string for the life of the process and never frees it
     static_str(bdk_sys::bdkffi_sha256_backend)
 }
 
 fn static_str(ffi: unsafe extern "C" fn() -> *const c_char) -> &'static str {
-    // Boundary contract: version externs return pointers to static storage from
-    // capi/src/version.cpp.in. Unlike error strings, these are not malloc-owned
-    // buffers and must not be copied-and-freed with bdkffi_free.
+    // Boundary contract: these externs return pointers that stay valid for the
+    // life of the process (string literals from capi/src/version.cpp.in, and the
+    // never-freed SHA-256 selection). Unlike error strings, they are not
+    // malloc-owned buffers and must not be copied-and-freed with bdkffi_free.
     let ptr = unsafe { ffi() };
     if ptr.is_null() {
         return "";

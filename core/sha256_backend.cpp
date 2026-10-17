@@ -154,7 +154,7 @@ namespace
         backends.push_back({name, stream, d_block_2way});
     }
 
-    bool ForceScalar()
+    [[maybe_unused]] bool ForceScalar()
     {
         const char* v = std::getenv("BDK_SHA256_FORCE_SCALAR");
         return v != nullptr && v[0] != '\0' && std::strcmp(v, "0") != 0;
@@ -189,7 +189,9 @@ const std::string& bsv::SelectSha256Backend()
     // Scalar only, and kept minimal: the wasm bundles have a size ceiling
     static const std::string selected{"standard"};
 #else
-    static const std::string selected = [] () -> std::string {
+    // Never destroyed: the Go and Rust getters hand out pointers into it, and a
+    // thread may still read one while the process exits
+    static const std::string& selected = *new std::string([] () -> std::string {
         if(ForceScalar())
             return "standard(forced)";
 #if defined(BDK_SHA256_X86_HW)
@@ -206,7 +208,7 @@ const std::string& bsv::SelectSha256Backend()
         }
         return ret;
 #endif
-    }();
+    }());
 #endif
     return selected;
 }

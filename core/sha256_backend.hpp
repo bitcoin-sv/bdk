@@ -39,7 +39,11 @@ const std::vector<Sha256Backend>& Sha256SupportedBackends();
  * result is "standard(forced)". The WASM build is always "standard".
  *
  * A program that hashes on several threads before it constructs any
- * CTxValidator should call this once at startup.
+ * CTxValidator, for example while building CChainParams to pass their
+ * Consensus::Params to one, should call this once at startup.
+ *
+ * Do not call sha256_dispatch::AutoDetect() directly: it writes the dispatch
+ * pointers again, and on x86-64 it ignores BDK_SHA256_FORCE_SCALAR.
  */
 const std::string& SelectSha256Backend();
 
