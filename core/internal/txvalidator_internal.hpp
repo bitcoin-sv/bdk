@@ -1,0 +1,96 @@
+#ifndef __TXVALIDATOR_INTERNAL_HPP__
+#define __TXVALIDATOR_INTERNAL_HPP__
+
+// Internal to bdk_core and its tests. Not installed with the core headers
+// (core/bdk-core-recipe.cmake leaves core/internal/ out of the install list)
+// and not part of any language binding.
+
+#include <cstddef>
+#include <cstdint>
+#include <optional>
+#include <string>
+
+namespace bsv::detail {
+
+// Input count from which implVerifyScript verifies a transaction's inputs on
+// several threads, unless a test changes it.
+inline constexpr size_t DEFAULT_PARALLEL_INPUT_THRESHOLD = 16;
+
+// Sets the input count from which a transaction's inputs are verified on
+// several threads, process-wide, and returns the previous value.
+// SIZE_MAX forces the serial path; 2 forces the parallel path for every
+// multi-input transaction. Tests only.
+size_t SetParallelInputThresholdForTesting(size_t minInputs);
+
+// Number of inputs verified on pool helper threads since process start,
+// counted as each one finishes. Tests only.
+uint64_t HelperVerifiedInputCountForTesting();
+
+// Number of inputs verified inside parallel jobs, by callers and helpers,
+// since process start. Tests only.
+uint64_t JobVerifiedInputCountForTesting();
+
+// Caps the cores the input pool sizes itself to (0: no cap) and returns the
+// previous cap. Takes effect only when set before the pool is created, so a
+// test binary sets it at start-up to reproduce a CI-sized pool on a bigger
+// machine. Tests only.
+size_t SetInputPoolCoresForTesting(size_t cores);
+
+// Helper threads in the input pool, creating the pool if it does not exist
+// yet; 0 without a pool. Tests only.
+size_t InputPoolHelperCountForTesting();
+
+// Threads currently counted against the core budget: callers inside
+// implVerifyScript or VerifySpend plus helpers on a job. Tests only.
+size_t BusyThreadCountForTesting();
+
+// Jobs queued in the input pool (0 without a pool). Tests only.
+size_t QueuedJobCountForTesting();
+
+// Count `count` extra threads against the core budget, then release them the
+// way a caller leaving does (waking a helper per freed core). Tests only;
+// ScopedBusyThreadsForTesting pairs them.
+void AddBusyThreadsForTesting(size_t count);
+void ReleaseBusyThreadsForTesting(size_t count);
+
+class ScopedBusyThreadsForTesting {
+public:
+    explicit ScopedBusyThreadsForTesting(size_t count) : count_{ count } { AddBusyThreadsForTesting(count_); }
+    ~ScopedBusyThreadsForTesting() { Release(); }
+    void Release()
+    {
+        ReleaseBusyThreadsForTesting(count_);
+        count_ = 0;
+    }
+    ScopedBusyThreadsForTesting(const ScopedBusyThreadsForTesting&) = delete;
+    ScopedBusyThreadsForTesting& operator=(const ScopedBusyThreadsForTesting&) = delete;
+
+private:
+    size_t count_;
+};
+
+// The CPU bandwidth limit (quota / period, in CPUs) of the cgroup this process
+// is in, read from the files under `root` ("/" on a live system): cgroup v2
+// cpu.max, or cgroup v1 cpu.cfs_quota_us / cpu.cfs_period_us of the hierarchy
+// with the cpu controller, located through proc/self/cgroup and
+// proc/self/mountinfo. nullopt when there is no limit, or when any file is
+// missing or does not parse. The lookup follows Go 1.26's
+// internal/runtime/cgroup (FindCPUCgroup, FindCPUMountPoint).
+std::optional<double> CgroupCpuLimit(const std::string& root);
+
+// Lowers a CPU count to a cgroup limit the way Go sets its default GOMAXPROCS
+// (runtime/cgroup_linux.go, adjustCgroupGOMAXPROCS, the same from go1.25.0 on):
+// the limit is rounded up to a whole CPU and to at least 2, and only ever
+// lowers `cpus`.
+size_t LimitCpuCount(size_t cpus, std::optional<double> cgroupLimit);
+
+// CPUs this process may use: hardware_concurrency(), lowered on Linux to the
+// calling thread's sched_getaffinity mask (so the input pool takes the mask
+// of the thread that creates it, the first caller with a large tx) and, by LimitCpuCount, to the cgroup
+// limit read under `cgroupRoot` ("/" on a live system; tests pass a fixture
+// root). Reads the system on every call; the input pool calls it once.
+size_t EffectiveCpuCount(const std::string& cgroupRoot = "/");
+
+} // namespace bsv::detail
+
+#endif /* __TXVALIDATOR_INTERNAL_HPP__ */

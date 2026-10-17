@@ -13,11 +13,34 @@
 #include <chainparams_bdk.hpp>
 #include <extendedTx.hpp>
 #include <txvalidator.hpp>
+#include <internal/txvalidator_internal.hpp>
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <vector>
+
+// Builds without threads (WASM without pthreads) verify inputs serially only.
+#if defined(__EMSCRIPTEN__) && !defined(__EMSCRIPTEN_PTHREADS__)
+#define BDK_PARALLEL_INPUTS 0
+#else
+#define BDK_PARALLEL_INPUTS 1
+#endif
+
+#if BDK_PARALLEL_INPUTS
+#include <algorithm>
+#include <condition_variable>
+#include <deque>
+#include <exception>
+#include <functional>
+#include <limits>
+#include <memory>
+#include <mutex>
+#include <new>
+#include <system_error>
+#include <thread>
+#endif
 
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -263,7 +286,444 @@ private:
     mutable std::vector<uint8_t> last_code_bytes_;
 };
 
+/*
+ * Parallel input verification
+ * ---------------------------
+ * implVerifyScript verifies the inputs of a transaction with at least
+ * parallelInputThreshold inputs on the calling thread plus idle helpers from
+ * one process-wide pool. The result is the serial result: the outcome of the
+ * lowest-index input that fails, whether a TxError or an exception.
+ *
+ * Every participant claims the next input index from one shared counter, so
+ * inputs are verified in index order and every index below the lowest known
+ * failure is claimed, and finished before the caller returns. Indices above it
+ * are skipped. The calling thread works from the start and only ever waits for
+ * helpers that have joined and are verifying an input; a helper that reaches a
+ * closed job drops it. Nested use (a helper's work calling back in) therefore
+ * cannot deadlock.
+ *
+ * Oversubscription: busyThreads counts every thread inside implVerifyScript or
+ * VerifySpend plus every helper on a job. A helper joins only while that count
+ * is below the core count, and checks it again before claiming each input,
+ * leaving the job once the count exceeds the core count. So a helper holds a
+ * core for at most one more input once the machine is oversubscribed. Callers
+ * are never held back: when callers alone occupy every core a large tx gets no
+ * helpers and runs serially on its own thread. The core count is
+ * EffectiveCpuCount(): on Linux it respects the affinity mask and a
+ * container's cgroup CPU limit, rounded as Go sets GOMAXPROCS.
+ *
+ * Cancellation: the cancellation token is read on whichever thread verifies
+ * an input, so a token must not depend on the calling thread (a thread CPU
+ * clock budget would measure a helper's clock against the caller's start).
+ *
+ * Shared by all participants, read only: the CTransaction, its
+ * PrecomputedTransactionData, the previous outputs, heights and flags, and the
+ * CTxValidator's settings. Each input gets its own CachingScriptChecker.
+ */
+
+// The default threshold, bsv::detail::DEFAULT_PARALLEL_INPUT_THRESHOLD, comes
+// from the threshold_sweep benchmark in test_txvalidator (SIGHASH_ALL|FORKID
+// P2PKH, about 20-50 us per input): at 16 inputs parallel was 1.56x-1.84x
+// faster on ubuntu-22.04 (x86-64, 4 vCPU), ubuntu-22.04-arm (4 cores),
+// macos-15 CI (3 vCPU) and an Apple M3 Max; at 2-4 inputs the macos-15 runner
+// was slower.
+static_assert(bsv::detail::DEFAULT_PARALLEL_INPUT_THRESHOLD == 16);
+std::atomic<size_t> parallelInputThreshold{ bsv::detail::DEFAULT_PARALLEL_INPUT_THRESHOLD };
+std::atomic<uint64_t> helperVerifiedInputs{ 0 };
+std::atomic<uint64_t> jobVerifiedInputs{ 0 };  // caller and helpers, inside jobs
+std::atomic<size_t> inputPoolCoresCap{ 0 };  // 0: no cap (tests only)
+
+#if BDK_PARALLEL_INPUTS
+
+// Each extra participant is worth at least this many inputs (fewer when the
+// threshold is lower, so a tx at the threshold is offered a helper).
+constexpr size_t MIN_INPUTS_PER_PARTICIPANT = 8;
+
+std::atomic<size_t> busyThreads{ 0 };
+thread_local bool threadIsBusy{ false };
+
+// One transaction's inputs [0, n), shared by its caller and the helpers that join.
+class InputJob {
+public:
+    using VerifyInput = std::function<TxError(size_t)>;
+
+    InputJob(size_t n, VerifyInput verify)
+        : n_{ n }, verify_{ std::move(verify) }, lowestFailure_{ n } {}
+
+    // Verifies inputs until none below the lowest known failure is left, or,
+    // for a helper (yieldAbove = the core count), until more threads than
+    // cores are busy. The budget is checked before claiming, never after, so
+    // leaving over budget never skips an index this thread claimed (claims at
+    // or above n_, or above the lowest failure, are skipped as always). A
+    // helper (`helperInputs` set) counts each input it verifies as it goes.
+    // Returns how many inputs this call verified.
+    size_t Work(size_t yieldAbove = std::numeric_limits<size_t>::max(),
+                std::atomic<uint64_t>* helperInputs = nullptr)
+    {
+        size_t verified = 0;
+        for (;;) {
+            if (busyThreads.load(std::memory_order_relaxed) > yieldAbove)
+                return verified;
+            const size_t index = next_.fetch_add(1, std::memory_order_relaxed);
+            if (index >= n_ || index > lowestFailure_.load(std::memory_order_relaxed))
+                return verified;
+            ++verified;
+            try {
+                const TxError result = verify_(index);
+                if (!bsv::TxErrorIsOk(result))
+                    Fail(index, result, nullptr);
+            } catch (...) {
+                Fail(index, bsv::TxErrorException(), std::current_exception());
+            }
+            if (helperInputs != nullptr)
+                helperInputs->fetch_add(1, std::memory_order_relaxed);
+        }
+    }
+
+    bool HasWork() const
+    {
+        const size_t next = next_.load(std::memory_order_relaxed);
+        return next < n_ && next <= lowestFailure_.load(std::memory_order_relaxed);
+    }
+
+    // A helper joins only an open job; the caller waits for every joined helper.
+    bool TryJoin()
+    {
+        std::lock_guard lock{ mutex_ };
+        if (closed_)
+            return false;
+        ++joined_;
+        return true;
+    }
+
+    void Leave()
+    {
+        std::lock_guard lock{ mutex_ };
+        if (--joined_ == 0 && closed_)
+            left_.notify_one();
+    }
+
+    // Called by the caller once its own Work() returned: no index below the
+    // lowest failure is unclaimed, so waiting for the joined helpers finishes it.
+    void CloseAndWait()
+    {
+        std::unique_lock lock{ mutex_ };
+        closed_ = true;
+        left_.wait(lock, [this] { return joined_ == 0; });
+    }
+
+    // The lowest failure's outcome, rethrown if it was an exception.
+    TxError Result()
+    {
+        std::lock_guard lock{ mutex_ };
+        if (failureException_)
+            std::rethrow_exception(failureException_);
+        return failure_;
+    }
+
+private:
+    void Fail(size_t index, const TxError& result, std::exception_ptr exception)
+    {
+        std::lock_guard lock{ mutex_ };
+        if (index >= lowestFailure_.load(std::memory_order_relaxed))
+            return;
+        lowestFailure_.store(index, std::memory_order_relaxed);
+        failure_ = result;
+        failureException_ = std::move(exception);
+    }
+
+    const size_t n_;
+    const VerifyInput verify_;
+    std::atomic<size_t> next_{ 0 };
+    std::atomic<size_t> lowestFailure_;  // n_ while nothing failed; written under mutex_
+
+    std::mutex mutex_;
+    std::condition_variable left_;
+    size_t joined_{ 0 };
+    bool closed_{ false };
+    TxError failure_{ bsv::TxErrorOk() };
+    std::exception_ptr failureException_;
+};
+
+// Process-wide helper threads. Created on first use and never destroyed: a
+// destructor joining them at exit could hang while other threads are still
+// inside BDK.
+class InputVerifyPool {
+public:
+    // nullptr when the machine has a single core or no helper could be started.
+    static InputVerifyPool* Get()
+    {
+        static InputVerifyPool* const pool = Create();
+        return pool;
+    }
+
+    // The pool if Get() already created it; never creates one.
+    static InputVerifyPool* Existing() { return created_.load(std::memory_order_acquire); }
+
+    size_t Helpers() const { return helpers_; }
+
+    // Helpers that could join a job now: idle cores under the global budget.
+    size_t AvailableHelpers() const
+    {
+        const size_t busy = busyThreads.load(std::memory_order_seq_cst);
+        return busy >= cores_ ? 0 : std::min(helpers_, cores_ - busy);
+    }
+
+    void Offer(const std::shared_ptr<InputJob>& job, size_t helpers)
+    {
+        {
+            std::lock_guard lock{ mutex_ };
+            jobs_.push_back(job);
+            openJobs_.fetch_add(1, std::memory_order_seq_cst);
+        }
+        for (size_t i = 0; i < helpers; ++i)
+            wake_.notify_one();
+    }
+
+    void Withdraw(const std::shared_ptr<InputJob>& job)
+    {
+        std::lock_guard lock{ mutex_ };
+        const auto it = std::find(jobs_.begin(), jobs_.end(), job);
+        if (it != jobs_.end()) {
+            jobs_.erase(it);
+            openJobs_.fetch_sub(1, std::memory_order_relaxed);
+        }
+    }
+
+    size_t QueuedJobs()
+    {
+        std::lock_guard lock{ mutex_ };
+        return jobs_.size();
+    }
+
+    // A busy thread left, leaving `busyAfter` busy: a helper over budget may
+    // now join. Nothing to do while the count is still at or above the core
+    // count; the decrement that takes it below does the check. The caller's
+    // seq_cst decrement of busyThreads and this seq_cst load pair with Offer's
+    // increment of openJobs_ and the helper's load of busyThreads, so either
+    // this sees the job or the helper sees the freed core.
+    void ReleasedCore(size_t busyAfter)
+    {
+        if (busyAfter >= cores_ || openJobs_.load(std::memory_order_seq_cst) == 0)
+            return;
+        { std::lock_guard lock{ mutex_ }; }  // a helper checking the budget is now waiting
+        wake_.notify_one();
+    }
+
+private:
+    InputVerifyPool(size_t cores) : cores_{ cores } {}
+
+    static InputVerifyPool* Create()
+    {
+        // hardware_concurrency(), lowered on Linux to the container's cgroup
+        // CPU limit and to the affinity mask of the thread that creates the
+        // pool, i.e. of the first caller with a large tx; the size is kept for
+        // the life of the process.
+        size_t cores = 0;
+        try {
+            cores = bsv::detail::EffectiveCpuCount();
+        } catch (const std::exception&) {
+            // e.g. bad_alloc reading the cgroup files. Get() keeps this
+            // nullptr, so the process stays serial: a lost speed-up, never a
+            // failed call.
+            return nullptr;
+        }
+        if (const size_t cap = inputPoolCoresCap.load(); cap != 0)
+            cores = std::min(cores, cap);
+        if (cores < 2)
+            return nullptr;
+        auto* pool = new (std::nothrow) InputVerifyPool(cores);
+        if (pool == nullptr)
+            return nullptr;
+        for (size_t i = 0; i + 1 < cores; ++i) {
+            try {
+                std::thread([pool] { pool->Run(); }).detach();
+                ++pool->helpers_;
+            } catch (const std::exception&) {  // system_error, bad_alloc
+                break;
+            }
+        }
+        if (pool->helpers_ == 0) {
+            delete pool;
+            return nullptr;
+        }
+        created_.store(pool, std::memory_order_release);
+        return pool;
+    }
+
+    static bool TryTakeCore(size_t cores)
+    {
+        size_t busy = busyThreads.load(std::memory_order_seq_cst);
+        while (busy < cores) {
+            if (busyThreads.compare_exchange_weak(busy, busy + 1, std::memory_order_seq_cst))
+                return true;
+        }
+        return false;
+    }
+
+    // The first queued job with inputs left, dropping finished ones.
+    std::shared_ptr<InputJob> NextJob()
+    {
+        while (!jobs_.empty() && !jobs_.front()->HasWork()) {
+            jobs_.pop_front();
+            openJobs_.fetch_sub(1, std::memory_order_relaxed);
+        }
+        return jobs_.empty() ? nullptr : jobs_.front();
+    }
+
+    void Run()
+    {
+        threadIsBusy = true;  // a helper's own work never counts twice
+        for (;;) {
+            std::shared_ptr<InputJob> job;
+            {
+                std::unique_lock lock{ mutex_ };
+                wake_.wait(lock, [&] {
+                    job = NextJob();
+                    if (job && TryTakeCore(cores_))
+                        return true;
+                    job.reset();  // don't keep a finished job alive while asleep
+                    return false;
+                });
+            }
+            if (job->TryJoin()) {
+                const size_t verified = job->Work(cores_, &helperVerifiedInputs);
+                jobVerifiedInputs.fetch_add(verified, std::memory_order_relaxed);
+                job->Leave();
+            }
+            job.reset();
+            busyThreads.fetch_sub(1, std::memory_order_seq_cst);
+        }
+    }
+
+    const size_t cores_;
+    size_t helpers_{ 0 };
+    std::mutex mutex_;
+    std::condition_variable wake_;
+    std::deque<std::shared_ptr<InputJob>> jobs_;
+    std::atomic<size_t> openJobs_{ 0 };
+
+    static inline std::atomic<InputVerifyPool*> created_{ nullptr };
+};
+
+// Counts the calling thread in busyThreads for the duration of one
+// implVerifyScript or VerifySpend call, unless it is already counted.
+class BusyScope {
+public:
+    BusyScope() : counted_{ !threadIsBusy }
+    {
+        if (counted_) {
+            threadIsBusy = true;
+            busyThreads.fetch_add(1, std::memory_order_seq_cst);
+        }
+    }
+    ~BusyScope()
+    {
+        if (!counted_)
+            return;
+        threadIsBusy = false;
+        const size_t busyAfter = busyThreads.fetch_sub(1, std::memory_order_seq_cst) - 1;
+        if (InputVerifyPool* pool = InputVerifyPool::Existing())
+            pool->ReleasedCore(busyAfter);
+    }
+    BusyScope(const BusyScope&) = delete;
+    BusyScope& operator=(const BusyScope&) = delete;
+
+private:
+    const bool counted_;
+};
+
+// The caller's side of a queued job: it always closes the job, waits for the
+// helpers that joined and withdraws it, also when its own Work() throws, since
+// joined helpers read the caller's stack.
+class JobCaller {
+public:
+    JobCaller(InputVerifyPool& pool, std::shared_ptr<InputJob> job) : pool_{ pool }, job_{ std::move(job) } {}
+    ~JobCaller()
+    {
+        job_->CloseAndWait();
+        pool_.Withdraw(job_);
+    }
+    JobCaller(const JobCaller&) = delete;
+    JobCaller& operator=(const JobCaller&) = delete;
+
+private:
+    InputVerifyPool& pool_;
+    const std::shared_ptr<InputJob> job_;
+};
+
+#endif // BDK_PARALLEL_INPUTS
+
 } // anonymous namespace
+
+size_t bsv::detail::SetParallelInputThresholdForTesting(size_t minInputs)
+{
+    return parallelInputThreshold.exchange(minInputs);
+}
+
+uint64_t bsv::detail::HelperVerifiedInputCountForTesting()
+{
+    return helperVerifiedInputs.load();
+}
+
+uint64_t bsv::detail::JobVerifiedInputCountForTesting()
+{
+    return jobVerifiedInputs.load();
+}
+
+size_t bsv::detail::SetInputPoolCoresForTesting(size_t cores)
+{
+    return inputPoolCoresCap.exchange(cores);
+}
+
+size_t bsv::detail::BusyThreadCountForTesting()
+{
+#if BDK_PARALLEL_INPUTS
+    return busyThreads.load();
+#else
+    return 0;
+#endif
+}
+
+size_t bsv::detail::QueuedJobCountForTesting()
+{
+#if BDK_PARALLEL_INPUTS
+    if (InputVerifyPool* pool = InputVerifyPool::Existing())
+        return pool->QueuedJobs();
+#endif
+    return 0;
+}
+
+size_t bsv::detail::InputPoolHelperCountForTesting()
+{
+#if BDK_PARALLEL_INPUTS
+    if (InputVerifyPool* pool = InputVerifyPool::Get())
+        return pool->Helpers();
+#endif
+    return 0;
+}
+
+void bsv::detail::AddBusyThreadsForTesting(size_t count)
+{
+#if BDK_PARALLEL_INPUTS
+    busyThreads.fetch_add(count);
+#else
+    (void)count;
+#endif
+}
+
+void bsv::detail::ReleaseBusyThreadsForTesting(size_t count)
+{
+#if BDK_PARALLEL_INPUTS
+    for (size_t i = 0; i < count; ++i) {
+        const size_t busyAfter = busyThreads.fetch_sub(1) - 1;
+        if (InputVerifyPool* pool = InputVerifyPool::Existing())
+            pool->ReleasedCore(busyAfter);
+    }
+#else
+    (void)count;
+#endif
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -831,6 +1291,9 @@ TxError bsv::CTxValidator::VerifySpend(
     std::optional<uint32_t> customFlags
 ) const
 {
+#if BDK_PARALLEL_INPUTS
+    const BusyScope busy;  // one input, verified here, but it takes a core
+#endif
     try {
         if (sourceSatoshis < 0)
             throw std::runtime_error("source satoshis cannot be negative");
@@ -922,7 +1385,8 @@ TxError bsv::CTxValidator::implVerifyScript(
     const PrecomputedTransactionData txdata(ctx);
 
     const bool useCustomFlags = !customFlags.empty();
-    for (size_t index = 0; index < prevUTXO.size(); ++index) {
+    // Reads only shared state and its own checker, so inputs can run on any thread.
+    const auto verifyInput = [&](size_t index) -> TxError {
         const uint64_t amount = prevUTXO[index].nValue.GetSatoshis();
         const CScript& lscript = prevUTXO[index].scriptPubKey;
         const CScript& uscript = ctx.vin[index].scriptSig;
@@ -932,16 +1396,47 @@ TxError bsv::CTxValidator::implVerifyScript(
             return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::UnconfirmedInputInBlock));
         const uint32_t flags = !useCustomFlags ? CalculateFlags(utxoHeight, blockHeight, consensus) : customFlags[index];
 
-        TxError verifyResult = bsv::TxErrorOk();
         if (!ctx.vin.empty() && !ctx.vout.empty()) {
             const Amount amt{ amount };
             CachingScriptChecker sig_checker(&ctx, index, amt, txdata);
-            verifyResult = bsvVerifyScript(uscript, lscript, consensus, flags, sig_checker);
-        } else {
-            BaseSignatureChecker sig_checker;
-            verifyResult = bsvVerifyScript(uscript, lscript, consensus, flags, sig_checker);
+            return bsvVerifyScript(uscript, lscript, consensus, flags, sig_checker);
         }
+        BaseSignatureChecker sig_checker;
+        return bsvVerifyScript(uscript, lscript, consensus, flags, sig_checker);
+    };
 
+    const size_t nInputs = prevUTXO.size();
+#if BDK_PARALLEL_INPUTS
+    const BusyScope busy;
+    const size_t threshold = parallelInputThreshold.load(std::memory_order_relaxed);
+    if (nInputs >= threshold) {
+        if (InputVerifyPool* pool = InputVerifyPool::Get()) {
+            // A tx at the threshold is offered at least one helper when a core is free.
+            const size_t perParticipant = std::clamp<size_t>(threshold / 2, 1, MIN_INPUTS_PER_PARTICIPANT);
+            const size_t participants = (nInputs + perParticipant - 1) / perParticipant;
+            // With every core already busy the tx runs serially, waking no one.
+            const size_t helpers = std::min(pool->AvailableHelpers(), participants - 1);
+            std::shared_ptr<InputJob> job;
+            if (helpers > 0) {
+                try {
+                    job = std::make_shared<InputJob>(nInputs, verifyInput);
+                    pool->Offer(job, helpers);
+                } catch (const std::exception&) {
+                    job.reset();  // not queued (bad_alloc, system_error): verify serially below
+                }
+            }
+            if (job) {
+                {
+                    const JobCaller caller(*pool, job);
+                    jobVerifiedInputs.fetch_add(job->Work(), std::memory_order_relaxed);
+                }
+                return job->Result();
+            }
+        }
+    }
+#endif
+    for (size_t index = 0; index < nInputs; ++index) {
+        const TxError verifyResult = verifyInput(index);
         if (!bsv::TxErrorIsOk(verifyResult))
             return verifyResult;
     }

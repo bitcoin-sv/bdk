@@ -1,0 +1,3 @@
+10:cpuset:/kubepods/pod1/ctr
+11:cpu,cpuacct:/kubepods/pod1/ctr
+0::/

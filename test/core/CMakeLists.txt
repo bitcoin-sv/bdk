@@ -180,7 +180,19 @@ bdk_add_unit_test(test_big_int_boost)
 
 add_executable(test_txvalidator "${CMAKE_CURRENT_SOURCE_DIR}/test_txvalidator.cpp" "${BSV_APPLICATION_HDR_FILES}" "${BSV_APPLICATION_SRC_FILES}")
 target_link_libraries(test_txvalidator PRIVATE bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono ${CMAKE_DL_LIBS})
+target_compile_definitions(test_txvalidator PRIVATE BDK_CGROUP_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data/cgroup")
 bdk_add_unit_test(test_txvalidator)
+## The same suite with every multi-input transaction verified on several threads,
+## on a pool of at most 4 cores (CI-sized, on any machine)
+add_test(NAME test_txvalidator_parallel_inputs
+         COMMAND $<TARGET_FILE:test_txvalidator> --report_level=detailed -- --parallel-input-threshold=2 --input-pool-cores=4)
+## A hang in the input pool fails the run instead of waiting for the CI job timeout
+get_directory_property(_bdk_core_tests TESTS)
+foreach(_t IN LISTS _bdk_core_tests)
+  if(_t MATCHES "^test_txvalidator")
+    set_tests_properties(${_t} PROPERTIES TIMEOUT 600)
+  endif()
+endforeach()
 
 add_executable(test_chronicle "${CMAKE_CURRENT_SOURCE_DIR}/test_chronicle.cpp" "${BSV_APPLICATION_HDR_FILES}" "${BSV_APPLICATION_SRC_FILES}")
 target_link_libraries(test_chronicle PRIVATE bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono ${CMAKE_DL_LIBS})
