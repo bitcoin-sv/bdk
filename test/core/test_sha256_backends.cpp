@@ -219,7 +219,7 @@ BOOST_AUTO_TEST_CASE(selection_happens_once)
     BOOST_TEST(first == second);
 }
 
-BOOST_AUTO_TEST_CASE(known_answers_through_every_backend)
+BOOST_AUTO_TEST_CASE(known_answers_through_every_backend, *boost::unit_test::timeout(120))
 {
     for(const auto& backend : bsv::Sha256SupportedBackends())
     {
@@ -289,7 +289,7 @@ BOOST_AUTO_TEST_CASE(double_sha256_of_64_byte_pairs)
     }
 }
 
-BOOST_AUTO_TEST_CASE(every_backend_matches_scalar_on_random_messages)
+BOOST_AUTO_TEST_CASE(every_backend_matches_scalar_on_random_messages, *boost::unit_test::timeout(120))
 {
     const uint64_t seed = TestSeed();
     std::cout << "differential seed (BDK_SHA256_TEST_SEED): " << seed << std::endl;
@@ -320,7 +320,7 @@ BOOST_AUTO_TEST_CASE(every_backend_matches_scalar_on_random_messages)
 
 // Not a pass/fail check: prints raw transform throughput per backend into the
 // test log, so CI records it for each runner's CPU
-BOOST_AUTO_TEST_CASE(throughput_per_backend)
+BOOST_AUTO_TEST_CASE(throughput_per_backend, *boost::unit_test::timeout(120))
 {
     constexpr size_t buffer_bytes = size_t{16} << 20;
     constexpr int rounds = 4;
