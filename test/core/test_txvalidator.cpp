@@ -37,6 +37,7 @@
 #include "txvalidator.hpp"
 #include "sha256_backend.hpp"
 #include "crypto/sha256_dispatch.h"
+#include "sha256_backend_expectations.h"
 #include "chainparams_bdk.hpp"
 #include "extendedTx.hpp"
 #include "txerror.h"
@@ -62,19 +63,25 @@ const std::string MyParams::CustomName = "MyParams";
 static bsv::RegisterCustomChainParams<MyParams> myParamsReg(MyParams::CustomName);
 
 // The first CTxValidator installs the fastest SHA-256 transforms this CPU
-// supports, so every test below validates through them. Only the pointers are
-// inspected before the log line, because SelectSha256Backend() would install
-// them itself.
+// supports, so every test below validates through them. The installed pointers
+// are checked before SelectSha256Backend() is called, because that call would
+// install them itself. In a full run this case is the first to construct a
+// validator; ctest also runs it alone, in its own process.
 BOOST_AUTO_TEST_CASE(constructing_a_validator_installs_the_sha256_backend)
 {
     const bsv::CTxValidator validator{bsv::TxValidationNetwork::Main};
-    const char* forced = std::getenv("BDK_SHA256_FORCE_SCALAR");
-    const auto& expected = (forced != nullptr && *forced != '\0' && std::string{forced} != "0")
-        ? bsv::Sha256SupportedBackends().front()
-        : bsv::Sha256SupportedBackends().back();
-    BOOST_TEST(sha256_dispatch::stream == expected.stream);
-    BOOST_TEST(sha256_dispatch::d_block_2way == expected.d_block_2way);
+    sha256_test::CheckInstalledBackend();
+    BOOST_TEST(bsv::SelectSha256Backend() == sha256_test::ExpectedSelection());
     std::cout << "SHA-256 backend: " << bsv::SelectSha256Backend() << std::endl;
+}
+
+// The same through the chain-name constructor. Meaningful only in a fresh
+// process: ctest runs it alone (test_txvalidator_chain_name_selects).
+BOOST_AUTO_TEST_CASE(constructing_a_validator_by_chain_name_installs_the_sha256_backend)
+{
+    const bsv::CTxValidator validator{std::string{"main"}};
+    sha256_test::CheckInstalledBackend();
+    BOOST_TEST(bsv::SelectSha256Backend() == sha256_test::ExpectedSelection());
 }
 
 BOOST_AUTO_TEST_CASE(custom_chainparams)

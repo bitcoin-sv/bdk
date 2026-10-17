@@ -205,6 +205,18 @@ foreach(_t test_sha256_backends test_sha256_select_race test_txvalidator test_bs
            --log_format=JUNIT --log_sink=$<TARGET_FILE:${_t}>_scalar.xml)
   set_tests_properties(${_t}_scalar PROPERTIES ENVIRONMENT "BDK_SHA256_FORCE_SCALAR=1" TIMEOUT 600)
 endforeach()
+## Each validator constructor must select the backend on its own: run each
+## selection case alone, so it is the first thing in its process to construct one
+foreach(_case constructing_a_validator_installs_the_sha256_backend:network_selects
+              constructing_a_validator_by_chain_name_installs_the_sha256_backend:chain_name_selects)
+  string(REPLACE ":" ";" _parts "${_case}")
+  list(GET _parts 0 _case_name)
+  list(GET _parts 1 _suffix)
+  add_test(NAME test_txvalidator_${_suffix}
+           COMMAND $<TARGET_FILE:test_txvalidator> --run_test=test_txvalidator/${_case_name})
+  set_tests_properties(test_txvalidator_${_suffix} PROPERTIES TIMEOUT 120)
+endforeach()
+
 ## Hard stops for the new timed and multi-threaded suites
 foreach(_t test_sha256_backends test_sha256_backendsd test_sha256_select_race test_sha256_select_raced)
   if(TEST ${_t})

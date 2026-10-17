@@ -4,7 +4,6 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
-#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <random>
@@ -28,53 +27,10 @@
 
 #include "sha256_backend.hpp"
 
-#if defined(__x86_64__) || defined(__amd64__)
-#include <cpuid.h>
-#endif
+#include "sha256_backend_expectations.h"
 
 namespace
 {
-    // Independent of bsv::Sha256SupportedBackends(): what this CPU can run, by a
-    // different probe than BDK's own detection.
-    std::string ExpectedBestBackend()
-    {
-#if defined(__x86_64__) || defined(__amd64__)
-        uint32_t eax{}, ebx{}, ecx{}, edx{};
-        const bool sse41 = __get_cpuid(1, &eax, &ebx, &ecx, &edx) != 0 && ((ecx >> 19) & 1u) != 0;
-        const bool shani = __get_cpuid_count(7, 0, &eax, &ebx, &ecx, &edx) != 0 && ((ebx >> 29) & 1u) != 0;
-        if(sse41 && shani)
-            return "shani";
-        if(sse41)
-            return "sse4";
-        return "standard";
-#elif defined(__aarch64__) && defined(__APPLE__)
-        return "arm_shani"; // every Apple silicon core implements FEAT_SHA256
-#elif defined(__aarch64__) && defined(__linux__)
-        std::ifstream cpuinfo{"/proc/cpuinfo"};
-        std::string line;
-        while(std::getline(cpuinfo, line))
-        {
-            if(line.rfind("Features", 0) != 0)
-                continue;
-            std::istringstream features{line.substr(line.find(':') + 1)};
-            std::string feature;
-            while(features >> feature)
-                if(feature == "sha2")
-                    return "arm_shani";
-            return "standard";
-        }
-        return "standard";
-#else
-        return "standard";
-#endif
-    }
-
-    bool ForcedScalar()
-    {
-        const char* v = std::getenv("BDK_SHA256_FORCE_SCALAR");
-        return v != nullptr && *v != '\0' && std::string{v} != "0";
-    }
-
     // Installs one backend's transforms for the lifetime of the object. The
     // tests are single-threaded, so swapping the global pointers is safe here.
     class UseBackend
@@ -192,24 +148,11 @@ BOOST_AUTO_TEST_CASE(selects_the_best_backend_the_cpu_supports)
     const std::string& active = bsv::SelectSha256Backend();
     std::cout << "SHA-256 backend: " << active << std::endl;
 
-    if(ForcedScalar())
-    {
-        BOOST_TEST(active == "standard(forced)");
-        BOOST_TEST(sha256_dispatch::stream == sha256_stream_scalar::Transform);
-        BOOST_TEST(sha256_dispatch::d_block_2way == nullptr);
-        return;
-    }
-
-    const std::string expected = ExpectedBestBackend();
-    // The active string leads with the stream backend, e.g. "shani,shani(2way)"
-    BOOST_TEST(active.substr(0, active.find(',')) == expected);
-
+    BOOST_TEST(active == sha256_test::ExpectedSelection());
     const auto& supported = bsv::Sha256SupportedBackends();
     BOOST_REQUIRE(!supported.empty());
     BOOST_TEST(std::string{supported.front().name} == "standard");
-    BOOST_TEST(std::string{supported.back().name} == expected);
-    BOOST_TEST(sha256_dispatch::stream == supported.back().stream);
-    BOOST_TEST(sha256_dispatch::d_block_2way == supported.back().d_block_2way);
+    sha256_test::CheckInstalledBackend();
 }
 
 BOOST_AUTO_TEST_CASE(selection_happens_once)
@@ -299,21 +242,70 @@ BOOST_AUTO_TEST_CASE(every_backend_matches_scalar_on_random_messages, *boost::un
     const auto& backends = bsv::Sha256SupportedBackends();
     for(int i = 0; i < 2000; ++i)
     {
-        std::vector<uint8_t> msg(length(rng));
-        std::generate(msg.begin(), msg.end(), [&] { return static_cast<uint8_t>(rng()); });
-        const size_t chunk = std::uniform_int_distribution<size_t>{1, msg.size() + 1}(rng);
+        // Each message starts at offset 0..15 into its buffer, so the transforms
+        // also see unaligned multi-block input, as they do in production
+        const size_t offset = static_cast<size_t>(i % 16);
+        std::vector<uint8_t> storage(offset + length(rng));
+        std::generate(storage.begin(), storage.end(), [&] { return static_cast<uint8_t>(rng()); });
+        const std::span<const uint8_t> msg = std::span<const uint8_t>{storage}.subspan(offset);
+        const size_t chunk = i % 3 == 0 ? msg.size() + 1 // one Write: the whole message goes to the transform at once
+                                        : std::uniform_int_distribution<size_t>{1, msg.size() + 1}(rng);
 
         std::string scalar;
         {
             const UseBackend use{backends.front()};
             scalar = CSha256Hex(msg, chunk);
         }
-        BOOST_TEST(scalar == OpenSslSha256Hex(msg), "scalar vs OpenSSL, message " << i << ", " << msg.size() << " bytes");
+        BOOST_TEST(scalar == OpenSslSha256Hex(msg),
+                   "scalar vs OpenSSL, message " << i << ", " << msg.size() << " bytes at offset " << offset);
         for(const auto& backend : backends)
         {
             const UseBackend use{backend};
             BOOST_TEST(CSha256Hex(msg, chunk) == scalar,
-                       backend.name << " vs scalar, message " << i << ", " << msg.size() << " bytes, pieces of " << chunk);
+                       backend.name << " vs scalar, message " << i << ", " << msg.size() << " bytes at offset "
+                                    << offset << ", pieces of " << chunk);
+        }
+    }
+}
+
+// The transforms called directly, as CSHA256 and the merkle code do, on input
+// and output that start 1 to 15 bytes past an aligned address
+BOOST_AUTO_TEST_CASE(direct_transforms_at_unaligned_offsets, *boost::unit_test::timeout(120))
+{
+    std::mt19937_64 rng{TestSeed()};
+    std::vector<uint8_t> buffer(16 + 8 * 64);
+    std::generate(buffer.begin(), buffer.end(), [&] { return static_cast<uint8_t>(rng()); });
+    const std::array<uint32_t, 8> init = {0x6a09e667ul, 0xbb67ae85ul, 0x3c6ef372ul, 0xa54ff53aul,
+                                          0x510e527ful, 0x9b05688cul, 0x1f83d9abul, 0x5be0cd19ul};
+    const auto& backends = bsv::Sha256SupportedBackends();
+
+    for(size_t offset = 1; offset < 16; ++offset)
+    {
+        for(const size_t blocks : {size_t{1}, size_t{2}, size_t{3}, size_t{4}, size_t{8}})
+        {
+            const std::span<const uint8_t> input{buffer.data() + offset, blocks * 64};
+            std::array<uint32_t, 8> scalar = init;
+            sha256_stream_scalar::Transform(input, scalar);
+            for(const auto& backend : backends)
+            {
+                std::array<uint32_t, 8> state = init;
+                backend.stream(input, state);
+                BOOST_TEST((state == scalar), backend.name << " stream, " << blocks << " blocks at offset " << offset);
+            }
+        }
+
+        const std::span<const uint8_t, 128> pairs{buffer.data() + offset, 128};
+        const auto first = OpenSslSha256d(pairs.first<64>());
+        const auto second = OpenSslSha256d(pairs.last<64>());
+        for(const auto& backend : backends)
+        {
+            if(backend.d_block_2way == nullptr)
+                continue;
+            std::array<uint8_t, 16 + 64> out_storage{};
+            const std::span<uint8_t, 64> out{out_storage.data() + offset, 64};
+            backend.d_block_2way(pairs, out);
+            BOOST_TEST(Hex(out.first<32>()) == Hex(first), backend.name << " 2way first, offset " << offset);
+            BOOST_TEST(Hex(out.last<32>()) == Hex(second), backend.name << " 2way second, offset " << offset);
         }
     }
 }

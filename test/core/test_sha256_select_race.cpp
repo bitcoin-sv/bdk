@@ -25,6 +25,8 @@
 #include "sha256_backend.hpp"
 #include "txvalidator.hpp"
 
+#include "sha256_backend_expectations.h"
+
 // The first SHA-256 backend selection in this process happens while several
 // threads enter BDK at once through the paths the Go and Rust bindings use:
 // constructing a validator (both constructors), asking for the backend, and the
@@ -116,11 +118,8 @@ BOOST_AUTO_TEST_CASE(first_selection_while_threads_enter_bdk, *boost::unit_test:
     for(int i = 0; i < threads; ++i)
         BOOST_TEST(ok[i] == 1, "thread " << i << " role " << i % RoleCount);
 
-    const char* forced = std::getenv("BDK_SHA256_FORCE_SCALAR");
-    const bool is_forced = forced != nullptr && *forced != '\0' && std::string{forced} != "0";
-    const auto& expected = is_forced ? bsv::Sha256SupportedBackends().front() : bsv::Sha256SupportedBackends().back();
-    BOOST_TEST(sha256_dispatch::stream == expected.stream);
-    BOOST_TEST(sha256_dispatch::d_block_2way == expected.d_block_2way);
+    sha256_test::CheckInstalledBackend();
+    BOOST_TEST(bsv::SelectSha256Backend() == sha256_test::ExpectedSelection());
     std::cout << "SHA-256 backend: " << bsv::SelectSha256Backend() << std::endl;
 }
 
