@@ -26,9 +26,15 @@ installed alongside the package (`CMakeLists.txt`).
     - **Selection happens once, in the first `CTxValidator` constructor**, through the new
       `bsv::SelectSha256Backend()` (`core/sha256_backend.hpp`). It returns what was installed,
       e.g. `shani,shani(2way)` or `arm_shani,arm_shani(2way)`, and
-      `bsv::Sha256SupportedBackends()` lists every backend the CPU can run. The Go and Rust
-      bindings need no change. A C++ program that hashes on several threads before it
-      constructs any `CTxValidator` should call `bsv::SelectSha256Backend()` once at startup.
+      `bsv::Sha256SupportedBackends()` lists every backend the CPU can run. Go has
+      `gobdk.SHA256_BACKEND()` and Rust has `rust_bdk::sha256_backend()` (C ABI
+      `cgo_sha256_backend()` / `bdkffi_sha256_backend()`). Each selects first if no validator
+      exists yet, so a startup log line reports what validation will use. Nothing the bindings
+      expose hashes outside a validator: asm conversion, error strings, the batch container
+      and the secp256k1 helpers do not touch the dispatch pointers, and every hash during
+      validation comes after the constructor's selection. A C++ program that hashes on several
+      threads before it constructs any `CTxValidator` should call
+      `bsv::SelectSha256Backend()` once at startup.
     - **`BDK_SHA256_FORCE_SCALAR=1`** in the environment keeps the scalar transforms, for
       debugging and for comparing backends.
     - **`sha256_dispatch::AutoDetect()` now links.** `bdk_core` builds `sha256_dispatch.cpp`, so
@@ -38,6 +44,11 @@ installed alongside the package (`CMakeLists.txt`).
       vectors and a seeded differential run, and prints the selected backend and its
       throughput; CI logs it for each runner. `test_txvalidator`, `test_bsv` and
       `test_sha256_backends` also run a second time with the scalar transforms forced.
+      `test_sha256_select_race` makes the first selection while 16 threads enter BDK at
+      once; a CI job runs it under GCC ThreadSanitizer on x86-64 and ARM64 Linux, with a
+      positive control that must be reported.
+    - The committed `libGoBDK_*.a` archives predate `cgo_sha256_backend()` and the hardware
+      backends until the `[GoBDKUpdate]` refresh rebuilds them.
 - **The Go binding version equals the BDK version again.** The `+2` patch offset is gone, so
   this release's Go module is `1.3.0` rather than `1.3.2`, and it sorts after the last published
   `module/gobdk/v1.2.4`. The configure-time check that the overall version is the maximum of
