@@ -816,9 +816,10 @@ constexpr int64_t P2PKH_OUTPUT_SATOSHIS = 1000;
 constexpr int32_t P2PKH_BLOCK_HEIGHT = 700000;  // post-Genesis, pre-Chronicle on mainnet
 constexpr int32_t P2PKH_UTXO_HEIGHT = 699999;
 
-static CKey MakeDeterministicTestKey(uint8_t lastByte)
+static CKey MakeDeterministicTestKey(uint8_t lastByte, uint8_t secondLastByte = 0)
 {
     std::array<uint8_t, 32> rawKey{};
+    rawKey[30] = secondLastByte;
     rawKey[31] = lastByte;
     CKey key;
     key.Set(rawKey.begin(), rawKey.end(), /*fCompressedIn=*/true);
@@ -1303,7 +1304,7 @@ static ManyKeyMultisigSpend MakeManyKeyMultisigSpend(size_t nInputs, size_t nKey
     std::vector<CKey> keys;
     CScript multisig = CScript() << static_cast<int64_t>(nKeys);
     for (size_t k = 0; k < nKeys; ++k) {
-        keys.push_back(MakeDeterministicTestKey(static_cast<uint8_t>(0x80 + k)));
+        keys.push_back(MakeDeterministicTestKey(static_cast<uint8_t>(k & 0xff), static_cast<uint8_t>(1 + (k >> 8))));
         multisig << ToByteVector(keys.back().GetPubKey());
     }
     multisig << static_cast<int64_t>(nKeys) << OP_CHECKMULTISIG;
@@ -1346,7 +1347,7 @@ static ManyKeyMultisigSpend MakeManyKeyMultisigSpend(size_t nInputs, size_t nKey
 // every outpoint, sequence and output of the tx, so one input costs K x O(N).
 //
 // The test measures the marginal cost of one extra signature check,
-// (t(K=65) - t(K=1)) / 64, on a 2,000-input and a 20,000-input tx, and bounds
+// (t(K=129) - t(K=1)) / 128, on a 2,000-input and a 60,000-input tx, and bounds
 // the ratio of the two. With the shared precompute an extra check is one ECDSA
 // verify whatever the tx size, so the ratio stays near 1; re-hashing per check
 // makes it grow with N. Subtracting the K=1 time takes out parsing and the
@@ -1356,8 +1357,8 @@ BOOST_AUTO_TEST_CASE(verify_spend_shares_sighash_precompute_across_checks,
     * boost::unit_test::label("timing") * boost::unit_test::disabled()
     * boost::unit_test::precondition(OptimisedBuild))
 {
-    constexpr std::array<size_t, 2> N_INPUTS{ 2000, 20000 };
-    constexpr std::array<size_t, 2> N_KEYS{ 1, 65 };
+    constexpr std::array<size_t, 2> N_INPUTS{ 2000, 60000 };
+    constexpr std::array<size_t, 2> N_KEYS{ 1, 129 };
     constexpr int SAMPLES = 7;
     constexpr int CALLS_PER_SAMPLE = 5;
     constexpr double MAX_RATIO = 3.0;
