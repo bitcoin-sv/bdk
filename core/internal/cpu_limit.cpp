@@ -159,11 +159,15 @@ std::optional<std::string> FindCpuCgroupDir(std::string_view content, const CpuC
         // ID, parent ID, major:minor, root, mount point, options, optional
         // fields..., "-", filesystem type, source, super options.
         const auto separator = std::find(fields.begin(), fields.end(), std::string_view("-"));
-        if (fields.size() < 6 || separator == fields.end() || separator - fields.begin() < 6 || fields.end() - separator < 4)
+        if (fields.size() < 6 || separator == fields.end() || separator - fields.begin() < 6
+            || fields.end() - separator < 4)
             return std::nullopt;
         const std::string_view fsType = separator[1];
         const std::string_view superOptions = separator[3];
-        if (cgroup.version == CgroupVersion::V2 ? fsType != "cgroup2" : (fsType != "cgroup" || !ContainsCpu(superOptions)))
+        const bool cpuMount = cgroup.version == CgroupVersion::V2
+            ? fsType == "cgroup2"
+            : fsType == "cgroup" && ContainsCpu(superOptions);
+        if (!cpuMount)
             continue;
 
         const auto root = UnescapeMountPath(fields[3]);

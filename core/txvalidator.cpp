@@ -340,6 +340,8 @@ static_assert(bsv::detail::DEFAULT_PARALLEL_INPUT_THRESHOLD == 16);
 std::atomic<size_t> parallelInputThreshold{ bsv::detail::DEFAULT_PARALLEL_INPUT_THRESHOLD };
 std::atomic<uint64_t> helperVerifiedInputs{ 0 };
 std::atomic<uint64_t> jobVerifiedInputs{ 0 };  // caller and helpers, inside jobs
+std::atomic<uint64_t> helperJobParticipations{ 0 };  // helper Work() calls that verified an input
+std::atomic<bsv::detail::InputFailureHook> inputFailureHook{ nullptr };  // tests only
 std::atomic<size_t> inputPoolCoresCap{ 0 };  // 0: no cap (tests only)
 
 #if BDK_PARALLEL_INPUTS
@@ -348,7 +350,7 @@ std::atomic<size_t> inputPoolCoresCap{ 0 };  // 0: no cap (tests only)
 // threshold is lower, so a tx at the threshold is offered a helper).
 constexpr size_t MIN_INPUTS_PER_PARTICIPANT = 8;
 
-std::atomic<size_t> busyThreads{ 0 };
+alignas(64) std::atomic<size_t> busyThreads{ 0 };  // own cache line: helpers read it per input
 thread_local bool threadIsBusy{ false };
 
 // One transaction's inputs [0, n), shared by its caller and the helpers that join.
@@ -433,6 +435,8 @@ public:
 private:
     void Fail(size_t index, const TxError& result, std::exception_ptr exception)
     {
+        if (const auto hook = inputFailureHook.load(std::memory_order_relaxed))
+            hook(index);
         std::lock_guard lock{ mutex_ };
         if (index >= lowestFailure_.load(std::memory_order_relaxed))
             return;
@@ -597,6 +601,8 @@ private:
             }
             if (job->TryJoin()) {
                 const size_t verified = job->Work(cores_, &helperVerifiedInputs);
+                if (verified > 0)
+                    helperJobParticipations.fetch_add(1, std::memory_order_relaxed);
                 jobVerifiedInputs.fetch_add(verified, std::memory_order_relaxed);
                 job->Leave();
             }
@@ -673,6 +679,16 @@ size_t bsv::detail::SetParallelInputThresholdForTesting(size_t minInputs)
 uint64_t bsv::detail::HelperVerifiedInputCountForTesting()
 {
     return helperVerifiedInputs.load();
+}
+
+uint64_t bsv::detail::HelperJobParticipationCountForTesting()
+{
+    return helperJobParticipations.load();
+}
+
+bsv::detail::InputFailureHook bsv::detail::SetInputFailureHookForTesting(InputFailureHook hook)
+{
+    return inputFailureHook.exchange(hook);
 }
 
 uint64_t bsv::detail::JobVerifiedInputCountForTesting()

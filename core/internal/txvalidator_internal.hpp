@@ -30,6 +30,17 @@ uint64_t HelperVerifiedInputCountForTesting();
 // since process start. Tests only.
 uint64_t JobVerifiedInputCountForTesting();
 
+// Times a helper's Work() call on a job verified at least one input, since
+// process start. A job with every helper on it adds one per helper. Tests only.
+uint64_t HelperJobParticipationCountForTesting();
+
+// Called with the input index on the verifying thread when an input of a
+// parallel job fails, before the failure is recorded; nullptr for none.
+// Lets a test fix the order in which failures reach the job. Returns the
+// previous hook. Tests only.
+using InputFailureHook = void (*)(size_t index);
+InputFailureHook SetInputFailureHookForTesting(InputFailureHook hook);
+
 // Caps the cores the input pool sizes itself to (0: no cap) and returns the
 // previous cap. Takes effect only when set before the pool is created, so a
 // test binary sets it at start-up to reproduce a CI-sized pool on a bigger
@@ -86,9 +97,10 @@ size_t LimitCpuCount(size_t cpus, std::optional<double> cgroupLimit);
 
 // CPUs this process may use: hardware_concurrency(), lowered on Linux to the
 // calling thread's sched_getaffinity mask (so the input pool takes the mask
-// of the thread that creates it, the first caller with a large tx) and, by LimitCpuCount, to the cgroup
-// limit read under `cgroupRoot` ("/" on a live system; tests pass a fixture
-// root). Reads the system on every call; the input pool calls it once.
+// of the thread that creates it, the first caller with a large tx) and, by
+// LimitCpuCount, to the cgroup limit read under `cgroupRoot` ("/" on a live
+// system; tests pass a fixture root). Reads the system on every call; the
+// input pool calls it once.
 size_t EffectiveCpuCount(const std::string& cgroupRoot = "/");
 
 } // namespace bsv::detail
