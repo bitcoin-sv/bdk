@@ -32,7 +32,7 @@ on:
         default: 'true'
         type: boolean
       run-benchmarks:
-        description: 'Also run the input verification benchmark (about 45 s per native leg)'
+        description: 'Also run the input verification benchmark (about 50 s per native leg)'
         required: false
         default: false
         type: boolean
