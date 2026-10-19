@@ -341,7 +341,7 @@ std::atomic<size_t> parallelInputThreshold{ bsv::detail::DEFAULT_PARALLEL_INPUT_
 std::atomic<uint64_t> helperVerifiedInputs{ 0 };
 std::atomic<uint64_t> jobVerifiedInputs{ 0 };  // caller and helpers, inside jobs
 std::atomic<uint64_t> helperJobParticipations{ 0 };  // helper Work() calls that verified an input
-std::atomic<bsv::detail::InputFailureHook> inputFailureHook{ nullptr };  // tests only
+std::atomic<bsv::detail::InputHook> inputHook{ nullptr };  // tests only
 std::atomic<size_t> inputPoolCoresCap{ 0 };  // 0: no cap (tests only)
 
 #if BDK_PARALLEL_INPUTS
@@ -378,6 +378,8 @@ public:
             const size_t index = next_.fetch_add(1, std::memory_order_relaxed);
             if (index >= n_ || index > lowestFailure_.load(std::memory_order_relaxed))
                 return verified;
+            if (const auto hook = inputHook.load(std::memory_order_relaxed))
+                hook(index, bsv::detail::InputEvent::Claimed);
             ++verified;
             try {
                 const TxError result = verify_(index);
@@ -435,8 +437,8 @@ public:
 private:
     void Fail(size_t index, const TxError& result, std::exception_ptr exception)
     {
-        if (const auto hook = inputFailureHook.load(std::memory_order_relaxed))
-            hook(index);
+        if (const auto hook = inputHook.load(std::memory_order_relaxed))
+            hook(index, bsv::detail::InputEvent::Failed);
         std::lock_guard lock{ mutex_ };
         if (index >= lowestFailure_.load(std::memory_order_relaxed))
             return;
@@ -686,9 +688,9 @@ uint64_t bsv::detail::HelperJobParticipationCountForTesting()
     return helperJobParticipations.load();
 }
 
-bsv::detail::InputFailureHook bsv::detail::SetInputFailureHookForTesting(InputFailureHook hook)
+bsv::detail::InputHook bsv::detail::SetInputHookForTesting(InputHook hook)
 {
-    return inputFailureHook.exchange(hook);
+    return inputHook.exchange(hook);
 }
 
 uint64_t bsv::detail::JobVerifiedInputCountForTesting()

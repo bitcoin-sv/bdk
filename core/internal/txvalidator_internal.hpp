@@ -34,12 +34,14 @@ uint64_t JobVerifiedInputCountForTesting();
 // process start. A job with every helper on it adds one per helper. Tests only.
 uint64_t HelperJobParticipationCountForTesting();
 
-// Called with the input index on the verifying thread when an input of a
-// parallel job fails, before the failure is recorded; nullptr for none.
-// Lets a test fix the order in which failures reach the job. Returns the
-// previous hook. Tests only.
-using InputFailureHook = void (*)(size_t index);
-InputFailureHook SetInputFailureHookForTesting(InputFailureHook hook);
+// Called on the verifying thread with an input's index when a participant of
+// a parallel job claims it, before verifying it (Claimed), and when it fails,
+// before the failure is recorded (Failed); nullptr for none. Lets a test fix
+// the order in which failures reach a job, or make inputs take longer
+// without using CPU. Returns the previous hook. Tests only.
+enum class InputEvent { Claimed, Failed };
+using InputHook = void (*)(size_t index, InputEvent event);
+InputHook SetInputHookForTesting(InputHook hook);
 
 // Caps the cores the input pool sizes itself to (0: no cap) and returns the
 // previous cap. Takes effect only when set before the pool is created, so a
