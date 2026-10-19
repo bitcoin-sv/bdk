@@ -1095,6 +1095,110 @@ BOOST_AUTO_TEST_CASE(multisig_input_with_corrupted_signature_fails)
     }
 }
 
+// An N-input tx whose input `index` spends a bare K-of-K OP_CHECKMULTISIG,
+// signed ALL|FORKID by K distinct keys in pubkey order. VerifySpend checks only
+// that input, so the other scriptSigs stay empty. Returns the plain tx bytes
+// and the spent output.
+struct ManyKeyMultisigSpend {
+    std::vector<uint8_t> txBin;
+    CTxOut source;
+    uint32_t index;
+};
+
+static ManyKeyMultisigSpend MakeManyKeyMultisigSpend(size_t nInputs, size_t nKeys)
+{
+    const SigHashType allForkId = SigHashType().withForkId();
+    const uint32_t index = static_cast<uint32_t>(nInputs / 2);
+
+    std::vector<CKey> keys;
+    CScript multisig = CScript() << static_cast<int64_t>(nKeys);
+    for (size_t k = 0; k < nKeys; ++k) {
+        keys.push_back(MakeDeterministicTestKey(static_cast<uint8_t>(0x80 + k)));
+        multisig << ToByteVector(keys.back().GetPubKey());
+    }
+    multisig << static_cast<int64_t>(nKeys) << OP_CHECKMULTISIG;
+
+    CMutableTransaction mtx;
+    mtx.nVersion = 2;
+    mtx.nLockTime = 0;
+    mtx.vin.resize(nInputs);
+    for (size_t i = 0; i < nInputs; ++i) {
+        mtx.vin[i].prevout = COutPoint(uint256S("01"), static_cast<uint32_t>(i));
+        mtx.vin[i].nSequence = 0xffffffff - static_cast<uint32_t>(i % 3);
+    }
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = Amount(P2PKH_OUTPUT_SATOSHIS);
+    mtx.vout[0].scriptPubKey = MakeP2PKHScript(MakeP2PKHTestKey().GetPubKey());
+
+    const CTxOut source(Amount(P2PKH_INPUT_SATOSHIS), multisig);
+    const CTransaction unsignedTx(mtx);
+    const PrecomputedTransactionData txdata(unsignedTx);
+    const uint256 sighash = SignatureHash(multisig, unsignedTx, index, allForkId, source.nValue, &txdata);
+    CScript scriptSig = CScript() << OP_0;
+    for (const CKey& key : keys) {
+        std::vector<uint8_t> sig;
+        BOOST_REQUIRE(key.Sign(sighash, sig));
+        sig.push_back(static_cast<uint8_t>(allForkId.getRawSigHashType()));
+        scriptSig << sig;
+    }
+    mtx.vin[index].scriptSig = scriptSig;
+
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << mtx;
+    return { std::vector<uint8_t>(ss.begin(), ss.end()), source, index };
+}
+
+// VerifySpend must share one PrecomputedTransactionData across the signature
+// checks of its input. Without it each of K distinct FORKID checks re-hashes
+// every outpoint and sequence of the tx, so one input costs K x O(N).
+//
+// The test fixes N and compares a 1-of-1 with a 32-of-32 multisig input. With
+// the shared precompute the 31 extra checks add only ECDSA work, a small
+// fraction of parsing and hashing a 10,000-input tx; without it each adds a
+// full hash pass. Timed in process CPU time, best of 3 samples of 5 calls.
+BOOST_AUTO_TEST_CASE(verify_spend_shares_sighash_precompute_across_checks)
+{
+    constexpr size_t N_INPUTS = 10000;
+    constexpr size_t FEW_KEYS = 1;
+    constexpr size_t MANY_KEYS = 32;
+    constexpr int SAMPLES = 3;
+    constexpr int CALLS_PER_SAMPLE = 5;
+    constexpr double MAX_RATIO = 4.0;
+
+    const bsv::CTxValidator se("main");
+
+    const auto bestTimeMs = [&](size_t nKeys) {
+        const ManyKeyMultisigSpend spend = MakeManyKeyMultisigSpend(N_INPUTS, nKeys);
+        const std::span<const uint8_t> lockingScript(spend.source.scriptPubKey.data(), spend.source.scriptPubKey.size());
+        double best = std::numeric_limits<double>::max();
+        for (int sample = 0; sample < SAMPLES; ++sample) {
+            const std::clock_t c0 = std::clock();
+            for (int call = 0; call < CALLS_PER_SAMPLE; ++call) {
+                const auto status = se.VerifySpend(std::span<const uint8_t>(spend.txBin), spend.index, lockingScript,
+                    spend.source.nValue.GetSatoshis(), P2PKH_UTXO_HEIGHT, P2PKH_BLOCK_HEIGHT, /*consensus=*/true);
+                BOOST_REQUIRE_MESSAGE(bsv::TxErrorIsOk(status),
+                    "K=" << nKeys << ": domain=" << status.domain << " code=" << status.code);
+            }
+            const double elapsed = 1000.0 * static_cast<double>(std::clock() - c0) / CLOCKS_PER_SEC;
+            best = std::min(best, elapsed / CALLS_PER_SAMPLE);
+        }
+        return best;
+    };
+
+    const double fewMs = bestTimeMs(FEW_KEYS);
+    const double manyMs = bestTimeMs(MANY_KEYS);
+    const double ratio = manyMs / fewMs;
+
+    std::cerr << "[verify_spend_shares_sighash_precompute_across_checks] N=" << N_INPUTS
+              << " K=" << FEW_KEYS << " best_cpu_ms=" << fewMs
+              << " K=" << MANY_KEYS << " best_cpu_ms=" << manyMs
+              << " ratio=" << ratio << " max_ratio=" << MAX_RATIO << std::endl;
+
+    BOOST_CHECK_MESSAGE(ratio < MAX_RATIO,
+        "VerifySpend CPU time ratio " << ratio << " for " << MANY_KEYS << " vs " << FEW_KEYS
+        << " signature checks exceeds " << MAX_RATIO << ": each check is re-hashing the whole tx");
+}
+
 // Script verification must share one PrecomputedTransactionData across the
 // inputs of a tx, as SV Node does. Without it every FORKID signature check
 // re-hashes all outpoints and sequences, so ValidateTransaction grows with the
