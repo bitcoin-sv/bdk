@@ -205,12 +205,13 @@ namespace {
 class CachingScriptChecker final : public TransactionSignatureChecker {
 public:
     // txdata must be built from *txTo and outlive this checker: the base class
-    // keeps a pointer to it. Binding a temporary is rejected at compile time.
+    // keeps a pointer to it. Binding a temporary, const or not, is rejected at
+    // compile time: an rvalue prefers the deleted const&& overload.
     CachingScriptChecker(const CTransaction* txTo, unsigned int nIn, const Amount amount,
                          const PrecomputedTransactionData& txdata)
         : TransactionSignatureChecker(txTo, nIn, amount, txdata) {}
     CachingScriptChecker(const CTransaction* txTo, unsigned int nIn, const Amount amount,
-                         PrecomputedTransactionData&& txdata) = delete;
+                         const PrecomputedTransactionData&& txdata) = delete;
 
     bool CheckSig(const std::vector<uint8_t>& scriptSig,
                   const std::vector<uint8_t>& vchPubKey,
