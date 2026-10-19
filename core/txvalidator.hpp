@@ -43,10 +43,17 @@ enum class TxValidationNetwork {
  * the interpreter before every opcode it runs (also before each signature of
  * OP_CHECKMULTISIG and each chunk of OP_LSHIFT / OP_RSHIFT). Work between two polls
  * finishes before a cancel is seen: deserialising and hashing the transaction, the
- * linear transaction checks, one signature hash, one hash or big-number opcode. A
- * token that fires after the call's last poll leaves it to return its verdict. The
- * token may be cancelled from any thread while the call runs; each call takes its own
- * token, so concurrent calls on one validator cancel independently.
+ * linear transaction checks, building the shared signature-hash data, one signature
+ * hash, one hash or big-number opcode. A token that fires after the call's last poll
+ * leaves it to return its verdict. The token may be cancelled from any thread while
+ * the call runs; each call takes its own token, so concurrent calls on one validator
+ * cancel independently.
+ *
+ * Use a source whose answer does not depend on the thread that asks, such as
+ * task::CTimedCancellationSource (steady clock). task::CThreadTimedCancellationSource
+ * measures the CPU clock of whichever thread polls it: today that is the calling
+ * thread, but a token may be read on other threads if inputs come to be verified in
+ * parallel, and a CPU-time budget would then be measured on the wrong thread.
  *
  * Checks present in bitcoin-sv's TxnValidation / BlockValidateTxns that are intentionally
  * absent here. In every case BDK is missing the chain / mempool / node-state context the
@@ -225,10 +232,11 @@ class CTxValidator {
         TxError VerifyScript(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool consensus, std::span<const uint32_t> customFlags = std::span<const uint32_t>()) const;
 
         // Cancellable form of VerifyScript; an empty customFlags span means the
-        // calculated flags. Polls (see Cancellation above): at entry, after
-        // deserialising and building the shared signature-hash data, then the
-        // interpreter's polls. Not polled: deserialising, hashing and building that
-        // data.
+        // calculated flags. Polls (see Cancellation above): at entry; after
+        // deserialising; after building the shared signature-hash data; then the
+        // interpreter's polls. Not polled: deserialising and hashing; the argument
+        // checks and building the shared signature-hash data; setting up each input's
+        // script check.
         TxError VerifyScript(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool consensus, std::span<const uint32_t> customFlags, const task::CCancellationToken& token) const;
 
         // VerifySpend executes one input against an explicitly supplied source
@@ -246,10 +254,11 @@ class CTxValidator {
             std::optional<uint32_t> customFlags = std::nullopt
         ) const;
 
-        // Cancellable form of VerifySpend. Polls (see Cancellation above): at entry,
-        // after deserialising and building the shared signature-hash data, then the
-        // interpreter's polls. Not polled: deserialising, hashing and building that
-        // data.
+        // Cancellable form of VerifySpend. Polls (see Cancellation above): at entry;
+        // after deserialising; after building the shared signature-hash data; then the
+        // interpreter's polls. Not polled: deserialising and hashing; the input-index
+        // and unconfirmed-input checks, copying the locking script and building the
+        // shared signature-hash data.
         TxError VerifySpend(
             std::span<const uint8_t> transaction,
             uint32_t inputIndex,

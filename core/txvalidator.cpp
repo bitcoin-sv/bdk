@@ -830,7 +830,11 @@ TxError bsv::CTxValidator::VerifyScript(std::span<const uint8_t> extendedTX, std
             throw std::runtime_error("error serializing extended tx");
 
         const CTransaction ctx(eTX.mtx);
-        // implVerifyScript polls once it has built the shared signature-hash data.
+        // Deserialising is linear in the transaction size with no poll inside;
+        // check before implVerifyScript's argument checks can throw. It polls again
+        // once it has built the shared signature-hash data.
+        if (token.IsCanceled())
+            return bsv::TxErrorCancelled();
         return implVerifyScript(ctx, eTX.vutxo, utxoHeights, blockHeight, consensus, customFlags, token);
     }
     catch (const std::exception&) {
@@ -882,6 +886,10 @@ TxError bsv::CTxValidator::VerifySpend(
             throw std::runtime_error("error serializing transaction");
 
         const CTransaction tx(std::move(mutableTx));
+        // Deserialising is linear in the transaction size with no poll inside;
+        // check before the checks below can return a result.
+        if (token.IsCanceled())
+            return bsv::TxErrorCancelled();
         if (inputIndex >= tx.vin.size())
             throw std::runtime_error("input index is out of range");
         if (consensus && utxoHeight == MEMPOOL_HEIGHT)
@@ -893,7 +901,7 @@ TxError bsv::CTxValidator::VerifySpend(
         // One input can run several FORKID checks (multisig, contracts with
         // several CHECKSIGs); they all read these hashes.
         const PrecomputedTransactionData txdata(tx);
-        // Deserialising and building txdata are linear in the transaction size
+        // Copying the locking script and building txdata are linear in their size
         // with no poll inside.
         if (token.IsCanceled())
             return bsv::TxErrorCancelled();
@@ -981,7 +989,10 @@ TxError bsv::CTxValidator::implVerifyScript(
 
     // Hashed once here and shared by every input's FORKID signature checks.
     const PrecomputedTransactionData txdata(ctx);
-    // Building it is linear in the transaction size with no poll inside.
+    // Building it is linear in the transaction size with no poll inside, so poll
+    // after it, not before: a cancel that lands while it runs is then seen before
+    // the first script. No test pins this position; polling just before the build
+    // would give the same results and polls, only later on a large transaction.
     if (token.IsCanceled())
         return bsv::TxErrorCancelled();
 

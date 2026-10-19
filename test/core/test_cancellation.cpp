@@ -520,9 +520,10 @@ BOOST_AUTO_TEST_CASE(cancel_during_each_unpolled_phase_is_honoured_before_the_ne
     }
 }
 
-// The same property for VerifySpend and CheckStandardness: a cancel that lands while
-// they deserialise (and, in VerifySpend, build the shared signature-hash data) is
-// seen right after, and in CheckStandardness one that lands
+// The same property for VerifySpend, VerifyScript and CheckStandardness. A cancel
+// that lands while they deserialise is seen right after, before any check that can
+// return a result; in VerifySpend one that lands while it builds the shared
+// signature-hash data is seen before the script; in CheckStandardness one that lands
 // before an input's standardness check is seen before that check. Each case's
 // uncancelled result needs no further poll, so a missing poll turns the expected
 // Cancelled into that result.
@@ -539,6 +540,41 @@ BOOST_AUTO_TEST_CASE(verify_spend_and_check_standardness_poll_after_deserialisin
         const auto source = RecordingSource::Make(1);  // cancel lands while deserialising
         const auto r = mainValidator.VerifySpend(tx, 0, emptyLock, 1000, kSimpleUtxoHeights[0], kSimpleBlockHeight, true, std::nullopt, source->GetToken());
         BOOST_CHECK_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_CANCELLED), r.domain);
+        BOOST_CHECK_EQUAL(2u, source->polls());
+
+        // Cancel lands while the shared signature-hash data is built.
+        const auto during = RecordingSource::Make(2);
+        const auto d = mainValidator.VerifySpend(tx, 0, emptyLock, 1000, kSimpleUtxoHeights[0], kSimpleBlockHeight, true, std::nullopt, during->GetToken());
+        BOOST_CHECK_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_CANCELLED), d.domain);
+        BOOST_CHECK_EQUAL(3u, during->polls());
+
+        // Checks right after deserialising that return a result: an unconfirmed input
+        // in consensus mode (a DoS result) and an input index out of range (an
+        // exception). A cancel that lands while deserialising wins over both.
+        BOOST_REQUIRE_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_DOS),
+                            mainValidator.VerifySpend(tx, 0, emptyLock, 1000, MEMPOOL_HEIGHT, kSimpleBlockHeight, true).domain);
+        const auto unconfirmed = RecordingSource::Make(1);
+        BOOST_CHECK_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_CANCELLED),
+                          mainValidator.VerifySpend(tx, 0, emptyLock, 1000, MEMPOOL_HEIGHT, kSimpleBlockHeight, true, std::nullopt, unconfirmed->GetToken()).domain);
+        BOOST_CHECK_EQUAL(2u, unconfirmed->polls());
+
+        BOOST_REQUIRE_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_EXCEPTION),
+                            mainValidator.VerifySpend(tx, 5, emptyLock, 1000, kSimpleUtxoHeights[0], kSimpleBlockHeight, true).domain);
+        const auto badIndex = RecordingSource::Make(1);
+        BOOST_CHECK_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_CANCELLED),
+                          mainValidator.VerifySpend(tx, 5, emptyLock, 1000, kSimpleUtxoHeights[0], kSimpleBlockHeight, true, std::nullopt, badIndex->GetToken()).domain);
+        BOOST_CHECK_EQUAL(2u, badIndex->polls());
+    }
+    {
+        // VerifyScript with one height for a two-input transaction: its argument
+        // checks throw. A cancel that lands while deserialising wins.
+        const std::vector<uint8_t> valid = ParseHex(kValidTxHex);
+        const std::vector<int32_t> oneHeight{ kValidTxUtxoHeights[0] };
+        BOOST_REQUIRE_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_EXCEPTION),
+                            mainValidator.VerifyScript(valid, oneHeight, kValidTxBlockHeight, true).domain);
+        const auto source = RecordingSource::Make(1);
+        BOOST_CHECK_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_CANCELLED),
+                          mainValidator.VerifyScript(valid, oneHeight, kValidTxBlockHeight, true, {}, source->GetToken()).domain);
         BOOST_CHECK_EQUAL(2u, source->polls());
     }
 
@@ -569,6 +605,40 @@ BOOST_AUTO_TEST_CASE(verify_spend_and_check_standardness_poll_after_deserialisin
         BOOST_CHECK_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_CANCELLED),
                           validator.CheckStandardness(tx, kPreGenesisUtxoHeights2, 5000, second->GetToken()).domain);
         BOOST_CHECK_EQUAL(4u, second->polls());
+    }
+}
+
+// VerifySpend passes the caller's token to the interpreter: a cancel from another
+// thread while its script runs stops it, as for ValidateTransaction.
+BOOST_AUTO_TEST_CASE(verify_spend_cancelled_mid_script_returns_cancelled_promptly)
+{
+    CMutableTransaction mtx;
+    mtx.nVersion = 2;
+    mtx.vin.resize(1);
+    mtx.vin[0].prevout = COutPoint(uint256S("01"), 0);
+    mtx.vin[0].scriptSig = CScript() << std::vector<uint8_t>(1 << 20, 0x01);
+    mtx.vout.resize(1);
+    mtx.vout[0].nValue = Amount(1000);
+    mtx.vout[0].scriptPubKey = CScript() << OP_TRUE;
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << mtx;
+    const std::vector<uint8_t> tx(ss.begin(), ss.end());
+    CScript lock;
+    for (size_t i = 0; i < 2000; ++i)
+        lock << OP_DUP << OP_SHA256 << OP_DROP;
+    const std::vector<uint8_t> lockBytes(lock.begin(), lock.end());
+    const bsv::CTxValidator validator = LongRunningValidator();
+
+    for (const bool consensus : { true, false }) {
+        auto source = task::CCancellationSource::Make();
+        const auto token = source->GetToken();
+        const auto [result, latency] = RunAndCancelAfter(source, std::chrono::milliseconds(50), [&] {
+            return validator.VerifySpend(tx, 0, lockBytes, 100000, kLongUtxoHeights[0], kLongBlockHeight, consensus, std::nullopt, token);
+        });
+        BOOST_TEST_CONTEXT("consensus=" << consensus) {
+            BOOST_CHECK_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_CANCELLED), result.domain);
+            BOOST_CHECK_LT(latency.count(), 1000);
+        }
     }
 }
 

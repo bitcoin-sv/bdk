@@ -76,8 +76,9 @@ consensus and policy mode alike. The token is polled only at fixed points:
 
 | Call | Polls | Not polled (each linear in the transaction size) |
 |---|---|---|
-| `ValidateTransaction` | entry; after deserialising; after the transaction-level, prevout and output checks; in policy mode when inputs are checked for standardness (non-standard outputs not accepted), before each input; after building the shared signature-hash data, before the scripts | deserialising and hashing; the transaction-level, prevout and output checks; the output standardness, sigop, input-value and fee checks and building the shared signature-hash data |
-| `VerifyScript`, `VerifySpend` | entry; after deserialising and building the shared signature-hash data | deserialising, hashing and building the shared signature-hash data |
+| `ValidateTransaction` | entry; after deserialising; after the transaction-level, prevout and output checks; in policy mode when inputs are checked for standardness (non-standard outputs not accepted), before each input; after building the shared signature-hash data, before the scripts | deserialising and hashing; the transaction-level, prevout and output checks; the output standardness, sigop, input-value and fee checks and building the shared signature-hash data; setting up each input's script check |
+| `VerifyScript` | entry; after deserialising; after building the shared signature-hash data | deserialising and hashing; the argument checks and building the shared signature-hash data; setting up each input's script check |
+| `VerifySpend` | entry; after deserialising; after building the shared signature-hash data | deserialising and hashing; the input-index and unconfirmed-input checks, copying the locking script and building the shared signature-hash data |
 | `CheckStandardness` | entry; after deserialising; before each input's check when inputs are checked | deserialising and hashing; the output standardness check |
 | `ValidateBatch` | as `ValidateTransaction`, per entry | as `ValidateTransaction` |
 
@@ -87,6 +88,12 @@ started finishes before the next poll: one signature hash, one hash or big-numbe
 phase in the right-hand column. A token that fires after the last poll leaves the call to return its
 verdict, so callers must act on the result rather than on whether they cancelled. A cancelled
 `ValidateBatch` keeps the results of the entries it finished and returns `CANCELLED` for the rest.
+
+Use a token whose answer does not depend on the thread that polls it, such as SV Node's
+`task::CTimedCancellationSource` (steady clock). `task::CThreadTimedCancellationSource` measures the
+CPU clock of whichever thread polls it: today that is the calling thread, but a token may be read on
+other threads if inputs come to be verified in parallel, and a CPU-time budget would then be
+measured on the wrong thread.
 
 The token belongs to the call, not to the `CTxValidator`, so concurrent calls on one validator
 cancel independently. The C bindings take a pointer to a caller-owned `int32_t` instead of a token
