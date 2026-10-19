@@ -11,6 +11,17 @@ installed alongside the package (`CMakeLists.txt`).
 
 ## Recent changes
 
+- **Script validation of many-input transactions is linear in the input count.**
+  `ValidateTransaction` and `VerifyScript` now build one `PrecomputedTransactionData` per
+  transaction and share it across all inputs, as SV Node does; `VerifySpend` builds one per call
+  and shares it across the signature checks of its input, such as the keys of a multisig. Before,
+  every FORKID signature check hashed all of the transaction's outpoints, sequences and outputs
+  again, so validation time grew with the square of the input count. On an Apple M3 Max, a
+  synthetic 8,000-input P2PKH transaction validated through the Go binding took 6.2 s and now
+  takes 0.18 s, about 23 µs per input at every size measured. A 16,000-input one went from 24.4 s
+  to 0.37 s of CPU time. Verdicts are unchanged, and signatures on the original sighash
+  algorithm (non-FORKID, or FORKID with the Chronicle flag) never read the shared data. No API
+  change in C++, Go, Rust or WASM.
 - **The Go binding version equals the BDK version again.** The `+2` patch offset is gone, so
   this release's Go module is `1.3.0` rather than `1.3.2`, and it sorts after the last published
   `module/gobdk/v1.2.4`. The configure-time check that the overall version is the maximum of
