@@ -1095,6 +1095,105 @@ BOOST_AUTO_TEST_CASE(multisig_input_with_corrupted_signature_fails)
     }
 }
 
+// The precompute only feeds BIP143. Signatures that go to
+// SignatureHashOriginal must validate exactly as before: FORKID|CHRONICLE
+// (allowed from Chronicle on, beside BIP143 inputs in the same tx), and plain
+// non-FORKID, which is only valid in consensus mode before the UAHF fork. From
+// the fork on every signature must carry FORKID (SCRIPT_ERR_MUST_USE_FORKID,
+// after Chronicle too), policy flags always require it, and before the fork
+// FORKID is illegal, so no tx validly mixes the two.
+constexpr int32_t POST_CHRONICLE_BLOCK_HEIGHT = 950000;  // mainnet Chronicle: 943,816
+constexpr int32_t POST_CHRONICLE_UTXO_HEIGHT = 949999;
+constexpr int32_t PRE_UAHF_BLOCK_HEIGHT = 470000;  // mainnet UAHF: 478,558
+constexpr int32_t PRE_UAHF_UTXO_HEIGHT = 469999;
+
+static TxError ValidateAtHeights(const bsv::CTxValidator& se,
+                                 const bsv::CMutableTransactionExtended& eTx,
+                                 int32_t utxoHeight,
+                                 int32_t blockHeight,
+                                 bool consensus)
+{
+    const auto etxBin = SerializeExtended(eTx);
+    const std::vector<int32_t> utxoHeights(eTx.mtx.vin.size(), utxoHeight);
+    return se.ValidateTransaction(std::span<const uint8_t>(etxBin),
+        std::span<const int32_t>(utxoHeights), blockHeight, consensus);
+}
+
+// BIP143 and Chronicle (original-algorithm) signatures interleaved in one tx,
+// after Chronicle: valid, and a corrupted Chronicle or BIP143 signature fails.
+// After Chronicle a version-2 tx is malleable, NULLFAIL is not enforced, and
+// the failed check ends the script false.
+BOOST_AUTO_TEST_CASE(chronicle_and_forkid_signatures_mixed_in_one_tx)
+{
+    const bsv::CTxValidator se("main");
+    const SigHashType forkId = SigHashType().withForkId();
+    const SigHashType chronicle = forkId.withChronicle();  // 0x61
+    const std::vector<SigHashType> types{
+        forkId,
+        chronicle,
+        forkId.withBaseType(BaseSigHashType::SINGLE),
+        chronicle.withBaseType(BaseSigHashType::SINGLE),
+        chronicle.withAnyoneCanPay(),
+        forkId.withBaseType(BaseSigHashType::NONE).withAnyoneCanPay(),
+        chronicle.withBaseType(BaseSigHashType::NONE),
+    };
+    const auto valid = MakeSignedP2PKHSpend(types, /*nOutputs=*/types.size());
+    for (const bool consensus : { true, false }) {
+        const auto status = ValidateAtHeights(se, valid, POST_CHRONICLE_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT, consensus);
+        BOOST_CHECK_MESSAGE(bsv::TxErrorIsOk(status),
+            "consensus=" << consensus << ": domain=" << status.domain << " code=" << status.code);
+    }
+
+    // Input 1 is Chronicle (original algorithm), input 2 BIP143.
+    for (const size_t k : { size_t{ 1 }, size_t{ 2 } }) {
+        auto corrupted = valid;
+        CorruptP2PKHSignature(corrupted, k);
+        for (const bool consensus : { true, false }) {
+            const auto status = ValidateAtHeights(se, corrupted, POST_CHRONICLE_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT, consensus);
+            BOOST_CHECK_MESSAGE(status.domain == static_cast<int32_t>(TX_ERR_DOMAIN_SCRIPT),
+                "k=" << k << " consensus=" << consensus << ": domain=" << status.domain << " code=" << status.code);
+            BOOST_CHECK_MESSAGE(status.code == static_cast<int32_t>(SCRIPT_ERR_EVAL_FALSE),
+                "k=" << k << " consensus=" << consensus << ": code=" << status.code);
+        }
+    }
+}
+
+// Plain non-FORKID signatures on every input, before the UAHF fork in
+// consensus mode: valid, and a corrupted one fails. Policy mode, and consensus
+// after Chronicle, reject the same tx with MUST_USE_FORKID.
+BOOST_AUTO_TEST_CASE(non_forkid_signatures_validate_before_uahf_only)
+{
+    const bsv::CTxValidator se("main");
+    const std::vector<SigHashType> types{
+        SigHashType(),
+        SigHashType().withBaseType(BaseSigHashType::NONE),
+        SigHashType().withBaseType(BaseSigHashType::SINGLE),
+        SigHashType().withAnyoneCanPay(),
+    };
+    const auto valid = MakeSignedP2PKHSpend(types, /*nOutputs=*/types.size());
+    const auto status = ValidateAtHeights(se, valid, PRE_UAHF_UTXO_HEIGHT, PRE_UAHF_BLOCK_HEIGHT, /*consensus=*/true);
+    BOOST_CHECK_MESSAGE(bsv::TxErrorIsOk(status),
+        "pre-UAHF consensus: domain=" << status.domain << " code=" << status.code);
+
+    const auto mustUseForkId = [](const TxError& e) {
+        return e.domain == static_cast<int32_t>(TX_ERR_DOMAIN_SCRIPT)
+            && e.code == static_cast<int32_t>(SCRIPT_ERR_MUST_USE_FORKID);
+    };
+    const auto policy = ValidateAtHeights(se, valid, PRE_UAHF_UTXO_HEIGHT, PRE_UAHF_BLOCK_HEIGHT, /*consensus=*/false);
+    BOOST_CHECK_MESSAGE(mustUseForkId(policy), "pre-UAHF policy: domain=" << policy.domain << " code=" << policy.code);
+    const auto late = ValidateAtHeights(se, valid, POST_CHRONICLE_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT, /*consensus=*/true);
+    BOOST_CHECK_MESSAGE(mustUseForkId(late), "post-Chronicle consensus: domain=" << late.domain << " code=" << late.code);
+
+    // Before the fork NULLFAIL is not a consensus rule; the failed check ends
+    // the script false.
+    auto corrupted = valid;
+    CorruptP2PKHSignature(corrupted, 2);
+    const auto bad = ValidateAtHeights(se, corrupted, PRE_UAHF_UTXO_HEIGHT, PRE_UAHF_BLOCK_HEIGHT, /*consensus=*/true);
+    BOOST_CHECK_MESSAGE(bad.domain == static_cast<int32_t>(TX_ERR_DOMAIN_SCRIPT)
+        && bad.code == static_cast<int32_t>(SCRIPT_ERR_EVAL_FALSE),
+        "pre-UAHF consensus, corrupted: domain=" << bad.domain << " code=" << bad.code);
+}
+
 // Timing tests. Both are disabled by default and carry the `timing` label;
 // ctest runs them as their own entry (`--run_test=@timing`, see
 // test/core/CMakeLists.txt). They time CPU work, so in a non-optimised build
