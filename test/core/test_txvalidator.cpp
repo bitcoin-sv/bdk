@@ -1242,8 +1242,9 @@ static double ProcessCpuSeconds()
 
 // An N-input tx whose input `index` spends a bare K-of-K OP_CHECKMULTISIG,
 // signed ALL|FORKID by K distinct keys in pubkey order. VerifySpend checks only
-// that input, so the other scriptSigs stay empty. Returns the plain tx bytes
-// and the spent output.
+// that input, so the other scriptSigs stay empty. The tx has as many outputs
+// as inputs, so re-hashing any one of the three aggregates per check shows up.
+// Returns the plain tx bytes and the spent output.
 struct ManyKeyMultisigSpend {
     std::vector<uint8_t> txBin;
     CTxOut source;
@@ -1271,9 +1272,12 @@ static ManyKeyMultisigSpend MakeManyKeyMultisigSpend(size_t nInputs, size_t nKey
         mtx.vin[i].prevout = COutPoint(uint256S("01"), static_cast<uint32_t>(i));
         mtx.vin[i].nSequence = 0xffffffff - static_cast<uint32_t>(i % 3);
     }
-    mtx.vout.resize(1);
-    mtx.vout[0].nValue = Amount(P2PKH_OUTPUT_SATOSHIS);
-    mtx.vout[0].scriptPubKey = MakeP2PKHScript(MakeP2PKHTestKey().GetPubKey());
+    const CScript payTo = MakeP2PKHScript(MakeP2PKHTestKey().GetPubKey());
+    mtx.vout.resize(nInputs);
+    for (size_t j = 0; j < nInputs; ++j) {
+        mtx.vout[j].nValue = Amount(P2PKH_OUTPUT_SATOSHIS + static_cast<int64_t>(j));
+        mtx.vout[j].scriptPubKey = payTo;
+    }
 
     const CTxOut source(Amount(P2PKH_INPUT_SATOSHIS), multisig);
     const CTransaction unsignedTx(mtx);
@@ -1295,7 +1299,7 @@ static ManyKeyMultisigSpend MakeManyKeyMultisigSpend(size_t nInputs, size_t nKey
 
 // VerifySpend must share one PrecomputedTransactionData across the signature
 // checks of its input. Without it each of K distinct FORKID checks re-hashes
-// every outpoint and sequence of the tx, so one input costs K x O(N).
+// every outpoint, sequence and output of the tx, so one input costs K x O(N).
 //
 // The test measures the marginal cost of one extra signature check,
 // (t(K=65) - t(K=1)) / 64, on a 2,000-input and a 20,000-input tx, and bounds
