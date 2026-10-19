@@ -13,7 +13,8 @@ import (
 )
 
 // expectedSHA256Backend says which SHA-256 backend BDK should select on this
-// machine, probing the CPU independently of BDK's own detection.
+// machine, without BDK's own detection code: /proc/cpuinfo on Linux, and on
+// Apple silicon a fixed expectation rather than a probe.
 func expectedSHA256Backend(t *testing.T) string {
 	t.Helper()
 	if v := os.Getenv("BDK_SHA256_FORCE_SCALAR"); v != "" && v != "0" {

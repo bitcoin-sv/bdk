@@ -19,8 +19,8 @@ installed alongside the package (`CMakeLists.txt`).
   backend for the ARMv8 SHA-2 instructions, vendored unchanged from Bitcoin Core v29.0
   (`core/sha256_arm_shani.cpp`, MIT), for both the streaming transform and the 2-way merkle-pair
   transform. It is enabled when Linux reports `HWCAP_SHA2` or macOS reports
-  `hw.optional.arm.FEAT_SHA256`; other ARM operating systems, Windows and the WASM build keep
-  the scalar transforms. Only the files holding the intrinsics get the instruction-set flags;
+  `hw.optional.arm.FEAT_SHA256`; other ARM operating systems, MSVC builds and the WASM build
+  keep the scalar transforms. Only the files holding the intrinsics get the instruction-set flags;
   nothing is built with `-march=native`. Each candidate passes a known-answer self-test before
   it is installed, and the scalar transforms remain the fallback. One M3 core goes from 471 to
   2,611 MB/s.
@@ -39,9 +39,12 @@ installed alongside the package (`CMakeLists.txt`).
     - **`BDK_SHA256_FORCE_SCALAR=1`** in the environment keeps the scalar transforms, for
       debugging and for comparing backends.
     - **`bdk_core` now defines `sha256_dispatch::AutoDetect()`**, declared in the installed
-      `crypto/sha256_dispatch.h`, so the link gap is closed. Consumers must not call it: it
-      writes the dispatch pointers a second time, and on x86-64 it ignores
-      `BDK_SHA256_FORCE_SCALAR`. Call `bsv::SelectSha256Backend()` instead.
+      `crypto/sha256_dispatch.h`, so the link gap is closed. Consumers must not call it. On
+      x86-64 it installs SSE4 / SHA-NI regardless of `BDK_SHA256_FORCE_SCALAR`: under forced
+      scalar BDK never calls it, so a direct call is the first write to the dispatch pointers,
+      while the backend string still says `standard(forced)`. Called before any selection, it
+      writes the pointers outside BDK's once-only guard. On ARM64 it installs nothing. Call
+      `bsv::SelectSha256Backend()` instead.
     - `test_sha256_backends` checks every backend the runner supports against FIPS 180-4
       vectors and a seeded differential run, and prints the selected backend and its
       throughput; CI logs it for each runner. `test_txvalidator`, `test_bsv` and

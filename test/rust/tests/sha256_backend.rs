@@ -8,8 +8,9 @@ use std::thread;
 
 use rust_bdk::{TxValidator, sha256_backend};
 
-/// Which SHA-256 backend BDK should select here, probing the CPU independently
-/// of BDK's own detection. `None` when this platform has no independent probe.
+/// Which SHA-256 backend BDK should select here, without BDK's own detection
+/// code: `/proc/cpuinfo` on Linux, and on Apple silicon a fixed expectation
+/// rather than a probe. `None` when this platform has neither.
 fn expected_sha256_backend() -> Option<&'static str> {
     if let Ok(v) = std::env::var("BDK_SHA256_FORCE_SCALAR") {
         if !v.is_empty() && v != "0" {
