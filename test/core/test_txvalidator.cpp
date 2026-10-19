@@ -1198,53 +1198,72 @@ static ManyKeyMultisigSpend MakeManyKeyMultisigSpend(size_t nInputs, size_t nKey
 // checks of its input. Without it each of K distinct FORKID checks re-hashes
 // every outpoint and sequence of the tx, so one input costs K x O(N).
 //
-// The test fixes N and compares a 1-of-1 with a 32-of-32 multisig input. With
-// the shared precompute the 31 extra checks add only ECDSA work, a small
-// fraction of parsing and hashing a 10,000-input tx; without it each adds a
-// full hash pass. Timed in process CPU time, best of 3 samples of 5 calls.
+// The test measures the marginal cost of one extra signature check,
+// (t(K=65) - t(K=1)) / 64, on a 2,000-input and a 20,000-input tx, and bounds
+// the ratio of the two. With the shared precompute an extra check is one ECDSA
+// verify whatever the tx size, so the ratio stays near 1; re-hashing per check
+// makes it grow with N. Subtracting the K=1 time takes out parsing and the
+// precompute, whose cost depends on how fast SHA-256 runs. Each of the four
+// timings is the best of 7 samples of 5 calls, the samples interleaved.
 BOOST_AUTO_TEST_CASE(verify_spend_shares_sighash_precompute_across_checks,
     * boost::unit_test::label("timing") * boost::unit_test::disabled()
     * boost::unit_test::precondition(OptimisedBuild))
 {
-    constexpr size_t N_INPUTS = 10000;
-    constexpr size_t FEW_KEYS = 1;
-    constexpr size_t MANY_KEYS = 32;
-    constexpr int SAMPLES = 3;
+    constexpr std::array<size_t, 2> N_INPUTS{ 2000, 20000 };
+    constexpr std::array<size_t, 2> N_KEYS{ 1, 65 };
+    constexpr int SAMPLES = 7;
     constexpr int CALLS_PER_SAMPLE = 5;
-    constexpr double MAX_RATIO = 4.0;
+    constexpr double MAX_RATIO = 3.0;
 
     const bsv::CTxValidator se("main");
 
-    const auto bestTimeMs = [&](size_t nKeys) {
-        const ManyKeyMultisigSpend spend = MakeManyKeyMultisigSpend(N_INPUTS, nKeys);
-        const std::span<const uint8_t> lockingScript(spend.source.scriptPubKey.data(), spend.source.scriptPubKey.size());
-        double best = std::numeric_limits<double>::max();
-        for (int sample = 0; sample < SAMPLES; ++sample) {
-            const double t0 = ProcessCpuSeconds();
-            for (int call = 0; call < CALLS_PER_SAMPLE; ++call) {
-                const auto status = se.VerifySpend(std::span<const uint8_t>(spend.txBin), spend.index, lockingScript,
-                    spend.source.nValue.GetSatoshis(), P2PKH_UTXO_HEIGHT, P2PKH_BLOCK_HEIGHT, /*consensus=*/true);
-                BOOST_REQUIRE_MESSAGE(bsv::TxErrorIsOk(status),
-                    "K=" << nKeys << ": domain=" << status.domain << " code=" << status.code);
-            }
-            const double elapsed = 1000.0 * (ProcessCpuSeconds() - t0);
-            best = std::min(best, elapsed / CALLS_PER_SAMPLE);
+    // spends[n][k], bestMs[n][k] for N_INPUTS[n], N_KEYS[k]
+    std::array<std::array<ManyKeyMultisigSpend, 2>, 2> spends;
+    std::array<std::array<double, 2>, 2> bestMs;
+    for (size_t n = 0; n < 2; ++n) {
+        for (size_t k = 0; k < 2; ++k) {
+            spends[n][k] = MakeManyKeyMultisigSpend(N_INPUTS[n], N_KEYS[k]);
+            bestMs[n][k] = std::numeric_limits<double>::max();
         }
-        return best;
-    };
+    }
 
-    const double fewMs = bestTimeMs(FEW_KEYS);
-    const double manyMs = bestTimeMs(MANY_KEYS);
-    const double ratio = manyMs / fewMs;
+    for (int sample = 0; sample < SAMPLES; ++sample) {
+        for (size_t n = 0; n < 2; ++n) {
+            for (size_t k = 0; k < 2; ++k) {
+                const ManyKeyMultisigSpend& spend = spends[n][k];
+                const std::span<const uint8_t> lockingScript(
+                    spend.source.scriptPubKey.data(), spend.source.scriptPubKey.size());
+                const double t0 = ProcessCpuSeconds();
+                for (int call = 0; call < CALLS_PER_SAMPLE; ++call) {
+                    const auto status = se.VerifySpend(std::span<const uint8_t>(spend.txBin), spend.index,
+                        lockingScript, spend.source.nValue.GetSatoshis(), P2PKH_UTXO_HEIGHT, P2PKH_BLOCK_HEIGHT,
+                        /*consensus=*/true);
+                    BOOST_REQUIRE_MESSAGE(bsv::TxErrorIsOk(status), "N=" << N_INPUTS[n] << " K=" << N_KEYS[k]
+                        << ": domain=" << status.domain << " code=" << status.code);
+                }
+                const double ms = 1000.0 * (ProcessCpuSeconds() - t0) / CALLS_PER_SAMPLE;
+                bestMs[n][k] = std::min(bestMs[n][k], ms);
+            }
+        }
+    }
 
-    std::cerr << "[verify_spend_shares_sighash_precompute_across_checks] N=" << N_INPUTS
-              << " K=" << FEW_KEYS << " best_cpu_ms=" << fewMs
-              << " K=" << MANY_KEYS << " best_cpu_ms=" << manyMs
-              << " ratio=" << ratio << " max_ratio=" << MAX_RATIO << std::endl;
+    const double extraChecks = static_cast<double>(N_KEYS[1] - N_KEYS[0]);
+    const double smallMarginalMs = (bestMs[0][1] - bestMs[0][0]) / extraChecks;
+    const double largeMarginalMs = (bestMs[1][1] - bestMs[1][0]) / extraChecks;
+    BOOST_REQUIRE_MESSAGE(smallMarginalMs > 0.0,
+        "N=" << N_INPUTS[0] << ": " << N_KEYS[1] << " checks measured no slower than " << N_KEYS[0]);
+    const double ratio = largeMarginalMs / smallMarginalMs;
+
+    std::cerr << "[verify_spend_shares_sighash_precompute_across_checks]";
+    for (size_t n = 0; n < 2; ++n)
+        for (size_t k = 0; k < 2; ++k)
+            std::cerr << " N=" << N_INPUTS[n] << ",K=" << N_KEYS[k] << " best_cpu_ms=" << bestMs[n][k];
+    std::cerr << " marginal_ms N=" << N_INPUTS[0] << ":" << smallMarginalMs << " N=" << N_INPUTS[1] << ":"
+              << largeMarginalMs << " ratio=" << ratio << " max_ratio=" << MAX_RATIO << std::endl;
 
     BOOST_CHECK_MESSAGE(ratio < MAX_RATIO,
-        "VerifySpend CPU time ratio " << ratio << " for " << MANY_KEYS << " vs " << FEW_KEYS
-        << " signature checks exceeds " << MAX_RATIO << ": each check is re-hashing the whole tx");
+        "the CPU cost of one extra VerifySpend signature check grew " << ratio << "x from " << N_INPUTS[0]
+        << " to " << N_INPUTS[1] << " inputs, over " << MAX_RATIO << ": each check is re-hashing the whole tx");
 }
 
 // Script verification must share one PrecomputedTransactionData across the
