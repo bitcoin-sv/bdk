@@ -193,12 +193,20 @@
  * contracts with several CHECKSIGs) costs K x O(N). Every caller therefore
  * builds one PrecomputedTransactionData per transaction, as SV Node's
  * validation does, and passes it in: implVerifyScript shares it across all
- * inputs, VerifySpend across the checks of its one input. With no FORKID
- * check that reads the hashes, it is one wasted O(N) pass, the same as SV
- * Node's unconditional precompute. The checker only forwards it to
- * TransactionSignatureChecker; SV Node's SignatureHashBIP143 decides when a
- * cached hash applies (ANYONECANPAY, NONE and SINGLE fall back to their own
- * values) and the non-FORKID and Chronicle paths ignore it.
+ * inputs, VerifySpend across the checks of its one input. The checker only
+ * forwards it to TransactionSignatureChecker; SV Node's SignatureHashBIP143
+ * decides, per field and per sighash type, which aggregate a FORKID check
+ * reads:
+ *   - hashPrevouts unless ANYONECANPAY,
+ *   - hashSequence unless ANYONECANPAY, SINGLE or NONE,
+ *   - hashOutputs unless SINGLE or NONE (SINGLE hashes its own output, NONE
+ *     uses zero).
+ * So ALL|ANYONECANPAY still reads hashOutputs and NONE or SINGLE without
+ * ANYONECANPAY still reads hashPrevouts; only NONE|ANYONECANPAY and
+ * SINGLE|ANYONECANPAY read none of them. Non-FORKID and Chronicle signatures
+ * go to SignatureHashOriginal, which ignores the precompute. When no check
+ * reads an aggregate, building it is one wasted O(N) pass, the same as SV
+ * Node's unconditional precompute.
  */
 namespace {
 
