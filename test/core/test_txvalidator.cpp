@@ -1095,6 +1095,52 @@ BOOST_AUTO_TEST_CASE(multisig_input_with_corrupted_signature_fails)
     }
 }
 
+// Timing tests. Both are disabled by default and carry the `timing` label;
+// ctest runs them as their own entry (`--run_test=@timing`, see
+// test/core/CMakeLists.txt). They time CPU work, so in a non-optimised build
+// (no NDEBUG) they skip: debug code changes the ratios they bound.
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#endif
+
+static boost::test_tools::assertion_result OptimisedBuild(boost::unit_test::test_unit_id)
+{
+#ifdef NDEBUG
+    return true;
+#else
+    boost::test_tools::assertion_result skip(false);
+    skip.message() << "timing test skipped: not an optimised (NDEBUG) build";
+    return skip;
+#endif
+}
+
+// CPU time of the whole process, every thread, user plus kernel, in seconds.
+// Process, not thread, time: work moved to helper threads must still count.
+// Wall-clock would charge a test for time spent descheduled on a busy runner.
+// GetProcessTimes ticks coarsely (about 15.6 ms by default) and no CI job runs
+// on Windows today.
+static double ProcessCpuSeconds()
+{
+#ifdef _WIN32
+    FILETIME creation, exit, kernel, user;
+    BOOST_REQUIRE(GetProcessTimes(GetCurrentProcess(), &creation, &exit, &kernel, &user));
+    const auto ticks = [](const FILETIME& t) {
+        return (static_cast<uint64_t>(t.dwHighDateTime) << 32) | t.dwLowDateTime;
+    };
+    return static_cast<double>(ticks(kernel) + ticks(user)) * 1e-7;  // 100 ns units
+#else
+    timespec now{};
+    BOOST_REQUIRE(clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &now) == 0);
+    return static_cast<double>(now.tv_sec) + static_cast<double>(now.tv_nsec) * 1e-9;
+#endif
+}
+
 // An N-input tx whose input `index` spends a bare K-of-K OP_CHECKMULTISIG,
 // signed ALL|FORKID by K distinct keys in pubkey order. VerifySpend checks only
 // that input, so the other scriptSigs stay empty. Returns the plain tx bytes
@@ -1156,7 +1202,9 @@ static ManyKeyMultisigSpend MakeManyKeyMultisigSpend(size_t nInputs, size_t nKey
 // the shared precompute the 31 extra checks add only ECDSA work, a small
 // fraction of parsing and hashing a 10,000-input tx; without it each adds a
 // full hash pass. Timed in process CPU time, best of 3 samples of 5 calls.
-BOOST_AUTO_TEST_CASE(verify_spend_shares_sighash_precompute_across_checks)
+BOOST_AUTO_TEST_CASE(verify_spend_shares_sighash_precompute_across_checks,
+    * boost::unit_test::label("timing") * boost::unit_test::disabled()
+    * boost::unit_test::precondition(OptimisedBuild))
 {
     constexpr size_t N_INPUTS = 10000;
     constexpr size_t FEW_KEYS = 1;
@@ -1172,14 +1220,14 @@ BOOST_AUTO_TEST_CASE(verify_spend_shares_sighash_precompute_across_checks)
         const std::span<const uint8_t> lockingScript(spend.source.scriptPubKey.data(), spend.source.scriptPubKey.size());
         double best = std::numeric_limits<double>::max();
         for (int sample = 0; sample < SAMPLES; ++sample) {
-            const std::clock_t c0 = std::clock();
+            const double t0 = ProcessCpuSeconds();
             for (int call = 0; call < CALLS_PER_SAMPLE; ++call) {
                 const auto status = se.VerifySpend(std::span<const uint8_t>(spend.txBin), spend.index, lockingScript,
                     spend.source.nValue.GetSatoshis(), P2PKH_UTXO_HEIGHT, P2PKH_BLOCK_HEIGHT, /*consensus=*/true);
                 BOOST_REQUIRE_MESSAGE(bsv::TxErrorIsOk(status),
                     "K=" << nKeys << ": domain=" << status.domain << " code=" << status.code);
             }
-            const double elapsed = 1000.0 * static_cast<double>(std::clock() - c0) / CLOCKS_PER_SEC;
+            const double elapsed = 1000.0 * (ProcessCpuSeconds() - t0);
             best = std::min(best, elapsed / CALLS_PER_SAMPLE);
         }
         return best;
@@ -1209,13 +1257,11 @@ BOOST_AUTO_TEST_CASE(verify_spend_shares_sighash_precompute_across_checks)
 // The test times the same P2PKH shape at two sizes and bounds the ratio, which
 // cancels out the runner's absolute speed. Inputs and outputs grow together,
 // so re-hashing any one of the three aggregates per input shows up. It
-// measures process CPU time with std::clock(), which is CPU time on Linux and
-// macOS, the only CI hosts today; MSVC's std::clock() is wall-clock, so this
-// rationale does not hold on Windows. Validation is single-threaded, and on an
-// oversubscribed runner wall-clock charges the large run for time spent
-// descheduled. Best of 3 per size absorbs the remaining noise (cache and
-// frequency effects).
-BOOST_AUTO_TEST_CASE(validate_transaction_scales_linearly_with_input_count)
+// measures process CPU time (ProcessCpuSeconds above). Best of 3 per size
+// absorbs the remaining noise (cache and frequency effects).
+BOOST_AUTO_TEST_CASE(validate_transaction_scales_linearly_with_input_count,
+    * boost::unit_test::label("timing") * boost::unit_test::disabled()
+    * boost::unit_test::precondition(OptimisedBuild))
 {
     constexpr size_t SMALL_N = 1000;
     constexpr size_t LARGE_N = 16000;
@@ -1231,9 +1277,9 @@ BOOST_AUTO_TEST_CASE(validate_transaction_scales_linearly_with_input_count)
             MakeSignedP2PKHSpend(types, /*nOutputs=*/nInputs, /*precomputeForSigning=*/true));
         double best = std::numeric_limits<double>::max();
         for (int run = 0; run < RUNS; ++run) {
-            const std::clock_t c0 = std::clock();
+            const double t0 = ProcessCpuSeconds();
             const auto status = ValidateP2PKHSpend(se, etxBin, nInputs, /*consensus=*/true);
-            const double elapsed = 1000.0 * static_cast<double>(std::clock() - c0) / CLOCKS_PER_SEC;
+            const double elapsed = 1000.0 * (ProcessCpuSeconds() - t0);
             BOOST_REQUIRE_MESSAGE(bsv::TxErrorIsOk(status),
                 "N=" << nInputs << ": domain=" << status.domain << " code=" << status.code);
             best = std::min(best, elapsed);
