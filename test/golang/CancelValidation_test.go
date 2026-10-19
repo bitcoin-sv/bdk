@@ -309,10 +309,12 @@ func TestValidateBatchContextCancelledPartWay(t *testing.T) {
 }
 
 // Many goroutines share one validator, each with its own context cancelled at a random
-// moment. Every result is the verdict or a cancellation, never anything else, and some
-// calls are cancelled while they run. Under -race this checks the Go side (the
-// AfterFunc store, the flag's lifetime); the race detector does not see the C++ read
-// of the flag, which the ThreadSanitizer CI job covers.
+// moment. Every result is the verdict or a cancellation, never anything else. Of the
+// long calls (tens of ms) whose context was still live when they began, most must
+// come back cancelled: those cancels can only arrive through the flag, since the Go
+// early return needs a context that is already done. Under -race this also checks the
+// Go side (the AfterFunc store, the flag's lifetime); the race detector does not see
+// the C++ read of the flag, which the ThreadSanitizer CI job covers.
 func TestContextConcurrentCancellation(t *testing.T) {
 	mainSE := goscript.NewTxValidator("main")
 	longSE := longRunningValidator(t)
@@ -321,7 +323,7 @@ func TestContextConcurrentCancellation(t *testing.T) {
 	longUtxo := []int32{cancelTestLongUtxoHeight}
 
 	var wg sync.WaitGroup
-	var cancelled atomic.Int64
+	var liveLongCalls, cancelledMidCall atomic.Int64
 	for g := 0; g < 16; g++ {
 		wg.Add(1)
 		go func(seed int64) {
@@ -335,19 +337,26 @@ func TestContextConcurrentCancellation(t *testing.T) {
 				if i%2 == 0 {
 					err = mainSE.ValidateTransactionContext(ctx, valid, cancelTestValidUtxo, cancelTestValidHeight, i%4 == 0)
 				} else {
+					liveAtStart := ctx.Err() == nil
 					err = longSE.ValidateTransactionContext(ctx, long, longUtxo, cancelTestLongBlockHeight, i%3 == 0)
+					if liveAtStart {
+						liveLongCalls.Add(1)
+						if errors.Is(err, goscript.ErrCancelled) {
+							cancelledMidCall.Add(1)
+						}
+					}
 				}
 				cancel()
-				if errors.Is(err, goscript.ErrCancelled) {
-					cancelled.Add(1)
-				} else if err != nil {
+				if err != nil && !errors.Is(err, goscript.ErrCancelled) {
 					t.Errorf("unexpected result %v", err)
 				}
 			}
 		}(int64(g))
 	}
 	wg.Wait()
-	assert.Positive(t, cancelled.Load(), "no call was cancelled while it ran")
+	require.Positive(t, liveLongCalls.Load())
+	assert.GreaterOrEqual(t, 2*cancelledMidCall.Load(), liveLongCalls.Load(),
+		"only %d of %d long calls with a live context were cancelled while running", cancelledMidCall.Load(), liveLongCalls.Load())
 }
 
 // chanContext is a cancellable context the context package does not recognise, so
