@@ -11,6 +11,27 @@ installed alongside the package (`CMakeLists.txt`).
 
 ## Recent changes
 
+- **A transaction with 16 or more inputs is verified on several cores.** `ValidateTransaction`,
+  `VerifyScript` and `ValidateBatch` hand such a transaction's inputs to the calling thread plus
+  idle helper threads; smaller transactions, `VerifySpend` and the WASM build verify serially as
+  before. The result is always the serial one: the error of the lowest-index failing input. At
+  1,000 to 40,000 P2PKH inputs, `ValidateTransaction` is 2.3x faster on a 4-vCPU x86-64 runner,
+  3.7x on a 4-core ARM64 runner and 7.4x on a 14-core Apple M3 Max; with callers already using
+  every core, aggregate throughput is unchanged. What embedders should know:
+  - The helpers belong to one process-wide pool, created on the first such transaction and never
+    torn down (they idle on a condition variable). It has one helper per available CPU minus one.
+  - Available CPUs are `std::thread::hardware_concurrency()`, lowered on Linux to the affinity
+    mask of the thread that creates the pool and to the cgroup CPU limit (v2 `cpu.max`, v1
+    `cpu.cfs_quota_us`/`cpu.cfs_period_us`), rounded up and never below 2 as Go's default
+    GOMAXPROCS is. Both are read once, when the pool is created.
+  - Helpers only use CPUs that callers leave free: a helper joins a job only while fewer threads
+    than CPUs are verifying, and leaves before its next input once more are. Callers are never held
+    back, so when callers alone fill every CPU, large transactions verify serially.
+  - `bdk_core` now links `Threads::Threads`; a consumer linking the static archive needs the
+    platform's thread library (cgo and Cargo add it already).
+  - Changing a `CTxValidator` setting (`Set...`) while any validation runs on it is a data race,
+    as before; helpers now read those settings too.
+  - No API change in C++, Go, Rust or WASM.
 - **Script validation of many-input transactions is linear in the input count.**
   `ValidateTransaction` and `VerifyScript` now build one `PrecomputedTransactionData` per
   transaction and share it across all inputs, as SV Node does; `VerifySpend` builds one per call
