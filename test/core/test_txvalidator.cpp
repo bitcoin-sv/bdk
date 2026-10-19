@@ -1,8 +1,12 @@
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cstdlib>
+#include <ctime>
 #include <iostream>
+#include <limits>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -816,6 +820,669 @@ BOOST_AUTO_TEST_CASE(small_bare_large_aggregate_previous_scripts)
         BOOST_CHECK_MESSAGE(status.domain != static_cast<int32_t>(TX_ERR_DOMAIN_ABI),
             "consensus=" << consensus << ": the ABI domain must never appear in the core validator");
     }
+}
+
+// Synthetic P2PKH spends for the sighash tests below. Every input spends
+// COutPoint(01, i), worth P2PKH_INPUT_SATOSHIS and locked to one deterministic
+// key; output j pays P2PKH_OUTPUT_SATOSHIS + j back to the same key. Output
+// values and nSequence differ by position, so sighash data built from a
+// reordered tx no longer hashes the same.
+constexpr int64_t P2PKH_INPUT_SATOSHIS = 100000;
+constexpr int64_t P2PKH_OUTPUT_SATOSHIS = 1000;
+constexpr int32_t P2PKH_BLOCK_HEIGHT = 700000;  // post-Genesis, pre-Chronicle on mainnet
+constexpr int32_t P2PKH_UTXO_HEIGHT = 699999;
+
+static CKey MakeDeterministicTestKey(uint8_t lastByte, uint8_t secondLastByte = 0)
+{
+    std::array<uint8_t, 32> rawKey{};
+    rawKey[30] = secondLastByte;
+    rawKey[31] = lastByte;
+    CKey key;
+    key.Set(rawKey.begin(), rawKey.end(), /*fCompressedIn=*/true);
+    return key;
+}
+
+static CKey MakeP2PKHTestKey()
+{
+    return MakeDeterministicTestKey(0x64);
+}
+
+static CScript MakeP2PKHScript(const CPubKey& pubkey)
+{
+    return CScript() << OP_DUP << OP_HASH160 << ToByteVector(pubkey.GetID())
+                     << OP_EQUALVERIFY << OP_CHECKSIG;
+}
+
+// Builds and signs an extended tx with one input per entry of sigHashTypes.
+// precomputeForSigning only changes how the signer reaches the sighash: without
+// it every input is signed through SignatureHash with no shared data, which is
+// independent of the precompute the validator uses; with it signing a large tx
+// stays linear. forkIdDigest is SignatureHash's enabledSighashForkid: false
+// signs a FORKID-bit type over the original digest, as before the UAHF fork.
+static bsv::CMutableTransactionExtended MakeSignedP2PKHSpend(
+    const std::vector<SigHashType>& sigHashTypes,
+    size_t nOutputs,
+    bool precomputeForSigning = false,
+    bool forkIdDigest = true)
+{
+    const CKey key = MakeP2PKHTestKey();
+    const CPubKey pubkey = key.GetPubKey();
+    const CScript lockingScript = MakeP2PKHScript(pubkey);
+    const Amount inputAmount(P2PKH_INPUT_SATOSHIS);
+
+    bsv::CMutableTransactionExtended eTx;
+    eTx.mtx.nVersion = 2;
+    eTx.mtx.nLockTime = 0;
+    eTx.mtx.vin.resize(sigHashTypes.size());
+    eTx.vutxo.resize(sigHashTypes.size());
+    for (size_t i = 0; i < sigHashTypes.size(); ++i) {
+        eTx.mtx.vin[i].prevout = COutPoint(uint256S("01"), static_cast<uint32_t>(i));
+        // Bit 31 stays set, so BIP68 relative locktime never applies; nLockTime 0
+        // keeps the tx final whatever the sequence.
+        eTx.mtx.vin[i].nSequence = 0xffffffff - static_cast<uint32_t>(i % 3);
+        eTx.vutxo[i].nValue = inputAmount;
+        eTx.vutxo[i].scriptPubKey = lockingScript;
+    }
+    eTx.mtx.vout.resize(nOutputs);
+    for (size_t j = 0; j < nOutputs; ++j) {
+        eTx.mtx.vout[j].nValue = Amount(P2PKH_OUTPUT_SATOSHIS + static_cast<int64_t>(j));
+        eTx.mtx.vout[j].scriptPubKey = lockingScript;
+    }
+
+    // BIP143 never commits to scriptSigs, so every input can be signed against
+    // the unsigned tx.
+    const CTransaction unsignedTx(eTx.mtx);
+    std::optional<PrecomputedTransactionData> txdata;
+    if (precomputeForSigning)
+        txdata.emplace(unsignedTx);
+
+    for (size_t i = 0; i < sigHashTypes.size(); ++i) {
+        const uint256 sighash = SignatureHash(lockingScript, unsignedTx, static_cast<unsigned int>(i),
+            sigHashTypes[i], inputAmount, txdata ? &*txdata : nullptr, forkIdDigest);
+        std::vector<uint8_t> sig;
+        BOOST_REQUIRE(key.Sign(sighash, sig));
+        sig.push_back(static_cast<uint8_t>(sigHashTypes[i].getRawSigHashType()));
+        eTx.mtx.vin[i].scriptSig = CScript() << sig << ToByteVector(pubkey);
+    }
+    return eTx;
+}
+
+static std::vector<uint8_t> SerializeExtended(const bsv::CMutableTransactionExtended& eTx)
+{
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << eTx;
+    return std::vector<uint8_t>(ss.begin(), ss.end());
+}
+
+static TxError ValidateP2PKHSpend(const bsv::CTxValidator& se,
+                                  const std::vector<uint8_t>& etxBin,
+                                  size_t nInputs,
+                                  bool consensus)
+{
+    const std::vector<int32_t> utxoHeights(nInputs, P2PKH_UTXO_HEIGHT);
+    return se.ValidateTransaction(std::span<const uint8_t>(etxBin),
+        std::span<const int32_t>(utxoHeights), P2PKH_BLOCK_HEIGHT, consensus);
+}
+
+// Flips the low bit of the last byte of r in the DER signature pushed by input
+// `index`, keeping the encoding strict-DER and low-S so only ECDSA verification
+// can reject it.
+static void CorruptP2PKHSignature(bsv::CMutableTransactionExtended& eTx, size_t index)
+{
+    CScript::const_iterator pc = eTx.mtx.vin[index].scriptSig.begin();
+    opcodetype opcode;
+    std::vector<uint8_t> sig;
+    std::vector<uint8_t> pubkey;
+    BOOST_REQUIRE(eTx.mtx.vin[index].scriptSig.GetOp(pc, opcode, sig));
+    BOOST_REQUIRE(eTx.mtx.vin[index].scriptSig.GetOp(pc, opcode, pubkey));
+    BOOST_REQUIRE(sig.size() > 5 && sig[0] == 0x30 && sig[2] == 0x02);
+    const size_t rLen = sig[3];
+    sig[4 + rLen - 1] ^= 0x01;
+    eTx.mtx.vin[index].scriptSig = CScript() << sig << pubkey;
+}
+
+static const std::array<SigHashType, 6> FORKID_SIGHASH_TYPES{
+    SigHashType().withBaseType(BaseSigHashType::ALL).withForkId(),
+    SigHashType().withBaseType(BaseSigHashType::NONE).withForkId(),
+    SigHashType().withBaseType(BaseSigHashType::SINGLE).withForkId(),
+    SigHashType().withBaseType(BaseSigHashType::ALL).withForkId().withAnyoneCanPay(),
+    SigHashType().withBaseType(BaseSigHashType::NONE).withForkId().withAnyoneCanPay(),
+    SigHashType().withBaseType(BaseSigHashType::SINGLE).withForkId().withAnyoneCanPay(),
+};
+
+// Each FORKID sighash type, with and without ANYONECANPAY, on every input of a
+// multi-input, multi-output tx. SINGLE has a matching output for every input.
+BOOST_AUTO_TEST_CASE(forkid_sighash_types_validate_on_multi_input_tx)
+{
+    const bsv::CTxValidator se("main");
+    for (const SigHashType& type : FORKID_SIGHASH_TYPES) {
+        const std::vector<SigHashType> types(3, type);
+        const auto etxBin = SerializeExtended(MakeSignedP2PKHSpend(types, /*nOutputs=*/3));
+        for (const bool consensus : { true, false }) {
+            const auto status = ValidateP2PKHSpend(se, etxBin, types.size(), consensus);
+            BOOST_CHECK_MESSAGE(bsv::TxErrorIsOk(status),
+                "sighash type 0x" << std::hex << type.getRawSigHashType() << std::dec
+                << " consensus=" << consensus << ": domain=" << status.domain << " code=" << status.code);
+        }
+    }
+}
+
+// All six FORKID sighash types mixed across the inputs of one tx.
+BOOST_AUTO_TEST_CASE(mixed_forkid_sighash_types_validate_in_one_tx)
+{
+    const bsv::CTxValidator se("main");
+    const std::vector<SigHashType> types(FORKID_SIGHASH_TYPES.begin(), FORKID_SIGHASH_TYPES.end());
+    const auto etxBin = SerializeExtended(MakeSignedP2PKHSpend(types, /*nOutputs=*/types.size()));
+    for (const bool consensus : { true, false }) {
+        const auto status = ValidateP2PKHSpend(se, etxBin, types.size(), consensus);
+        BOOST_CHECK_MESSAGE(bsv::TxErrorIsOk(status),
+            "consensus=" << consensus << ": domain=" << status.domain << " code=" << status.code);
+    }
+}
+
+// A bad signature on any one input fails the tx with the script error, wherever
+// that input sits.
+BOOST_AUTO_TEST_CASE(corrupted_signature_fails_at_first_middle_and_last_input)
+{
+    constexpr size_t nInputs = 5;
+    const bsv::CTxValidator se("main");
+    const std::vector<SigHashType> types(nInputs, SigHashType().withForkId());
+    for (const size_t k : { size_t{ 0 }, nInputs / 2, nInputs - 1 }) {
+        auto eTx = MakeSignedP2PKHSpend(types, /*nOutputs=*/2);
+        CorruptP2PKHSignature(eTx, k);
+        const auto etxBin = SerializeExtended(eTx);
+        for (const bool consensus : { true, false }) {
+            const auto status = ValidateP2PKHSpend(se, etxBin, nInputs, consensus);
+            BOOST_CHECK_MESSAGE(status.domain == static_cast<int32_t>(TX_ERR_DOMAIN_SCRIPT),
+                "k=" << k << " consensus=" << consensus << ": domain=" << status.domain << " code=" << status.code);
+            // A non-empty signature that fails ECDSA trips NULLFAIL, which these
+            // flags set in both modes, before OP_CHECKSIG can push false.
+            BOOST_CHECK_MESSAGE(status.code == static_cast<int32_t>(SCRIPT_ERR_SIG_NULLFAIL),
+                "k=" << k << " consensus=" << consensus << ": code=" << status.code);
+        }
+    }
+}
+
+// SIGHASH_SINGLE|FORKID on an input with no output at the same index. BIP143
+// signs a zero hashOutputs in that case (no "sighash 1" quirk), so the
+// signature validates. Pins SV Node's behaviour as BDK reproduces it.
+BOOST_AUTO_TEST_CASE(sighash_single_without_matching_output)
+{
+    const bsv::CTxValidator se("main");
+    const SigHashType all = SigHashType().withForkId();
+    const SigHashType single = SigHashType().withBaseType(BaseSigHashType::SINGLE).withForkId();
+    const std::vector<SigHashType> types{ all, all, single };
+    const auto etxBin = SerializeExtended(MakeSignedP2PKHSpend(types, /*nOutputs=*/2));
+    for (const bool consensus : { true, false }) {
+        const auto status = ValidateP2PKHSpend(se, etxBin, types.size(), consensus);
+        BOOST_CHECK_MESSAGE(bsv::TxErrorIsOk(status),
+            "consensus=" << consensus << ": domain=" << status.domain << " code=" << status.code);
+    }
+}
+
+// The guard txs above with input `index` re-locked to a bare 2-of-3
+// OP_CHECKMULTISIG and signed by the first two of its three keys, ALL|FORKID.
+// BIP143 commits only to an input's own scriptCode and amount, so the other
+// inputs' P2PKH signatures stay valid.
+struct MultisigSpend {
+    bsv::CMutableTransactionExtended eTx;
+    size_t index;
+};
+
+static MultisigSpend MakeSpendWithMultisigInput(size_t nInputs, size_t index, size_t nOutputs)
+{
+    const SigHashType allForkId = SigHashType().withForkId();
+    MultisigSpend spend{ MakeSignedP2PKHSpend(std::vector<SigHashType>(nInputs, allForkId), nOutputs), index };
+
+    const std::array<CKey, 3> keys{ MakeDeterministicTestKey(0x65), MakeDeterministicTestKey(0x66),
+                                    MakeDeterministicTestKey(0x67) };
+    CScript multisig = CScript() << OP_2;
+    for (const CKey& key : keys)
+        multisig << ToByteVector(key.GetPubKey());
+    multisig << OP_3 << OP_CHECKMULTISIG;
+    spend.eTx.vutxo[index].scriptPubKey = multisig;
+
+    const CTransaction unsignedTx(spend.eTx.mtx);
+    const uint256 sighash = SignatureHash(multisig, unsignedTx, static_cast<unsigned int>(index),
+        allForkId, spend.eTx.vutxo[index].nValue);
+    CScript scriptSig = CScript() << OP_0;  // CHECKMULTISIG's extra pop; NULLDUMMY wants it empty
+    for (size_t k = 0; k < 2; ++k) {
+        std::vector<uint8_t> sig;
+        BOOST_REQUIRE(keys[k].Sign(sighash, sig));
+        sig.push_back(static_cast<uint8_t>(allForkId.getRawSigHashType()));
+        scriptSig << sig;
+    }
+    spend.eTx.mtx.vin[index].scriptSig = scriptSig;
+    return spend;
+}
+
+// Flips the low bit of the last byte of r in the second multisig signature,
+// keeping it strict-DER and low-S.
+static void CorruptSecondMultisigSignature(MultisigSpend& spend)
+{
+    const CScript& scriptSig = spend.eTx.mtx.vin[spend.index].scriptSig;
+    CScript::const_iterator pc = scriptSig.begin();
+    opcodetype opcode;
+    std::vector<uint8_t> dummy, sig1, sig2;
+    BOOST_REQUIRE(scriptSig.GetOp(pc, opcode, dummy));
+    BOOST_REQUIRE(scriptSig.GetOp(pc, opcode, sig1));
+    BOOST_REQUIRE(scriptSig.GetOp(pc, opcode, sig2));
+    BOOST_REQUIRE(sig2.size() > 5 && sig2[0] == 0x30 && sig2[2] == 0x02);
+    sig2[4 + sig2[3] - 1] ^= 0x01;
+    spend.eTx.mtx.vin[spend.index].scriptSig = CScript() << OP_0 << sig1 << sig2;
+}
+
+static TxError VerifyMultisigSpend(const bsv::CTxValidator& se, const MultisigSpend& spend, bool consensus)
+{
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << spend.eTx.mtx;
+    const std::vector<uint8_t> txBin(ss.begin(), ss.end());
+    const CTxOut& source = spend.eTx.vutxo[spend.index];
+    return se.VerifySpend(std::span<const uint8_t>(txBin), static_cast<uint32_t>(spend.index),
+        std::span<const uint8_t>(source.scriptPubKey.data(), source.scriptPubKey.size()),
+        source.nValue.GetSatoshis(), P2PKH_UTXO_HEIGHT, P2PKH_BLOCK_HEIGHT, consensus);
+}
+
+// Several FORKID checks in one input: a 2-of-3 bare multisig among P2PKH
+// inputs, through VerifySpend on that input and ValidateTransaction on the tx.
+BOOST_AUTO_TEST_CASE(multisig_input_validates_through_verify_spend_and_validate_transaction)
+{
+    constexpr size_t nInputs = 4;
+    const bsv::CTxValidator se("main");
+    for (const size_t index : { size_t{ 0 }, nInputs - 1 }) {
+        const MultisigSpend spend = MakeSpendWithMultisigInput(nInputs, index, /*nOutputs=*/3);
+        const auto etxBin = SerializeExtended(spend.eTx);
+        for (const bool consensus : { true, false }) {
+            const auto spendStatus = VerifyMultisigSpend(se, spend, consensus);
+            BOOST_CHECK_MESSAGE(bsv::TxErrorIsOk(spendStatus),
+                "VerifySpend index=" << index << " consensus=" << consensus
+                << ": domain=" << spendStatus.domain << " code=" << spendStatus.code);
+            const auto txStatus = ValidateP2PKHSpend(se, etxBin, nInputs, consensus);
+            BOOST_CHECK_MESSAGE(bsv::TxErrorIsOk(txStatus),
+                "ValidateTransaction index=" << index << " consensus=" << consensus
+                << ": domain=" << txStatus.domain << " code=" << txStatus.code);
+        }
+    }
+}
+
+// One bad signature among the multisig's two fails the spend with the script
+// error, through both entry points.
+BOOST_AUTO_TEST_CASE(multisig_input_with_corrupted_signature_fails)
+{
+    constexpr size_t nInputs = 4;
+    const bsv::CTxValidator se("main");
+    MultisigSpend spend = MakeSpendWithMultisigInput(nInputs, /*index=*/1, /*nOutputs=*/3);
+    CorruptSecondMultisigSignature(spend);
+    const auto etxBin = SerializeExtended(spend.eTx);
+    for (const bool consensus : { true, false }) {
+        for (const auto& [entry, status] : { std::pair{ "VerifySpend", VerifyMultisigSpend(se, spend, consensus) },
+                                             std::pair{ "ValidateTransaction", ValidateP2PKHSpend(se, etxBin, nInputs, consensus) } }) {
+            BOOST_CHECK_MESSAGE(status.domain == static_cast<int32_t>(TX_ERR_DOMAIN_SCRIPT),
+                entry << " consensus=" << consensus << ": domain=" << status.domain << " code=" << status.code);
+            BOOST_CHECK_MESSAGE(status.code == static_cast<int32_t>(SCRIPT_ERR_SIG_NULLFAIL),
+                entry << " consensus=" << consensus << ": code=" << status.code);
+        }
+    }
+}
+
+// The precompute only feeds BIP143. Signatures that go to
+// SignatureHashOriginal must validate exactly as before. Three routes lead
+// there: FORKID|CHRONICLE (allowed from Chronicle on, beside BIP143 inputs in
+// the same tx); no FORKID bit, which is only valid in consensus mode before the
+// UAHF fork; and, also before the fork, a FORKID bit while consensus flags
+// carry neither SCRIPT_ENABLE_SIGHASH_FORKID nor STRICTENC, so the bit is
+// legal but the digest is the original one. From the fork on every signature
+// must carry FORKID and use BIP143 (SCRIPT_ERR_MUST_USE_FORKID, after
+// Chronicle too), and policy flags always require it.
+constexpr int32_t POST_CHRONICLE_BLOCK_HEIGHT = 950000;  // mainnet Chronicle: 943,816
+constexpr int32_t POST_CHRONICLE_UTXO_HEIGHT = 949999;
+constexpr int32_t PRE_UAHF_BLOCK_HEIGHT = 470000;  // mainnet UAHF: 478,558
+constexpr int32_t PRE_UAHF_UTXO_HEIGHT = 469999;
+
+static TxError ValidateAtHeights(const bsv::CTxValidator& se,
+                                 const bsv::CMutableTransactionExtended& eTx,
+                                 int32_t utxoHeight,
+                                 int32_t blockHeight,
+                                 bool consensus)
+{
+    const auto etxBin = SerializeExtended(eTx);
+    const std::vector<int32_t> utxoHeights(eTx.mtx.vin.size(), utxoHeight);
+    return se.ValidateTransaction(std::span<const uint8_t>(etxBin),
+        std::span<const int32_t>(utxoHeights), blockHeight, consensus);
+}
+
+// BIP143 and Chronicle (original-algorithm) signatures interleaved in one tx,
+// after Chronicle: valid, and a corrupted Chronicle or BIP143 signature fails.
+// After Chronicle a version-2 tx is malleable, NULLFAIL is not enforced, and
+// the failed check ends the script false.
+BOOST_AUTO_TEST_CASE(chronicle_and_forkid_signatures_mixed_in_one_tx)
+{
+    const bsv::CTxValidator se("main");
+    const SigHashType forkId = SigHashType().withForkId();
+    const SigHashType chronicle = forkId.withChronicle();  // 0x61
+    const std::vector<SigHashType> types{
+        forkId,
+        chronicle,
+        forkId.withBaseType(BaseSigHashType::SINGLE),
+        chronicle.withBaseType(BaseSigHashType::SINGLE),
+        chronicle.withAnyoneCanPay(),
+        forkId.withBaseType(BaseSigHashType::NONE).withAnyoneCanPay(),
+        chronicle.withBaseType(BaseSigHashType::NONE),
+    };
+    const auto valid = MakeSignedP2PKHSpend(types, /*nOutputs=*/types.size());
+    for (const bool consensus : { true, false }) {
+        const auto status = ValidateAtHeights(se, valid, POST_CHRONICLE_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT, consensus);
+        BOOST_CHECK_MESSAGE(bsv::TxErrorIsOk(status),
+            "consensus=" << consensus << ": domain=" << status.domain << " code=" << status.code);
+    }
+
+    // Input 1 is Chronicle (original algorithm), input 2 BIP143.
+    for (const size_t k : { size_t{ 1 }, size_t{ 2 } }) {
+        auto corrupted = valid;
+        CorruptP2PKHSignature(corrupted, k);
+        for (const bool consensus : { true, false }) {
+            const auto status = ValidateAtHeights(se, corrupted, POST_CHRONICLE_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT, consensus);
+            BOOST_CHECK_MESSAGE(status.domain == static_cast<int32_t>(TX_ERR_DOMAIN_SCRIPT),
+                "k=" << k << " consensus=" << consensus << ": domain=" << status.domain << " code=" << status.code);
+            BOOST_CHECK_MESSAGE(status.code == static_cast<int32_t>(SCRIPT_ERR_EVAL_FALSE),
+                "k=" << k << " consensus=" << consensus << ": code=" << status.code);
+        }
+    }
+}
+
+// Plain non-FORKID signatures on every input, before the UAHF fork in
+// consensus mode: valid, and a corrupted one fails. Policy mode, and consensus
+// after Chronicle, reject the same tx with MUST_USE_FORKID.
+BOOST_AUTO_TEST_CASE(non_forkid_signatures_validate_before_uahf_only)
+{
+    const bsv::CTxValidator se("main");
+    const std::vector<SigHashType> types{
+        SigHashType(),
+        SigHashType().withBaseType(BaseSigHashType::NONE),
+        SigHashType().withBaseType(BaseSigHashType::SINGLE),
+        SigHashType().withAnyoneCanPay(),
+    };
+    const auto valid = MakeSignedP2PKHSpend(types, /*nOutputs=*/types.size());
+    const auto status = ValidateAtHeights(se, valid, PRE_UAHF_UTXO_HEIGHT, PRE_UAHF_BLOCK_HEIGHT, /*consensus=*/true);
+    BOOST_CHECK_MESSAGE(bsv::TxErrorIsOk(status),
+        "pre-UAHF consensus: domain=" << status.domain << " code=" << status.code);
+
+    const auto mustUseForkId = [](const TxError& e) {
+        return e.domain == static_cast<int32_t>(TX_ERR_DOMAIN_SCRIPT)
+            && e.code == static_cast<int32_t>(SCRIPT_ERR_MUST_USE_FORKID);
+    };
+    const auto policy = ValidateAtHeights(se, valid, PRE_UAHF_UTXO_HEIGHT, PRE_UAHF_BLOCK_HEIGHT, /*consensus=*/false);
+    BOOST_CHECK_MESSAGE(mustUseForkId(policy), "pre-UAHF policy: domain=" << policy.domain << " code=" << policy.code);
+    const auto late = ValidateAtHeights(se, valid, POST_CHRONICLE_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT, /*consensus=*/true);
+    BOOST_CHECK_MESSAGE(mustUseForkId(late), "post-Chronicle consensus: domain=" << late.domain << " code=" << late.code);
+
+    // Before the fork NULLFAIL is not a consensus rule; the failed check ends
+    // the script false.
+    auto corrupted = valid;
+    CorruptP2PKHSignature(corrupted, 2);
+    const auto bad = ValidateAtHeights(se, corrupted, PRE_UAHF_UTXO_HEIGHT, PRE_UAHF_BLOCK_HEIGHT, /*consensus=*/true);
+    BOOST_CHECK_MESSAGE(bad.domain == static_cast<int32_t>(TX_ERR_DOMAIN_SCRIPT)
+        && bad.code == static_cast<int32_t>(SCRIPT_ERR_EVAL_FALSE),
+        "pre-UAHF consensus, corrupted: domain=" << bad.domain << " code=" << bad.code);
+}
+
+// Before the UAHF fork, in consensus mode, a FORKID-bit signature is checked
+// over the original digest. Mixed with plain non-FORKID inputs, the tx
+// validates when every input is signed over the original digest, and fails
+// when the FORKID-bit inputs are signed over BIP143 instead. Policy flags
+// require FORKID and BIP143, so the original-digest tx fails there.
+BOOST_AUTO_TEST_CASE(forkid_bit_uses_original_digest_before_uahf)
+{
+    const bsv::CTxValidator se("main");
+    const std::vector<SigHashType> types{
+        SigHashType(),                                                                   // 0x01
+        SigHashType().withForkId(),                                                      // 0x41
+        SigHashType().withBaseType(BaseSigHashType::SINGLE).withForkId().withAnyoneCanPay(), // 0xc3
+        SigHashType().withBaseType(BaseSigHashType::NONE).withForkId(),                  // 0x42
+    };
+
+    const auto original = MakeSignedP2PKHSpend(types, /*nOutputs=*/types.size(),
+        /*precomputeForSigning=*/false, /*forkIdDigest=*/false);
+    const auto ok = ValidateAtHeights(se, original, PRE_UAHF_UTXO_HEIGHT, PRE_UAHF_BLOCK_HEIGHT, /*consensus=*/true);
+    BOOST_CHECK_MESSAGE(bsv::TxErrorIsOk(ok),
+        "original digest, pre-UAHF consensus: domain=" << ok.domain << " code=" << ok.code);
+
+    const auto policy = ValidateAtHeights(se, original, PRE_UAHF_UTXO_HEIGHT, PRE_UAHF_BLOCK_HEIGHT, /*consensus=*/false);
+    BOOST_CHECK_MESSAGE(policy.domain == static_cast<int32_t>(TX_ERR_DOMAIN_SCRIPT)
+        && policy.code == static_cast<int32_t>(SCRIPT_ERR_MUST_USE_FORKID),
+        "original digest, pre-UAHF policy: domain=" << policy.domain << " code=" << policy.code);
+
+    const auto bip143 = MakeSignedP2PKHSpend(types, /*nOutputs=*/types.size());
+    const auto bad = ValidateAtHeights(se, bip143, PRE_UAHF_UTXO_HEIGHT, PRE_UAHF_BLOCK_HEIGHT, /*consensus=*/true);
+    BOOST_CHECK_MESSAGE(bad.domain == static_cast<int32_t>(TX_ERR_DOMAIN_SCRIPT)
+        && bad.code == static_cast<int32_t>(SCRIPT_ERR_EVAL_FALSE),
+        "BIP143 digest, pre-UAHF consensus: domain=" << bad.domain << " code=" << bad.code);
+}
+
+// Timing tests. Both are disabled by default and carry the `timing` label;
+// ctest runs them as their own entry (`--run_test=@timing`, see
+// test/core/CMakeLists.txt). They time CPU work in small samples, so they
+// skip in a non-optimised build (no NDEBUG), where debug code changes the
+// ratios they bound, and on Windows, whose process CPU clock (GetProcessTimes)
+// ticks every ~15.6 ms, too coarse for samples of a few milliseconds.
+static boost::test_tools::assertion_result OptimisedBuild(boost::unit_test::test_unit_id)
+{
+#if defined(_WIN32)
+    boost::test_tools::assertion_result skip(false);
+    skip.message() << "timing test skipped: Windows process CPU time is too coarse for these samples";
+    return skip;
+#elif !defined(NDEBUG)
+    boost::test_tools::assertion_result skip(false);
+    skip.message() << "timing test skipped: not an optimised (NDEBUG) build";
+    return skip;
+#else
+    return true;
+#endif
+}
+
+// CPU time of the whole process, every thread, user plus kernel, in seconds.
+// Process, not thread, time: work moved to helper threads must still count.
+// Wall-clock would charge a test for time spent descheduled on a busy runner.
+// Not implemented on Windows: the timing tests skip there (see above), and no
+// CI job runs on Windows today.
+static double ProcessCpuSeconds()
+{
+#ifdef _WIN32
+    BOOST_FAIL("ProcessCpuSeconds() is not implemented on Windows; the timing tests skip there");
+    return 0.0;
+#else
+    timespec now{};
+    BOOST_REQUIRE(clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &now) == 0);
+    return static_cast<double>(now.tv_sec) + static_cast<double>(now.tv_nsec) * 1e-9;
+#endif
+}
+
+// An N-input tx whose input `index` spends a bare K-of-K OP_CHECKMULTISIG,
+// signed ALL|FORKID by K distinct keys in pubkey order. VerifySpend checks only
+// that input, so the other scriptSigs stay empty. The tx has as many outputs
+// as inputs, so re-hashing any one of the three aggregates per check shows up.
+// Returns the plain tx bytes and the spent output.
+struct ManyKeyMultisigSpend {
+    std::vector<uint8_t> txBin;
+    CTxOut source;
+    uint32_t index;
+};
+
+static ManyKeyMultisigSpend MakeManyKeyMultisigSpend(size_t nInputs, size_t nKeys)
+{
+    const SigHashType allForkId = SigHashType().withForkId();
+    const uint32_t index = static_cast<uint32_t>(nInputs / 2);
+
+    std::vector<CKey> keys;
+    CScript multisig = CScript() << static_cast<int64_t>(nKeys);
+    for (size_t k = 0; k < nKeys; ++k) {
+        keys.push_back(MakeDeterministicTestKey(static_cast<uint8_t>(k & 0xff), static_cast<uint8_t>(1 + (k >> 8))));
+        multisig << ToByteVector(keys.back().GetPubKey());
+    }
+    multisig << static_cast<int64_t>(nKeys) << OP_CHECKMULTISIG;
+
+    CMutableTransaction mtx;
+    mtx.nVersion = 2;
+    mtx.nLockTime = 0;
+    mtx.vin.resize(nInputs);
+    for (size_t i = 0; i < nInputs; ++i) {
+        mtx.vin[i].prevout = COutPoint(uint256S("01"), static_cast<uint32_t>(i));
+        mtx.vin[i].nSequence = 0xffffffff - static_cast<uint32_t>(i % 3);
+    }
+    const CScript payTo = MakeP2PKHScript(MakeP2PKHTestKey().GetPubKey());
+    mtx.vout.resize(nInputs);
+    for (size_t j = 0; j < nInputs; ++j) {
+        mtx.vout[j].nValue = Amount(P2PKH_OUTPUT_SATOSHIS + static_cast<int64_t>(j));
+        mtx.vout[j].scriptPubKey = payTo;
+    }
+
+    const CTxOut source(Amount(P2PKH_INPUT_SATOSHIS), multisig);
+    const CTransaction unsignedTx(mtx);
+    const PrecomputedTransactionData txdata(unsignedTx);
+    const uint256 sighash = SignatureHash(multisig, unsignedTx, index, allForkId, source.nValue, &txdata);
+    CScript scriptSig = CScript() << OP_0;
+    for (const CKey& key : keys) {
+        std::vector<uint8_t> sig;
+        BOOST_REQUIRE(key.Sign(sighash, sig));
+        sig.push_back(static_cast<uint8_t>(allForkId.getRawSigHashType()));
+        scriptSig << sig;
+    }
+    mtx.vin[index].scriptSig = scriptSig;
+
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << mtx;
+    return { std::vector<uint8_t>(ss.begin(), ss.end()), source, index };
+}
+
+// VerifySpend must share one PrecomputedTransactionData across the signature
+// checks of its input. Without it each of K distinct FORKID checks re-hashes
+// every outpoint, sequence and output of the tx, so one input costs K x O(N).
+//
+// The test measures the marginal cost of one extra signature check,
+// (t(K=129) - t(K=1)) / 128, on a 2,000-input and a 60,000-input tx, and bounds
+// the ratio of the two. With the shared precompute an extra check is one ECDSA
+// verify whatever the tx size, so the ratio stays near 1; re-hashing per check
+// makes it grow with N. Subtracting the K=1 time takes out parsing and the
+// precompute, whose cost depends on how fast SHA-256 runs. Each of the four
+// timings is the best of 7 samples of 5 calls, the samples interleaved.
+BOOST_AUTO_TEST_CASE(verify_spend_shares_sighash_precompute_across_checks,
+    * boost::unit_test::label("timing") * boost::unit_test::disabled()
+    * boost::unit_test::precondition(OptimisedBuild))
+{
+    constexpr std::array<size_t, 2> N_INPUTS{ 2000, 60000 };
+    constexpr std::array<size_t, 2> N_KEYS{ 1, 129 };
+    constexpr int SAMPLES = 7;
+    constexpr int CALLS_PER_SAMPLE = 5;
+    constexpr double MAX_RATIO = 3.0;
+
+    const bsv::CTxValidator se("main");
+
+    // spends[n][k], bestMs[n][k] for N_INPUTS[n], N_KEYS[k]
+    std::array<std::array<ManyKeyMultisigSpend, 2>, 2> spends;
+    std::array<std::array<double, 2>, 2> bestMs;
+    for (size_t n = 0; n < 2; ++n) {
+        for (size_t k = 0; k < 2; ++k) {
+            spends[n][k] = MakeManyKeyMultisigSpend(N_INPUTS[n], N_KEYS[k]);
+            bestMs[n][k] = std::numeric_limits<double>::max();
+        }
+    }
+
+    for (int sample = 0; sample < SAMPLES; ++sample) {
+        for (size_t n = 0; n < 2; ++n) {
+            for (size_t k = 0; k < 2; ++k) {
+                const ManyKeyMultisigSpend& spend = spends[n][k];
+                const std::span<const uint8_t> lockingScript(
+                    spend.source.scriptPubKey.data(), spend.source.scriptPubKey.size());
+                const double t0 = ProcessCpuSeconds();
+                for (int call = 0; call < CALLS_PER_SAMPLE; ++call) {
+                    const auto status = se.VerifySpend(std::span<const uint8_t>(spend.txBin), spend.index,
+                        lockingScript, spend.source.nValue.GetSatoshis(), P2PKH_UTXO_HEIGHT, P2PKH_BLOCK_HEIGHT,
+                        /*consensus=*/true);
+                    BOOST_REQUIRE_MESSAGE(bsv::TxErrorIsOk(status), "N=" << N_INPUTS[n] << " K=" << N_KEYS[k]
+                        << ": domain=" << status.domain << " code=" << status.code);
+                }
+                const double ms = 1000.0 * (ProcessCpuSeconds() - t0) / CALLS_PER_SAMPLE;
+                bestMs[n][k] = std::min(bestMs[n][k], ms);
+            }
+        }
+    }
+
+    const double extraChecks = static_cast<double>(N_KEYS[1] - N_KEYS[0]);
+    const double smallMarginalMs = (bestMs[0][1] - bestMs[0][0]) / extraChecks;
+    const double largeMarginalMs = (bestMs[1][1] - bestMs[1][0]) / extraChecks;
+    BOOST_REQUIRE_MESSAGE(smallMarginalMs > 0.0,
+        "N=" << N_INPUTS[0] << ": " << N_KEYS[1] << " checks measured no slower than " << N_KEYS[0]
+        << " (best_cpu_ms " << bestMs[0][1] << " vs " << bestMs[0][0] << ")");
+    BOOST_REQUIRE_MESSAGE(largeMarginalMs > 0.0,
+        "N=" << N_INPUTS[1] << ": " << N_KEYS[1] << " checks measured no slower than " << N_KEYS[0]
+        << " (best_cpu_ms " << bestMs[1][1] << " vs " << bestMs[1][0] << ")");
+    const double ratio = largeMarginalMs / smallMarginalMs;
+
+    std::cerr << "[verify_spend_shares_sighash_precompute_across_checks]";
+    for (size_t n = 0; n < 2; ++n)
+        for (size_t k = 0; k < 2; ++k)
+            std::cerr << " N=" << N_INPUTS[n] << ",K=" << N_KEYS[k] << " best_cpu_ms=" << bestMs[n][k];
+    std::cerr << " marginal_ms N=" << N_INPUTS[0] << ":" << smallMarginalMs << " N=" << N_INPUTS[1] << ":"
+              << largeMarginalMs << " ratio=" << ratio << " max_ratio=" << MAX_RATIO << std::endl;
+
+    BOOST_CHECK_MESSAGE(ratio < MAX_RATIO,
+        "the CPU cost of one extra VerifySpend signature check grew " << ratio << "x from " << N_INPUTS[0]
+        << " to " << N_INPUTS[1] << " inputs, over " << MAX_RATIO << ": each check is re-hashing the whole tx");
+}
+
+// Script verification must share one PrecomputedTransactionData across the
+// inputs of a tx, as SV Node does. Without it every FORKID signature check
+// re-hashes all outpoints, sequences and outputs, so ValidateTransaction grows
+// with the square of the input count: mainnet tx
+// 4201a692b7349e7d047274029317460449b1a30f734eb43991c44bf15fa4382a (86,584
+// inputs) took about 26 minutes.
+//
+// The test times the same P2PKH shape at two sizes and bounds the ratio, which
+// cancels out the runner's absolute speed. Inputs and outputs grow together,
+// so re-hashing any one of the three aggregates per input shows up. It
+// measures process CPU time (ProcessCpuSeconds above). Best of 3 per size
+// absorbs the remaining noise (cache and frequency effects).
+BOOST_AUTO_TEST_CASE(validate_transaction_scales_linearly_with_input_count,
+    * boost::unit_test::label("timing") * boost::unit_test::disabled()
+    * boost::unit_test::precondition(OptimisedBuild))
+{
+    constexpr size_t SMALL_N = 1000;
+    constexpr size_t LARGE_N = 16000;
+    constexpr int RUNS = 3;
+    constexpr double MAX_RATIO = 40.0;
+
+    const bsv::CTxValidator se("main");
+    const SigHashType allForkId = SigHashType().withForkId();
+
+    const auto bestTimeMs = [&](size_t nInputs) {
+        const std::vector<SigHashType> types(nInputs, allForkId);
+        const auto etxBin = SerializeExtended(
+            MakeSignedP2PKHSpend(types, /*nOutputs=*/nInputs, /*precomputeForSigning=*/true));
+        double best = std::numeric_limits<double>::max();
+        for (int run = 0; run < RUNS; ++run) {
+            const double t0 = ProcessCpuSeconds();
+            const auto status = ValidateP2PKHSpend(se, etxBin, nInputs, /*consensus=*/true);
+            const double elapsed = 1000.0 * (ProcessCpuSeconds() - t0);
+            BOOST_REQUIRE_MESSAGE(bsv::TxErrorIsOk(status),
+                "N=" << nInputs << ": domain=" << status.domain << " code=" << status.code);
+            best = std::min(best, elapsed);
+        }
+        return best;
+    };
+
+    const double smallMs = bestTimeMs(SMALL_N);
+    const double largeMs = bestTimeMs(LARGE_N);
+    const double ratio = largeMs / smallMs;
+
+    // stderr so ctest --output-on-failure shows the measurement on regression.
+    std::cerr << "[validate_transaction_scales_linearly_with_input_count]"
+              << " N=" << SMALL_N << " best_cpu_ms=" << smallMs
+              << " N=" << LARGE_N << " best_cpu_ms=" << largeMs
+              << " ratio=" << ratio << " max_ratio=" << MAX_RATIO << std::endl;
+
+    BOOST_CHECK_MESSAGE(ratio < MAX_RATIO,
+        "ValidateTransaction CPU time ratio " << ratio << " for " << LARGE_N / SMALL_N
+        << "x the inputs exceeds " << MAX_RATIO << ": sighash work is growing with the square of the input count");
 }
 
 BOOST_AUTO_TEST_SUITE_END()

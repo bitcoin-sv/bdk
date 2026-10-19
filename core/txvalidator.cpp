@@ -183,13 +183,44 @@
  * is no global mutable state, no init function, and no thread safety
  * concerns. The base TransactionSignatureChecker behaviour is otherwise
  * untouched.
+ *
+ * Shared sighash precompute (per transaction, not per input)
+ * ----------------------------------------------------------
+ * The per-input cache above does not cover the BIP143 midstate hashes:
+ * hashPrevouts, hashSequence and hashOutputs each hash data from the whole
+ * transaction. Without shared data the base class recomputes them on every
+ * FORKID signature check that misses the per-input cache: a tx with N
+ * inputs costs O(N^2), and one input with K distinct signatures (multisig,
+ * contracts with several CHECKSIGs) costs K x O(N). Every caller therefore
+ * builds one PrecomputedTransactionData per transaction, as SV Node's
+ * validation does, and passes it in: implVerifyScript shares it across all
+ * inputs, VerifySpend across the checks of its one input. The checker only
+ * forwards it to TransactionSignatureChecker; SV Node's SignatureHashBIP143
+ * decides, per field and per sighash type, which aggregate a FORKID check
+ * reads:
+ *   - hashPrevouts unless ANYONECANPAY,
+ *   - hashSequence unless ANYONECANPAY, SINGLE or NONE,
+ *   - hashOutputs unless SINGLE or NONE (SINGLE hashes its own output, NONE
+ *     uses zero).
+ * So ALL|ANYONECANPAY still reads hashOutputs and NONE or SINGLE without
+ * ANYONECANPAY still reads hashPrevouts; only NONE|ANYONECANPAY and
+ * SINGLE|ANYONECANPAY read none of them. Non-FORKID and Chronicle signatures
+ * go to SignatureHashOriginal, which ignores the precompute. When no check
+ * reads an aggregate, building it is one wasted O(N) pass, the same as SV
+ * Node's unconditional precompute.
  */
 namespace {
 
 class CachingScriptChecker final : public TransactionSignatureChecker {
 public:
-    CachingScriptChecker(const CTransaction* txTo, unsigned int nIn, const Amount amount)
-        : TransactionSignatureChecker(txTo, nIn, amount) {}
+    // txdata must be built from *txTo and outlive this checker: the base class
+    // keeps a pointer to it. Binding a temporary, const or not, is rejected at
+    // compile time: an rvalue prefers the deleted const&& overload.
+    CachingScriptChecker(const CTransaction* txTo, unsigned int nIn, const Amount amount,
+                         const PrecomputedTransactionData& txdata)
+        : TransactionSignatureChecker(txTo, nIn, amount, txdata) {}
+    CachingScriptChecker(const CTransaction* txTo, unsigned int nIn, const Amount amount,
+                         const PrecomputedTransactionData&& txdata) = delete;
 
     bool CheckSig(const std::vector<uint8_t>& scriptSig,
                   const std::vector<uint8_t>& vchPubKey,
@@ -837,7 +868,10 @@ TxError bsv::CTxValidator::VerifySpend(
         const uint32_t flags = customFlags.value_or(CalculateFlags(utxoHeight, blockHeight, consensus));
         const CScript script(lockingScript.begin(), lockingScript.end());
         const Amount amount{ sourceSatoshis };
-        CachingScriptChecker checker(&tx, inputIndex, amount);
+        // One input can run several FORKID checks (multisig, contracts with
+        // several CHECKSIGs); they all read these hashes.
+        const PrecomputedTransactionData txdata(tx);
+        CachingScriptChecker checker(&tx, inputIndex, amount, txdata);
         return bsvVerifyScript(tx.vin[inputIndex].scriptSig, script, consensus, flags, checker);
     }
     catch (const std::exception&) {
@@ -899,6 +933,9 @@ TxError bsv::CTxValidator::implVerifyScript(
     if (!customFlags.empty() && customFlags.size() != prevUTXO.size())
         throw std::runtime_error("inconsistent custom flags size");
 
+    // Hashed once here and shared by every input's FORKID signature checks.
+    const PrecomputedTransactionData txdata(ctx);
+
     const bool useCustomFlags = !customFlags.empty();
     for (size_t index = 0; index < prevUTXO.size(); ++index) {
         const uint64_t amount = prevUTXO[index].nValue.GetSatoshis();
@@ -913,7 +950,7 @@ TxError bsv::CTxValidator::implVerifyScript(
         TxError verifyResult = bsv::TxErrorOk();
         if (!ctx.vin.empty() && !ctx.vout.empty()) {
             const Amount amt{ amount };
-            CachingScriptChecker sig_checker(&ctx, index, amt);
+            CachingScriptChecker sig_checker(&ctx, index, amt, txdata);
             verifyResult = bsvVerifyScript(uscript, lscript, consensus, flags, sig_checker);
         } else {
             BaseSignatureChecker sig_checker;

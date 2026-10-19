@@ -249,3 +249,12 @@ else()
   set_target_properties(test_sha256_backends PROPERTIES DEBUG_POSTFIX "")
   set_target_properties(test_sha256_select_race PROPERTIES DEBUG_POSTFIX "")
 endif()
+
+## Timing tests in test_txvalidator are disabled by default and labelled
+## `timing` in Boost; this entry runs only them. They skip themselves in a
+## non-optimised (no NDEBUG) build, and run serially so a parallel ctest
+## doesn't load the machine under them. `ctest -L timing` runs just these,
+## `ctest -LE timing` everything else.
+add_test(NAME test_txvalidator_timing
+         COMMAND $<TARGET_FILE:test_txvalidator> --run_test=@timing --report_level=detailed)
+set_tests_properties(test_txvalidator_timing PROPERTIES LABELS timing RUN_SERIAL TRUE TIMEOUT 600)
