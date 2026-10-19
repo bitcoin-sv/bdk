@@ -484,8 +484,8 @@ BOOST_AUTO_TEST_CASE(cancel_at_every_poll_gives_cancelled_or_the_uncancelled_res
 }
 
 // ValidateTransaction polls at entry, after deserialising, after the output checks
-// and before the scripts. Each of the three polls after entry ends a phase that has
-// no poll inside it. A cancel that lands in such a phase must stop the call at the
+// and after building the shared signature-hash data, before the scripts. Each of the
+// three polls after entry ends a phase that has no poll inside it. A cancel that lands in such a phase must stop the call at the
 // poll that ends it, before the next phase can reach a verdict. Each case cancels
 // right after the poll that starts a phase (the 1st, 2nd or 3rd poll of the call)
 // and uses a transaction whose verdict comes from the phase after it, so dropping
@@ -501,7 +501,7 @@ BOOST_AUTO_TEST_CASE(cancel_during_each_unpolled_phase_is_honoured_before_the_ne
     const std::vector<Case> cases{
         { "deserialising", 1, NoOutputsTx(), static_cast<int32_t>(TX_ERR_DOMAIN_DOS) },
         { "transaction and output checks", 2, InputsBelowOutputsTx(), static_cast<int32_t>(TX_ERR_DOMAIN_DOS) },
-        { "input value and fee checks", 3, EmptyScriptsTx(), static_cast<int32_t>(TX_ERR_DOMAIN_SCRIPT) },
+        { "input value and fee checks and building the shared signature-hash data", 3, EmptyScriptsTx(), static_cast<int32_t>(TX_ERR_DOMAIN_SCRIPT) },
     };
     const bsv::CTxValidator validator("main");
 
@@ -521,7 +521,8 @@ BOOST_AUTO_TEST_CASE(cancel_during_each_unpolled_phase_is_honoured_before_the_ne
 }
 
 // The same property for VerifySpend and CheckStandardness: a cancel that lands while
-// they deserialise is seen right after, and in CheckStandardness one that lands
+// they deserialise (and, in VerifySpend, build the shared signature-hash data) is
+// seen right after, and in CheckStandardness one that lands
 // before an input's standardness check is seen before that check. Each case's
 // uncancelled result needs no further poll, so a missing poll turns the expected
 // Cancelled into that result.
@@ -582,8 +583,9 @@ BOOST_AUTO_TEST_CASE(cancelled_during_a_signature_hash_stops_at_the_next_input)
     const bsv::CTxValidator validator("main");
 
     // Polls of the consensus path: entry, after deserialising, after the output
-    // checks, before the scripts (4); then per input: the signature push, and in the
-    // locking script the data push, OP_DROP, the pubkey push and OP_CHECKSIG (5).
+    // checks, after the shared signature-hash data (4); then per input: the
+    // signature push, and in the locking script the data push, OP_DROP, the pubkey
+    // push and OP_CHECKSIG (5).
     constexpr uint64_t kPrefixPolls = 4;
     constexpr uint64_t kPollsPerInput = 5;
     constexpr uint64_t kInput0Checksig = kPrefixPolls + kPollsPerInput;   // poll before input 0's OP_CHECKSIG

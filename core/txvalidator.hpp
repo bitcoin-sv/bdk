@@ -226,8 +226,9 @@ class CTxValidator {
 
         // Cancellable form of VerifyScript; an empty customFlags span means the
         // calculated flags. Polls (see Cancellation above): at entry, after
-        // deserialising, then the interpreter's polls. Not polled: deserialising and
-        // hashing the transaction.
+        // deserialising and building the shared signature-hash data, then the
+        // interpreter's polls. Not polled: deserialising, hashing and building that
+        // data.
         TxError VerifyScript(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool consensus, std::span<const uint32_t> customFlags, const task::CCancellationToken& token) const;
 
         // VerifySpend executes one input against an explicitly supplied source
@@ -246,8 +247,9 @@ class CTxValidator {
         ) const;
 
         // Cancellable form of VerifySpend. Polls (see Cancellation above): at entry,
-        // after deserialising, then the interpreter's polls. Not polled: deserialising
-        // and hashing the transaction.
+        // after deserialising and building the shared signature-hash data, then the
+        // interpreter's polls. Not polled: deserialising, hashing and building that
+        // data.
         TxError VerifySpend(
             std::span<const uint8_t> transaction,
             uint32_t inputIndex,
@@ -293,11 +295,12 @@ class CTxValidator {
         //   - after deserialising;
         //   - after the transaction-level, prevout and output checks;
         //   - policy mode, when inputs are checked for standardness: before each input;
-        //   - before script verification;
+        //   - after building the shared signature-hash data, before the scripts;
         //   - the interpreter's polls.
         // Not polled, each linear in the transaction size: deserialising and hashing;
         // the transaction-level, prevout and output checks; the output standardness,
-        // sigop, input-value and fee checks; setting up each input's script check.
+        // sigop, input-value and fee checks and building the shared signature-hash
+        // data; setting up each input's script check.
         TxError ValidateTransaction(std::span<const uint8_t> extendedTX,
                                  std::span<const int32_t> utxoHeights,
                                  int32_t blockHeight,

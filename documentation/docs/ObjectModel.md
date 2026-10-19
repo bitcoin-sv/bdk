@@ -76,8 +76,8 @@ consensus and policy mode alike. The token is polled only at fixed points:
 
 | Call | Polls | Not polled (each linear in the transaction size) |
 |---|---|---|
-| `ValidateTransaction` | entry; after deserialising; after the transaction-level, prevout and output checks; in policy mode when inputs are checked for standardness (non-standard outputs not accepted), before each input; before script verification | deserialising and hashing; the transaction-level, prevout and output checks; the output standardness, sigop, input-value and fee checks |
-| `VerifyScript`, `VerifySpend` | entry; after deserialising | deserialising and hashing |
+| `ValidateTransaction` | entry; after deserialising; after the transaction-level, prevout and output checks; in policy mode when inputs are checked for standardness (non-standard outputs not accepted), before each input; after building the shared signature-hash data, before the scripts | deserialising and hashing; the transaction-level, prevout and output checks; the output standardness, sigop, input-value and fee checks and building the shared signature-hash data |
+| `VerifyScript`, `VerifySpend` | entry; after deserialising and building the shared signature-hash data | deserialising, hashing and building the shared signature-hash data |
 | `CheckStandardness` | entry; after deserialising; before each input's check when inputs are checked | deserialising and hashing; the output standardness check |
 | `ValidateBatch` | as `ValidateTransaction`, per entry | as `ValidateTransaction` |
 

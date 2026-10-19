@@ -830,8 +830,7 @@ TxError bsv::CTxValidator::VerifyScript(std::span<const uint8_t> extendedTX, std
             throw std::runtime_error("error serializing extended tx");
 
         const CTransaction ctx(eTX.mtx);
-        if (token.IsCanceled())
-            return bsv::TxErrorCancelled();
+        // implVerifyScript polls once it has built the shared signature-hash data.
         return implVerifyScript(ctx, eTX.vutxo, utxoHeights, blockHeight, consensus, customFlags, token);
     }
     catch (const std::exception&) {
@@ -883,8 +882,6 @@ TxError bsv::CTxValidator::VerifySpend(
             throw std::runtime_error("error serializing transaction");
 
         const CTransaction tx(std::move(mutableTx));
-        if (token.IsCanceled())
-            return bsv::TxErrorCancelled();
         if (inputIndex >= tx.vin.size())
             throw std::runtime_error("input index is out of range");
         if (consensus && utxoHeight == MEMPOOL_HEIGHT)
@@ -896,6 +893,10 @@ TxError bsv::CTxValidator::VerifySpend(
         // One input can run several FORKID checks (multisig, contracts with
         // several CHECKSIGs); they all read these hashes.
         const PrecomputedTransactionData txdata(tx);
+        // Deserialising and building txdata are linear in the transaction size
+        // with no poll inside.
+        if (token.IsCanceled())
+            return bsv::TxErrorCancelled();
         CachingScriptChecker checker(&tx, inputIndex, amount, txdata);
         return bsvVerifyScript(tx.vin[inputIndex].scriptSig, script, consensus, flags, checker, token);
     }
@@ -980,6 +981,9 @@ TxError bsv::CTxValidator::implVerifyScript(
 
     // Hashed once here and shared by every input's FORKID signature checks.
     const PrecomputedTransactionData txdata(ctx);
+    // Building it is linear in the transaction size with no poll inside.
+    if (token.IsCanceled())
+        return bsv::TxErrorCancelled();
 
     const bool useCustomFlags = !customFlags.empty();
     for (size_t index = 0; index < prevUTXO.size(); ++index) {
@@ -1177,11 +1181,12 @@ TxError bsv::CTxValidator::ValidateTransaction(std::span<const uint8_t> extended
 
         const CTransaction ctx(eTX.mtx);
 
-        // Polled here and below between groups of checks. Within a group nothing
-        // polls: deserialising and hashing above, then the transaction-level, prevout
-        // and output checks, then the standardness (polled per input when inputs are
-        // checked), sigop, input-value and fee checks. Each is linear in the
-        // transaction size.
+        // Polled here, below between groups of checks, and in implVerifyScript once
+        // the shared signature-hash data is built. Within a group nothing polls:
+        // deserialising and hashing above, then the transaction-level, prevout and
+        // output checks, then the standardness (polled per input when inputs are
+        // checked), sigop, input-value and fee checks and the shared signature-hash
+        // data. Each is linear in the transaction size.
         if (token.IsCanceled())
             return bsv::TxErrorCancelled();
 
@@ -1216,8 +1221,7 @@ TxError bsv::CTxValidator::ValidateTransaction(std::span<const uint8_t> extended
         if (!consensus) {
             if (auto r = implCheckFee(ctx, eTX.vutxo, utxoHeights, blockHeight);               !bsv::TxErrorIsOk(r)) return r;
         }
-        if (token.IsCanceled())
-            return bsv::TxErrorCancelled();
+        // implVerifyScript polls once it has built the shared signature-hash data.
         return implVerifyScript(ctx, eTX.vutxo, utxoHeights, blockHeight, consensus, {}, token);
     }
     catch (const std::exception&) {
