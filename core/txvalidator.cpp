@@ -350,7 +350,7 @@ std::atomic<size_t> inputPoolCoresCap{ 0 };  // 0: no cap (tests only)
 // threshold is lower, so a tx at the threshold is offered a helper).
 constexpr size_t MIN_INPUTS_PER_PARTICIPANT = 8;
 
-alignas(64) std::atomic<size_t> busyThreads{ 0 };  // own cache line: helpers read it per input
+std::atomic<size_t> busyThreads{ 0 };
 thread_local bool threadIsBusy{ false };
 
 // One transaction's inputs [0, n), shared by its caller and the helpers that join.
