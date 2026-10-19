@@ -1201,16 +1201,20 @@ BOOST_AUTO_TEST_CASE(verify_spend_shares_sighash_precompute_across_checks)
 
 // Script verification must share one PrecomputedTransactionData across the
 // inputs of a tx, as SV Node does. Without it every FORKID signature check
-// re-hashes all outpoints and sequences, so ValidateTransaction grows with the
-// square of the input count: mainnet tx
+// re-hashes all outpoints, sequences and outputs, so ValidateTransaction grows
+// with the square of the input count: mainnet tx
 // 4201a692b7349e7d047274029317460449b1a30f734eb43991c44bf15fa4382a (86,584
 // inputs) took about 26 minutes.
 //
-// The test times the same P2PKH shape at two input counts and bounds the ratio,
-// which cancels out the runner's absolute speed. It measures process CPU time,
-// not wall-clock: validation is single-threaded, and on an oversubscribed
-// runner wall-clock charges the large run for time spent descheduled. Best of
-// 3 per size absorbs the remaining noise (cache and frequency effects).
+// The test times the same P2PKH shape at two sizes and bounds the ratio, which
+// cancels out the runner's absolute speed. Inputs and outputs grow together,
+// so re-hashing any one of the three aggregates per input shows up. It
+// measures process CPU time with std::clock(), which is CPU time on Linux and
+// macOS, the only CI hosts today; MSVC's std::clock() is wall-clock, so this
+// rationale does not hold on Windows. Validation is single-threaded, and on an
+// oversubscribed runner wall-clock charges the large run for time spent
+// descheduled. Best of 3 per size absorbs the remaining noise (cache and
+// frequency effects).
 BOOST_AUTO_TEST_CASE(validate_transaction_scales_linearly_with_input_count)
 {
     constexpr size_t SMALL_N = 1000;
@@ -1224,7 +1228,7 @@ BOOST_AUTO_TEST_CASE(validate_transaction_scales_linearly_with_input_count)
     const auto bestTimeMs = [&](size_t nInputs) {
         const std::vector<SigHashType> types(nInputs, allForkId);
         const auto etxBin = SerializeExtended(
-            MakeSignedP2PKHSpend(types, /*nOutputs=*/1, /*precomputeForSigning=*/true));
+            MakeSignedP2PKHSpend(types, /*nOutputs=*/nInputs, /*precomputeForSigning=*/true));
         double best = std::numeric_limits<double>::max();
         for (int run = 0; run < RUNS; ++run) {
             const std::clock_t c0 = std::clock();
