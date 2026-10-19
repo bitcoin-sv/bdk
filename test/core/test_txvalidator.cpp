@@ -20,6 +20,17 @@
 #include <boost/test/unit_test.hpp>
 #include <boost/algorithm/hex.hpp>
 
+// GetProcessTimes, for ProcessCpuSeconds() below.
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#endif
+
 #include "streams.h"
 #include "version.h"
 #include "key.h"
@@ -1196,34 +1207,30 @@ BOOST_AUTO_TEST_CASE(non_forkid_signatures_validate_before_uahf_only)
 
 // Timing tests. Both are disabled by default and carry the `timing` label;
 // ctest runs them as their own entry (`--run_test=@timing`, see
-// test/core/CMakeLists.txt). They time CPU work, so in a non-optimised build
-// (no NDEBUG) they skip: debug code changes the ratios they bound.
-#ifdef _WIN32
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <windows.h>
-#endif
-
+// test/core/CMakeLists.txt). They time CPU work in small samples, so they
+// skip in a non-optimised build (no NDEBUG), where debug code changes the
+// ratios they bound, and on Windows, where GetProcessTimes ticks every
+// ~15.6 ms and a sample of a few milliseconds is quantisation noise.
 static boost::test_tools::assertion_result OptimisedBuild(boost::unit_test::test_unit_id)
 {
-#ifdef NDEBUG
-    return true;
-#else
+#if defined(_WIN32)
+    boost::test_tools::assertion_result skip(false);
+    skip.message() << "timing test skipped: Windows process CPU time is too coarse for these samples";
+    return skip;
+#elif !defined(NDEBUG)
     boost::test_tools::assertion_result skip(false);
     skip.message() << "timing test skipped: not an optimised (NDEBUG) build";
     return skip;
+#else
+    return true;
 #endif
 }
 
 // CPU time of the whole process, every thread, user plus kernel, in seconds.
 // Process, not thread, time: work moved to helper threads must still count.
 // Wall-clock would charge a test for time spent descheduled on a busy runner.
-// GetProcessTimes ticks coarsely (about 15.6 ms by default) and no CI job runs
-// on Windows today.
+// The Windows branch is correct but the timing tests skip there (see above);
+// no CI job runs on Windows today.
 static double ProcessCpuSeconds()
 {
 #ifdef _WIN32
