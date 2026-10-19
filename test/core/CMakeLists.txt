@@ -197,7 +197,12 @@ bdk_add_unit_test(test_cancellation)
 ## Tests labelled `tsan` also run in the ThreadSanitizer CI job
 ## (.github/workflows/tsan.yaml), which builds bdk_tsan_tests and runs `ctest -L tsan`.
 ## To cover another test there: give it the label and add its target here.
-set_tests_properties(test_cancellation PROPERTIES LABELS tsan)
+## bdk_add_unit_test names the test test_cancellationd in a single-config Debug build.
+foreach(_t test_cancellation test_cancellationd)
+  if(TEST ${_t})
+    set_tests_properties(${_t} PROPERTIES LABELS tsan)
+  endif()
+endforeach()
 add_custom_target(bdk_tsan_tests)
 add_dependencies(bdk_tsan_tests test_cancellation)
 
