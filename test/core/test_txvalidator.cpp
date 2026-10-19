@@ -840,11 +840,13 @@ static CScript MakeP2PKHScript(const CPubKey& pubkey)
 // precomputeForSigning only changes how the signer reaches the sighash: without
 // it every input is signed through SignatureHash with no shared data, which is
 // independent of the precompute the validator uses; with it signing a large tx
-// stays linear.
+// stays linear. forkIdDigest is SignatureHash's enabledSighashForkid: false
+// signs a FORKID-bit type over the original digest, as before the UAHF fork.
 static bsv::CMutableTransactionExtended MakeSignedP2PKHSpend(
     const std::vector<SigHashType>& sigHashTypes,
     size_t nOutputs,
-    bool precomputeForSigning = false)
+    bool precomputeForSigning = false,
+    bool forkIdDigest = true)
 {
     const CKey key = MakeP2PKHTestKey();
     const CPubKey pubkey = key.GetPubKey();
@@ -879,7 +881,7 @@ static bsv::CMutableTransactionExtended MakeSignedP2PKHSpend(
 
     for (size_t i = 0; i < sigHashTypes.size(); ++i) {
         const uint256 sighash = SignatureHash(lockingScript, unsignedTx, static_cast<unsigned int>(i),
-            sigHashTypes[i], inputAmount, txdata ? &*txdata : nullptr);
+            sigHashTypes[i], inputAmount, txdata ? &*txdata : nullptr, forkIdDigest);
         std::vector<uint8_t> sig;
         BOOST_REQUIRE(key.Sign(sighash, sig));
         sig.push_back(static_cast<uint8_t>(sigHashTypes[i].getRawSigHashType()));
@@ -1107,12 +1109,14 @@ BOOST_AUTO_TEST_CASE(multisig_input_with_corrupted_signature_fails)
 }
 
 // The precompute only feeds BIP143. Signatures that go to
-// SignatureHashOriginal must validate exactly as before: FORKID|CHRONICLE
-// (allowed from Chronicle on, beside BIP143 inputs in the same tx), and plain
-// non-FORKID, which is only valid in consensus mode before the UAHF fork. From
-// the fork on every signature must carry FORKID (SCRIPT_ERR_MUST_USE_FORKID,
-// after Chronicle too), policy flags always require it, and before the fork
-// FORKID is illegal, so no tx validly mixes the two.
+// SignatureHashOriginal must validate exactly as before. Three routes lead
+// there: FORKID|CHRONICLE (allowed from Chronicle on, beside BIP143 inputs in
+// the same tx); no FORKID bit, which is only valid in consensus mode before the
+// UAHF fork; and, also before the fork, a FORKID bit while consensus flags
+// carry neither SCRIPT_ENABLE_SIGHASH_FORKID nor STRICTENC, so the bit is
+// legal but the digest is the original one. From the fork on every signature
+// must carry FORKID and use BIP143 (SCRIPT_ERR_MUST_USE_FORKID, after
+// Chronicle too), and policy flags always require it.
 constexpr int32_t POST_CHRONICLE_BLOCK_HEIGHT = 950000;  // mainnet Chronicle: 943,816
 constexpr int32_t POST_CHRONICLE_UTXO_HEIGHT = 949999;
 constexpr int32_t PRE_UAHF_BLOCK_HEIGHT = 470000;  // mainnet UAHF: 478,558
@@ -1203,6 +1207,39 @@ BOOST_AUTO_TEST_CASE(non_forkid_signatures_validate_before_uahf_only)
     BOOST_CHECK_MESSAGE(bad.domain == static_cast<int32_t>(TX_ERR_DOMAIN_SCRIPT)
         && bad.code == static_cast<int32_t>(SCRIPT_ERR_EVAL_FALSE),
         "pre-UAHF consensus, corrupted: domain=" << bad.domain << " code=" << bad.code);
+}
+
+// Before the UAHF fork, in consensus mode, a FORKID-bit signature is checked
+// over the original digest. Mixed with plain non-FORKID inputs, the tx
+// validates when every input is signed over the original digest, and fails
+// when the FORKID-bit inputs are signed over BIP143 instead. Policy flags
+// require FORKID and BIP143, so the original-digest tx fails there.
+BOOST_AUTO_TEST_CASE(forkid_bit_uses_original_digest_before_uahf)
+{
+    const bsv::CTxValidator se("main");
+    const std::vector<SigHashType> types{
+        SigHashType(),                                                                   // 0x01
+        SigHashType().withForkId(),                                                      // 0x41
+        SigHashType().withBaseType(BaseSigHashType::SINGLE).withForkId().withAnyoneCanPay(), // 0xc3
+        SigHashType().withBaseType(BaseSigHashType::NONE).withForkId(),                  // 0x42
+    };
+
+    const auto original = MakeSignedP2PKHSpend(types, /*nOutputs=*/types.size(),
+        /*precomputeForSigning=*/false, /*forkIdDigest=*/false);
+    const auto ok = ValidateAtHeights(se, original, PRE_UAHF_UTXO_HEIGHT, PRE_UAHF_BLOCK_HEIGHT, /*consensus=*/true);
+    BOOST_CHECK_MESSAGE(bsv::TxErrorIsOk(ok),
+        "original digest, pre-UAHF consensus: domain=" << ok.domain << " code=" << ok.code);
+
+    const auto policy = ValidateAtHeights(se, original, PRE_UAHF_UTXO_HEIGHT, PRE_UAHF_BLOCK_HEIGHT, /*consensus=*/false);
+    BOOST_CHECK_MESSAGE(policy.domain == static_cast<int32_t>(TX_ERR_DOMAIN_SCRIPT)
+        && policy.code == static_cast<int32_t>(SCRIPT_ERR_MUST_USE_FORKID),
+        "original digest, pre-UAHF policy: domain=" << policy.domain << " code=" << policy.code);
+
+    const auto bip143 = MakeSignedP2PKHSpend(types, /*nOutputs=*/types.size());
+    const auto bad = ValidateAtHeights(se, bip143, PRE_UAHF_UTXO_HEIGHT, PRE_UAHF_BLOCK_HEIGHT, /*consensus=*/true);
+    BOOST_CHECK_MESSAGE(bad.domain == static_cast<int32_t>(TX_ERR_DOMAIN_SCRIPT)
+        && bad.code == static_cast<int32_t>(SCRIPT_ERR_EVAL_FALSE),
+        "BIP143 digest, pre-UAHF consensus: domain=" << bad.domain << " code=" << bad.code);
 }
 
 // Timing tests. Both are disabled by default and carry the `timing` label;
