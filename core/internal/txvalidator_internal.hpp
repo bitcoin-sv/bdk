@@ -67,6 +67,11 @@ enum class InputEvent { Claimed, Failed };
 using InputHook = void (*)(size_t index, InputEvent event);
 InputHook SetInputHookForTesting(InputHook hook);
 
+// Called by a helper after it releases its core and before it checks the
+// queue again, outside the pool mutex. Returns the previous hook. Tests only.
+using HelperReleasedCoreHook = void (*)();
+HelperReleasedCoreHook SetHelperReleasedCoreHookForTesting(HelperReleasedCoreHook hook);
+
 // Caps the cores the input pool sizes itself to (0: no cap) and returns the
 // previous cap. Takes effect only when set before the pool is created, so a
 // test binary sets it at start-up to reproduce a CI-sized pool on a bigger

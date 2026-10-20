@@ -186,6 +186,11 @@ bdk_add_unit_test(test_txvalidator)
 ## on a pool of at most 4 cores (CI-sized, on any machine)
 add_test(NAME test_txvalidator_parallel_inputs
          COMMAND $<TARGET_FILE:test_txvalidator> --report_level=detailed -- --parallel-input-threshold=2 --input-pool-cores=4)
+## Keep the helper hand-off regression cheap to repeat, including on 3-core CI.
+add_test(NAME test_txvalidator_helper_release
+         COMMAND $<TARGET_FILE:test_txvalidator> --report_level=detailed
+                 --run_test=test_txvalidator/parallel_input_verification/leaving_helper_wakes_another_for_a_queued_job
+                 -- --input-pool-cores=3)
 ## A hang in the input pool fails the run instead of waiting for the CI job timeout
 get_directory_property(_bdk_core_tests TESTS)
 foreach(_t IN LISTS _bdk_core_tests)

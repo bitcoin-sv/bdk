@@ -2671,6 +2671,114 @@ BOOST_AUTO_TEST_CASE(freeing_one_core_wakes_a_parked_helper, PARALLEL_TEST_CASE_
     BOOST_CHECK_MESSAGE(resumed, "no helper took the freed core within 2 s (busy " << busy() << ")");
 }
 
+// Holds both callers in their inputs and the first helper after it releases
+// its core. Only another helper can then claim the queued job's remaining input.
+class HelperReleaseOrder {
+public:
+    HelperReleaseOrder()
+    {
+        firstCallerClaimed = secondCallerClaimed = firstHelperClaimed = false;
+        firstHelperReleased = queuedHelperClaimed = releaseFirstHelper = releaseAll = false;
+        previousInput = bsv::detail::SetInputHookForTesting(&OnInput);
+        previousRelease = bsv::detail::SetHelperReleasedCoreHookForTesting(&OnRelease);
+    }
+    ~HelperReleaseOrder()
+    {
+        releaseFirstHelper = releaseAll = true;
+        bsv::detail::SetInputHookForTesting(previousInput);
+        bsv::detail::SetHelperReleasedCoreHookForTesting(previousRelease);
+    }
+    HelperReleaseOrder(const HelperReleaseOrder&) = delete;
+    HelperReleaseOrder& operator=(const HelperReleaseOrder&) = delete;
+
+    static inline thread_local unsigned caller = 0;
+    static inline std::atomic<bool> firstCallerClaimed{ false }, secondCallerClaimed{ false };
+    static inline std::atomic<bool> firstHelperClaimed{ false }, firstHelperReleased{ false };
+    static inline std::atomic<bool> queuedHelperClaimed{ false }, releaseFirstHelper{ false }, releaseAll{ false };
+
+private:
+    static void OnInput(size_t, bsv::detail::InputEvent event)
+    {
+        if (event != bsv::detail::InputEvent::Claimed)
+            return;
+        if (caller == 1)
+            firstCallerClaimed = true;
+        else if (caller == 2)
+            secondCallerClaimed = true;
+        else if (!firstHelperClaimed.exchange(true)) {
+            firstHelper = true;
+            WaitFor([] { return releaseFirstHelper.load(); }, std::chrono::milliseconds(20000));
+            return;
+        } else
+            queuedHelperClaimed = true;
+        WaitFor([] { return releaseAll.load(); }, std::chrono::milliseconds(20000));
+    }
+
+    static void OnRelease()
+    {
+        if (!firstHelper)
+            return;
+        firstHelper = false;
+        firstHelperReleased = true;
+        WaitFor([] { return releaseAll.load(); }, std::chrono::milliseconds(20000));
+    }
+
+    static inline thread_local bool firstHelper = false;
+    bsv::detail::InputHook previousInput = nullptr;
+    bsv::detail::HelperReleasedCoreHook previousRelease = nullptr;
+};
+
+BOOST_AUTO_TEST_CASE(leaving_helper_wakes_another_for_a_queued_job, PARALLEL_TEST_CASE_DECORATORS)
+{
+    const size_t helpers = bsv::detail::InputPoolHelperCountForTesting();
+    if (helpers < 2) {
+        BOOST_TEST_MESSAGE("needs at least two helpers; nothing to check");
+        return;
+    }
+    const bsv::CTxValidator se("main");
+    const auto etxBin = SignedP2PKHBin(2);
+    const InputThresholdGuard parallel(FORCE_PARALLEL);
+    BOOST_REQUIRE(PoolIsIdle());
+    const HelperReleaseOrder order;
+    // Leave room for two callers and one helper, filling the core budget
+    // when the second caller queues its job without waking any helper.
+    bsv::detail::ScopedBusyThreadsForTesting extra(helpers - 2);
+    TxError firstStatus = bsv::TxErrorOk(), secondStatus = bsv::TxErrorOk();
+    std::thread first([&] {
+        HelperReleaseOrder::caller = 1;
+        firstStatus = ValidateP2PKHSpend(se, etxBin, 2, /*consensus=*/true);
+    });
+    const bool joined = WaitFor([] {
+        return HelperReleaseOrder::firstCallerClaimed && HelperReleaseOrder::firstHelperClaimed;
+    });
+    std::thread second([&] {
+        HelperReleaseOrder::caller = 2;
+        secondStatus = ValidateP2PKHSpend(se, etxBin, 2, /*consensus=*/true);
+    });
+    const bool queued = WaitFor([] { return HelperReleaseOrder::secondCallerClaimed.load(); });
+    const size_t busyBefore = bsv::detail::BusyThreadCountForTesting();
+    const bool helpedBeforeRelease = HelperReleaseOrder::queuedHelperClaimed;
+    HelperReleaseOrder::releaseFirstHelper = true;
+    const bool released = WaitFor([] { return HelperReleaseOrder::firstHelperReleased.load(); });
+    const bool woke = WaitFor([] { return HelperReleaseOrder::queuedHelperClaimed.load(); });
+    // Unblock and join before asserting, including on the missing-wakeup path.
+    HelperReleaseOrder::releaseAll = true;
+    first.join();
+    second.join();
+    extra.Release();
+
+    BOOST_REQUIRE_MESSAGE(joined, "the first job did not hold its caller and helper");
+    BOOST_REQUIRE_MESSAGE(queued, "the second caller did not queue its job");
+    BOOST_CHECK_EQUAL(busyBefore, helpers + 1);
+    BOOST_CHECK(!helpedBeforeRelease);
+    BOOST_REQUIRE_MESSAGE(released, "the first helper did not release its core");
+    BOOST_CHECK_MESSAGE(woke, "no other helper woke for the queued job after a helper released its core");
+    BOOST_CHECK(bsv::TxErrorIsOk(firstStatus));
+    BOOST_CHECK(bsv::TxErrorIsOk(secondStatus));
+    BOOST_CHECK(PoolIsIdle());
+    BOOST_CHECK_EQUAL(bsv::detail::QueuedJobCountForTesting(), 0u);
+}
+
 // A helper keeps working while the busy count equals the core count, its
 // own core included: only a count above the core count sends it away. One
 // helper works a job of slow inputs (40 ms each, SlowInputs); the count is

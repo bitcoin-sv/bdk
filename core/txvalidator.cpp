@@ -358,6 +358,7 @@ std::atomic<uint64_t> jobVerifiedInputs{ 0 };  // caller and helpers, inside job
 std::atomic<uint64_t> helperJobParticipations{ 0 };  // helper Work() calls that verified an input
 std::atomic<uint64_t> helperWakesWithoutCore{ 0 };
 std::atomic<bsv::detail::InputHook> inputHook{ nullptr };  // tests only
+std::atomic<bsv::detail::HelperReleasedCoreHook> helperReleasedCoreHook{ nullptr };  // tests only
 std::atomic<size_t> inputPoolCoresCap{ 0 };  // 0: no cap (tests only)
 std::atomic<int64_t> parallelInputHelpers{ -1 };  // SetParallelInputHelpers; < 0: automatic
 
@@ -565,7 +566,7 @@ public:
 
     // A busy thread left, leaving `busyAfter` busy: a helper over budget may
     // now join. Nothing to do while the count is still at or above the core
-    // count; the decrement that takes it below does the check. The caller's
+    // count; the decrement that takes it below does the check. The leaving thread's
     // seq_cst decrement of busyThreads and this seq_cst load pair with Offer's
     // increment of openJobs_ and the helper's load of busyThreads, so either
     // this sees the job or the helper sees the freed core.
@@ -712,7 +713,10 @@ private:
             job.reset();
             if (!terms.placeReturned)
                 helpersOnJobs_.fetch_sub(1, std::memory_order_relaxed);
-            busyThreads.fetch_sub(1, std::memory_order_seq_cst);
+            const size_t busyAfter = busyThreads.fetch_sub(1, std::memory_order_seq_cst) - 1;
+            ReleasedCore(busyAfter);
+            if (const auto hook = helperReleasedCoreHook.load(std::memory_order_relaxed))
+                hook();
         }
     }
 
@@ -815,6 +819,11 @@ uint64_t bsv::detail::HelperJobParticipationCountForTesting()
 bsv::detail::InputHook bsv::detail::SetInputHookForTesting(InputHook hook)
 {
     return inputHook.exchange(hook);
+}
+
+bsv::detail::HelperReleasedCoreHook bsv::detail::SetHelperReleasedCoreHookForTesting(HelperReleasedCoreHook hook)
+{
+    return helperReleasedCoreHook.exchange(hook);
 }
 
 uint64_t bsv::detail::JobVerifiedInputCountForTesting()
