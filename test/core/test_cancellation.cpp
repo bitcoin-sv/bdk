@@ -18,6 +18,10 @@
 
 #include <boost/test/unit_test.hpp>
 
+#if defined(_MSC_VER) && !defined(__clang__)
+#include <intrin.h>
+#endif
+
 #include "chainparamsbase.h"
 #include "primitives/transaction.h"
 #include "hash.h"
@@ -53,6 +57,16 @@ task::CCancellationToken CancelledToken()
     auto source = task::CCancellationSource::Make();
     source->Cancel();
     return source->GetToken();
+}
+
+// Sets a cancel flag the way a binding does: an atomic store from another thread.
+void StoreFlagRelaxed(int32_t* flag, int32_t value)
+{
+#if defined(_MSC_VER) && !defined(__clang__)
+    __iso_volatile_store32(reinterpret_cast<volatile __int32*>(flag), value);
+#else
+    __atomic_store_n(flag, value, __ATOMIC_RELAXED);
+#endif
 }
 
 bool IsCancelled(const TxError& r)
@@ -726,7 +740,7 @@ BOOST_AUTO_TEST_CASE(flag_token_cancels_when_the_flag_is_set_from_another_thread
     alignas(4) int32_t flag = 0;
     std::thread canceller([&] {
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        std::atomic_ref<int32_t>(flag).store(1, std::memory_order_relaxed);
+        StoreFlagRelaxed(&flag, 1);
     });
     const auto started = std::chrono::steady_clock::now();
     const TxError result = validator.ValidateTransaction(etx, kLongUtxoHeights, kLongBlockHeight, true, bsv::MakeFlagCancellationToken(&flag));
