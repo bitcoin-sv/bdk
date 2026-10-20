@@ -324,6 +324,11 @@ private:
  * EffectiveCpuCount(): on Linux it respects the affinity mask and a
  * container's cgroup CPU limit, rounded as Go sets GOMAXPROCS.
  *
+ * Helper limit: SetParallelInputHelpers caps the helpers on jobs at once,
+ * process-wide. A helper takes a place under the limit before it takes a
+ * core, whichever wake brought it, and gives it back when it leaves the job.
+ * A limit of 0 never creates the pool.
+ *
  * Cancellation: the cancellation token is read on whichever thread verifies
  * an input, so a token must not depend on the calling thread (a thread CPU
  * clock budget would measure a helper's clock against the caller's start).
@@ -349,6 +354,7 @@ std::atomic<uint64_t> jobVerifiedInputs{ 0 };  // caller and helpers, inside job
 std::atomic<uint64_t> helperJobParticipations{ 0 };  // helper Work() calls that verified an input
 std::atomic<bsv::detail::InputHook> inputHook{ nullptr };  // tests only
 std::atomic<size_t> inputPoolCoresCap{ 0 };  // 0: no cap (tests only)
+std::atomic<int64_t> parallelInputHelpers{ -1 };  // SetParallelInputHelpers; < 0: automatic
 
 #if BDK_PARALLEL_INPUTS
 
@@ -358,6 +364,15 @@ constexpr size_t MIN_INPUTS_PER_PARTICIPANT = 8;
 
 std::atomic<size_t> busyThreads{ 0 };
 thread_local bool threadIsBusy{ false };
+
+// The most helpers that may be on jobs at once, from SetParallelInputHelpers.
+size_t HelperLimit()
+{
+    const int64_t helpers = parallelInputHelpers.load(std::memory_order_relaxed);
+    if (helpers < 0)
+        return std::numeric_limits<size_t>::max();
+    return static_cast<size_t>(std::min<uint64_t>(static_cast<uint64_t>(helpers), std::numeric_limits<size_t>::max()));
+}
 
 // One transaction's inputs [0, n), shared by its caller and the helpers that join.
 class InputJob {
@@ -483,11 +498,15 @@ public:
 
     size_t Helpers() const { return helpers_; }
 
-    // Helpers that could join a job now: idle cores under the global budget.
-    size_t AvailableHelpers() const
+    // Helpers that could join a job now: idle cores under the global budget,
+    // and free places under the helper limit.
+    size_t AvailableHelpers(size_t limit) const
     {
         const size_t busy = busyThreads.load(std::memory_order_seq_cst);
-        return busy >= cores_ ? 0 : std::min(helpers_, cores_ - busy);
+        const size_t onJobs = helpersOnJobs_.load(std::memory_order_relaxed);
+        if (busy >= cores_ || onJobs >= limit)
+            return 0;
+        return std::min({ helpers_, cores_ - busy, limit - onJobs });
     }
 
     void Offer(const std::shared_ptr<InputJob>& job, size_t helpers)
@@ -600,6 +619,18 @@ private:
     }
 #endif
 
+    // A place under the helper limit, held while this helper is on a job.
+    bool TryTakeHelperPlace()
+    {
+        const size_t limit = HelperLimit();
+        size_t onJobs = helpersOnJobs_.load(std::memory_order_relaxed);
+        while (onJobs < limit) {
+            if (helpersOnJobs_.compare_exchange_weak(onJobs, onJobs + 1, std::memory_order_relaxed))
+                return true;
+        }
+        return false;
+    }
+
     static bool TryTakeCore(size_t cores)
     {
         size_t busy = busyThreads.load(std::memory_order_seq_cst);
@@ -629,8 +660,11 @@ private:
                 std::unique_lock lock{ mutex_ };
                 wake_.wait(lock, [&] {
                     job = NextJob();
-                    if (job && TryTakeCore(cores_))
-                        return true;
+                    if (job && TryTakeHelperPlace()) {
+                        if (TryTakeCore(cores_))
+                            return true;
+                        helpersOnJobs_.fetch_sub(1, std::memory_order_relaxed);
+                    }
                     job.reset();  // don't keep a finished job alive while asleep
                     return false;
                 });
@@ -646,6 +680,7 @@ private:
                 job->Leave();
             }
             job.reset();
+            helpersOnJobs_.fetch_sub(1, std::memory_order_relaxed);
             busyThreads.fetch_sub(1, std::memory_order_seq_cst);
         }
     }
@@ -656,6 +691,7 @@ private:
     std::condition_variable wake_;
     std::deque<std::shared_ptr<InputJob>> jobs_;
     std::atomic<size_t> openJobs_{ 0 };
+    std::atomic<size_t> helpersOnJobs_{ 0 };  // helpers holding a place under HelperLimit()
 
     static inline std::atomic<InputVerifyPool*> created_{ nullptr };
 };
@@ -709,6 +745,16 @@ private:
 #endif // BDK_PARALLEL_INPUTS
 
 } // anonymous namespace
+
+void bsv::SetParallelInputHelpers(int64_t helpers)
+{
+    parallelInputHelpers.store(helpers < 0 ? -1 : helpers, std::memory_order_relaxed);
+}
+
+int64_t bsv::GetParallelInputHelpers()
+{
+    return parallelInputHelpers.load(std::memory_order_relaxed);
+}
 
 size_t bsv::detail::SetParallelInputThresholdForTesting(size_t minInputs)
 {
@@ -1478,13 +1524,15 @@ TxError bsv::CTxValidator::implVerifyScript(
 #if BDK_PARALLEL_INPUTS
     const BusyScope busy;
     const size_t threshold = parallelInputThreshold.load(std::memory_order_relaxed);
-    if (nInputs >= threshold) {
+    // A limit of 0 never creates the pool, so no helper thread is started.
+    const size_t helperLimit = nInputs >= threshold ? HelperLimit() : 0;
+    if (helperLimit > 0) {
         if (InputVerifyPool* pool = InputVerifyPool::Get()) {
             // A tx at the threshold is offered at least one helper when a core is free.
             const size_t perParticipant = std::clamp<size_t>(threshold / 2, 1, MIN_INPUTS_PER_PARTICIPANT);
             const size_t participants = (nInputs + perParticipant - 1) / perParticipant;
             // With every core already busy the tx runs serially, waking no one.
-            const size_t helpers = std::min(pool->AvailableHelpers(), participants - 1);
+            const size_t helpers = std::min(pool->AvailableHelpers(helperLimit), participants - 1);
             std::shared_ptr<InputJob> job;
             if (helpers > 0) {
                 try {

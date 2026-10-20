@@ -392,6 +392,29 @@ class CTxValidator {
 // export the value of SCRIPT_ERR_ERROR_COUNT
 int CPP_SCRIPT_ERR_ERROR_COUNT();
 
+// The most helper threads that verify a large transaction's inputs alongside
+// its caller at any one time, process-wide (VerifyScript, ValidateTransaction
+// and ValidateBatch split a transaction with 16 or more inputs across the
+// caller and idle helpers).
+//   helpers < 0  automatic, the default: up to one helper per CPU this process
+//                may use, minus one (on Linux, the affinity mask and the
+//                container's cgroup CPU limit)
+//   helpers == 0 no helpers: every transaction is verified on its caller's
+//                thread, and no helper thread is ever started
+//   helpers > 0  at most `helpers` helpers, and never more than automatic
+// Helpers only ever take cores that BDK's own threads leave idle; this limit
+// also leaves room for other work in the process, such as Go code calling
+// BDK. Results are the same at every setting. Safe to call at any time from
+// any thread: helpers already verifying an input finish it, and from then on
+// no more than the new limit verify at once. Without thread support (WASM)
+// the setting is kept but has no effect: every transaction is verified on its
+// caller.
+void SetParallelInputHelpers(int64_t helpers);
+
+// The setting last passed to SetParallelInputHelpers, with every negative
+// value read back as -1 (automatic); -1 until it is first set.
+int64_t GetParallelInputHelpers();
+
 } // namespace bsv
 
 #endif /* __TXVALIDATOR_HPP__ */
