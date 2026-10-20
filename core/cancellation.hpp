@@ -1,5 +1,4 @@
-#ifndef __CANCELLATION_HPP__
-#define __CANCELLATION_HPP__
+#pragma once
 
 #include <cstdint>
 
@@ -23,5 +22,3 @@ namespace bsv
 task::CCancellationToken MakeFlagCancellationToken(const int32_t* flag);
 
 } // namespace bsv
-
-#endif /* __CANCELLATION_HPP__ */
