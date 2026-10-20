@@ -123,19 +123,16 @@ if(UNIX)
         list(APPEND listArchive ${buildFile})
     endforeach()
 
+    set(extractCommands)
     foreach(archive IN LISTS listArchive)
         get_filename_component(archiveName ${archive} NAME_WE)
         set(objDir "${buildDir}/merge_bdkffi/${archiveName}")
-        file(MAKE_DIRECTORY "${objDir}")
-
         ## Start from an empty directory: objects left from an earlier build would
         ## otherwise be merged too, alongside the ones that replaced them
-        add_custom_command(TARGET static-bdkffi POST_BUILD
+        list(APPEND extractCommands
             COMMAND ${CMAKE_COMMAND} -E rm -rf "${objDir}"
             COMMAND ${CMAKE_COMMAND} -E make_directory "${objDir}"
-            COMMAND ${CMAKE_COMMAND} -E chdir "${objDir}" ${CMAKE_AR} x ${archive}
-            WORKING_DIRECTORY "${buildDir}/merge_bdkffi"
-            COMMENT "Extract object files from [${archive}]")
+            COMMAND ${CMAKE_COMMAND} -E chdir "${objDir}" ${CMAKE_AR} x ${archive})
     endforeach()
 
     if(DEFINED CUSTOM_BDKFFI_OS_ARCH)
@@ -160,6 +157,7 @@ if(UNIX)
     # not relied on anywhere (the refresh bot gates on a source hash and the archive
     # is never committed), so plain 'rcs' is both portable and sufficient.
     add_custom_target(MergeBDKFFI ALL
+        ${extractCommands}
         COMMAND ${CMAKE_COMMAND} -E rm -f "${mergedArchive}"
         COMMAND ${CMAKE_AR} rcs "${mergedArchive}" "${buildDir}/merge_bdkffi/*/*.o"
         DEPENDS static-bdkffi
