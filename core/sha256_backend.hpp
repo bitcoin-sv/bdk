@@ -1,5 +1,4 @@
-#ifndef __SHA256_BACKEND_HPP__
-#define __SHA256_BACKEND_HPP__
+#pragma once
 
 #include <string>
 #include <vector>
@@ -56,5 +55,3 @@ const std::vector<Sha256Backend>& Sha256SupportedBackends();
 const std::string& SelectSha256Backend();
 
 } // namespace bsv
-
-#endif /* __SHA256_BACKEND_HPP__ */

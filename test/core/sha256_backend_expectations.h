@@ -1,5 +1,4 @@
-#ifndef __SHA256_BACKEND_EXPECTATIONS_H__
-#define __SHA256_BACKEND_EXPECTATIONS_H__
+#pragma once
 
 // What the SHA-256 backend selection should produce on this machine, for the
 // test suites. Include after <boost/test/unit_test.hpp>.
@@ -110,5 +109,3 @@ namespace sha256_test
         }
     }
 }
-
-#endif /* __SHA256_BACKEND_EXPECTATIONS_H__ */
