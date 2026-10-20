@@ -34,41 +34,26 @@ bdk_add_core_library(bdk_core
 
 ## Hardware SHA-256, native core only (the wasm variant stays scalar).
 ## sha256_dispatch.cpp defines sha256_dispatch::AutoDetect(), declared in the
-## installed crypto/sha256_dispatch.h. bsv::SelectSha256Backend() (sha256_backend.cpp)
-## picks the transforms at run time; nothing is built with -march=native, only
-## the files holding the intrinsics get the ISA flags they need.
+## installed crypto/sha256_dispatch.h. The x86-64 sources below are built for
+## every target: each guards itself with the compiler's own target macros, so
+## a macOS universal, Rosetta or cross build gets them in the x86-64 code only.
+## No file gets instruction-set flags: core/sha256_x86_shani.cpp (SV's
+## sha256d64_shani.cpp) and core/sha256_arm_shani_target.cpp enable SHA-NI and
+## the ARMv8 SHA-2 instructions with target pragmas around the included code.
+## bsv::SelectSha256Backend() (sha256_backend.cpp) picks at run time.
 ## The source properties are directory-scoped, so they never reach the wasm
 ## variant, which builds the same core/ files from its own directory.
 set(_bsv_crypto_dir "${BDK_BSV_ROOT_DIR}/src/crypto")
-target_sources(bdk_core PRIVATE "${_bsv_crypto_dir}/sha256_dispatch.cpp")
-if(CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$" AND NOT MSVC)
-  ## SV Node's SSE4 (GCC inline asm) and SHA-NI transforms, as SV's src/crypto/CMakeLists.txt builds them
-  target_sources(bdk_core PRIVATE
-    "${_bsv_crypto_dir}/sha256_sse4.cpp"
-    "${_bsv_crypto_dir}/sha256_sse4_shim.cpp"
-    "${_bsv_crypto_dir}/sha256_shani_shim.cpp"
-    "${_bsv_crypto_dir}/sha256d64_shani_shim.cpp"
-    "${_bsv_crypto_dir}/sha256d64_shani.cpp")
-  ## -Wno-cast-align: upstream's (__m128i*) casts on byte buffers, kept verbatim
-  set_source_files_properties("${_bsv_crypto_dir}/sha256d64_shani.cpp" PROPERTIES
-    COMPILE_OPTIONS "-msha;-msse4.1;-mssse3;-Wno-cast-align"
-    COMPILE_DEFINITIONS "ENABLE_X86_SHANI"
-    SKIP_LINTING TRUE)
-  ## SV defines USE_ASM per target rather than in bitcoin-config.h; without it
-  ## AutoDetect() silently skips SSE4
-  set_source_files_properties("${_bsv_crypto_dir}/sha256_dispatch.cpp" PROPERTIES
-    COMPILE_DEFINITIONS "USE_ASM")
-  set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/sha256_backend.cpp" PROPERTIES
-    COMPILE_DEFINITIONS "BDK_SHA256_X86_HW")
-elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64|ARM64)$" AND NOT MSVC)
-  ## BDK's ARMv8 SHA-2 backend, vendored from Bitcoin Core
-  set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/sha256_arm_shani.cpp" PROPERTIES
-    COMPILE_OPTIONS "-march=armv8-a+crypto"
-    COMPILE_DEFINITIONS "ENABLE_ARM_SHANI"
-    SKIP_LINTING TRUE)
-  set_source_files_properties("${CMAKE_CURRENT_SOURCE_DIR}/sha256_backend.cpp" PROPERTIES
-    COMPILE_DEFINITIONS "BDK_SHA256_ARM_HW")
-endif()
+target_sources(bdk_core PRIVATE
+  "${_bsv_crypto_dir}/sha256_dispatch.cpp"
+  "${_bsv_crypto_dir}/sha256_sse4.cpp"
+  "${_bsv_crypto_dir}/sha256_sse4_shim.cpp"
+  "${_bsv_crypto_dir}/sha256_shani_shim.cpp"
+  "${_bsv_crypto_dir}/sha256d64_shani_shim.cpp")
+## SV defines USE_ASM per target rather than in bitcoin-config.h; without it
+## AutoDetect() silently skips SSE4. Only read under __x86_64__.
+set_source_files_properties("${_bsv_crypto_dir}/sha256_dispatch.cpp" PROPERTIES
+  COMPILE_DEFINITIONS "USE_ASM")
 
 ## Install the binary library
 if(BDK_INSTALL_CORE_ARCHIVE)

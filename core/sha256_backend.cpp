@@ -9,12 +9,21 @@
 
 #include "crypto/sha256_stream_scalar.h"
 
-// core/CMakeLists.txt defines at most one of these for the native core, never
-// for the wasm variant:
+// Which hardware transforms this target has, from the compiler's own target
+// macros, so a universal, Rosetta or cross build decides per target:
 //   BDK_SHA256_X86_HW : SV Node's SSE4 and SHA-NI transforms and its
-//                       sha256_dispatch::AutoDetect() are built in
-//   BDK_SHA256_ARM_HW : sha256_arm_shani.cpp is built with the ARMv8 SHA-2
-//                       extensions enabled
+//                       sha256_dispatch::AutoDetect() (core/CMakeLists.txt,
+//                       sha256_x86_shani.cpp)
+//   BDK_SHA256_ARM_HW : the ARMv8 SHA-2 transforms (sha256_arm_shani_target.cpp)
+// Neither for the wasm variant or MSVC.
+#if (defined(__GNUC__) || defined(__clang__)) && !defined(__EMSCRIPTEN__)
+#if defined(__x86_64__) || defined(__amd64__)
+#define BDK_SHA256_X86_HW 1
+#elif defined(__aarch64__)
+#define BDK_SHA256_ARM_HW 1
+#endif
+#endif
+
 #if defined(BDK_SHA256_X86_HW)
 #include <cpuid.h>
 #include "crypto/sha256_shani.h"

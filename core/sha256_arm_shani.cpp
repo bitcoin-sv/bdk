@@ -10,10 +10,10 @@
 //
 // Vendored into BDK unchanged from Bitcoin Core v29.0
 // (commit f490f5562d4b20857ef8d042c050763795fd43da, src/crypto/sha256_arm_shani.cpp).
-// core/CMakeLists.txt compiles it with -march=armv8-a+crypto and ENABLE_ARM_SHANI
-// on 64-bit ARM only; everywhere else it is an empty translation unit. The
-// span-typed entry points and the runtime detection live in sha256_backend.cpp,
-// which is compiled without those flags.
+// sha256_arm_shani_target.cpp includes it with ENABLE_ARM_SHANI defined and the
+// SHA-2 target enabled, for 64-bit ARM targets only; compiled on its own it is an
+// empty translation unit. The span-typed entry points and the runtime detection
+// live in sha256_backend.cpp, which is compiled for the default target.
 
 #ifdef ENABLE_ARM_SHANI
 
