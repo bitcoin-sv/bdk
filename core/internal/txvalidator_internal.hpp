@@ -1,5 +1,4 @@
-#ifndef __TXVALIDATOR_INTERNAL_HPP__
-#define __TXVALIDATOR_INTERNAL_HPP__
+#pragma once
 
 // Internal to bdk_core and its tests. Not installed with the core headers
 // (core/bdk-core-recipe.cmake leaves core/internal/ out of the install list)
@@ -135,5 +134,3 @@ size_t LimitCpuCount(size_t cpus, std::optional<double> cgroupLimit);
 size_t EffectiveCpuCount(const std::string& cgroupRoot = "/");
 
 } // namespace bsv::detail
-
-#endif /* __TXVALIDATOR_INTERNAL_HPP__ */
