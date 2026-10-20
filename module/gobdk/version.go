@@ -48,7 +48,7 @@ func BDK_GOLANG_VERSION_STRING() string { return C.GoString(C.BDK_GOLANG_VERSION
 
 // SHA256_BACKEND returns the SHA-256 transforms BDK hashes with on this CPU, e.g.
 // "shani,shani(2way)", "sse4", "arm_shani,arm_shani(2way)" or "standard", and
-// "standard(forced)" when BDK_SHA256_FORCE_SCALAR is set. The first call, or the
-// first TxValidator, makes the selection, so calling it at startup before any
-// validation is safe and reports what validation will use.
+// "standard(forced)" when BDK_SHA256_FORCE_SCALAR is set. BDK selects the backend
+// while the program is loaded, from the environment it starts with; this only
+// reports it.
 func SHA256_BACKEND() string { return C.GoString(C.cgo_sha256_backend()) }

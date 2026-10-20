@@ -84,11 +84,8 @@ pub fn bdk_rust_version_string() -> &'static str {
 
 /// The SHA-256 transforms BDK hashes with on this CPU, e.g. `shani,shani(2way)`,
 /// `sse4`, `arm_shani,arm_shani(2way)` or `standard`, and `standard(forced)` when
-/// `BDK_SHA256_FORCE_SCALAR` is set. The first call, or the first [`TxValidator`],
-/// makes the selection, so calling it at startup before any validation is safe and
-/// reports what validation will use.
-///
-/// [`TxValidator`]: crate::TxValidator
+/// `BDK_SHA256_FORCE_SCALAR` is set. BDK selects the backend while the program is
+/// loaded, from the environment it starts with; this only reports it.
 pub fn sha256_backend() -> &'static str {
     // The C++ selection keeps its string for the life of the process and never frees it
     static_str(bdk_sys::bdkffi_sha256_backend)
