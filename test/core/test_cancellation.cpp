@@ -622,23 +622,45 @@ BOOST_AUTO_TEST_CASE(verify_spend_and_check_standardness_poll_after_deserialisin
     }
 }
 
-// CheckStandardness reads one height per input. A heights span shorter than the
-// inputs is an argument error, reported in the exception domain like the other entry
-// points' size checks, by both overloads; it must not read past the span.
-BOOST_AUTO_TEST_CASE(check_standardness_rejects_too_few_utxo_heights)
+// CheckStandardness takes one UTXO height per input. Any other number, fewer or more,
+// is an argument error, reported in the exception domain like the other entry points'
+// size checks, by both overloads. That holds whether or not the policy reads the
+// heights: pre-Genesis with standardness required (the per-input check reads them,
+// so a short span must not be read past its end), and post-Genesis with the default
+// policy, with standardness required (mainnet) or not (regtest), where they are never
+// read.
+BOOST_AUTO_TEST_CASE(check_standardness_requires_one_utxo_height_per_input)
 {
-    bsv::CTxValidator validator(CBaseChainParams::REGTEST);
-    validator.SetRequireStandard(true);  // pre-Genesis: the per-input check reads the heights
-    const std::vector<uint8_t> tx = PreGenesisTwoP2PKHInputsTx(P2PKHScript());
-    BOOST_REQUIRE(bsv::TxErrorIsOk(validator.CheckStandardness(tx, kPreGenesisUtxoHeights2, 5000)));
+    struct Case {
+        const char* policy;
+        bsv::CTxValidator validator;
+        int32_t blockHeight;
+        int32_t utxoHeight;
+    };
+    bsv::CTxValidator preGenesis(CBaseChainParams::REGTEST);
+    preGenesis.SetRequireStandard(true);
+    const std::vector<Case> cases{
+        { "pre-Genesis, standardness required", preGenesis, 5000, 4000 },
+        { "post-Genesis, mainnet default", bsv::CTxValidator(CBaseChainParams::MAIN), kSimpleBlockHeight, kSimpleUtxoHeights[0] },
+        { "post-Genesis, regtest default (standardness not required)", bsv::CTxValidator(CBaseChainParams::REGTEST), kLongBlockHeight, kLongUtxoHeights[0] },
+    };
+    const std::vector<uint8_t> tx = PreGenesisTwoP2PKHInputsTx(P2PKHScript());  // two inputs
 
-    for (const std::vector<int32_t>& heights : { std::vector<int32_t>{ 4000 }, std::vector<int32_t>{} }) {
-        BOOST_TEST_CONTEXT("heights=" << heights.size()) {
-            BOOST_CHECK_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_EXCEPTION),
-                              validator.CheckStandardness(tx, heights, 5000).domain);
-            const auto token = task::CCancellationSource::Make()->GetToken();
-            BOOST_CHECK_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_EXCEPTION),
-                              validator.CheckStandardness(tx, heights, 5000, token).domain);
+    for (const auto& c : cases) {
+        BOOST_TEST_CONTEXT(c.policy) {
+            const std::vector<int32_t> matching(2, c.utxoHeight);
+            BOOST_REQUIRE(bsv::TxErrorIsOk(c.validator.CheckStandardness(tx, matching, c.blockHeight)));
+
+            for (const size_t count : { size_t{ 0 }, size_t{ 1 }, size_t{ 3 } }) {
+                const std::vector<int32_t> heights(count, c.utxoHeight);
+                BOOST_TEST_CONTEXT("heights=" << count) {
+                    BOOST_CHECK_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_EXCEPTION),
+                                      c.validator.CheckStandardness(tx, heights, c.blockHeight).domain);
+                    const auto token = task::CCancellationSource::Make()->GetToken();
+                    BOOST_CHECK_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_EXCEPTION),
+                                      c.validator.CheckStandardness(tx, heights, c.blockHeight, token).domain);
+                }
+            }
         }
     }
 }
