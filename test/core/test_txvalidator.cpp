@@ -71,6 +71,8 @@ using namespace bsv;
 static size_t shippedParallelInputThreshold = 0;
 // The helper limit the library starts with, read the same way.
 static int64_t shippedParallelInputHelpers = 0;
+// Whether the test-only input counters were on when the library started.
+static bool shippedInputCountersEnabled = true;
 
 struct ParallelInputThresholdFromArgs {
     ParallelInputThresholdFromArgs()
@@ -79,7 +81,7 @@ struct ParallelInputThresholdFromArgs {
         shippedParallelInputHelpers = bsv::GetParallelInputHelpers();
         bsv::detail::SetParallelInputThresholdForTesting(shippedParallelInputThreshold);
         // The pool tests read the test-only input counters; they are off by default.
-        bsv::detail::SetInputCountersEnabledForTesting(true);
+        shippedInputCountersEnabled = bsv::detail::SetInputCountersEnabledForTesting(true);
         const std::string threshold = "--parallel-input-threshold=";
         const std::string cores = "--input-pool-cores=";
         const auto& suite = boost::unit_test::framework::master_test_suite();
@@ -1602,6 +1604,13 @@ BOOST_AUTO_TEST_CASE(shipped_threshold_is_the_default)
     BOOST_CHECK_EQUAL(shippedParallelInputThreshold, bsv::detail::DEFAULT_PARALLEL_INPUT_THRESHOLD);
 }
 
+// The library ships with the test-only input counters off, so production
+// does no per-input write to them.
+BOOST_AUTO_TEST_CASE(input_counters_are_off_by_default)
+{
+    BOOST_CHECK(!shippedInputCountersEnabled);
+}
+
 BOOST_AUTO_TEST_CASE(valid_tx_validates_with_inputs_spread_over_helpers, *boost::unit_test::timeout(PARALLEL_TEST_TIMEOUT_S))
 {
     constexpr size_t nInputs = 200;
@@ -2554,24 +2563,63 @@ BOOST_AUTO_TEST_CASE(every_helper_joins_a_large_job_on_an_idle_pool, PARALLEL_TE
     BOOST_CHECK_MESSAGE(most >= helpers, "at most " << most << " of " << helpers << " helpers verified inputs of one job");
 }
 
-// With every core already counted busy, a large tx runs serially on its
-// caller: no job is created, so no input is verified inside one.
-BOOST_AUTO_TEST_CASE(large_tx_runs_serially_when_every_core_is_busy, PARALLEL_TEST_CASE_DECORATORS)
+// A large tx that starts with every core already counted busy still queues
+// its job, offered to no helper: the caller verifies alone and no helper is
+// woken to find no core. When a core frees while it runs, a helper joins it.
+BOOST_AUTO_TEST_CASE(large_tx_started_with_every_core_busy_takes_a_helper_when_one_frees, PARALLEL_TEST_CASE_DECORATORS)
 {
     const size_t helpers = bsv::detail::InputPoolHelperCountForTesting();
     if (helpers == 0) {
         BOOST_TEST_MESSAGE("no helpers on this machine; nothing to check");
         return;
     }
-    constexpr size_t nInputs = 200;
     const bsv::CTxValidator se("main");
-    const auto etxBin = SignedP2PKHBin(nInputs);
     const InputThresholdGuard defaults(bsv::detail::DEFAULT_PARALLEL_INPUT_THRESHOLD);
     BOOST_REQUIRE(PoolIsIdle());
-    const bsv::detail::ScopedBusyThreadsForTesting everyCore(helpers + 1);
-    const uint64_t before = bsv::detail::JobVerifiedInputCountForTesting();
-    BOOST_CHECK(bsv::TxErrorIsOk(ValidateP2PKHSpend(se, etxBin, nInputs, /*consensus=*/true)));
-    BOOST_CHECK_EQUAL(bsv::detail::JobVerifiedInputCountForTesting() - before, 0u);
+    // A helper that has just left a job re-checks the queue once on its way
+    // back to sleep; let that happen before counting wakes.
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+    {
+        constexpr size_t nInputs = 200;
+        const auto etxBin = SignedP2PKHBin(nInputs);
+        const bsv::detail::ScopedBusyThreadsForTesting everyCore(helpers + 1);
+        const uint64_t jobInputs = bsv::detail::JobVerifiedInputCountForTesting();
+        const uint64_t helperInputs = bsv::detail::HelperVerifiedInputCountForTesting();
+        const uint64_t wakes = bsv::detail::HelperWakesWithoutCoreForTesting();
+        BOOST_CHECK(bsv::TxErrorIsOk(ValidateP2PKHSpend(se, etxBin, nInputs, /*consensus=*/true)));
+        BOOST_CHECK_EQUAL(bsv::detail::JobVerifiedInputCountForTesting() - jobInputs, nInputs);
+        BOOST_CHECK_EQUAL(bsv::detail::HelperVerifiedInputCountForTesting() - helperInputs, 0u);
+        BOOST_CHECK_EQUAL(bsv::detail::HelperWakesWithoutCoreForTesting() - wakes, 0u);
+        BOOST_CHECK_EQUAL(bsv::detail::QueuedJobCountForTesting(), 0u);
+    }
+
+    constexpr size_t nInputs = 32;
+    const auto etxBin = SignedP2PKHBin(nInputs);
+    BOOST_REQUIRE(PoolIsIdle());
+    const SlowInputs slow(std::chrono::milliseconds(20));
+    bsv::detail::ScopedBusyThreadsForTesting everyCore(helpers + 1);
+    const uint64_t helperInputs = bsv::detail::HelperVerifiedInputCountForTesting();
+    std::atomic<bool> done{ false };
+    TxError status = bsv::TxErrorOk();
+    std::thread caller([&] {
+        status = ValidateP2PKHSpend(se, etxBin, nInputs, /*consensus=*/true);
+        done.store(true);
+    });
+    const bool queued = WaitFor([&] { return bsv::detail::QueuedJobCountForTesting() == 1 || done.load(); }) && !done.load();
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    const uint64_t whileBusy = bsv::detail::HelperVerifiedInputCountForTesting() - helperInputs;
+    everyCore.Release();
+    const bool joined = WaitFor([&] {
+        return bsv::detail::HelperVerifiedInputCountForTesting() > helperInputs + whileBusy || done.load();
+    }) && !done.load();
+    caller.join();
+
+    BOOST_CHECK(bsv::TxErrorIsOk(status));
+    BOOST_REQUIRE_MESSAGE(queued, "the tx queued no job with every core busy");
+    BOOST_CHECK_EQUAL(whileBusy, 0u);
+    BOOST_CHECK_MESSAGE(joined, "no helper joined the job after the cores were released");
+    BOOST_CHECK(PoolIsIdle());
     BOOST_CHECK_EQUAL(bsv::detail::QueuedJobCountForTesting(), 0u);
 }
 
@@ -2925,7 +2973,10 @@ public:
     HelperConcurrency& operator=(const HelperConcurrency&) = delete;
 
     static size_t Most() { return most.load(); }
+    static size_t InFlight() { return inFlight.load(); }
+    static uint64_t HelperClaims() { return helperClaims.load(); }
     static void Reset() { most.store(0); }
+    static void SetDelay(std::chrono::milliseconds delay) { sleepMs.store(delay.count()); }
     static inline thread_local bool isCaller = false;
 
 private:
@@ -2938,6 +2989,7 @@ private:
             std::this_thread::sleep_for(delay);
             return;
         }
+        helperClaims.fetch_add(1);
         const size_t now = inFlight.fetch_add(1) + 1;
         size_t seen = most.load();
         while (now > seen && !most.compare_exchange_weak(seen, now)) {
@@ -2948,6 +3000,7 @@ private:
     static inline std::atomic<long long> sleepMs{ 0 };
     static inline std::atomic<size_t> inFlight{ 0 };
     static inline std::atomic<size_t> most{ 0 };
+    static inline std::atomic<uint64_t> helperClaims{ 0 };
     bsv::detail::InputHook previous = nullptr;
 };
 
@@ -3043,6 +3096,57 @@ BOOST_AUTO_TEST_CASE(helper_limit_caps_concurrent_helpers, PARALLEL_TEST_CASE_DE
                 "limit " << limit << ", " << callers << " caller(s): " << most << " helpers verified at once");
         }
     }
+}
+
+// Lowering the limit while a job runs sends the helpers over it away before
+// their next input: lowered to 1, exactly one helper keeps verifying once the
+// inputs in flight finish; lowered to 0, the helper still on the job
+// claims no input after the one it is verifying. Inputs sleep 10 ms on claim.
+BOOST_AUTO_TEST_CASE(lowering_the_helper_limit_sends_helpers_away_mid_job, PARALLEL_TEST_CASE_DECORATORS)
+{
+    const size_t helpers = bsv::detail::InputPoolHelperCountForTesting();
+    if (helpers < 2) {
+        BOOST_TEST_MESSAGE(helpers << " helper(s): lowering from automatic to 1 needs at least 2");
+        return;
+    }
+    constexpr size_t nInputs = 160;
+    const auto etxBin = SignedP2PKHBin(nInputs);
+    const bsv::CTxValidator se("main");
+    const InputThresholdGuard defaults(bsv::detail::DEFAULT_PARALLEL_INPUT_THRESHOLD);
+    const HelperLimitGuard automatic(-1);
+    BOOST_REQUIRE(PoolIsIdle());
+    const HelperConcurrency probe(std::chrono::milliseconds(10));
+    std::atomic<bool> done{ false };
+    TxError status = bsv::TxErrorOk();
+    std::thread caller([&] {
+        HelperConcurrency::isCaller = true;
+        status = ValidateP2PKHSpend(se, etxBin, nInputs, /*consensus=*/true);
+        done.store(true);
+    });
+    const bool spread = WaitFor([&] { return HelperConcurrency::InFlight() >= 2 || done.load(); }) && !done.load();
+
+    bsv::SetParallelInputHelpers(1);
+    std::this_thread::sleep_for(std::chrono::milliseconds(60));
+    HelperConcurrency::Reset();
+    std::this_thread::sleep_for(std::chrono::milliseconds(60));
+    const size_t mostAtOne = HelperConcurrency::Most();
+
+    bsv::SetParallelInputHelpers(0);
+    const size_t onJobAtZero = bsv::detail::BusyThreadCountForTesting() - 1;
+    const uint64_t claimsAtZero = HelperConcurrency::HelperClaims();
+    std::this_thread::sleep_for(std::chrono::milliseconds(60));
+    const uint64_t claimsAfterZero = HelperConcurrency::HelperClaims() - claimsAtZero;
+    const bool stillRunning = !done.load();
+
+    HelperConcurrency::SetDelay(std::chrono::milliseconds(0));
+    caller.join();
+    BOOST_CHECK(bsv::TxErrorIsOk(status));
+    BOOST_REQUIRE_MESSAGE(spread, "no two helpers verified at once before the limit was lowered");
+    BOOST_REQUIRE_MESSAGE(stillRunning, "the job finished before the checks");
+    BOOST_CHECK_MESSAGE(mostAtOne == 1, mostAtOne << " helpers verified at once after the limit was lowered to 1");
+    BOOST_CHECK_MESSAGE(claimsAfterZero <= onJobAtZero, claimsAfterZero << " helper claims after the limit was lowered "
+        "to 0, with " << onJobAtZero << " helper(s) on the job");
+    BOOST_CHECK(PoolIsIdle());
 }
 
 // The automatic setting (any negative value) uses more than one helper when
