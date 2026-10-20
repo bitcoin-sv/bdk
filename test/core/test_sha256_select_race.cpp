@@ -128,9 +128,10 @@ BOOST_AUTO_TEST_CASE(selected_at_load_before_threads_hash, *boost::unit_test::ti
         pool.emplace_back([&] {
             go.arrive_and_wait();
             // An unsynchronised write while the others hash: the race the
-            // load-time selection prevents
-            sha256_dispatch::StreamType installed = sha256_dispatch::stream;
-            sha256_dispatch::stream = installed;
+            // load-time selection prevents. Volatile, so the compiler cannot
+            // drop a store of the value just read.
+            volatile sha256_dispatch::StreamType& stream = sha256_dispatch::stream;
+            stream = sha256_dispatch::StreamType{stream};
         });
     }
     for(auto& t : pool)
