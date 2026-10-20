@@ -22,14 +22,14 @@ int32_t LoadRelaxed(const int32_t* flag)
 }
 
 // A cancellation source whose state lives in caller memory.
-class CFlagCancellationSource final : public task::CCancellationSource
+class FlagCancellationSource final : public task::CCancellationSource
 {
 public:
-    explicit CFlagCancellationSource(const int32_t* flag) : flag_{ flag } {}
+    explicit FlagCancellationSource(const int32_t* flag) : flag_{ flag } {}
 
-    static std::unique_ptr<CFlagCancellationSource> Make(const int32_t* flag)
+    static std::unique_ptr<FlagCancellationSource> Make(const int32_t* flag)
     {
-        return std::make_unique<CFlagCancellationSource>(flag);
+        return std::make_unique<FlagCancellationSource>(flag);
     }
 
     // Nothing outside this file can reach the source to call Cancel() on it, so the
@@ -49,6 +49,6 @@ task::CCancellationToken bsv::MakeFlagCancellationToken(const int32_t* flag)
 {
     // A token holds its sources by shared_ptr and GetToken() calls shared_from_this(),
     // so hand ownership to a shared_ptr first.
-    std::shared_ptr<task::CCancellationSource> source = CFlagCancellationSource::Make(flag);
+    std::shared_ptr<task::CCancellationSource> source = FlagCancellationSource::Make(flag);
     return source->GetToken();
 }
