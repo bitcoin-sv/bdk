@@ -74,7 +74,7 @@ func expectedSHA256Backend(t *testing.T) string {
 // Runs in its own process (one go test per file) that has constructed no
 // validator. The backend was selected while the program loaded, from the
 // environment it started with, so concurrent first calls must all report it.
-func TestSHA256BackendIsSelectedByTheGetter(t *testing.T) {
+func TestSHA256BackendIsSelectedAtLoad(t *testing.T) {
 	expected := expectedSHA256Backend(t)
 
 	const callers = 16
