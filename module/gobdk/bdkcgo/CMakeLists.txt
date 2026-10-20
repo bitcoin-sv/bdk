@@ -137,9 +137,13 @@ if(UNIX)
     set(objDir "${buildDir}/merge_gobdk/${archiveName}")
     file(MAKE_DIRECTORY "${objDir}")
 
+    ## Start from an empty directory: objects left from an earlier build would
+    ## otherwise be merged too, alongside the ones that replaced them
     add_custom_command(TARGET static-${_GO_MODULE_NAME} POST_BUILD
-    COMMAND ${CMAKE_AR} x ${archive}
-    WORKING_DIRECTORY "${objDir}"
+    COMMAND ${CMAKE_COMMAND} -E rm -rf "${objDir}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${objDir}"
+    COMMAND ${CMAKE_COMMAND} -E chdir "${objDir}" ${CMAKE_AR} x ${archive}
+    WORKING_DIRECTORY "${buildDir}/merge_gobdk"
     COMMENT "Extract object files from [${archive}]")
   endforeach()
 
@@ -159,6 +163,7 @@ if(UNIX)
   string(TOLOWER ${OsArch} os_arch)
   set(mergedArchive "libGoBDK_${os_arch}.a")
   add_custom_target(MergeGoBDK ALL
+                  COMMAND ${CMAKE_COMMAND} -E rm -f "${mergedArchive}"
                   COMMAND ${CMAKE_AR} rcs "${mergedArchive}" "${buildDir}/merge_gobdk/*/*.o"
                   DEPENDS static-${_GO_MODULE_NAME}
                   WORKING_DIRECTORY ${buildDir}

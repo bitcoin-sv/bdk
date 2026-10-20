@@ -54,7 +54,7 @@ set(_BDKFFI_SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/alloc.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/asm.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/error_strings.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/sha256.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/sha256_ffi.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/txvalidator.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/validatebatch.cpp
     ${BDK_VERSION_RUST_CPP}
@@ -128,9 +128,13 @@ if(UNIX)
         set(objDir "${buildDir}/merge_bdkffi/${archiveName}")
         file(MAKE_DIRECTORY "${objDir}")
 
+        ## Start from an empty directory: objects left from an earlier build would
+        ## otherwise be merged too, alongside the ones that replaced them
         add_custom_command(TARGET static-bdkffi POST_BUILD
-            COMMAND ${CMAKE_AR} x ${archive}
-            WORKING_DIRECTORY "${objDir}"
+            COMMAND ${CMAKE_COMMAND} -E rm -rf "${objDir}"
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${objDir}"
+            COMMAND ${CMAKE_COMMAND} -E chdir "${objDir}" ${CMAKE_AR} x ${archive}
+            WORKING_DIRECTORY "${buildDir}/merge_bdkffi"
             COMMENT "Extract object files from [${archive}]")
     endforeach()
 
@@ -156,6 +160,7 @@ if(UNIX)
     # not relied on anywhere (the refresh bot gates on a source hash and the archive
     # is never committed), so plain 'rcs' is both portable and sufficient.
     add_custom_target(MergeBDKFFI ALL
+        COMMAND ${CMAKE_COMMAND} -E rm -f "${mergedArchive}"
         COMMAND ${CMAKE_AR} rcs "${mergedArchive}" "${buildDir}/merge_bdkffi/*/*.o"
         DEPENDS static-bdkffi
         WORKING_DIRECTORY ${buildDir}
