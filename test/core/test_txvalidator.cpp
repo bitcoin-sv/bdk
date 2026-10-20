@@ -68,10 +68,11 @@ static bsv::RegisterCustomChainParams<MyParams> myParamsReg(MyParams::CustomName
 
 // BDK installs the fastest SHA-256 transforms this CPU supports while it is
 // loaded, so every validator, and every test below, validates through them.
-// The installed pointers are checked before SelectSha256Backend() is called,
-// because that call could install them itself. ctest also runs this case
-// alone, in its own process.
-BOOST_AUTO_TEST_CASE(constructing_a_validator_installs_the_sha256_backend)
+// These cases check the installed pointers after each constructor, before the
+// getter could install them itself. They do not check when selection happened;
+// the race test and Go/Rust at-load tests cover load-time selection. ctest also
+// runs each case alone, in its own process.
+BOOST_AUTO_TEST_CASE(validator_by_network_has_sha256_backend)
 {
     const bsv::CTxValidator validator{bsv::TxValidationNetwork::Main};
     sha256_test::CheckInstalledBackend();
@@ -80,8 +81,8 @@ BOOST_AUTO_TEST_CASE(constructing_a_validator_installs_the_sha256_backend)
 }
 
 // The same through the chain-name constructor, which ctest also runs alone, in
-// its own process (test_txvalidator_chain_name_selects).
-BOOST_AUTO_TEST_CASE(constructing_a_validator_by_chain_name_installs_the_sha256_backend)
+// its own process (test_txvalidator_chain_name_has_backend).
+BOOST_AUTO_TEST_CASE(validator_by_chain_name_has_sha256_backend)
 {
     const bsv::CTxValidator validator{std::string{"main"}};
     sha256_test::CheckInstalledBackend();
