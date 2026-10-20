@@ -10,6 +10,7 @@ This package contains comprehensive benchmarks measuring:
 - **bench_verifyscript_test.go**: Go implementation of script verification benchmark
 - **../../example/bench_verifyscript.cpp**: C++ implementation of script verification benchmark
 - **bench_validatetransaction_inputs_test.go**: `ValidateTransaction` on synthetic P2PKH spends with 1,000, 2,000, 4,000 and 8,000 inputs, reporting `us/input`. Time per input should stay flat as the input count grows (see [Input-count scaling](#input-count-scaling))
+- **bench_validatetransaction_goload_test.go** (build tag `bdk_internal_hooks`): `ValidateTransaction` on a 10,000-input P2PKH spend while `GOMAXPROCS` goroutines burn CPU, with parallel input verification off and on, reporting wall time, process CPU per validation and the goroutines' throughput. It switches the parallel input threshold through BDK's test-only hook (`parallelinputs_knob.go`/`.cpp`), so it needs a GoBDK archive built from a tree that has `core/internal/txvalidator_internal.hpp`: `go test -tags bdk_internal_hooks -run '^$' -bench GoLoad -benchtime 10x`
 
 ## Test Data
 
