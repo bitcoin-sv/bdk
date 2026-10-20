@@ -1,31 +1,29 @@
-//go:build bdk_internal_hooks
-
 package cgobench
 
 import (
 	"fmt"
-	"math"
 	"runtime"
 	"sync"
 	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
+
+	bdkscript "github.com/bitcoin-sv/bdk/module/gobdk/script"
 )
 
 // BenchmarkValidateTransaction_GoLoad validates a 10,000-input P2PKH
 // transaction through ValidateTransaction while `burners` goroutines keep
-// Go code running on every P, with BDK's parallel input verification off
-// (threshold SIZE_MAX) and on (the default threshold, 16). It reports, per
-// validation, process CPU time (user + system, all threads), and the burner
-// goroutines' throughput over the same interval: whether helpers make the
-// transaction faster and whether they slow the Go work down. The "none" mode
+// Go code running on every P, at several settings of
+// script.SetParallelInputHelpers: 0 (no helpers, every input on the calling
+// thread), 2, GOMAXPROCS/4 and automatic (-1). It reports, per validation,
+// process CPU time (user + system, all threads), and the burner goroutines'
+// throughput over the same interval: how much faster helpers make the
+// transaction and how much they slow the Go work down. The "none" mode
 // validates nothing (it sleeps 50 ms per op) and gives the burners' rate on
 // their own.
 //
-//	go test -tags bdk_internal_hooks -run '^$' -bench GoLoad -benchtime 10x
-//
-// Needs a GoBDK archive built from a tree with core/internal's test hooks.
+//	go test -run '^$' -bench GoLoad -benchtime 10x
 func BenchmarkValidateTransaction_GoLoad(b *testing.B) {
 	const nInputs = 10000
 	etx, utxoHeights := makeManyInputP2PKHTx(b, nInputs)
@@ -33,12 +31,14 @@ func BenchmarkValidateTransaction_GoLoad(b *testing.B) {
 
 	for _, burners := range []int{0, procs} {
 		for _, mode := range []struct {
-			name      string
-			threshold uint64
+			name    string
+			helpers int64
 		}{
 			{"none", 0},
-			{"serial", math.MaxUint64},
-			{"parallel", 16},
+			{"helpers=0", 0},
+			{"helpers=2", 2},
+			{fmt.Sprintf("helpers=%d", max(1, procs/4)), int64(max(1, procs/4))},
+			{"helpers=auto", -1},
 		} {
 			if mode.name == "none" && burners == 0 {
 				continue
@@ -46,8 +46,9 @@ func BenchmarkValidateTransaction_GoLoad(b *testing.B) {
 			b.Run(fmt.Sprintf("gomaxprocs=%d/burners=%d/%s", procs, burners, mode.name), func(b *testing.B) {
 				validate := mode.name != "none"
 				if validate {
-					previous := setParallelInputThreshold(mode.threshold)
-					defer setParallelInputThreshold(previous)
+					previous := bdkscript.GetParallelInputHelpers()
+					bdkscript.SetParallelInputHelpers(mode.helpers)
+					defer bdkscript.SetParallelInputHelpers(previous)
 					// One unmeasured call checks the tx and starts the helper pool.
 					if err := se.ValidateTransaction(etx, utxoHeights, inputsBlockHeight, true); err != nil {
 						b.Fatalf("ValidateTransaction: %v", err)
