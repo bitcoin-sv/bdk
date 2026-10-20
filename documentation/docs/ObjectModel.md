@@ -67,6 +67,25 @@ classDiagram
 
 `SCRIPT` and `DOS` are verdicts about the transaction. `EXCEPTION` and `ABI` are not: they report that this process could not carry out the call, and a consumer must classify them as a local fault rather than as an invalid transaction. `ABI` is produced only by the language bindings, never by the core validator, and means a buffer length could not be expressed at the C boundary.
 
+## Parallel input helpers (process-wide)
+
+`ValidateTransaction`, `VerifyScript` and `ValidateBatch` verify a transaction with 16 or more
+inputs on the calling thread plus idle helper threads from one process-wide pool; the result is
+always the serial one. Two free functions in `core/txvalidator.hpp`, not members of
+`CTxValidator`, limit how many helpers verify at once, for the whole process:
+
+- `bsv::SetParallelInputHelpers(int64_t helpers)`: `helpers < 0` automatic (the default: up to
+  one helper per CPU the process may use, minus one), `0` no helpers (every transaction verified
+  on its caller, no helper thread started), `> 0` at most that many, never more than automatic.
+  Safe to call at any time from any thread.
+- `bsv::GetParallelInputHelpers()`: the setting, `-1` for automatic.
+
+Helpers only take cores that BDK's own threads leave idle, but they do not see other threads in
+the process, such as goroutines. A lower limit leaves more CPU to them at the cost of slower large
+transactions. Go: `script.SetParallelInputHelpers` / `script.GetParallelInputHelpers`. Rust:
+`rust_bdk::set_parallel_input_helpers` / `rust_bdk::parallel_input_helpers`. The WASM build has no
+helpers and does not expose the setting.
+
 ## Go binding
 
 The Go type `script.TxValidator` (`module/gobdk/script/txvalidator.go`) is a thin cgo wrapper that

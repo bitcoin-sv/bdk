@@ -31,7 +31,20 @@ installed alongside the package (`CMakeLists.txt`).
     platform's thread library (cgo and Cargo add it already).
   - Changing a `CTxValidator` setting (`Set...`) while any validation runs on it is a data race,
     as before; helpers now read those settings too.
-  - No API change in C++, Go, Rust or WASM.
+  - Helpers do not see goroutines or other threads of the embedding process. While a large
+    transaction is verified they compete with them for CPUs: on a 14-core machine with every Go P
+    busy, a 10,000-input transaction verified 4.7x faster than serially while the goroutines'
+    throughput fell by about 40% for that shorter time; with at most 2 helpers, 2.8x faster at
+    about 20%. `SetParallelInputHelpers` (below) sets that trade-off.
+- **New, additive API: a process-wide limit on parallel input helpers.** C++
+  `bsv::SetParallelInputHelpers(int64_t)` / `bsv::GetParallelInputHelpers()`
+  (`core/txvalidator.hpp`), Go `script.SetParallelInputHelpers(int64)` /
+  `script.GetParallelInputHelpers()`, Rust `rust_bdk::set_parallel_input_helpers(i64)` /
+  `rust_bdk::parallel_input_helpers()`. A negative value is automatic (the default, unchanged
+  behaviour), `0` turns helpers off (no helper thread is started), `n > 0` caps the helpers
+  verifying at once at `n`. Results are the same at every setting; it can be changed at any time.
+  The WASM build has no helpers and does not expose it. The Go binding calls two new cgo symbols,
+  so it needs GoBDK archives built from this version.
 - **Script validation of many-input transactions is linear in the input count.**
   `ValidateTransaction` and `VerifyScript` now build one `PrecomputedTransactionData` per
   transaction and share it across all inputs, as SV Node does; `VerifySpend` builds one per call
