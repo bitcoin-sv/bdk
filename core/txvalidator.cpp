@@ -1087,6 +1087,10 @@ TxError bsv::CTxValidator::implCheckStandardness(
     const task::CCancellationToken& token
 ) const
 {
+    // One previous output and one height per input; the input loop below indexes both.
+    if (prevUTXO.size() != tx.vin.size() || utxoHeights.size() != tx.vin.size())
+        throw std::runtime_error("implCheckStandardness: inconsistent inputs, utxos and utxo heights");
+
     // Replicate TxnValidation standardness logic from bitcoin-sv validation.cpp.
     // acceptNonStandardOutput is era-dependent:
     //   pre-Genesis  → !requireStandard

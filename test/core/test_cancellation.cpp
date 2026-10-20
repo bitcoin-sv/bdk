@@ -608,6 +608,27 @@ BOOST_AUTO_TEST_CASE(verify_spend_and_check_standardness_poll_after_deserialisin
     }
 }
 
+// CheckStandardness reads one height per input. A heights span shorter than the
+// inputs is an argument error, reported in the exception domain like the other entry
+// points' size checks, by both overloads; it must not read past the span.
+BOOST_AUTO_TEST_CASE(check_standardness_rejects_too_few_utxo_heights)
+{
+    bsv::CTxValidator validator(CBaseChainParams::REGTEST);
+    validator.SetRequireStandard(true);  // pre-Genesis: the per-input check reads the heights
+    const std::vector<uint8_t> tx = PreGenesisTwoP2PKHInputsTx(P2PKHScript());
+    BOOST_REQUIRE(bsv::TxErrorIsOk(validator.CheckStandardness(tx, kPreGenesisUtxoHeights2, 5000)));
+
+    for (const std::vector<int32_t>& heights : { std::vector<int32_t>{ 4000 }, std::vector<int32_t>{} }) {
+        BOOST_TEST_CONTEXT("heights=" << heights.size()) {
+            BOOST_CHECK_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_EXCEPTION),
+                              validator.CheckStandardness(tx, heights, 5000).domain);
+            const auto token = task::CCancellationSource::Make()->GetToken();
+            BOOST_CHECK_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_EXCEPTION),
+                              validator.CheckStandardness(tx, heights, 5000, token).domain);
+        }
+    }
+}
+
 // VerifySpend passes the caller's token to the interpreter: a cancel from another
 // thread while its script runs stops it, as for ValidateTransaction.
 BOOST_AUTO_TEST_CASE(verify_spend_cancelled_mid_script_returns_cancelled_promptly)
