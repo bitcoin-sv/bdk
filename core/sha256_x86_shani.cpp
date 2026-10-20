@@ -5,9 +5,9 @@
 // included source, not from per-file compiler flags, so they follow the
 // compiler's target rather than the build machine: a macOS universal, Rosetta
 // or cross build gets these transforms in its x86-64 code and nowhere else.
-// Elsewhere (ARM, WASM, MSVC) this is an empty translation unit.
+// Elsewhere (ARM, WASM, MSVC/clang-cl) this is an empty translation unit.
 
-#if (defined(__x86_64__) || defined(__amd64__)) && (defined(__GNUC__) || defined(__clang__)) && !defined(__EMSCRIPTEN__)
+#if (defined(__x86_64__) || defined(__amd64__)) && (defined(__GNUC__) || defined(__clang__)) && !defined(_MSC_VER) && !defined(__EMSCRIPTEN__)
 
 // The included source's own headers, first, so their inline functions keep the
 // default target

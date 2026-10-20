@@ -19,7 +19,7 @@ installed alongside the package (`CMakeLists.txt`).
   backend for the ARMv8 SHA-2 instructions, vendored unchanged from Bitcoin Core v29.0
   (`core/sha256_arm_shani.cpp`, MIT), for both the streaming transform and the 2-way merkle-pair
   transform. It is enabled when Linux reports `HWCAP_SHA2` or macOS reports
-  `hw.optional.arm.FEAT_SHA256`; other ARM operating systems, MSVC builds and the WASM build
+  `hw.optional.arm.FEAT_SHA256`; other ARM operating systems, MSVC/clang-cl builds and the WASM build
   keep the scalar transforms. No file gets instruction-set flags and nothing is built with
   `-march=native`: the SHA-NI and ARMv8 SHA-2 code is compiled through wrappers
   (`core/sha256_x86_shani.cpp`, `core/sha256_arm_shani_target.cpp`) that enable the instructions

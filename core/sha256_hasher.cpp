@@ -31,7 +31,7 @@ namespace
         }
     }
 
-#if defined(__GNUC__) || defined(__clang__)
+#if (defined(__GNUC__) || defined(__clang__)) && !defined(_MSC_VER)
     [[gnu::constructor]] void RunSelectSha256BackendAtLoad() { SelectSha256BackendAtLoad(); }
 #else
     const bool kSelectedAtLoad = (SelectSha256BackendAtLoad(), true);
