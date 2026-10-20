@@ -288,6 +288,62 @@ jobs:
           test "$rc" -eq 66
           grep -q "sha256_dispatch::stream" control.log
 
+  ## The SHA-256 instruction-set code follows the compiler's target, not the
+  ## build machine: a macOS universal build must carry the ARMv8 SHA-2 transforms
+  ## in its arm64 slice only and SHA-NI / SSE4 in its x86_64 slice only, both with
+  ## the load-time selection. Builds bdk_core only (the dependency bundle is arm64).
+  universal-sha256-slices:
+    if: github.event_name == 'pull_request'
+    runs-on: macos-15
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Check out bitcoin-sv and dependencies
+        run: |
+          git clone -q https://github.com/bitcoin-sv/bitcoin-sv.git bitcoin-sv
+          git -C bitcoin-sv checkout -q ${{ env.DEFAULT_BITCOIN_SV_COMMIT }}
+          wget -q https://github.com/bitcoin-sv/bdk/releases/download/depcy/dependancies_darwin_arm64.tar.gz
+          tar -xzf dependancies_darwin_arm64.tar.gz
+          echo "DEPS=${{ github.workspace }}/dependancies_darwin_arm64" >> "$GITHUB_ENV"
+
+      - name: Build a universal bdk_core
+        run: |
+          cmake -B build-universal -S . -DCMAKE_BUILD_TYPE=Release "-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64" \
+            -DBDK_BUILD_MODULES=OFF -DBDK_BUILD_CORE_TESTS=OFF \
+            -DBSV_ROOT="${{ github.workspace }}/bitcoin-sv" \
+            -DBOOST_ROOT="$DEPS/boost_1.85.0" -DOPENSSL_ROOT_DIR="$DEPS/openssl_3.4.0"
+          cmake --build build-universal --target bdk_core --parallel 4
+
+      - name: Each slice has its own backend and only that
+        run: |
+          lib="$(find build-universal -name libbdk_core.a | head -1)"
+          lipo -info "$lib"
+          for arch in arm64 x86_64; do
+            lipo -thin "$arch" "$lib" -o "core_$arch.a"
+            nm -C "core_$arch.a" 2>/dev/null | grep -E ' T (sha256_arm_shani|sha256d64_arm_shani|sha256_x86_shani|sha256d64_x86_shani)::' | sed "s/^/$arch: /" || true
+            mkdir -p "obj_$arch" && (cd "obj_$arch" && ar x "../core_$arch.a" sha256_arm_shani_target.cpp.o sha256_x86_shani.cpp.o sha256_hasher.cpp.o)
+          done
+          count() { otool -tV "$1" | grep -c "$2" || true; }
+          test "$(count obj_arm64/sha256_arm_shani_target.cpp.o 'sha256h\.4s')" -gt 0
+          test "$(count obj_arm64/sha256_x86_shani.cpp.o sha256rnds2)" -eq 0
+          test "$(count obj_x86_64/sha256_x86_shani.cpp.o sha256rnds2)" -gt 0
+          test "$(count obj_x86_64/sha256_arm_shani_target.cpp.o 'sha256h\.4s')" -eq 0
+          for arch in arm64 x86_64; do
+            test -n "$(nm -C "core_$arch.a" 2>/dev/null | grep 'RunSelectSha256BackendAtLoad')"
+          done
+          echo "arm64: ARMv8 SHA-2 only; x86_64: SHA-NI only; both select at load"
+
   ## The wasm leg runs on EVERY dispatch, regardless of either checkbox. That is what
   ## makes the all-or-nothing gate meaningful: a red wasm leg blocks the gobdk commit
   ## too. With commit-wasm-artifacts unticked it builds and tests but never publishes
