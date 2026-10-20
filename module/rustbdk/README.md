@@ -151,7 +151,9 @@ let flag = Arc::new(CancelFlag::new());
 let result = validator.validate_transaction_cancellable(extended_tx, utxo_heights, block_height, true, &flag);
 ```
 
-`TxError` is `#[non_exhaustive]`.
+`TxError` gained the `Cancelled` variant and is now `#[non_exhaustive]`, so a
+`match` that listed every variant needs a wildcard arm. That breaks source
+compatibility, so `rust-bdk` and `bdk-sys` are 0.2.0.
 
 ## Supported Platforms
 
