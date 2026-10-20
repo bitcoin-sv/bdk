@@ -105,9 +105,14 @@ func requireCancelled(t *testing.T, err error, cause error) {
 	t.Helper()
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, goscript.ErrCancelled), "expected ErrCancelled, got %v", err)
+	var cancelledErr *goscript.CancelledError
+	require.True(t, errors.As(err, &cancelledErr), "expected *CancelledError, got %T", err)
 	if cause != nil {
-		assert.True(t, errors.Is(err, cause), "expected cause %v, got %v", cause, err)
+		assert.True(t, errors.Is(cancelledErr.Cause(), cause), "expected cause %v, got %v", cause, cancelledErr.Cause())
 	}
+	// The cause is not in the error chain: errors.Is/As on err see only the cancellation.
+	assert.False(t, errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded),
+		"the context error must not be in the chain: %v", err)
 	var scriptErr goscript.ScriptError
 	assert.False(t, errors.As(err, &scriptErr), "a cancelled call must not report a script error: %v", err)
 	var dosErr goscript.DoSError
@@ -185,7 +190,9 @@ func TestContextCancelCauseIsCarried(t *testing.T) {
 	time.AfterFunc(20*time.Millisecond, func() { cancel(slowLane) })
 	err := se.VerifyScriptContext(ctx, tx, []int32{cancelTestLongUtxoHeight}, cancelTestLongBlockHeight, true)
 	requireCancelled(t, err, slowLane)
-	assert.False(t, errors.Is(err, context.DeadlineExceeded))
+	var cancelledErr *goscript.CancelledError
+	require.True(t, errors.As(err, &cancelledErr))
+	assert.False(t, errors.Is(cancelledErr.Cause(), context.DeadlineExceeded))
 }
 
 // errShape names a result by its type, domain and code, so two results compare equal
@@ -231,6 +238,23 @@ func (nilDoneContext) Done() <-chan struct{} { return nil }
 // whose redeem scripts the calculated (post-Genesis) flags never run; run with these
 // flags, they fail.
 var cancelTestP2SHOnlyFlags = []uint32{1, 1}
+
+// A cause that is itself a validation error stays out of the error chain: a caller
+// checking errors.As(err, &ScriptError) must not take a cancelled call for a verdict.
+func TestContextCauseIsNotAVerdict(t *testing.T) {
+	se := longRunningValidator(t)
+	tx := cancelTestLongRunningTx(2000)
+	verdictCause := goscript.NewScriptError(goscript.SCRIPT_ERR_EVAL_FALSE)
+
+	ctx, cancel := context.WithCancelCause(context.Background())
+	time.AfterFunc(20*time.Millisecond, func() { cancel(verdictCause) })
+	err := se.ValidateTransactionContext(ctx, tx, []int32{cancelTestLongUtxoHeight}, cancelTestLongBlockHeight, true)
+	requireCancelled(t, err, verdictCause)
+
+	pre, cancelPre := context.WithCancelCause(context.Background())
+	cancelPre(verdictCause)
+	requireCancelled(t, se.ValidateTransactionContext(pre, tx, []int32{cancelTestLongUtxoHeight}, cancelTestLongBlockHeight, true), verdictCause)
+}
 
 // A context that is never cancelled, or cancelled only after the call returned, gives
 // exactly the result of the non-context function, compared by error type, domain and

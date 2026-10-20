@@ -21,9 +21,11 @@ var ErrCancelled = errors.New("validation cancelled before a verdict")
 // BDK reached a verdict. It is not a verdict about the transaction and not a fault of
 // this node: the transaction is neither valid nor invalid as far as this call knows.
 //
-// errors.Is(err, ErrCancelled) is true. Unwrap returns context.Cause(ctx), so
-// errors.Is(err, context.Canceled) or errors.Is(err, context.DeadlineExceeded) tells
-// the two apart, as does any cause given to context.WithCancelCause.
+// errors.Is(err, ErrCancelled) is true. Cause returns context.Cause(ctx), so
+// errors.Is(e.Cause(), context.DeadlineExceeded) and the like tell why it was
+// cancelled. The cause is deliberately not in the error chain (there is no Unwrap):
+// a cause that is itself, say, a ScriptError must not make errors.As(err,
+// &ScriptError) report a verdict for a transaction that was never evaluated.
 type CancelledError struct {
 	cause error
 }
@@ -38,8 +40,9 @@ func (e *CancelledError) Error() string {
 // Is reports whether target is ErrCancelled.
 func (e *CancelledError) Is(target error) bool { return target == ErrCancelled }
 
-// Unwrap returns the cause of the cancellation, context.Cause(ctx).
-func (e *CancelledError) Unwrap() error { return e.cause }
+// Cause returns why the call was cancelled: context.Cause(ctx) of the context passed
+// in, which is ctx.Err() unless a cause was given to context.WithCancelCause.
+func (e *CancelledError) Cause() error { return e.cause }
 
 func newCancelledError(ctx context.Context) error {
 	if ctx == nil {
