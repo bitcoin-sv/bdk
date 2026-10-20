@@ -26,6 +26,16 @@ int TxValidator_CPP_SCRIPT_ERR_ERROR_COUNT();
 uint64_t TxValidator_ABI_EchoLength(uint64_t len);
 
 /**
+ * TxValidator_SetParallelInputHelpers sets, process-wide, the most helper threads that
+ * verify a large transaction's inputs alongside its caller at once:
+ * < 0 automatic (the default), 0 none, > 0 at most that many. See
+ * bsv::SetParallelInputHelpers in core/txvalidator.hpp.
+ * TxValidator_GetParallelInputHelpers returns the setting, -1 for automatic.
+ */
+void TxValidator_SetParallelInputHelpers(int64_t helpers);
+int64_t TxValidator_GetParallelInputHelpers();
+
+/**
  * TxValidatorCGO implement the cgo handler for TxValidator class
  */
 typedef void* TxValidatorCGO;

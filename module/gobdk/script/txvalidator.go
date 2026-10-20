@@ -537,6 +537,32 @@ func ABIEchoLength(n uint64) uint64 {
 	return uint64(C.TxValidator_ABI_EchoLength(C.uint64_t(n)))
 }
 
+// SetParallelInputHelpers sets, for the whole process, the most helper threads that
+// verify a large transaction's inputs alongside the calling goroutine at once.
+// VerifyScript, VerifyScriptWithCustomFlags, ValidateTransaction and ValidateBatch
+// split a transaction with 16 or more inputs across the caller and idle helper threads.
+//
+//   - helpers < 0: automatic, the default. Up to one helper per CPU the process may use,
+//     minus one; on Linux that follows the affinity mask and the container's CPU limit.
+//   - helpers == 0: no helpers. Every transaction is verified on the calling goroutine's
+//     thread and no helper thread is started.
+//   - helpers > 0: at most that many helpers, and never more than automatic.
+//
+// Helpers only take cores that BDK's own threads leave idle, but they do not see
+// goroutines: while a large transaction is verified they compete with Go code for the
+// CPUs. A lower limit leaves more of the machine to Go at the cost of slower large
+// transactions. Results are the same at every setting. Safe to call at any time from
+// any goroutine; helpers already verifying an input finish it.
+func SetParallelInputHelpers(helpers int64) {
+	C.TxValidator_SetParallelInputHelpers(C.int64_t(helpers))
+}
+
+// GetParallelInputHelpers returns the setting last passed to SetParallelInputHelpers,
+// -1 for automatic (any negative value reads back as -1).
+func GetParallelInputHelpers() int64 {
+	return int64(C.TxValidator_GetParallelInputHelpers())
+}
+
 // translateTxError converts a C TxError into a Go error. Returns nil on success.
 func translateTxError(r C.TxError) error {
 	switch r.domain {
