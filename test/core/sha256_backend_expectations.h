@@ -69,10 +69,11 @@ namespace sha256_test
         return backend == "shani" || backend == "arm_shani";
     }
 
-    // The full string bsv::SelectSha256Backend() must return
-    inline std::string ExpectedSelection()
+    // The full string bsv::SelectSha256Backend() must return. `forced`: whether
+    // BDK_SHA256_FORCE_SCALAR was set when the process started.
+    inline std::string ExpectedSelection(bool forced = ForcedScalar())
     {
-        if(ForcedScalar())
+        if(forced)
             return "standard(forced)";
         const std::string best = ExpectedBestBackend();
         return HasTwoWay(best) ? best + "," + best + "(2way)" : best;
@@ -81,9 +82,9 @@ namespace sha256_test
     // Checks the transforms actually installed in the sha256_dispatch pointers
     // against what this CPU should run. It never calls SelectSha256Backend(),
     // so it can check whether something else made the selection.
-    inline void CheckInstalledBackend()
+    inline void CheckInstalledBackend(bool forced = ForcedScalar())
     {
-        if(ForcedScalar())
+        if(forced)
         {
             BOOST_TEST(sha256_dispatch::stream == sha256_stream_scalar::Transform);
             BOOST_TEST(sha256_dispatch::d_block_2way == nullptr);

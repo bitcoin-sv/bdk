@@ -12,12 +12,28 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// forcedAtStart records BDK_SHA256_FORCE_SCALAR as the process started. init
+// then flips it: BDK reads it while the program is loaded, before any Go init
+// function runs, so the flip must not change the selection.
+var forcedAtStart = func() bool {
+	v := os.Getenv("BDK_SHA256_FORCE_SCALAR")
+	return v != "" && v != "0"
+}()
+
+func init() {
+	if forcedAtStart {
+		os.Setenv("BDK_SHA256_FORCE_SCALAR", "0")
+	} else {
+		os.Setenv("BDK_SHA256_FORCE_SCALAR", "1")
+	}
+}
+
 // expectedSHA256Backend says which SHA-256 backend BDK should select on this
 // machine, without BDK's own detection code: /proc/cpuinfo on Linux, and on
 // Apple silicon a fixed expectation rather than a probe.
 func expectedSHA256Backend(t *testing.T) string {
 	t.Helper()
-	if v := os.Getenv("BDK_SHA256_FORCE_SCALAR"); v != "" && v != "0" {
+	if forcedAtStart {
 		return "standard(forced)"
 	}
 	if runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" {
@@ -55,9 +71,9 @@ func expectedSHA256Backend(t *testing.T) string {
 	return "standard"
 }
 
-// Runs in its own process (one go test per file), so the first call below is
-// the first selection: the getter must select, not report a default, even
-// though no TxValidator exists yet, and concurrent first calls must agree.
+// Runs in its own process (one go test per file) that has constructed no
+// validator. The backend was selected while the program loaded, from the
+// environment it started with, so concurrent first calls must all report it.
 func TestSHA256BackendIsSelectedByTheGetter(t *testing.T) {
 	expected := expectedSHA256Backend(t)
 

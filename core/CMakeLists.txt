@@ -29,7 +29,10 @@ endif()
 
 ## Canonical native core: OpenSSL-linked, no exclusions, no extra definitions
 ## (OpenSSL discovery runs at root scope, visible to core/, module/ and test/)
+## SV's src/crypto/sha256.cpp (CSHA256) is compiled by core/sha256_hasher.cpp
+## instead, together with the load-time SHA-256 backend selection
 bdk_add_core_library(bdk_core
+  EXCLUDE_BSV_SOURCES "${BDK_BSV_ROOT_DIR}/src/crypto/sha256.cpp"
   LINK_LIBRARIES OpenSSL::Crypto OpenSSL::SSL)
 
 ## Hardware SHA-256, native core only (the wasm variant stays scalar).

@@ -1,7 +1,7 @@
 //! The SHA-256 backend getter. Cargo builds each file under `tests/` as its own
-//! binary, so this process has constructed no validator when the test starts:
-//! the getter must select the backend itself, and concurrent first calls must
-//! agree.
+//! binary, so this process has constructed no validator when the test starts.
+//! BDK selected the backend while the binary loaded, from the environment it
+//! started with, so concurrent first calls must all report it.
 
 use std::sync::{Arc, Barrier};
 use std::thread;
@@ -11,11 +11,9 @@ use rust_bdk::{TxValidator, sha256_backend};
 /// Which SHA-256 backend BDK should select here, without BDK's own detection
 /// code: `/proc/cpuinfo` on Linux, and on Apple silicon a fixed expectation
 /// rather than a probe. `None` when this platform has neither.
-fn expected_sha256_backend() -> Option<&'static str> {
-    if let Ok(v) = std::env::var("BDK_SHA256_FORCE_SCALAR") {
-        if !v.is_empty() && v != "0" {
-            return Some("standard(forced)");
-        }
+fn expected_sha256_backend(forced_at_start: bool) -> Option<&'static str> {
+    if forced_at_start {
+        return Some("standard(forced)");
     }
     if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
         return Some("arm_shani,arm_shani(2way)"); // every Apple silicon core implements FEAT_SHA256
@@ -43,8 +41,18 @@ fn expected_sha256_backend() -> Option<&'static str> {
     Some("standard")
 }
 
+fn forced_scalar() -> bool {
+    std::env::var("BDK_SHA256_FORCE_SCALAR").is_ok_and(|v| !v.is_empty() && v != "0")
+}
+
 #[test]
-fn sha256_backend_is_selected_by_the_getter() {
+fn sha256_backend_is_selected_at_load() {
+    // BDK read BDK_SHA256_FORCE_SCALAR while the test binary loaded, before
+    // main: flipping it now must not change the selection
+    let forced_at_start = forced_scalar();
+    // SAFETY: the only test in this binary; nothing else reads the environment concurrently
+    unsafe { std::env::set_var("BDK_SHA256_FORCE_SCALAR", if forced_at_start { "0" } else { "1" }) };
+
     const CALLERS: usize = 16;
     let barrier = Arc::new(Barrier::new(CALLERS));
     let handles: Vec<_> = (0..CALLERS)
@@ -61,7 +69,7 @@ fn sha256_backend_is_selected_by_the_getter() {
     println!("SHA-256 backend: {}", got[0]);
     assert!(!got[0].is_empty());
     assert!(got.iter().all(|b| *b == got[0]), "callers disagree: {got:?}");
-    if let Some(expected) = expected_sha256_backend() {
+    if let Some(expected) = expected_sha256_backend(forced_at_start) {
         assert_eq!(got[0], expected);
     }
 

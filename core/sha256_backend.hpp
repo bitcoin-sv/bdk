@@ -31,23 +31,27 @@ const std::vector<Sha256Backend>& Sha256SupportedBackends();
 /**
  * Installs the fastest supported transforms into the sha256_dispatch pointers
  * and returns a description of what was installed, e.g. "shani,shani(2way)" or
- * "arm_shani,arm_shani(2way)". It does the work once, on the first call; later
- * calls return the same string. Every CTxValidator constructor calls it first.
+ * "arm_shani,arm_shani(2way)". It does the work once; later calls return the
+ * same string and write nothing.
  *
- * Setting the environment variable BDK_SHA256_FORCE_SCALAR to anything other
- * than "" or "0" before the first call keeps the scalar transforms, and the
- * result is "standard(forced)". The WASM build is always "standard".
+ * BDK calls it while it is loaded, from the object that holds CSHA256
+ * (core/sha256_hasher.cpp), so the selection is made before main(), before Go
+ * runs any init function and before any thread can hash. Every CTxValidator
+ * constructor calls it as well; after load that is a no-op.
  *
- * A program that hashes on several threads before it constructs any
- * CTxValidator, for example while building CChainParams to pass their
- * Consensus::Params to one, should call this once at startup.
+ * BDK_SHA256_FORCE_SCALAR is read at that point, at load. Set to anything other
+ * than "" or "0" in the environment the process starts with, it keeps the
+ * scalar transforms and the result is "standard(forced)". Setting it later, for
+ * example with Go's os.Setenv, has no effect. The WASM build is always
+ * "standard".
  *
  * Do not call sha256_dispatch::AutoDetect() directly. On x86-64 it installs
  * SSE4 / SHA-NI regardless of BDK_SHA256_FORCE_SCALAR: under forced scalar BDK
  * never calls it, so a direct call is the first write to the dispatch pointers,
- * and this function still returns "standard(forced)". Called before any
- * selection, it writes the pointers outside this function's once-only guard. On
- * ARM64 it installs nothing. Call SelectSha256Backend() instead.
+ * and this function still returns "standard(forced)". Called from another
+ * static initializer before BDK's selection, it writes the pointers outside
+ * this function's once-only guard. On ARM64 it installs nothing. Call
+ * SelectSha256Backend() instead.
  */
 const std::string& SelectSha256Backend();
 

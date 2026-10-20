@@ -205,8 +205,8 @@ foreach(_t test_sha256_backends test_sha256_select_race test_txvalidator test_bs
            --log_format=JUNIT --log_sink=$<TARGET_FILE:${_t}>_scalar.xml)
   set_tests_properties(${_t}_scalar PROPERTIES ENVIRONMENT "BDK_SHA256_FORCE_SCALAR=1" TIMEOUT 600)
 endforeach()
-## Each validator constructor must select the backend on its own: run each
-## selection case alone, so it is the first thing in its process to construct one
+## Run each constructor's backend check alone, in a process of its own: the
+## transforms must be installed before the first validator does anything
 foreach(_case constructing_a_validator_installs_the_sha256_backend:network_selects
               constructing_a_validator_by_chain_name_installs_the_sha256_backend:chain_name_selects)
   string(REPLACE ":" ";" _parts "${_case}")

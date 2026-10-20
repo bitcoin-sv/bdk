@@ -66,11 +66,11 @@ const std::string MyParams::CustomName = "MyParams";
 // Registration custom chain params
 static bsv::RegisterCustomChainParams<MyParams> myParamsReg(MyParams::CustomName);
 
-// The first CTxValidator installs the fastest SHA-256 transforms this CPU
-// supports, so every test below validates through them. The installed pointers
-// are checked before SelectSha256Backend() is called, because that call would
-// install them itself. In a full run this case is the first to construct a
-// validator; ctest also runs it alone, in its own process.
+// BDK installs the fastest SHA-256 transforms this CPU supports while it is
+// loaded, so every validator, and every test below, validates through them.
+// The installed pointers are checked before SelectSha256Backend() is called,
+// because that call could install them itself. ctest also runs this case
+// alone, in its own process.
 BOOST_AUTO_TEST_CASE(constructing_a_validator_installs_the_sha256_backend)
 {
     const bsv::CTxValidator validator{bsv::TxValidationNetwork::Main};
@@ -79,8 +79,8 @@ BOOST_AUTO_TEST_CASE(constructing_a_validator_installs_the_sha256_backend)
     std::cout << "SHA-256 backend: " << bsv::SelectSha256Backend() << std::endl;
 }
 
-// The same through the chain-name constructor. Meaningful only in a fresh
-// process: ctest runs it alone (test_txvalidator_chain_name_selects).
+// The same through the chain-name constructor, which ctest also runs alone, in
+// its own process (test_txvalidator_chain_name_selects).
 BOOST_AUTO_TEST_CASE(constructing_a_validator_by_chain_name_installs_the_sha256_backend)
 {
     const bsv::CTxValidator validator{std::string{"main"}};
