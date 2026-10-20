@@ -17,6 +17,15 @@ bdkffi_txvalidator_t bdkffi_txvalidator_create(const char* network_name, int net
 void bdkffi_txvalidator_destroy(bdkffi_txvalidator_t validator);
 
 /*
+ * Process-wide: the most helper threads that verify a large transaction's
+ * inputs alongside its caller at once. < 0 automatic (the default), 0 none,
+ * > 0 at most that many. See bsv::SetParallelInputHelpers in
+ * core/txvalidator.hpp. The getter returns the setting, -1 for automatic.
+ */
+void bdkffi_set_parallel_input_helpers(int64_t helpers);
+int64_t bdkffi_get_parallel_input_helpers(void);
+
+/*
  * Fallible setters return NULL on success, otherwise a malloc-owned
  * null-terminated error string. Free it with bdkffi_free.
  */

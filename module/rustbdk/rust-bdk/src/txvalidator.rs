@@ -520,6 +520,34 @@ impl Drop for TxValidator {
     }
 }
 
+/// Sets, for the whole process, the most helper threads that verify a large
+/// transaction's inputs alongside the calling thread at once.
+/// [`TxValidator::verify_script`], [`TxValidator::validate_transaction`] and
+/// [`TxValidator::validate_batch`] split a transaction with 16 or more inputs
+/// across the caller and idle helper threads.
+///
+/// - `helpers < 0`: automatic, the default. Up to one helper per CPU the
+///   process may use, minus one; on Linux that follows the affinity mask and
+///   the container's CPU limit.
+/// - `helpers == 0`: no helpers. Every transaction is verified on the calling
+///   thread and no helper thread is started.
+/// - `helpers > 0`: at most that many helpers, and never more than automatic.
+///
+/// Helpers only take cores that BDK's own threads leave idle; other threads in
+/// the process are not counted, so a lower limit leaves them more of the
+/// machine at the cost of slower large transactions. Results are the same at
+/// every setting. Safe to call at any time from any thread; helpers already
+/// verifying an input finish it.
+pub fn set_parallel_input_helpers(helpers: i64) {
+    unsafe { bdk_sys::bdkffi_set_parallel_input_helpers(helpers) }
+}
+
+/// The setting last passed to [`set_parallel_input_helpers`], `-1` for
+/// automatic (any negative value reads back as `-1`).
+pub fn parallel_input_helpers() -> i64 {
+    unsafe { bdk_sys::bdkffi_get_parallel_input_helpers() }
+}
+
 fn slice_lengths(extended_tx: &[u8], utxo_heights: &[i32]) -> Result<(c_int, c_int), TxError> {
     let tx_len = len_to_c_int(extended_tx.len()).map_err(|_| TxError::Exception)?;
     let utxo_len = len_to_c_int(utxo_heights.len()).map_err(|_| TxError::Exception)?;
