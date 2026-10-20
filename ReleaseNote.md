@@ -26,7 +26,8 @@ installed alongside the package (`CMakeLists.txt`).
     GOMAXPROCS is. Both are read once, when the pool is created.
   - Helpers only use CPUs that callers leave free: a helper joins a job only while fewer threads
     than CPUs are verifying, and leaves before its next input once more are. Callers are never held
-    back, so when callers alone fill every CPU, large transactions verify serially.
+    back: when callers alone fill every CPU, a large transaction starts on its caller alone and a
+    helper joins it as soon as a CPU frees.
   - `bdk_core` now links `Threads::Threads`; a consumer linking the static archive needs the
     platform's thread library (cgo and Cargo add it already).
   - Changing a `CTxValidator` setting (`Set...`) while any validation runs on it is a data race,

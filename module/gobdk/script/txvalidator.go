@@ -552,7 +552,8 @@ func ABIEchoLength(n uint64) uint64 {
 // goroutines: while a large transaction is verified they compete with Go code for the
 // CPUs. A lower limit leaves more of the machine to Go at the cost of slower large
 // transactions. Results are the same at every setting. Safe to call at any time from
-// any goroutine; helpers already verifying an input finish it.
+// any goroutine; a lower limit holds from each helper's next input, as helpers over it
+// finish the input they are verifying and leave.
 func SetParallelInputHelpers(helpers int64) {
 	C.TxValidator_SetParallelInputHelpers(C.int64_t(helpers))
 }

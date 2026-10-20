@@ -536,8 +536,9 @@ impl Drop for TxValidator {
 /// Helpers only take cores that BDK's own threads leave idle; other threads in
 /// the process are not counted, so a lower limit leaves them more of the
 /// machine at the cost of slower large transactions. Results are the same at
-/// every setting. Safe to call at any time from any thread; helpers already
-/// verifying an input finish it.
+/// every setting. Safe to call at any time from any thread; a lower limit
+/// holds from each helper's next input, as helpers over it finish the input
+/// they are verifying and leave.
 pub fn set_parallel_input_helpers(helpers: i64) {
     unsafe { bdk_sys::bdkffi_set_parallel_input_helpers(helpers) }
 }
