@@ -40,6 +40,9 @@
 #include <new>
 #include <system_error>
 #include <thread>
+#if !defined(_WIN32)
+#include <pthread.h>
+#endif
 #endif
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -338,6 +341,9 @@ private:
 // was slower.
 static_assert(bsv::detail::DEFAULT_PARALLEL_INPUT_THRESHOLD == 16);
 std::atomic<size_t> parallelInputThreshold{ bsv::detail::DEFAULT_PARALLEL_INPUT_THRESHOLD };
+// Test-only counters, written only while inputCountersEnabled (off by
+// default); each participant reads the flag once per job.
+std::atomic<bool> inputCountersEnabled{ false };
 std::atomic<uint64_t> helperVerifiedInputs{ 0 };
 std::atomic<uint64_t> jobVerifiedInputs{ 0 };  // caller and helpers, inside jobs
 std::atomic<uint64_t> helperJobParticipations{ 0 };  // helper Work() calls that verified an input
@@ -550,14 +556,8 @@ private:
         auto* pool = new (std::nothrow) InputVerifyPool(cores);
         if (pool == nullptr)
             return nullptr;
-        for (size_t i = 0; i + 1 < cores; ++i) {
-            try {
-                std::thread([pool] { pool->Run(); }).detach();
-                ++pool->helpers_;
-            } catch (const std::exception&) {  // system_error, bad_alloc
-                break;
-            }
-        }
+        for (size_t i = 0; i + 1 < cores && StartHelper(pool); ++i)
+            ++pool->helpers_;
         if (pool->helpers_ == 0) {
             delete pool;
             return nullptr;
@@ -565,6 +565,40 @@ private:
         created_.store(pool, std::memory_order_release);
         return pool;
     }
+
+    // Starts one detached helper thread running pool->Run(). On POSIX it gets
+    // an INPUT_HELPER_STACK_BYTES stack: a caller's main thread usually has
+    // 8 MiB, while a secondary thread's default can be far smaller (512 KiB
+    // on macOS), and inputs used to run on the caller's stack.
+    static bool StartHelper(InputVerifyPool* pool)
+    {
+#if defined(_WIN32)
+        try {
+            std::thread([pool] { pool->Run(); }).detach();
+            return true;
+        } catch (const std::exception&) {  // system_error, bad_alloc
+            return false;
+        }
+#else
+        pthread_attr_t attr;
+        if (pthread_attr_init(&attr) != 0)
+            return false;
+        pthread_t thread;
+        const bool started = pthread_attr_setstacksize(&attr, bsv::detail::INPUT_HELPER_STACK_BYTES) == 0
+            && pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED) == 0
+            && pthread_create(&thread, &attr, &InputVerifyPool::RunHelper, pool) == 0;
+        pthread_attr_destroy(&attr);
+        return started;
+#endif
+    }
+
+#if !defined(_WIN32)
+    static void* RunHelper(void* pool)
+    {
+        static_cast<InputVerifyPool*>(pool)->Run();
+        return nullptr;
+    }
+#endif
 
     static bool TryTakeCore(size_t cores)
     {
@@ -602,10 +636,13 @@ private:
                 });
             }
             if (job->TryJoin()) {
-                const size_t verified = job->Work(cores_, &helperVerifiedInputs);
-                if (verified > 0)
-                    helperJobParticipations.fetch_add(1, std::memory_order_relaxed);
-                jobVerifiedInputs.fetch_add(verified, std::memory_order_relaxed);
+                const bool count = inputCountersEnabled.load(std::memory_order_relaxed);
+                const size_t verified = job->Work(cores_, count ? &helperVerifiedInputs : nullptr);
+                if (count) {
+                    if (verified > 0)
+                        helperJobParticipations.fetch_add(1, std::memory_order_relaxed);
+                    jobVerifiedInputs.fetch_add(verified, std::memory_order_relaxed);
+                }
                 job->Leave();
             }
             job.reset();
@@ -681,6 +718,11 @@ size_t bsv::detail::SetParallelInputThresholdForTesting(size_t minInputs)
 uint64_t bsv::detail::HelperVerifiedInputCountForTesting()
 {
     return helperVerifiedInputs.load();
+}
+
+bool bsv::detail::SetInputCountersEnabledForTesting(bool enabled)
+{
+    return inputCountersEnabled.exchange(enabled);
 }
 
 uint64_t bsv::detail::HelperJobParticipationCountForTesting()
@@ -1455,7 +1497,9 @@ TxError bsv::CTxValidator::implVerifyScript(
             if (job) {
                 {
                     const JobCaller caller(*pool, job);
-                    jobVerifiedInputs.fetch_add(job->Work(), std::memory_order_relaxed);
+                    const size_t verified = job->Work();
+                    if (inputCountersEnabled.load(std::memory_order_relaxed))
+                        jobVerifiedInputs.fetch_add(verified, std::memory_order_relaxed);
                 }
                 return job->Result();
             }

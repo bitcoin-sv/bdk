@@ -22,8 +22,28 @@ inline constexpr size_t DEFAULT_PARALLEL_INPUT_THRESHOLD = 16;
 // multi-input transaction. Tests only.
 size_t SetParallelInputThresholdForTesting(size_t minInputs);
 
+// Helper threads of the input pool are created with this stack size where
+// the platform lets BDK choose it (POSIX), rather than the platform default.
+inline constexpr size_t INPUT_HELPER_STACK_BYTES = size_t{ 8 } << 20;
+
+// The counters below (helper inputs, job inputs, helper participations) count
+// only while enabled; off by default, so production does no per-input write
+// to them. Returns the previous setting. Tests only.
+bool SetInputCountersEnabledForTesting(bool enabled);
+
+class ScopedInputCountersForTesting {
+public:
+    explicit ScopedInputCountersForTesting(bool enabled) : previous_{ SetInputCountersEnabledForTesting(enabled) } {}
+    ~ScopedInputCountersForTesting() { SetInputCountersEnabledForTesting(previous_); }
+    ScopedInputCountersForTesting(const ScopedInputCountersForTesting&) = delete;
+    ScopedInputCountersForTesting& operator=(const ScopedInputCountersForTesting&) = delete;
+
+private:
+    const bool previous_;
+};
+
 // Number of inputs verified on pool helper threads since process start,
-// counted as each one finishes. Tests only.
+// counted as each one finishes, while counting is enabled. Tests only.
 uint64_t HelperVerifiedInputCountForTesting();
 
 // Number of inputs verified inside parallel jobs, by callers and helpers,
