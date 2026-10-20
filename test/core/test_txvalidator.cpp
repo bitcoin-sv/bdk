@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <ctime>
 #include <limits>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -17,6 +18,9 @@
 
 #if defined(__linux__)
 #include <sched.h>
+#endif
+#if defined(__APPLE__) || defined(__linux__)
+#include <pthread.h>
 #endif
 
 /// Define test module name with debug postfix
@@ -71,6 +75,8 @@ struct ParallelInputThresholdFromArgs {
     {
         shippedParallelInputThreshold = bsv::detail::SetParallelInputThresholdForTesting(0);
         bsv::detail::SetParallelInputThresholdForTesting(shippedParallelInputThreshold);
+        // The pool tests read the test-only input counters; they are off by default.
+        bsv::detail::SetInputCountersEnabledForTesting(true);
         const std::string threshold = "--parallel-input-threshold=";
         const std::string cores = "--input-pool-cores=";
         const auto& suite = boost::unit_test::framework::master_test_suite();
@@ -2660,6 +2666,230 @@ BOOST_AUTO_TEST_CASE(helper_stays_with_the_busy_count_at_the_core_count, PARALLE
         << " more inputs with the busy count at the core count; expected at least 2");
 }
 
+// Records, from the claim hook, which thread claimed each input of a parallel
+// job and that thread's stack size; optionally holds the caller on input 0 so
+// helpers claim the rest.
+class ClaimRecorder {
+public:
+    struct Claim {
+        std::thread::id thread;
+        size_t stackBytes;
+    };
+
+    explicit ClaimRecorder(bool holdCallerOnFirstInput)
+    {
+        std::lock_guard lock{ mutex };
+        claims.clear();
+        caller = std::this_thread::get_id();
+        hold = holdCallerOnFirstInput;
+        previous = bsv::detail::SetInputHookForTesting(&ClaimRecorder::Hook);
+    }
+    ~ClaimRecorder() { bsv::detail::SetInputHookForTesting(previous); }
+    ClaimRecorder(const ClaimRecorder&) = delete;
+    ClaimRecorder& operator=(const ClaimRecorder&) = delete;
+
+    static std::map<size_t, Claim> Claims()
+    {
+        std::lock_guard lock{ mutex };
+        return claims;
+    }
+    static void Reset()
+    {
+        std::lock_guard lock{ mutex };
+        claims.clear();
+    }
+    static bool OnHelper(size_t index)
+    {
+        std::lock_guard lock{ mutex };
+        const auto it = claims.find(index);
+        return it != claims.end() && it->second.thread != caller;
+    }
+
+private:
+    static size_t CurrentStackBytes()
+    {
+#if defined(__APPLE__)
+        return pthread_get_stacksize_np(pthread_self());
+#elif defined(__linux__)
+        pthread_attr_t attr;
+        size_t bytes = 0;
+        if (pthread_getattr_np(pthread_self(), &attr) == 0) {
+            pthread_attr_getstacksize(&attr, &bytes);
+            pthread_attr_destroy(&attr);
+        }
+        return bytes;
+#else
+        return 0;
+#endif
+    }
+
+    static void Hook(size_t index, bsv::detail::InputEvent event)
+    {
+        if (event != bsv::detail::InputEvent::Claimed)
+            return;
+        bool holdHere = false;
+        {
+            std::lock_guard lock{ mutex };
+            claims[index] = Claim{ std::this_thread::get_id(), CurrentStackBytes() };
+            holdHere = hold && index == 0 && std::this_thread::get_id() == caller;
+        }
+        if (holdHere)
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    }
+
+    static inline std::mutex mutex;
+    static inline std::map<size_t, Claim> claims;
+    static inline std::thread::id caller;
+    static inline bool hold = false;
+    bsv::detail::InputHook previous = nullptr;
+};
+
+// The test-only counters (helper inputs, job inputs, helper participations)
+// stay untouched unless a test turns them on, so production does no
+// per-input write to them; helpers still verify inputs either way.
+BOOST_AUTO_TEST_CASE(input_counters_count_only_when_enabled, PARALLEL_TEST_CASE_DECORATORS)
+{
+    if (!PoolHasHelpers())
+        return;
+    constexpr size_t nInputs = 200;
+    const bsv::CTxValidator se("main");
+    const auto etxBin = SignedP2PKHBin(nInputs);
+    const InputThresholdGuard parallel(FORCE_PARALLEL);
+    BOOST_REQUIRE(PoolIsIdle());
+    const auto counters = [] {
+        return std::array<uint64_t, 3>{ bsv::detail::HelperVerifiedInputCountForTesting(),
+                                        bsv::detail::JobVerifiedInputCountForTesting(),
+                                        bsv::detail::HelperJobParticipationCountForTesting() };
+    };
+    const ClaimRecorder recorder(/*holdCallerOnFirstInput=*/true);
+    {
+        const bsv::detail::ScopedInputCountersForTesting off(false);
+        const auto before = counters();
+        bool helperVerified = false;
+        for (int call = 0; call < 5 && !helperVerified; ++call) {
+            ClaimRecorder::Reset();
+            BOOST_REQUIRE(bsv::TxErrorIsOk(ValidateP2PKHSpend(se, etxBin, nInputs, /*consensus=*/true)));
+            for (size_t i = 1; i < nInputs && !helperVerified; ++i)
+                helperVerified = ClaimRecorder::OnHelper(i);
+        }
+        BOOST_REQUIRE_MESSAGE(helperVerified, "no helper verified an input with the counters off");
+        BOOST_CHECK_MESSAGE(counters() == before, "a test-only counter moved with counting off");
+    }
+    {
+        const bsv::detail::ScopedInputCountersForTesting on(true);
+        const auto before = counters();
+        BOOST_REQUIRE(PoolIsIdle());
+        ClaimRecorder::Reset();
+        BOOST_REQUIRE(bsv::TxErrorIsOk(ValidateP2PKHSpend(se, etxBin, nInputs, /*consensus=*/true)));
+        BOOST_CHECK_GT(counters()[1], before[1]);
+    }
+}
+
+// Helper threads get an 8 MiB stack, as a caller's main thread usually has,
+// rather than the platform default (512 KiB for secondary threads on macOS).
+BOOST_AUTO_TEST_CASE(helpers_run_on_an_8_mib_stack, PARALLEL_TEST_CASE_DECORATORS)
+{
+    if (!PoolHasHelpers())
+        return;
+#if !defined(__APPLE__) && !defined(__linux__)
+    BOOST_TEST_MESSAGE("no stack size query on this platform; nothing to check");
+    return;
+#endif
+    constexpr size_t nInputs = 64;
+    const bsv::CTxValidator se("main");
+    const auto etxBin = SignedP2PKHBin(nInputs);
+    const InputThresholdGuard parallel(FORCE_PARALLEL);
+    BOOST_REQUIRE(PoolIsIdle());
+    const ClaimRecorder recorder(/*holdCallerOnFirstInput=*/true);
+    size_t helperClaims = 0;
+    size_t smallest = std::numeric_limits<size_t>::max();
+    for (int call = 0; call < 5 && helperClaims == 0; ++call) {
+        ClaimRecorder::Reset();
+        BOOST_REQUIRE(bsv::TxErrorIsOk(ValidateP2PKHSpend(se, etxBin, nInputs, /*consensus=*/true)));
+        for (const auto& [index, claim] : ClaimRecorder::Claims()) {
+            if (ClaimRecorder::OnHelper(index)) {
+                ++helperClaims;
+                smallest = std::min(smallest, claim.stackBytes);
+            }
+        }
+    }
+    BOOST_REQUIRE_MESSAGE(helperClaims > 0, "no helper claimed an input");
+    BOOST_CHECK_MESSAGE(smallest >= (size_t{ 8 } << 20), "a helper ran on a " << smallest << "-byte stack");
+}
+
+// Inputs (0) P2PKH, (1) OP_IF nested `depth` deep, (2) a bare 1-of-`nKeys`
+// multisig signed by the key CHECKMULTISIG reaches last. Verified with
+// VerifyScript in consensus mode (no post-Genesis size, op or key-count
+// limits).
+static bsv::CMutableTransactionExtended MakeDeepScriptSpend(size_t depth, size_t nKeys)
+{
+    auto eTx = MakeSignedP2PKHSpend(std::vector<SigHashType>(3, SigHashType().withForkId()), 1);
+    CScript nested;
+    for (size_t i = 0; i < depth; ++i)
+        nested << OP_1 << OP_IF;
+    nested << OP_1;
+    for (size_t i = 0; i < depth; ++i)
+        nested << OP_ENDIF;
+    eTx.vutxo[1].scriptPubKey = nested;
+    eTx.mtx.vin[1].scriptSig = CScript();
+
+    std::vector<CKey> keys(nKeys);
+    CScript multisig = CScript() << OP_1;
+    for (size_t k = 0; k < nKeys; ++k) {
+        std::array<uint8_t, 32> raw{};
+        raw[29] = 0x6b;
+        raw[30] = static_cast<uint8_t>((k + 1) >> 8);
+        raw[31] = static_cast<uint8_t>(k + 1);
+        keys[k].Set(raw.begin(), raw.end(), /*fCompressedIn=*/true);
+        multisig << ToByteVector(keys[k].GetPubKey());
+    }
+    multisig << static_cast<int64_t>(nKeys) << OP_CHECKMULTISIG;
+    eTx.vutxo[2].scriptPubKey = multisig;
+    const CTransaction unsignedTx(eTx.mtx);
+    const SigHashType allForkId = SigHashType().withForkId();
+    const uint256 sighash = SignatureHash(multisig, unsignedTx, 2, allForkId, eTx.vutxo[2].nValue);
+    std::vector<uint8_t> sig;
+    BOOST_REQUIRE(keys.front().Sign(sighash, sig));
+    sig.push_back(static_cast<uint8_t>(allForkId.getRawSigHashType()));
+    eTx.mtx.vin[2].scriptSig = CScript() << OP_0 << sig;
+    return eTx;
+}
+
+constexpr size_t DEEP_IF_DEPTH = 100000;
+constexpr size_t DEEP_MULTISIG_KEYS = 1000;
+
+// The deepest scripts in this suite, an OP_IF nested 100,000 deep and a
+// 1-of-1,000 multisig checked against every key, verify on a helper thread.
+BOOST_AUTO_TEST_CASE(deep_scripts_verify_on_a_helper, PARALLEL_TEST_CASE_DECORATORS)
+{
+    if (!PoolHasHelpers())
+        return;
+    const bsv::CTxValidator se("main");
+    const auto eTx = MakeDeepScriptSpend(DEEP_IF_DEPTH, DEEP_MULTISIG_KEYS);
+    const auto etxBin = SerializeExtended(eTx);
+    const std::vector<int32_t> heights(3, P2PKH_UTXO_HEIGHT);
+    const auto verify = [&] {
+        return se.VerifyScript(std::span<const uint8_t>(etxBin), std::span<const int32_t>(heights),
+            P2PKH_BLOCK_HEIGHT, /*consensus=*/true);
+    };
+    {
+        const InputThresholdGuard serial(FORCE_SERIAL);
+        const TxError status = verify();
+        BOOST_REQUIRE_MESSAGE(bsv::TxErrorIsOk(status), "serial: " << status.domain << "/" << status.code);
+    }
+    const InputThresholdGuard parallel(FORCE_PARALLEL);
+    BOOST_REQUIRE(PoolIsIdle());
+    const ClaimRecorder recorder(/*holdCallerOnFirstInput=*/true);
+    bool bothOnHelpers = false;
+    for (int call = 0; call < 5 && !bothOnHelpers; ++call) {
+        ClaimRecorder::Reset();
+        const TxError status = verify();
+        BOOST_REQUIRE_MESSAGE(bsv::TxErrorIsOk(status), "parallel: " << status.domain << "/" << status.code);
+        bothOnHelpers = ClaimRecorder::OnHelper(1) && ClaimRecorder::OnHelper(2);
+    }
+    BOOST_CHECK_MESSAGE(bothOnHelpers, "the deep inputs were not both verified on helpers in 5 calls");
+}
+
 #undef PARALLEL_TEST_CASE_DECORATORS
 
 BOOST_AUTO_TEST_SUITE_END()
@@ -2894,6 +3124,7 @@ static double BestUsPerTx(const bsv::CTxValidator& se, const BenchTx& tx, size_t
 // would get.
 BOOST_AUTO_TEST_CASE(threshold_sweep)
 {
+    const bsv::detail::ScopedInputCountersForTesting productionCounters(false);
     const bsv::CTxValidator se("main");
     std::cerr << "[threshold_sweep] hardware_concurrency=" << std::thread::hardware_concurrency() << std::endl;
     std::cerr << "[threshold_sweep] inputs serial_us parallel_us speedup" << std::endl;
@@ -2908,6 +3139,7 @@ BOOST_AUTO_TEST_CASE(threshold_sweep)
 // ValidateTransaction at 1k, 10k and 40k SIGHASH_ALL|FORKID P2PKH inputs.
 BOOST_AUTO_TEST_CASE(large_tx_serial_vs_parallel)
 {
+    const bsv::detail::ScopedInputCountersForTesting productionCounters(false);
     const bsv::CTxValidator se("main");
     const size_t defaultThreshold = bsv::detail::SetParallelInputThresholdForTesting(FORCE_SERIAL);
     bsv::detail::SetParallelInputThresholdForTesting(defaultThreshold);
@@ -2959,6 +3191,7 @@ static double AggregateInputsPerSecond(const bsv::CTxValidator& se, const std::v
 
 BOOST_AUTO_TEST_CASE(concurrent_callers_throughput)
 {
+    const bsv::detail::ScopedInputCountersForTesting productionCounters(false);
     const bsv::CTxValidator se("main");
     const size_t cores = std::max<size_t>(1, std::thread::hardware_concurrency());
     const size_t defaultThreshold = bsv::detail::SetParallelInputThresholdForTesting(FORCE_SERIAL);
@@ -3003,6 +3236,7 @@ BOOST_AUTO_TEST_CASE(concurrent_callers_throughput)
 // alone account for. Run with -- --input-pool-cores=N to size the pool.
 BOOST_AUTO_TEST_CASE(core_budget_under_concurrent_callers)
 {
+    const bsv::detail::ScopedInputCountersForTesting productionCounters(false);
     const size_t cores = bsv::detail::InputPoolHelperCountForTesting() + 1;
     const bsv::CTxValidator se("main");
     const BenchTx large = MakeBenchTx(10000);
@@ -3037,6 +3271,64 @@ BOOST_AUTO_TEST_CASE(core_budget_under_concurrent_callers)
         BOOST_REQUIRE_EQUAL(failures.load(), 0u);
         std::cerr << "[core_budget_under_concurrent_callers] " << callerCount << " | " << peak << " | "
                   << overCallers << "/" << samples << " | " << overCores << "/" << samples << std::endl;
+    }
+}
+
+// Peak stack used to verify one input, measured by painting a 2 MiB region
+// below this frame, verifying the input with VerifySpend on this thread, and
+// counting how much of the pattern was overwritten. A measurement only: it
+// reads the painted bytes back through a fresh frame at the same depth.
+constexpr size_t STACK_PROBE_BYTES = size_t{ 2 } << 20;
+
+[[gnu::noinline]] static void PaintStack()
+{
+    volatile unsigned char area[STACK_PROBE_BYTES];
+    for (size_t i = 0; i < STACK_PROBE_BYTES; ++i)
+        area[i] = 0xa5;
+}
+
+[[gnu::noinline]] static size_t UnusedStackBytes()
+{
+    volatile unsigned char area[STACK_PROBE_BYTES];
+    size_t untouched = 0;
+    while (untouched < STACK_PROBE_BYTES && area[untouched] == 0xa5)
+        ++untouched;
+    return untouched;
+}
+
+// Calibration for the probe: a frame that touches `Bytes` of stack.
+template <size_t Bytes>
+[[gnu::noinline]] static void UseStack()
+{
+    volatile unsigned char area[Bytes];
+    for (size_t i = 0; i < Bytes; ++i)
+        area[i] = 0;
+}
+
+BOOST_AUTO_TEST_CASE(stack_use_of_the_deepest_scripts)
+{
+    const bsv::detail::ScopedInputCountersForTesting productionCounters(false);
+    const bsv::CTxValidator se("main");
+    const auto eTx = parallel_input_verification::MakeDeepScriptSpend(
+        parallel_input_verification::DEEP_IF_DEPTH, parallel_input_verification::DEEP_MULTISIG_KEYS);
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << eTx.mtx;
+    const std::vector<uint8_t> txBin(ss.begin(), ss.end());
+    std::cerr << "[stack_use_of_the_deepest_scripts] input | peak_stack_bytes (probe " << STACK_PROBE_BYTES << ")" << std::endl;
+    PaintStack();
+    UseStack<65536>();
+    std::cerr << "[stack_use_of_the_deepest_scripts] calibration, a 65536-byte frame | "
+              << STACK_PROBE_BYTES - UnusedStackBytes() << std::endl;
+    for (const auto& [index, name] : { std::pair{ size_t{ 0 }, "P2PKH" }, std::pair{ size_t{ 1 }, "OP_IF nested 100000 deep" },
+                                       std::pair{ size_t{ 2 }, "1-of-1000 multisig, 1000 checks" } }) {
+        const CTxOut& source = eTx.vutxo[index];
+        PaintStack();
+        const TxError status = se.VerifySpend(std::span<const uint8_t>(txBin), static_cast<uint32_t>(index),
+            std::span<const uint8_t>(source.scriptPubKey.data(), source.scriptPubKey.size()),
+            source.nValue.GetSatoshis(), P2PKH_UTXO_HEIGHT, P2PKH_BLOCK_HEIGHT, /*consensus=*/true);
+        const size_t used = STACK_PROBE_BYTES - UnusedStackBytes();
+        BOOST_REQUIRE(bsv::TxErrorIsOk(status));
+        std::cerr << "[stack_use_of_the_deepest_scripts] " << name << " | " << used << std::endl;
     }
 }
 
