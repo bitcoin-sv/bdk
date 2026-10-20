@@ -69,11 +69,14 @@ using namespace bsv;
 // The parallel input threshold the library starts with, read before any
 // test or argument changes it.
 static size_t shippedParallelInputThreshold = 0;
+// The helper limit the library starts with, read the same way.
+static int64_t shippedParallelInputHelpers = 0;
 
 struct ParallelInputThresholdFromArgs {
     ParallelInputThresholdFromArgs()
     {
         shippedParallelInputThreshold = bsv::detail::SetParallelInputThresholdForTesting(0);
+        shippedParallelInputHelpers = bsv::GetParallelInputHelpers();
         bsv::detail::SetParallelInputThresholdForTesting(shippedParallelInputThreshold);
         // The pool tests read the test-only input counters; they are off by default.
         bsv::detail::SetInputCountersEnabledForTesting(true);
@@ -2888,6 +2891,256 @@ BOOST_AUTO_TEST_CASE(deep_scripts_verify_on_a_helper, PARALLEL_TEST_CASE_DECORAT
         bothOnHelpers = ClaimRecorder::OnHelper(1) && ClaimRecorder::OnHelper(2);
     }
     BOOST_CHECK_MESSAGE(bothOnHelpers, "the deep inputs were not both verified on helpers in 5 calls");
+}
+
+// Sets the process-wide helper limit for a scope and restores the previous one.
+class HelperLimitGuard {
+public:
+    explicit HelperLimitGuard(int64_t helpers) : previous_{ bsv::GetParallelInputHelpers() }
+    {
+        bsv::SetParallelInputHelpers(helpers);
+    }
+    ~HelperLimitGuard() { bsv::SetParallelInputHelpers(previous_); }
+    HelperLimitGuard(const HelperLimitGuard&) = delete;
+    HelperLimitGuard& operator=(const HelperLimitGuard&) = delete;
+
+private:
+    const int64_t previous_;
+};
+
+// Every input claimed inside a parallel job sleeps for `delay`; records the
+// most helpers verifying an input at the same moment, process-wide. A helper
+// is any thread other than the test's callers, which mark themselves with
+// `isCaller`.
+class HelperConcurrency {
+public:
+    explicit HelperConcurrency(std::chrono::milliseconds delay)
+    {
+        sleepMs.store(delay.count());
+        Reset();
+        previous = bsv::detail::SetInputHookForTesting(&HelperConcurrency::Hook);
+    }
+    ~HelperConcurrency() { bsv::detail::SetInputHookForTesting(previous); }
+    HelperConcurrency(const HelperConcurrency&) = delete;
+    HelperConcurrency& operator=(const HelperConcurrency&) = delete;
+
+    static size_t Most() { return most.load(); }
+    static void Reset() { most.store(0); }
+    static inline thread_local bool isCaller = false;
+
+private:
+    static void Hook(size_t, bsv::detail::InputEvent event)
+    {
+        if (event != bsv::detail::InputEvent::Claimed)
+            return;
+        const auto delay = std::chrono::milliseconds(sleepMs.load());
+        if (isCaller) {
+            std::this_thread::sleep_for(delay);
+            return;
+        }
+        const size_t now = inFlight.fetch_add(1) + 1;
+        size_t seen = most.load();
+        while (now > seen && !most.compare_exchange_weak(seen, now)) {
+        }
+        std::this_thread::sleep_for(delay);
+        inFlight.fetch_sub(1);
+    }
+    static inline std::atomic<long long> sleepMs{ 0 };
+    static inline std::atomic<size_t> inFlight{ 0 };
+    static inline std::atomic<size_t> most{ 0 };
+    bsv::detail::InputHook previous = nullptr;
+};
+
+// Validates a 48-input tx of slow inputs on `callers` threads at once while
+// the test thread frees a core five times (each release wakes a parked
+// helper, as a caller leaving would), and returns the most helpers seen
+// verifying at the same moment.
+static size_t MostConcurrentHelpers(size_t callers)
+{
+    constexpr size_t nInputs = 48;
+    const auto etxBin = SignedP2PKHBin(nInputs);
+    const bsv::CTxValidator se("main");
+    const InputThresholdGuard defaults(bsv::detail::DEFAULT_PARALLEL_INPUT_THRESHOLD);
+    BOOST_REQUIRE(PoolIsIdle());
+    const HelperConcurrency probe(std::chrono::milliseconds(10));
+    std::atomic<size_t> failures{ 0 };
+    std::atomic<size_t> finished{ 0 };
+    std::vector<std::thread> threads;
+    for (size_t t = 0; t < callers; ++t) {
+        threads.emplace_back([&] {
+            HelperConcurrency::isCaller = true;
+            if (!bsv::TxErrorIsOk(ValidateP2PKHSpend(se, etxBin, nInputs, /*consensus=*/true)))
+                failures.fetch_add(1);
+            finished.fetch_add(1);
+        });
+    }
+    for (int wake = 0; wake < 5 && finished.load() < callers; ++wake) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        bsv::detail::ScopedBusyThreadsForTesting oneCore(1);
+        oneCore.Release();
+    }
+    for (auto& thread : threads)
+        thread.join();
+    BOOST_CHECK_EQUAL(failures.load(), 0u);
+    BOOST_CHECK(PoolIsIdle());
+    return HelperConcurrency::Most();
+}
+
+// The library ships with an automatic helper count; the setting reads back
+// as set, every negative value reading back as -1.
+BOOST_AUTO_TEST_CASE(helper_limit_defaults_to_automatic_and_reads_back)
+{
+    BOOST_CHECK_EQUAL(shippedParallelInputHelpers, -1);
+    const HelperLimitGuard restore(bsv::GetParallelInputHelpers());
+    for (const int64_t helpers : { int64_t{ 0 }, int64_t{ 1 }, int64_t{ 3 }, int64_t{ 1000 }, int64_t{ -1 } }) {
+        bsv::SetParallelInputHelpers(helpers);
+        BOOST_CHECK_EQUAL(bsv::GetParallelInputHelpers(), helpers);
+    }
+    for (const int64_t helpers : { int64_t{ -2 }, std::numeric_limits<int64_t>::min() }) {
+        bsv::SetParallelInputHelpers(helpers);
+        BOOST_CHECK_EQUAL(bsv::GetParallelInputHelpers(), -1);
+    }
+}
+
+// With the limit at 0, a large tx is verified by its caller alone: no job is
+// queued and no helper verifies an input, however idle the pool is.
+BOOST_AUTO_TEST_CASE(no_helpers_verifies_every_tx_on_its_caller, PARALLEL_TEST_CASE_DECORATORS)
+{
+    if (!PoolHasHelpers())
+        return;
+    constexpr size_t nInputs = 200;
+    const bsv::CTxValidator se("main");
+    const auto etxBin = SignedP2PKHBin(nInputs);
+    const InputThresholdGuard parallel(FORCE_PARALLEL);
+    BOOST_REQUIRE(PoolIsIdle());
+    const HelperLimitGuard none(0);
+    const uint64_t jobInputs = bsv::detail::JobVerifiedInputCountForTesting();
+    const uint64_t helperInputs = bsv::detail::HelperVerifiedInputCountForTesting();
+    for (int call = 0; call < 5; ++call)
+        BOOST_CHECK(bsv::TxErrorIsOk(ValidateP2PKHSpend(se, etxBin, nInputs, /*consensus=*/true)));
+    BOOST_CHECK_EQUAL(bsv::detail::JobVerifiedInputCountForTesting() - jobInputs, 0u);
+    BOOST_CHECK_EQUAL(bsv::detail::HelperVerifiedInputCountForTesting() - helperInputs, 0u);
+    BOOST_CHECK_EQUAL(bsv::detail::QueuedJobCountForTesting(), 0u);
+}
+
+// With the limit at n, no more than n helpers verify inputs at once,
+// process-wide: not when two large txs run together, and not when freed cores
+// wake parked helpers while a job runs. At least one helper still joins.
+BOOST_AUTO_TEST_CASE(helper_limit_caps_concurrent_helpers, PARALLEL_TEST_CASE_DECORATORS)
+{
+    const size_t helpers = bsv::detail::InputPoolHelperCountForTesting();
+    if (helpers < 2) {
+        BOOST_TEST_MESSAGE(helpers << " helper(s): a limit below the pool size needs at least 2");
+        return;
+    }
+    for (const int64_t limit : { int64_t{ 1 }, int64_t{ 2 } }) {
+        if (static_cast<size_t>(limit) >= helpers)
+            continue;
+        const HelperLimitGuard capped(limit);
+        for (const size_t callers : { size_t{ 1 }, size_t{ 2 } }) {
+            const size_t most = MostConcurrentHelpers(callers);
+            BOOST_CHECK_MESSAGE(most >= 1 && most <= static_cast<size_t>(limit),
+                "limit " << limit << ", " << callers << " caller(s): " << most << " helpers verified at once");
+        }
+    }
+}
+
+// The automatic setting (any negative value) uses more than one helper when
+// the pool has them: a single caller's job gets several within a few calls.
+BOOST_AUTO_TEST_CASE(automatic_helper_limit_uses_the_pool, PARALLEL_TEST_CASE_DECORATORS)
+{
+    const size_t helpers = bsv::detail::InputPoolHelperCountForTesting();
+    if (helpers < 2) {
+        BOOST_TEST_MESSAGE(helpers << " helper(s): nothing to tell apart from a limit of 1");
+        return;
+    }
+    for (const int64_t automatic : { int64_t{ -1 }, int64_t{ -5 } }) {
+        const HelperLimitGuard limit(automatic);
+        size_t most = 0;
+        for (int call = 0; call < 5 && most < 2; ++call)
+            most = std::max(most, MostConcurrentHelpers(1));
+        BOOST_CHECK_MESSAGE(most >= 2, "setting " << automatic << ": at most " << most << " helper(s) at once");
+    }
+}
+
+// Results do not depend on the helper limit, and changing it while callers
+// validate is safe: each tx returns its serial result at every setting, then
+// while another thread keeps switching the limit between automatic, 0, 1, 2
+// and more than the pool has.
+BOOST_AUTO_TEST_CASE(results_hold_at_every_helper_limit_and_while_it_changes, PARALLEL_TEST_CASE_DECORATORS)
+{
+    const bsv::CTxValidator se("main");
+    const SigHashType allForkId = SigHashType().withForkId();
+    constexpr size_t nInputs = 60;
+    const auto spend = [&] {
+        return MakeSignedP2PKHSpend(std::vector<SigHashType>(nInputs, allForkId), 2, /*precomputeForSigning=*/true);
+    };
+    std::vector<bsv::CMutableTransactionExtended> txs;
+    txs.push_back(spend());                    // valid
+    txs.push_back(spend());
+    CorruptP2PKHSignature(txs.back(), 7);      // NULLFAIL
+    txs.push_back(spend());
+    EmptyP2PKHSignature(txs.back(), 40);       // EVAL_FALSE, above it NULLFAIL
+    CorruptP2PKHSignature(txs.back(), 50);
+    {
+        std::vector<SigHashType> types(nInputs, allForkId);
+        types[25] = SigHashType();             // MUST_USE_FORKID
+        txs.push_back(MakeSignedP2PKHSpend(types, 2, /*precomputeForSigning=*/true));
+    }
+    std::vector<std::vector<uint8_t>> bins;
+    const std::vector<int32_t> heights(nInputs, P2PKH_UTXO_HEIGHT);
+    std::vector<TxError> expected;
+    for (const auto& tx : txs) {
+        bins.push_back(SerializeExtended(tx));
+        expected.push_back(FirstFailingSpend(se, tx, heights, /*consensus=*/true));
+    }
+    const auto validate = [&](size_t i) {
+        return se.ValidateTransaction(std::span<const uint8_t>(bins[i]), std::span<const int32_t>(heights),
+            P2PKH_BLOCK_HEIGHT, /*consensus=*/true);
+    };
+
+    const InputThresholdGuard parallel(FORCE_PARALLEL);
+    const HelperLimitGuard restore(bsv::GetParallelInputHelpers());
+    constexpr std::array<int64_t, 5> SETTINGS{ -1, 0, 1, 2, 1000 };
+    for (const int64_t helpers : SETTINGS) {
+        bsv::SetParallelInputHelpers(helpers);
+        for (size_t i = 0; i < txs.size(); ++i) {
+            const TxError status = validate(i);
+            BOOST_CHECK_MESSAGE(SameTxError(status, expected[i]), "helpers " << helpers << ", tx " << i
+                << ": domain=" << status.domain << " code=" << status.code);
+        }
+    }
+
+    const size_t callerCount = std::max<size_t>(2, (bsv::detail::InputPoolHelperCountForTesting() + 1) / 2);
+    std::atomic<bool> stop{ false };
+    std::atomic<size_t> mismatches{ 0 };
+    std::atomic<size_t> calls{ 0 };
+    std::thread switcher([&] {
+        for (size_t s = 0; !stop.load(); ++s) {
+            bsv::SetParallelInputHelpers(SETTINGS[s % SETTINGS.size()]);
+            std::this_thread::sleep_for(std::chrono::microseconds(500));
+        }
+    });
+    std::vector<std::thread> callers;
+    const auto until = std::chrono::steady_clock::now() + std::chrono::milliseconds(1000);
+    for (size_t t = 0; t < callerCount; ++t) {
+        callers.emplace_back([&, t] {
+            for (size_t r = t; std::chrono::steady_clock::now() < until; ++r) {
+                const size_t i = r % txs.size();
+                if (!SameTxError(validate(i), expected[i]))
+                    mismatches.fetch_add(1);
+                calls.fetch_add(1);
+            }
+        });
+    }
+    for (auto& caller : callers)
+        caller.join();
+    stop.store(true);
+    switcher.join();
+    BOOST_CHECK_EQUAL(mismatches.load(), 0u);
+    BOOST_CHECK_GT(calls.load(), 0u);
+    BOOST_CHECK(PoolIsIdle());
+    BOOST_CHECK_EQUAL(bsv::detail::QueuedJobCountForTesting(), 0u);
 }
 
 #undef PARALLEL_TEST_CASE_DECORATORS
