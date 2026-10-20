@@ -317,6 +317,12 @@ jobs:
           tar -xzf dependancies_darwin_arm64.tar.gz
           echo "DEPS=${{ github.workspace }}/dependancies_darwin_arm64" >> "$GITHUB_ENV"
 
+      - name: Compile ARMv8 SHA-2 wrapper with generic clang target
+        timeout-minutes: 2
+        run: |
+          clang++ -std=c++20 -arch arm64 -mcpu=generic -c core/sha256_arm_shani_target.cpp \
+            -o "$RUNNER_TEMP/sha256_arm_generic.o"
+
       - name: Build a universal bdk_core
         run: |
           cmake -B build-universal -S . -DCMAKE_BUILD_TYPE=Release "-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64" \
