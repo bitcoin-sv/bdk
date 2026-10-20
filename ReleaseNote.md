@@ -17,8 +17,12 @@ installed alongside the package (`CMakeLists.txt`).
   `VerifyScriptWithCustomFlagsContext` and `ValidateBatchContext`; Rust has `*_cancellable`
   methods with a `CancelFlag`. A cancelled call returns the new `TX_ERR_DOMAIN_CANCELLED` (5),
   Go `*CancelledError` / `ErrCancelled`, Rust `TxError::Cancelled`: no verdict, never a script
-  or DoS error. Existing functions are unchanged. Rust's `TxError` is now `#[non_exhaustive]`.
+  or DoS error. Existing functions are unchanged. Rust's `TxError` is now `#[non_exhaustive]`;
+  as that breaks exhaustive matches, `rust-bdk` and `bdk-sys` move to 0.2.0.
   See [ObjectModel](documentation/docs/ObjectModel.md#cancellation).
+- **`CheckStandardness` checks it has one UTXO height per input.** A shorter heights span used to be
+  read past its end; it now gives the exception domain, as the other entry points do for
+  mismatched sizes.
 - **Script validation of many-input transactions is linear in the input count.**
   `ValidateTransaction` and `VerifyScript` now build one `PrecomputedTransactionData` per
   transaction and share it across all inputs, as SV Node does; `VerifySpend` builds one per call
