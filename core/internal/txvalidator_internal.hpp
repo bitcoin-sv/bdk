@@ -46,6 +46,10 @@ private:
 // counted as each one finishes, while counting is enabled. Tests only.
 uint64_t HelperVerifiedInputCountForTesting();
 
+// Times a woken helper found a job with inputs left but no free core, since
+// process start, while counting is enabled. Tests only.
+uint64_t HelperWakesWithoutCoreForTesting();
+
 // Number of inputs verified inside parallel jobs, by callers and helpers,
 // since process start. Tests only.
 uint64_t JobVerifiedInputCountForTesting();

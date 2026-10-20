@@ -405,8 +405,10 @@ int CPP_SCRIPT_ERR_ERROR_COUNT();
 // Helpers only ever take cores that BDK's own threads leave idle; this limit
 // also leaves room for other work in the process, such as Go code calling
 // BDK. Results are the same at every setting. Safe to call at any time from
-// any thread: helpers already verifying an input finish it, and from then on
-// no more than the new limit verify at once. Without thread support (WASM)
+// any thread. A lower limit holds from each helper's next input: helpers over
+// it finish the input they are verifying and leave the transaction to its
+// caller and the helpers within the limit. A higher limit applies to helpers
+// joining from then on. Without thread support (WASM)
 // the setting is kept but has no effect: every transaction is verified on its
 // caller.
 void SetParallelInputHelpers(int64_t helpers);

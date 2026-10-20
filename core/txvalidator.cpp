@@ -319,15 +319,19 @@ private:
  * is below the core count, and checks it again before claiming each input,
  * leaving the job once the count exceeds the core count. So a helper holds a
  * core for at most one more input once the machine is oversubscribed. Callers
- * are never held back: when callers alone occupy every core a large tx gets no
- * helpers and runs serially on its own thread. The core count is
+ * are never held back: when callers alone occupy every core a large tx's job
+ * is queued without waking anyone and its caller starts alone; a helper joins
+ * when a core frees. The core count is
  * EffectiveCpuCount(): on Linux it respects the affinity mask and a
  * container's cgroup CPU limit, rounded as Go sets GOMAXPROCS.
  *
  * Helper limit: SetParallelInputHelpers caps the helpers on jobs at once,
  * process-wide. A helper takes a place under the limit before it takes a
  * core, whichever wake brought it, and gives it back when it leaves the job.
- * A limit of 0 never creates the pool.
+ * Before each claim a helper also checks the places against the limit, and
+ * while more are held than it allows, gives its own back and leaves, so a
+ * lowered limit holds from each helper's next input. A limit of 0 never
+ * creates the pool.
  *
  * Cancellation: the cancellation token is read on whichever thread verifies
  * an input, so a token must not depend on the calling thread (a thread CPU
@@ -352,6 +356,7 @@ std::atomic<bool> inputCountersEnabled{ false };
 std::atomic<uint64_t> helperVerifiedInputs{ 0 };
 std::atomic<uint64_t> jobVerifiedInputs{ 0 };  // caller and helpers, inside jobs
 std::atomic<uint64_t> helperJobParticipations{ 0 };  // helper Work() calls that verified an input
+std::atomic<uint64_t> helperWakesWithoutCore{ 0 };
 std::atomic<bsv::detail::InputHook> inputHook{ nullptr };  // tests only
 std::atomic<size_t> inputPoolCoresCap{ 0 };  // 0: no cap (tests only)
 std::atomic<int64_t> parallelInputHelpers{ -1 };  // SetParallelInputHelpers; < 0: automatic
@@ -382,19 +387,26 @@ public:
     InputJob(size_t n, VerifyInput verify)
         : n_{ n }, verify_{ std::move(verify) }, lowestFailure_{ n } {}
 
+    // What a helper's Work() call checks before each claim.
+    struct HelperTerms {
+        size_t cores;                     // leave once more threads than this are busy
+        std::atomic<size_t>* places;      // helpers holding a place under HelperLimit()
+        std::atomic<uint64_t>* inputs;    // counts each input verified, or nullptr
+        bool placeReturned = false;       // set when the helper left over the limit
+    };
+
     // Verifies inputs until none below the lowest known failure is left, or,
-    // for a helper (yieldAbove = the core count), until more threads than
-    // cores are busy. The budget is checked before claiming, never after, so
-    // leaving over budget never skips an index this thread claimed (claims at
-    // or above n_, or above the lowest failure, are skipped as always). A
-    // helper (`helperInputs` set) counts each input it verifies as it goes.
-    // Returns how many inputs this call verified.
-    size_t Work(size_t yieldAbove = std::numeric_limits<size_t>::max(),
-                std::atomic<uint64_t>* helperInputs = nullptr)
+    // for a helper, until more threads than cores are busy or more helpers
+    // hold places than the helper limit allows; then the helper gives its
+    // place back itself, so exactly the excess leaves. Both are checked
+    // before claiming, never after, so leaving never skips an index this
+    // thread claimed (claims at or above n_, or above the lowest failure, are
+    // skipped as always). Returns how many inputs this call verified.
+    size_t Work(HelperTerms* helper = nullptr)
     {
         size_t verified = 0;
         for (;;) {
-            if (busyThreads.load(std::memory_order_relaxed) > yieldAbove)
+            if (helper != nullptr && HelperShouldLeave(*helper))
                 return verified;
             const size_t index = next_.fetch_add(1, std::memory_order_relaxed);
             if (index >= n_ || index > lowestFailure_.load(std::memory_order_relaxed))
@@ -409,8 +421,8 @@ public:
             } catch (...) {
                 Fail(index, bsv::TxErrorException(), std::current_exception());
             }
-            if (helperInputs != nullptr)
-                helperInputs->fetch_add(1, std::memory_order_relaxed);
+            if (helper != nullptr && helper->inputs != nullptr)
+                helper->inputs->fetch_add(1, std::memory_order_relaxed);
         }
     }
 
@@ -456,6 +468,21 @@ public:
     }
 
 private:
+    static bool HelperShouldLeave(HelperTerms& helper)
+    {
+        if (busyThreads.load(std::memory_order_relaxed) > helper.cores)
+            return true;
+        const size_t limit = HelperLimit();
+        size_t onJobs = helper.places->load(std::memory_order_relaxed);
+        while (onJobs > limit) {
+            if (helper.places->compare_exchange_weak(onJobs, onJobs - 1, std::memory_order_relaxed)) {
+                helper.placeReturned = true;
+                return true;
+            }
+        }
+        return false;
+    }
+
     void Fail(size_t index, const TxError& result, std::exception_ptr exception)
     {
         if (const auto hook = inputHook.load(std::memory_order_relaxed))
@@ -664,14 +691,17 @@ private:
                         if (TryTakeCore(cores_))
                             return true;
                         helpersOnJobs_.fetch_sub(1, std::memory_order_relaxed);
+                        if (inputCountersEnabled.load(std::memory_order_relaxed))
+                            helperWakesWithoutCore.fetch_add(1, std::memory_order_relaxed);
                     }
                     job.reset();  // don't keep a finished job alive while asleep
                     return false;
                 });
             }
+            const bool count = inputCountersEnabled.load(std::memory_order_relaxed);
+            InputJob::HelperTerms terms{ cores_, &helpersOnJobs_, count ? &helperVerifiedInputs : nullptr };
             if (job->TryJoin()) {
-                const bool count = inputCountersEnabled.load(std::memory_order_relaxed);
-                const size_t verified = job->Work(cores_, count ? &helperVerifiedInputs : nullptr);
+                const size_t verified = job->Work(&terms);
                 if (count) {
                     if (verified > 0)
                         helperJobParticipations.fetch_add(1, std::memory_order_relaxed);
@@ -680,7 +710,8 @@ private:
                 job->Leave();
             }
             job.reset();
-            helpersOnJobs_.fetch_sub(1, std::memory_order_relaxed);
+            if (!terms.placeReturned)
+                helpersOnJobs_.fetch_sub(1, std::memory_order_relaxed);
             busyThreads.fetch_sub(1, std::memory_order_seq_cst);
         }
     }
@@ -769,6 +800,11 @@ uint64_t bsv::detail::HelperVerifiedInputCountForTesting()
 bool bsv::detail::SetInputCountersEnabledForTesting(bool enabled)
 {
     return inputCountersEnabled.exchange(enabled);
+}
+
+uint64_t bsv::detail::HelperWakesWithoutCoreForTesting()
+{
+    return helperWakesWithoutCore.load();
 }
 
 uint64_t bsv::detail::HelperJobParticipationCountForTesting()
@@ -1531,16 +1567,15 @@ TxError bsv::CTxValidator::implVerifyScript(
             // A tx at the threshold is offered at least one helper when a core is free.
             const size_t perParticipant = std::clamp<size_t>(threshold / 2, 1, MIN_INPUTS_PER_PARTICIPANT);
             const size_t participants = (nInputs + perParticipant - 1) / perParticipant;
-            // With every core already busy the tx runs serially, waking no one.
+            // With every core already busy the job is still queued, waking no
+            // one: a helper joins it when a core frees.
             const size_t helpers = std::min(pool->AvailableHelpers(helperLimit), participants - 1);
             std::shared_ptr<InputJob> job;
-            if (helpers > 0) {
-                try {
-                    job = std::make_shared<InputJob>(nInputs, verifyInput);
-                    pool->Offer(job, helpers);
-                } catch (const std::exception&) {
-                    job.reset();  // not queued (bad_alloc, system_error): verify serially below
-                }
+            try {
+                job = std::make_shared<InputJob>(nInputs, verifyInput);
+                pool->Offer(job, helpers);
+            } catch (const std::exception&) {
+                job.reset();  // not queued (bad_alloc, system_error): verify serially below
             }
             if (job) {
                 {
