@@ -27,11 +27,6 @@ class FlagCancellationSource final : public task::CCancellationSource
 public:
     explicit FlagCancellationSource(const int32_t* flag) : flag_{ flag } {}
 
-    static std::unique_ptr<FlagCancellationSource> Make(const int32_t* flag)
-    {
-        return std::make_unique<FlagCancellationSource>(flag);
-    }
-
     // Nothing outside this file can reach the source to call Cancel() on it, so the
     // flag is the only state to read.
     bool IsCanceled() override
@@ -47,8 +42,7 @@ private:
 
 task::CCancellationToken bsv::MakeFlagCancellationToken(const int32_t* flag)
 {
-    // A token holds its sources by shared_ptr and GetToken() calls shared_from_this(),
-    // so hand ownership to a shared_ptr first.
-    std::shared_ptr<task::CCancellationSource> source = FlagCancellationSource::Make(flag);
+    // GetToken() calls shared_from_this(), so construct with shared ownership.
+    std::shared_ptr<task::CCancellationSource> source = std::make_shared<FlagCancellationSource>(flag);
     return source->GetToken();
 }
