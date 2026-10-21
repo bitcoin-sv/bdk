@@ -367,6 +367,7 @@ std::atomic<uint64_t> helperWakesWithoutCore{ 0 };
 std::atomic<uint64_t> helperReleaseNotifications{ 0 };
 std::atomic<uint64_t> inputCancellationSources{ 0 };
 std::atomic<bsv::detail::InputHook> inputHook{ nullptr };  // tests only
+std::atomic<bsv::detail::InputSourceAllocationHook> inputSourceAllocationHook{ nullptr };  // tests only
 std::atomic<bsv::detail::ValidationStageHook> validationStageHook{ nullptr };  // tests only
 std::atomic<bsv::detail::HelperReleasedCoreHook> helperReleasedCoreHook{ nullptr };  // tests only
 std::atomic<bsv::detail::InputPoolHook> inputPoolHook{ nullptr };  // tests only
@@ -415,14 +416,30 @@ public:
     // place back itself, so exactly the excess leaves. Both are checked
     // before claiming, never after, so leaving never skips an index this
     // thread claimed (claims at or above n_, or above the lowest failure, are
-    // skipped as always). Returns how many inputs this call verified.
-    size_t Work(HelperTerms* helper = nullptr)
+    // skipped as always). Returns how many inputs this call verified, or nullopt
+    // if participant setup allocation failed before any input was claimed.
+    std::optional<size_t> Work(HelperTerms* helper = nullptr)
     {
         size_t verified = 0;
         const bool count = inputCountersEnabled.load(std::memory_order_relaxed);
         const auto pollHook = inputHook.load(std::memory_order_relaxed);
         std::shared_ptr<bsv::detail::InputCancellationSource> cancellation;
         std::optional<task::CCancellationToken> inputToken;
+        if (!HasWork() || (helper != nullptr && HelperShouldLeave(*helper)))
+            return 0;
+        // Participant setup must not become an input failure or consume an
+        // index. A helper can leave; the caller drains then verifies serially.
+        try {
+            if (const auto hook = inputSourceAllocationHook.load(std::memory_order_relaxed))
+                hook(helper != nullptr);
+            cancellation = std::make_shared<bsv::detail::InputCancellationSource>(
+                lowestFailure_, callerCancelled_, helper == nullptr ? &callerToken_ : nullptr, pollHook);
+            if (count)
+                inputCancellationSources.fetch_add(1, std::memory_order_relaxed);
+            inputToken.emplace(cancellation->GetToken());
+        } catch (const std::bad_alloc&) {
+            return std::nullopt;
+        }
         for (;;) {
             if (helper != nullptr && HelperShouldLeave(*helper))
                 return verified;
@@ -444,15 +461,6 @@ public:
                 hook(index, bsv::detail::InputEvent::Claimed);
             ++verified;
             try {
-                // Allocate the source and token once per participant, under the
-                // same exception handling as verification; no per-input allocation.
-                if (!inputToken) {
-                    cancellation = std::make_shared<bsv::detail::InputCancellationSource>(
-                        lowestFailure_, callerCancelled_, helper == nullptr ? &callerToken_ : nullptr, pollHook);
-                    if (count)
-                        inputCancellationSources.fetch_add(1, std::memory_order_relaxed);
-                    inputToken.emplace(cancellation->GetToken());
-                }
                 cancellation->SetIndex(index);
                 const TxError result = verify_(index, *inputToken);
                 if (pollHook)
@@ -785,7 +793,7 @@ private:
             const bool count = inputCountersEnabled.load(std::memory_order_relaxed);
             InputJob::HelperTerms terms{ cores_, &helpersOnJobs_, count ? &helperVerifiedInputs : nullptr };
             if (job->TryJoin()) {
-                const size_t verified = job->Work(&terms);
+                const size_t verified = job->Work(&terms).value_or(0);
                 if (count) {
                     if (verified > 0)
                         helperJobParticipations.fetch_add(1, std::memory_order_relaxed);
@@ -908,6 +916,11 @@ uint64_t bsv::detail::HelperJobParticipationCountForTesting()
 uint64_t bsv::detail::InputCancellationSourceCountForTesting()
 {
     return inputCancellationSources.load();
+}
+
+bsv::detail::InputSourceAllocationHook bsv::detail::SetInputSourceAllocationHookForTesting(InputSourceAllocationHook hook)
+{
+    return inputSourceAllocationHook.exchange(hook);
 }
 
 bsv::detail::ValidationStageHook bsv::detail::SetValidationStageHookForTesting(ValidationStageHook hook)
@@ -1779,15 +1792,17 @@ TxError bsv::CTxValidator::implVerifyScript(
                 job.reset();  // not queued (bad_alloc, system_error): verify serially below
             }
             if (job) {
+                std::optional<size_t> verified;
                 {
                     const JobCaller caller(*pool, job);
-                    const size_t verified = job->Work();
+                    verified = job->Work();
                     if (inputCountersEnabled.load(std::memory_order_relaxed))
-                        jobVerifiedInputs.fetch_add(verified, std::memory_order_relaxed);
+                        jobVerifiedInputs.fetch_add(verified.value_or(0), std::memory_order_relaxed);
                 }
-                // All joined work has drained. Completion, not a fresh token
-                // poll, decides whether this call has a verdict.
-                return job->Result();
+                // All joined work has drained. A caller setup failure falls
+                // through to serial verification; otherwise completion decides.
+                if (verified)
+                    return job->Result();
             }
         }
     }

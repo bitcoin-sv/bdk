@@ -3703,6 +3703,86 @@ BOOST_AUTO_TEST_CASE(cancellation_source_is_reused_for_each_participant, PARALLE
     BOOST_TEST_MESSAGE(sources << " sources for " << nonemptyCalls << " nonempty Work calls and " << nInputs << " inputs");
 }
 
+// Allocation is a scheduling failure, not an invalid input. The helper-only
+// case requires caller work to wait for an injected failure; the caller-only
+// case keeps helpers from consuming the job before the caller attempts setup.
+class InputSourceAllocationFailure {
+public:
+    explicit InputSourceAllocationFailure(bool failHelpers)
+        : failHelpers{ failHelpers }, owner{ std::this_thread::get_id() }
+    {
+        active = this;
+        previousAllocation = bsv::detail::SetInputSourceAllocationHookForTesting(&Allocate);
+        previousInput = bsv::detail::SetInputHookForTesting(&Input);
+    }
+    ~InputSourceAllocationFailure()
+    {
+        bsv::detail::SetInputHookForTesting(previousInput);
+        bsv::detail::SetInputSourceAllocationHookForTesting(previousAllocation);
+        active = nullptr;
+    }
+    std::atomic<size_t> helperFailures{ 0 }, callerFailures{ 0 }, helperClaims{ 0 }, callerClaims{ 0 };
+    std::atomic<bool> callerAttempted{ false }, timedOut{ false };
+private:
+    static void Allocate(bool helper)
+    {
+        auto& self = *active;
+        if (helper) {
+            if (self.failHelpers) {
+                ++self.helperFailures;
+                throw std::bad_alloc{};
+            }
+            if (!WaitFor([&] { return self.callerAttempted.load(); }))
+                self.timedOut = true;
+        } else {
+            self.callerAttempted = true;
+            if (!self.failHelpers) {
+                ++self.callerFailures;
+                throw std::bad_alloc{};
+            }
+            if (!WaitFor([&] { return self.helperFailures.load() > 0; }))
+                self.timedOut = true;
+        }
+    }
+    static void Input(size_t, bsv::detail::InputEvent event)
+    {
+        if (event != bsv::detail::InputEvent::Claimed)
+            return;
+        if (std::this_thread::get_id() == active->owner) ++active->callerClaims;
+        else ++active->helperClaims;
+    }
+    const bool failHelpers;
+    const std::thread::id owner;
+    bsv::detail::InputSourceAllocationHook previousAllocation;
+    bsv::detail::InputHook previousInput;
+    static inline InputSourceAllocationFailure* active = nullptr;
+};
+
+BOOST_AUTO_TEST_CASE(participant_source_allocation_failure_preserves_valid_result, PARALLEL_TEST_CASE_DECORATORS)
+{
+    if (!PoolHasHelpers())
+        return;
+    const bsv::CTxValidator validator("main");
+    const auto bin = SignedP2PKHBin(32);
+    const InputThresholdGuard parallel(FORCE_PARALLEL);
+    for (const bool failHelpers : { true, false }) {
+        BOOST_REQUIRE(PoolIsIdle());
+        InputSourceAllocationFailure failure(failHelpers);
+        const auto result = ValidateP2PKHSpend(validator, bin, 32, true);
+        BOOST_CHECK_MESSAGE(bsv::TxErrorIsOk(result), "failHelpers=" << failHelpers
+            << " domain=" << result.domain << " code=" << result.code);
+        BOOST_CHECK(!failure.timedOut);
+        if (failHelpers) {
+            BOOST_CHECK_GT(failure.helperFailures.load(), 0u);
+            BOOST_CHECK_EQUAL(failure.helperClaims.load(), 0u);
+        } else {
+            BOOST_CHECK_EQUAL(failure.callerFailures.load(), 1u);
+            BOOST_CHECK_EQUAL(failure.callerClaims.load(), 0u);
+        }
+        BOOST_CHECK(PoolIsIdle());
+    }
+}
+
 // Helper threads get an 8 MiB stack, as a caller's main thread usually has,
 // rather than the platform default (512 KiB for secondary threads on macOS).
 BOOST_AUTO_TEST_CASE(helpers_run_on_an_8_mib_stack, PARALLEL_TEST_CASE_DECORATORS)

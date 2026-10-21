@@ -115,6 +115,11 @@ uint64_t InputCancellationSourceCountForTesting();
 // without using CPU. Returns the previous hook. Tests only.
 InputHook SetInputHookForTesting(InputHook hook);
 
+// Before a participant allocates its cancellation source/token; true for a
+// helper, false for the caller. May throw bad_alloc to test fallback. Tests only.
+using InputSourceAllocationHook = void (*)(bool helper);
+InputSourceAllocationHook SetInputSourceAllocationHookForTesting(InputSourceAllocationHook hook);
+
 // Caller-side phases before input work is offered. Internal observer for tests.
 enum class ValidationStage { Deserializing, TransactionChecks, PrecomputedData };
 using ValidationStageHook = void (*)(ValidationStage stage);
