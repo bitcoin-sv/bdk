@@ -429,7 +429,8 @@ public:
         if (!HasWork() || (helper != nullptr && HelperShouldLeave(*helper)))
             return 0;
         // Participant setup must not become an input failure or consume an
-        // index. A helper can leave; the caller drains then verifies serially.
+        // index. A helper can leave; the caller drains, retaining any completed
+        // verdict before falling back to serial verification if needed.
         try {
             if (const auto hook = inputSourceAllocationHook.load(std::memory_order_relaxed))
                 hook(helper != nullptr);
@@ -522,8 +523,9 @@ public:
         left_.wait(lock, [this] { return joined_ == 0; });
     }
 
-    // A completed verdict, or cancellation if necessary inputs were abandoned.
-    TxError Result()
+    // A completed verdict, or no result if necessary inputs were abandoned or
+    // never claimed. Called only after every joined participant has drained.
+    std::optional<TxError> CompletedResult()
     {
         std::lock_guard lock{ mutex_ };
         // Claims form a contiguous prefix, and every joined participant has
@@ -535,7 +537,7 @@ public:
             return failure_;
         }
         if (lowestCancelled_ < n_ || next_.load(std::memory_order_relaxed) < n_)
-            return bsv::TxErrorCancelled();
+            return std::nullopt;
         return bsv::TxErrorOk();
     }
 
@@ -1830,10 +1832,12 @@ TxError bsv::CTxValidator::implVerifyScript(
                     if (inputCountersEnabled.load(std::memory_order_relaxed))
                         jobVerifiedInputs.fetch_add(verified.value_or(0), std::memory_order_relaxed);
                 }
-                // All joined work has drained. A caller setup failure falls
-                // through to serial verification; otherwise completion decides.
+                // Setup failure must not discard a verdict already completed
+                // by helpers. Replay serially only if that job is unfinished.
+                if (const auto result = job->CompletedResult())
+                    return *result;
                 if (verified)
-                    return job->Result();
+                    return bsv::TxErrorCancelled();
             }
         }
     }

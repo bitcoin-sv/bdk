@@ -95,6 +95,12 @@ another input while work remains. There is no poll after the job drains. Cancell
 above an established lowest failure does not replace that verdict; cancellation leaving a lower
 input unfinished prevents reporting a higher failure. The serial loop keeps its existing poll sites.
 
+If caller participant setup runs out of memory, the queued job is withdrawn and
+joined helpers drain. A completed success or definitive lowest failure is retained,
+including when cancellation arrives after completion. If required work is still
+unfinished, the caller falls back to the full serial input loop with its token;
+this can recheck inputs already completed by helpers.
+
 `VerifyScript`, `ValidateTransaction` (including each `ValidateBatch` entry) and
 `VerifySpend` count the calling thread against the shared core budget from after the
 entry cancellation poll until return. Deserialization, transaction hashing,
