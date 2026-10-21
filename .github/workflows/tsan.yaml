@@ -1,8 +1,8 @@
 name: ThreadSanitizer
 
 ## Builds the core and the tests labelled `tsan` with -fsanitize=thread, then runs
-## them. Today that is test_cancellation, whose cancel flag is written by one thread
-## while validation reads it on another. To cover another test, label it `tsan` and
+## them: cancellation tests and the forced-parallel transaction suite, including
+## per-input early stop. To cover another test, label it `tsan` and
 ## add its target to bdk_tsan_tests in test/core/CMakeLists.txt.
 ##
 ## BDK's CMake sets CMAKE_CXX_FLAGS itself, so -fsanitize=thread passed there is
@@ -89,6 +89,36 @@ jobs:
             echo "instrumented: $bin"
           done
           [ "$found" = 1 ] || { echo "no test binary in $out"; exit 1; }
+
+      - name: Verify ThreadSanitizer detects a positive race control
+        run: |
+          sudo sysctl -w vm.mmap_rnd_bits=28
+          cat > "$RUNNER_TEMP/tsan-control.cpp" <<'CPP'
+          #include <atomic>
+          #include <thread>
+          std::atomic<bool> ready{false};
+          volatile int value = 0;
+          int main() {
+            std::thread writer([] {
+              while (!ready.load()) {}
+              for (int i = 0; i < 100000; ++i) value = i;
+            });
+            ready = true;
+            for (int i = 0; i < 100000; ++i) value = i;
+            writer.join();
+            return 0;
+          }
+          CPP
+          c++ -std=c++20 -O1 -g -fsanitize=thread -pthread \
+            "$RUNNER_TEMP/tsan-control.cpp" -o "$RUNNER_TEMP/tsan-control"
+          set +e
+          TSAN_OPTIONS="halt_on_error=1 exitcode=66" \
+            timeout 30s "$RUNNER_TEMP/tsan-control" > "$RUNNER_TEMP/tsan-control.log" 2>&1
+          status=$?
+          set -e
+          cat "$RUNNER_TEMP/tsan-control.log"
+          test "$status" -eq 66
+          grep -q 'WARNING: ThreadSanitizer: data race' "$RUNNER_TEMP/tsan-control.log"
 
       - name: Run the tsan tests
         run: |

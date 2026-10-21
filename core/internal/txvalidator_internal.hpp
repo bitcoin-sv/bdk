@@ -4,12 +4,36 @@
 // (core/bdk-core-recipe.cmake leaves core/internal/ out of the install list)
 // and not part of any language binding.
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
 
+#include "taskcancellation.h"
+
 namespace bsv::detail {
+
+// One source per job participant, reused for its successive inputs. The index
+// is private to that participant; the job owns lowestFailure and waits for all
+// participants before either it or the caller token can go away. Internal only.
+class InputCancellationSource final : public task::CCancellationSource {
+public:
+    InputCancellationSource(const std::atomic<size_t>& lowestFailure,
+                            const task::CCancellationToken& callerToken)
+        : lowestFailure_{ lowestFailure }, callerToken_{ callerToken } {}
+
+    void SetIndex(size_t index) { index_ = index; }
+    bool IsCanceled() override
+    {
+        return callerToken_.IsCanceled() || lowestFailure_.load(std::memory_order_relaxed) < index_;
+    }
+
+private:
+    const std::atomic<size_t>& lowestFailure_;
+    const task::CCancellationToken& callerToken_;
+    size_t index_{ 0 };
+};
 
 // Input count from which implVerifyScript verifies a transaction's inputs on
 // several threads, unless a test changes it.

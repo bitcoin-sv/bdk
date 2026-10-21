@@ -2041,6 +2041,233 @@ static std::vector<uint8_t> SignedP2PKHBin(size_t nInputs)
         /*nOutputs=*/1, /*precomputeForSigning=*/true));
 }
 
+// Track real interpreter polls on inputs above the failing one. Hold the
+// failing input until a higher input has reached its eighth poll, ensuring
+// this exercises in-flight work rather than just unclaimed indices.
+class EarlyStopProbe final : public task::CCancellationSource {
+public:
+    explicit EarlyStopProbe(size_t failingIndex, bool cancelOnFailure = false)
+        : failingIndex{ failingIndex }, cancelOnFailure{ cancelOnFailure }
+    {
+        currentIndex = std::numeric_limits<size_t>::max();
+        active = this;
+        previous = bsv::detail::SetInputHookForTesting(&Hook);
+    }
+    ~EarlyStopProbe()
+    {
+        bsv::detail::SetInputHookForTesting(previous);
+        active = nullptr;
+    }
+
+    bool IsCanceled() override
+    {
+        if (currentIndex != std::numeric_limits<size_t>::max() && currentIndex > failingIndex) {
+            ++higherPolls;
+            if (++inputPolls == 8) {
+                ++entered;
+                if (!WaitFor([&] { return failed.load(); }))
+                    timedOut = true;
+            }
+        }
+        return CCancellationSource::IsCanceled();
+    }
+
+    std::atomic<uint64_t> higherPolls{ 0 };
+    std::atomic<size_t> entered{ 0 };
+    std::atomic<bool> timedOut{ false };
+
+private:
+    static void Hook(size_t index, bsv::detail::InputEvent event)
+    {
+        auto& self = *active;
+        if (event == bsv::detail::InputEvent::Claimed) {
+            currentIndex = index;
+            inputPolls = 0;
+            if (index == self.failingIndex && !WaitFor([&] { return self.entered.load() > 0; }))
+                self.timedOut = true;
+        } else if (event == bsv::detail::InputEvent::Failed && index == self.failingIndex) {
+            if (self.cancelOnFailure)
+                self.Cancel();
+            self.failed = true;
+        }
+    }
+
+    const size_t failingIndex;
+    const bool cancelOnFailure;
+    std::atomic<bool> failed{ false };
+    bsv::detail::InputHook previous;
+    static inline EarlyStopProbe* active = nullptr;
+    static inline thread_local size_t currentIndex = std::numeric_limits<size_t>::max();
+    static inline thread_local uint64_t inputPolls = 0;
+};
+
+// A cheap failing input followed by many valid, expensive scripts. Lower
+// inputs succeed cheaply; higher ones each hash 64 KiB 2,048 times.
+static bsv::CMutableTransactionExtended EarlyStopSpend(size_t failingIndex)
+{
+    constexpr size_t inputs = 32;
+    bsv::CMutableTransactionExtended tx;
+    tx.mtx.nVersion = 2;
+    tx.mtx.vout.emplace_back(Amount{ 1000 }, CScript() << OP_TRUE);
+    for (size_t i = 0; i < inputs; ++i) {
+        tx.mtx.vin.emplace_back(COutPoint(uint256S("01"), i),
+            i > failingIndex ? CScript() << std::vector<uint8_t>(65536, 1) : CScript());
+        CScript locking;
+        if (i == failingIndex)
+            locking << OP_FALSE;
+        else if (i < failingIndex)
+            locking << OP_TRUE;
+        else
+            for (size_t round = 0; round < 2048; ++round)
+                locking << OP_DUP << OP_SHA256 << OP_DROP;
+        tx.vutxo.emplace_back(Amount{ 100000 }, locking);
+    }
+    return tx;
+}
+
+BOOST_AUTO_TEST_CASE(early_failure_abandons_inflight_higher_inputs, PARALLEL_TEST_CASE_DECORATORS)
+{
+    if (!PoolHasHelpers())
+        return;
+    const bsv::CTxValidator validator(CBaseChainParams::REGTEST);
+    const auto bin = SerializeExtended(EarlyStopSpend(0));
+    const std::vector<int32_t> heights(32, 19000);
+    const InputThresholdGuard parallel(FORCE_PARALLEL);
+    BOOST_REQUIRE(PoolIsIdle());
+    const auto probe = std::make_shared<EarlyStopProbe>(0);
+    const auto result = validator.ValidateTransaction(bin, heights, 20000, true, probe->GetToken());
+    BOOST_CHECK_EQUAL(result.domain, static_cast<int32_t>(TX_ERR_DOMAIN_SCRIPT));
+    BOOST_CHECK_EQUAL(result.code, SCRIPT_ERR_EVAL_FALSE);
+    BOOST_CHECK(!probe->timedOut);
+    BOOST_REQUIRE_GT(probe->entered.load(), 0u);
+    BOOST_TEST_MESSAGE("in-flight higher inputs=" << probe->entered.load()
+        << " interpreter polls=" << probe->higherPolls.load());
+    // Completing even one higher script takes over 6,000 polls. Early stop
+    // should need only its initial polls, plus the polls until failure is seen.
+    BOOST_CHECK_LT(probe->higherPolls.load(), 1000u);
+}
+
+// Pin the strict boundary on the actual source: a finished failure at index
+// 5 must leave both index 5 and all lower inputs uncancelled. A <= mutation
+// is otherwise invisible once that input has already finished verifying.
+BOOST_AUTO_TEST_CASE(early_stop_source_preserves_equal_and_lower_indices)
+{
+    std::atomic<size_t> lowest{ 32 };
+    const auto caller = task::CCancellationSource::Make();
+    const auto callerToken = caller->GetToken();
+    const auto source = std::make_shared<bsv::detail::InputCancellationSource>(lowest, callerToken);
+    const auto token = source->GetToken();
+    source->SetIndex(5);
+    BOOST_CHECK(!token.IsCanceled());
+    lowest = 5;
+    BOOST_CHECK(!token.IsCanceled());
+    source->SetIndex(4);
+    BOOST_CHECK(!token.IsCanceled());
+    source->SetIndex(6);
+    BOOST_CHECK(token.IsCanceled());
+    lowest = 3;
+    source->SetIndex(4);
+    BOOST_CHECK(token.IsCanceled());
+    source->SetIndex(2);
+    BOOST_CHECK(!token.IsCanceled());
+    caller->Cancel();
+    BOOST_CHECK(token.IsCanceled());
+}
+
+// Removing the final caller-token check would return EVAL_FALSE here: input
+// 0 has a real verdict, and cancellation of higher indices cannot replace it.
+BOOST_AUTO_TEST_CASE(caller_cancel_racing_early_failure_returns_cancelled, PARALLEL_TEST_CASE_DECORATORS)
+{
+    if (!PoolHasHelpers())
+        return;
+    const bsv::CTxValidator validator(CBaseChainParams::REGTEST);
+    const std::vector<int32_t> heights(32, 19000);
+    const InputThresholdGuard parallel(FORCE_PARALLEL);
+    for (const size_t failingIndex : { 0, 1, 2, 8 }) {
+        BOOST_REQUIRE(PoolIsIdle());
+        const auto bin = SerializeExtended(EarlyStopSpend(failingIndex));
+        const auto probe = std::make_shared<EarlyStopProbe>(failingIndex, true);
+        const auto result = validator.ValidateTransaction(bin, heights, 20000, true, probe->GetToken());
+        BOOST_CHECK(!probe->timedOut);
+        BOOST_CHECK_GT(probe->entered.load(), 0u);
+        BOOST_CHECK_EQUAL(result.domain, static_cast<int32_t>(TX_ERR_DOMAIN_CANCELLED));
+    }
+}
+
+BOOST_AUTO_TEST_CASE(early_stop_keeps_serial_verdict_for_mixed_failures, PARALLEL_TEST_CASE_DECORATORS)
+{
+    if (!PoolHasHelpers())
+        return;
+    const bsv::CTxValidator validator(CBaseChainParams::REGTEST);
+    const std::vector<int32_t> heights(32, 19000);
+    for (const size_t failingIndex : { 0, 1, 2, 8 }) {
+        auto tx = EarlyStopSpend(failingIndex);
+        // A distinct later verdict must neither win nor cancel lower indices.
+        tx.vutxo[31].scriptPubKey = CScript() << OP_RETURN;
+        const auto bin = SerializeExtended(tx);
+        TxError serial;
+        {
+            const InputThresholdGuard guard(FORCE_SERIAL);
+            serial = validator.ValidateTransaction(bin, heights, 20000, true);
+        }
+        BOOST_REQUIRE_EQUAL(serial.domain, static_cast<int32_t>(TX_ERR_DOMAIN_SCRIPT));
+        BOOST_REQUIRE_EQUAL(serial.code, SCRIPT_ERR_EVAL_FALSE);
+        const InputThresholdGuard parallel(FORCE_PARALLEL);
+        BOOST_REQUIRE(PoolIsIdle());
+        const auto probe = std::make_shared<EarlyStopProbe>(failingIndex);
+        const auto token = probe->GetToken();
+        const auto result = validator.ValidateTransaction(bin, heights, 20000, true, token);
+        BOOST_CHECK(!probe->timedOut);
+        BOOST_CHECK_GT(probe->entered.load(), 0u);
+        BOOST_CHECK(SameTxError(result, serial));
+        BOOST_CHECK_LT(probe->higherPolls.load(), 1000u);
+    }
+}
+
+// Cancel from an interpreter poll after a helper has joined a valid job.
+// This catches dropping the caller token when constructing the input token.
+class CancelDuringInput final : public task::CCancellationSource {
+public:
+    CancelDuringInput()
+    {
+        inJob = false;
+        previous = bsv::detail::SetInputHookForTesting(&Hook);
+    }
+    ~CancelDuringInput() { bsv::detail::SetInputHookForTesting(previous); }
+    bool IsCanceled() override
+    {
+        if (inJob && ++polls >= 20)
+            Cancel();
+        return CCancellationSource::IsCanceled();
+    }
+    std::atomic<uint64_t> polls{ 0 };
+private:
+    static void Hook(size_t, bsv::detail::InputEvent event)
+    {
+        if (event == bsv::detail::InputEvent::Claimed)
+            inJob = true;
+    }
+    static inline thread_local bool inJob = false;
+    bsv::detail::InputHook previous;
+};
+
+BOOST_AUTO_TEST_CASE(caller_cancel_during_parallel_input_returns_cancelled, PARALLEL_TEST_CASE_DECORATORS)
+{
+    if (!PoolHasHelpers())
+        return;
+    const bsv::CTxValidator validator(CBaseChainParams::REGTEST);
+    auto tx = EarlyStopSpend(0);
+    tx.vutxo[0].scriptPubKey = CScript() << OP_TRUE;
+    const auto bin = SerializeExtended(tx);
+    const std::vector<int32_t> heights(32, 19000);
+    const InputThresholdGuard parallel(FORCE_PARALLEL);
+    BOOST_REQUIRE(PoolIsIdle());
+    const auto source = std::make_shared<CancelDuringInput>();
+    const auto result = validator.ValidateTransaction(bin, heights, 20000, true, source->GetToken());
+    BOOST_CHECK_GE(source->polls.load(), 20u);
+    BOOST_CHECK_EQUAL(result.domain, static_cast<int32_t>(TX_ERR_DOMAIN_CANCELLED));
+}
+
 // Every input claimed inside a parallel job sleeps for `delay` before it is
 // verified: jobs last long without using CPU, so on a small machine the test
 // thread still gets to run while the caller and helpers are on a job.

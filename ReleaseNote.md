@@ -14,7 +14,9 @@ installed alongside the package (`CMakeLists.txt`).
 - **A transaction with 16 or more inputs is verified on several cores.** `ValidateTransaction`,
   `VerifyScript` and `ValidateBatch` hand such a transaction's inputs to the calling thread plus
   idle helper threads; smaller transactions, `VerifySpend` and the WASM build verify serially as
-  before. The result is always the serial one: the error of the lowest-index failing input. At
+  before. The result is always the serial one: the error of the lowest-index failing input.
+  In-flight inputs above that failure stop at their next interpreter cancellation poll; lower
+  inputs finish normally. Caller cancellation takes priority and returns no verdict. At
   1,000 to 40,000 P2PKH inputs, `ValidateTransaction` is 2.3x faster on a 4-vCPU x86-64 runner,
   3.7x on a 4-core ARM64 runner and 7.4x on a 14-core Apple M3 Max; with callers already using
   every core, aggregate throughput is unchanged. What embedders should know:

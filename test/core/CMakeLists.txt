@@ -221,7 +221,8 @@ foreach(_t test_cancellation test_cancellationd)
   endif()
 endforeach()
 add_custom_target(bdk_tsan_tests)
-add_dependencies(bdk_tsan_tests test_cancellation)
+set_tests_properties(test_txvalidator_parallel_inputs PROPERTIES LABELS tsan)
+add_dependencies(bdk_tsan_tests test_cancellation test_txvalidator)
 
 if(CMAKE_CONFIGURATION_TYPES)
   set_target_properties(test_bsv PROPERTIES FOLDER "test/core/bsv" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d

@@ -333,7 +333,12 @@ private:
  * lowered limit holds from each helper's next input. A limit of 0 never
  * creates the pool.
  *
- * Cancellation: the cancellation token is read on whichever thread verifies
+ * Cancellation: a participant reuses a source that combines the caller's token
+ * with lowestFailure < its current input index. The lowest failing input and
+ * every lower input finish normally; higher in-flight inputs stop at their next
+ * interpreter poll. The caller still waits for joined helpers, then checks its
+ * own token before returning the lowest failure's verdict.
+ * The cancellation token is read on whichever thread verifies
  * an input, so a token must not depend on the calling thread (a thread CPU
  * clock budget would measure a helper's clock against the caller's start).
  *
@@ -383,10 +388,10 @@ size_t HelperLimit()
 // One transaction's inputs [0, n), shared by its caller and the helpers that join.
 class InputJob {
 public:
-    using VerifyInput = std::function<TxError(size_t)>;
+    using VerifyInput = std::function<TxError(size_t, const task::CCancellationToken&)>;
 
-    InputJob(size_t n, VerifyInput verify)
-        : n_{ n }, verify_{ std::move(verify) }, lowestFailure_{ n } {}
+    InputJob(size_t n, VerifyInput verify, const task::CCancellationToken& callerToken)
+        : n_{ n }, verify_{ std::move(verify) }, callerToken_{ callerToken }, lowestFailure_{ n } {}
 
     // What a helper's Work() call checks before each claim.
     struct HelperTerms {
@@ -406,6 +411,8 @@ public:
     size_t Work(HelperTerms* helper = nullptr)
     {
         size_t verified = 0;
+        std::shared_ptr<bsv::detail::InputCancellationSource> cancellation;
+        std::optional<task::CCancellationToken> inputToken;
         for (;;) {
             if (helper != nullptr && HelperShouldLeave(*helper))
                 return verified;
@@ -416,7 +423,14 @@ public:
                 hook(index, bsv::detail::InputEvent::Claimed);
             ++verified;
             try {
-                const TxError result = verify_(index);
+                // Allocate the source and token once per participant, under the
+                // same exception handling as verification; no per-input allocation.
+                if (!inputToken) {
+                    cancellation = std::make_shared<bsv::detail::InputCancellationSource>(lowestFailure_, callerToken_);
+                    inputToken.emplace(cancellation->GetToken());
+                }
+                cancellation->SetIndex(index);
+                const TxError result = verify_(index, *inputToken);
                 if (!bsv::TxErrorIsOk(result))
                     Fail(index, result, nullptr);
             } catch (...) {
@@ -498,6 +512,7 @@ private:
 
     const size_t n_;
     const VerifyInput verify_;
+    const task::CCancellationToken& callerToken_;
     std::atomic<size_t> next_{ 0 };
     std::atomic<size_t> lowestFailure_;  // n_ while nothing failed; written under mutex_
 
@@ -1613,7 +1628,7 @@ TxError bsv::CTxValidator::implVerifyScript(
 
     const bool useCustomFlags = !customFlags.empty();
     // Reads only shared state and its own checker, so inputs can run on any thread.
-    const auto verifyInput = [&](size_t index) -> TxError {
+    const auto verifyInput = [&](size_t index, const task::CCancellationToken& inputToken) -> TxError {
         const uint64_t amount = prevUTXO[index].nValue.GetSatoshis();
         const CScript& lscript = prevUTXO[index].scriptPubKey;
         const CScript& uscript = ctx.vin[index].scriptSig;
@@ -1626,10 +1641,10 @@ TxError bsv::CTxValidator::implVerifyScript(
         if (!ctx.vin.empty() && !ctx.vout.empty()) {
             const Amount amt{ amount };
             CachingScriptChecker sig_checker(&ctx, index, amt, txdata);
-            return bsvVerifyScript(uscript, lscript, consensus, flags, sig_checker, token);
+            return bsvVerifyScript(uscript, lscript, consensus, flags, sig_checker, inputToken);
         }
         BaseSignatureChecker sig_checker;
-        return bsvVerifyScript(uscript, lscript, consensus, flags, sig_checker, token);
+        return bsvVerifyScript(uscript, lscript, consensus, flags, sig_checker, inputToken);
     };
 
     const size_t nInputs = prevUTXO.size();
@@ -1648,7 +1663,7 @@ TxError bsv::CTxValidator::implVerifyScript(
             const size_t helpers = std::min(pool->AvailableHelpers(helperLimit), participants - 1);
             std::shared_ptr<InputJob> job;
             try {
-                job = std::make_shared<InputJob>(nInputs, verifyInput);
+                job = std::make_shared<InputJob>(nInputs, verifyInput, token);
                 pool->Offer(job, helpers);
             } catch (const std::exception&) {
                 job.reset();  // not queued (bad_alloc, system_error): verify serially below
@@ -1660,13 +1675,18 @@ TxError bsv::CTxValidator::implVerifyScript(
                     if (inputCountersEnabled.load(std::memory_order_relaxed))
                         jobVerifiedInputs.fetch_add(verified, std::memory_order_relaxed);
                 }
+                // The caller token takes priority even when a real failure was
+                // recorded before it fired. Early-stop cancellations only occur
+                // above an already recorded failure and cannot replace its result.
+                if (token.IsCanceled())
+                    return bsv::TxErrorCancelled();
                 return job->Result();
             }
         }
     }
 #endif
     for (size_t index = 0; index < nInputs; ++index) {
-        const TxError verifyResult = verifyInput(index);
+        const TxError verifyResult = verifyInput(index, token);
         if (!bsv::TxErrorIsOk(verifyResult))
             return verifyResult;
     }
