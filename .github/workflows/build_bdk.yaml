@@ -204,7 +204,7 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           grep -E '^\[(cancelled_mid_script|cancelled_during_a_signature_hash)\]' build/Testing/Temporary/LastTest.log || true
-          cd test/golang && go test -count=1 -v -run 'TestContextOverheadReport$' Main_test.go CancelValidation_test.go | grep -E '^\[context_overhead\]' || true
+          cd test/golang && go test -count=1 -timeout 10m -run '^$' -bench '^BenchmarkContextOverhead$' -benchtime=100ms Main_test.go CancelValidation_test.go
 
       - name: Prepare Environment and Dependencies for Windows
         if: runner.os == 'Windows'

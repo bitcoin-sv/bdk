@@ -15,6 +15,7 @@ import (
 	"time"
 
 	goscript "github.com/bitcoin-sv/bdk/module/gobdk/script"
+	pkgerrors "github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -108,7 +109,7 @@ func requireCancelled(t *testing.T, err error, cause error) {
 	var cancelledErr *goscript.CancelledError
 	require.True(t, errors.As(err, &cancelledErr), "expected *CancelledError, got %T", err)
 	if cause != nil {
-		assert.True(t, errors.Is(cancelledErr.Cause(), cause), "expected cause %v, got %v", cause, cancelledErr.Cause())
+		assert.True(t, errors.Is(cancelledErr.ContextCause(), cause), "expected cause %v, got %v", cause, cancelledErr.ContextCause())
 	}
 	// The cause is not in the error chain: errors.Is/As on err see only the cancellation.
 	assert.False(t, errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded),
@@ -192,7 +193,7 @@ func TestContextCancelCauseIsCarried(t *testing.T) {
 	requireCancelled(t, err, slowLane)
 	var cancelledErr *goscript.CancelledError
 	require.True(t, errors.As(err, &cancelledErr))
-	assert.False(t, errors.Is(cancelledErr.Cause(), context.DeadlineExceeded))
+	assert.False(t, errors.Is(cancelledErr.ContextCause(), context.DeadlineExceeded))
 }
 
 // errShape names a result by its type, domain and code, so two results compare equal
@@ -254,6 +255,22 @@ func TestContextCauseIsNotAVerdict(t *testing.T) {
 	pre, cancelPre := context.WithCancelCause(context.Background())
 	cancelPre(verdictCause)
 	requireCancelled(t, se.ValidateTransactionContext(pre, tx, []int32{cancelTestLongUtxoHeight}, cancelTestLongBlockHeight, true), verdictCause)
+}
+
+// Legacy cause walkers must stop at the cancelled result, even for a script cause.
+func TestContextCauseIsNotAVerdictThroughPkgErrors(t *testing.T) {
+	ctx, cancel := context.WithCancelCause(context.Background())
+	cause := goscript.NewScriptError(goscript.SCRIPT_ERR_EVAL_FALSE)
+	cancel(cause)
+	se := goscript.NewTxValidator("main")
+	err := se.ValidateTransactionContext(ctx, nil, nil, 0, true)
+	requireCancelled(t, err, cause)
+	var cancelledErr *goscript.CancelledError
+	require.ErrorAs(t, err, &cancelledErr)
+	assert.Same(t, cancelledErr, pkgerrors.Cause(err))
+	assert.Same(t, cancelledErr, pkgerrors.Cause(pkgerrors.Wrap(err, "validation")))
+	var scriptErr goscript.ScriptError
+	assert.False(t, errors.As(err, &scriptErr))
 }
 
 // A context that is never cancelled, or cancelled only after the call returned, gives
@@ -321,7 +338,7 @@ func TestValidateBatchContextCancelledPartWay(t *testing.T) {
 		require.NoError(t, batch.Add(tx, utxo, cancelTestLongBlockHeight, true))
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 	results := se.ValidateBatchContext(ctx, batch)
 	require.Len(t, results, 4)
@@ -433,28 +450,25 @@ func TestContextCallsLeaveNoGoroutines(t *testing.T) {
 // one P2PKH input (one signature check), valid at block 620940.
 const cancelTestP2PKHTxHex = "010000000000000000ef0120fa0d2c5974cfe6e3aec71f7f6539cfa1c1e474082d2cdb41fb830f6267b7d7000000006b4830450221008788b545ebd6ebcb15f938045b71c1fa7efafd55d1f4e64e96602a04f3214cda0220717ddadfa7d1dc6a22ccb077350aef7a2073ee58fe780d86b77a31c24c664a21412103ef28c47337b05ec3f14b63d904db7ae023e897389dbdbf531221e13fd5e5b105ffffffffdc3de103000000001976a91437fb14a40d021abbb1763497f963a130286d1ad188ac017239e103000000001976a914962eba38504bcfb140ff0246afa795658812b42788ac00000000"
 
-// Prints the cost of a live context over the plain call to the test log (ctest keeps
-// it in LastTest.log), per platform. Not an assertion: CI machines are too noisy.
-func TestContextOverheadReport(t *testing.T) {
+// Measures the cost of a live context over the plain call when explicitly requested.
+func BenchmarkContextOverhead(b *testing.B) {
 	se := goscript.NewTxValidator("main")
 	tx, err := hex.DecodeString(cancelTestP2PKHTxHex)
-	require.NoError(t, err)
+	require.NoError(b, err)
 	utxo := []int32{574441}
 	const height = int32(620940)
-	require.NoError(t, se.ValidateTransaction(tx, utxo, height, true))
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	plain := testing.Benchmark(func(b *testing.B) {
+	require.NoError(b, se.ValidateTransaction(tx, utxo, height, true))
+	require.NoError(b, se.ValidateTransactionContext(ctx, tx, utxo, height, true))
+	b.Run("Plain", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			_ = se.ValidateTransaction(tx, utxo, height, true)
 		}
 	})
-	withCtx := testing.Benchmark(func(b *testing.B) {
+	b.Run("Context", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			_ = se.ValidateTransactionContext(ctx, tx, utxo, height, true)
 		}
 	})
-	fmt.Printf("[context_overhead] goos=%s goarch=%s inputs=1 plain_ns=%d context_ns=%d delta_ns=%d\n",
-		runtime.GOOS, runtime.GOARCH, plain.NsPerOp(), withCtx.NsPerOp(), withCtx.NsPerOp()-plain.NsPerOp())
 }

@@ -665,6 +665,29 @@ BOOST_AUTO_TEST_CASE(check_standardness_requires_one_utxo_height_per_input)
     }
 }
 
+// All byte-parsing entry points require exactly one extended transaction.
+BOOST_AUTO_TEST_CASE(check_standardness_rejects_trailing_bytes)
+{
+    const bsv::CTxValidator validator("main");
+    const auto tx = ParseHex(kValidTxHex);
+    const auto token = task::CCancellationSource::Make()->GetToken();
+    BOOST_REQUIRE(bsv::TxErrorIsOk(validator.CheckStandardness(tx, kValidTxUtxoHeights, kValidTxBlockHeight)));
+    BOOST_REQUIRE(bsv::TxErrorIsOk(validator.CheckStandardness(tx, kValidTxUtxoHeights, kValidTxBlockHeight, token)));
+
+    for (const std::vector<uint8_t> suffix : { std::vector<uint8_t>{ 0 }, std::vector<uint8_t>{ 1, 2, 3 } }) {
+        auto trailing = tx;
+        trailing.insert(trailing.end(), suffix.begin(), suffix.end());
+        BOOST_CHECK_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_EXCEPTION),
+                          validator.CheckStandardness(trailing, kValidTxUtxoHeights, kValidTxBlockHeight).domain);
+        BOOST_CHECK_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_EXCEPTION),
+                          validator.CheckStandardness(trailing, kValidTxUtxoHeights, kValidTxBlockHeight, token).domain);
+        BOOST_CHECK_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_EXCEPTION),
+                          validator.VerifyScript(trailing, kValidTxUtxoHeights, kValidTxBlockHeight, true).domain);
+        BOOST_CHECK_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_EXCEPTION),
+                          validator.ValidateTransaction(trailing, kValidTxUtxoHeights, kValidTxBlockHeight, true).domain);
+    }
+}
+
 // VerifySpend passes the caller's token to the interpreter: a cancel from another
 // thread while its script runs stops it, as for ValidateTransaction.
 BOOST_AUTO_TEST_CASE(verify_spend_cancelled_mid_script_returns_cancelled_promptly)

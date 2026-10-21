@@ -1623,6 +1623,9 @@ TxError bsv::CTxValidator::CheckStandardness(std::span<const uint8_t> extendedTX
         bsv::CMutableTransactionExtended eTX;
         tx_stream >> eTX;
 
+        if (!tx_stream.empty())
+            throw std::runtime_error("error serializing extended tx");
+
         const CTransaction ctx(eTX.mtx);
         if (token.IsCanceled())
             return bsv::TxErrorCancelled();

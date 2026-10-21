@@ -9,6 +9,14 @@ generated version header (`core/BDKVersion.h` / `module/gobdk/version.go`) at bu
 For the detailed list of changes, see the project's commit history / changelog. This file is
 installed alongside the package (`CMakeLists.txt`).
 
+## Release sequence for #66, #68 and #67
+
+Merge in order: #66, #68, then #67. Before each PR merges, merge master into that
+PR branch and dispatch `build_bdk.yaml` on the branch to refresh the gobdk archives.
+The workflow commits `[GoBDKUpdate]` to that branch; merge only after its checks are
+green. This keeps master linkable for gobdk importers at every commit.
+Tag `module/gobdk/v1.4.0` on master after #67 merges.
+
 ## Recent changes
 
 - **A transaction with 16 or more inputs is verified on several cores.** `ValidateTransaction`,
@@ -57,10 +65,16 @@ installed alongside the package (`CMakeLists.txt`).
   or DoS error. Existing functions are unchanged. Rust's `TxError` is now `#[non_exhaustive]`;
   as that breaks exhaustive matches, `rust-bdk` and `bdk-sys` move to 0.2.0.
   See [ObjectModel](documentation/docs/ObjectModel.md#cancellation).
+- **Go cancellation causes stay separate from validation errors.**
+  `CancelledError.ContextCause()` returns `context.Cause(ctx)`. It deliberately has neither
+  `Cause()` nor `Unwrap()`: `github.com/pkg/errors.Cause(err)` returns the cancelled result
+  itself, and `errors.As` does not expose a script error supplied as the context cause.
 - **`CheckStandardness` checks it has one UTXO height per input.** Where policy reads heights,
   a shorter span used to be read past its end. Where it does not (the post-Genesis default),
   mismatched sizes used to pass. Both cases now give `TX_ERR_DOMAIN_EXCEPTION`, as the other
-  entry points do for mismatched sizes.
+  entry points do for mismatched sizes. Both overloads also reject trailing bytes with
+  `TX_ERR_DOMAIN_EXCEPTION`, as `VerifyScript` and `ValidateTransaction` already do;
+  `CheckStandardness` previously ignored those bytes.
 - **Script validation of many-input transactions is linear in the input count.**
   `ValidateTransaction` and `VerifyScript` now build one `PrecomputedTransactionData` per
   transaction and share it across all inputs, as SV Node does; `VerifySpend` builds one per call
