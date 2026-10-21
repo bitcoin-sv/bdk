@@ -3287,7 +3287,7 @@ private:
     bsv::detail::InputHook previous = nullptr;
 };
 
-// The test-only counters (helper inputs, job inputs, helper participations)
+// The test-only counters (inputs, participations, source constructions)
 // stay untouched unless a test turns them on, so production does no
 // per-input write to them; helpers still verify inputs either way.
 BOOST_AUTO_TEST_CASE(input_counters_count_only_when_enabled, PARALLEL_TEST_CASE_DECORATORS)
@@ -3300,9 +3300,10 @@ BOOST_AUTO_TEST_CASE(input_counters_count_only_when_enabled, PARALLEL_TEST_CASE_
     const InputThresholdGuard parallel(FORCE_PARALLEL);
     BOOST_REQUIRE(PoolIsIdle());
     const auto counters = [] {
-        return std::array<uint64_t, 3>{ bsv::detail::HelperVerifiedInputCountForTesting(),
+        return std::array<uint64_t, 4>{ bsv::detail::HelperVerifiedInputCountForTesting(),
                                         bsv::detail::JobVerifiedInputCountForTesting(),
-                                        bsv::detail::HelperJobParticipationCountForTesting() };
+                                        bsv::detail::HelperJobParticipationCountForTesting(),
+                                        bsv::detail::InputCancellationSourceCountForTesting() };
     };
     const ClaimRecorder recorder(/*holdCallerOnFirstInput=*/true);
     {
@@ -3325,7 +3326,72 @@ BOOST_AUTO_TEST_CASE(input_counters_count_only_when_enabled, PARALLEL_TEST_CASE_
         ClaimRecorder::Reset();
         BOOST_REQUIRE(bsv::TxErrorIsOk(ValidateP2PKHSpend(se, etxBin, nInputs, /*consensus=*/true)));
         BOOST_CHECK_GT(counters()[1], before[1]);
+        BOOST_CHECK_GT(counters()[3], before[3]);
     }
+}
+
+// Hold each participant's first two claims until every participant reaches
+// that round. This makes reuse observable without relying on scheduling speed.
+class TwoClaimsPerParticipant {
+public:
+    explicit TwoClaimsPerParticipant(size_t participants) : participants{ participants }
+    {
+        active = this;
+        previous = bsv::detail::SetInputHookForTesting(&Hook);
+    }
+    ~TwoClaimsPerParticipant() { bsv::detail::SetInputHookForTesting(previous); }
+    std::map<std::thread::id, size_t> claims;
+    bool timedOut = false;
+
+private:
+    static void Hook(size_t, bsv::detail::InputEvent event)
+    {
+        if (event != bsv::detail::InputEvent::Claimed)
+            return;
+        auto& self = *active;
+        std::unique_lock lock{ self.mutex };
+        const size_t round = ++self.claims[std::this_thread::get_id()];
+        self.changed.notify_all();
+        if (round <= 2 && !self.changed.wait_for(lock, std::chrono::seconds(5), [&] {
+                return self.claims.size() == self.participants
+                    && std::all_of(self.claims.begin(), self.claims.end(),
+                        [round](const auto& entry) { return entry.second >= round; });
+            }))
+            self.timedOut = true;
+    }
+    const size_t participants;
+    std::mutex mutex;
+    std::condition_variable changed;
+    bsv::detail::InputHook previous;
+    static inline TwoClaimsPerParticipant* active = nullptr;
+};
+
+BOOST_AUTO_TEST_CASE(cancellation_source_is_reused_for_each_participant, PARALLEL_TEST_CASE_DECORATORS)
+{
+    const size_t helpers = bsv::detail::InputPoolHelperCountForTesting();
+    if (helpers == 0)
+        return;
+    const size_t participants = helpers + 1;
+    const size_t nInputs = participants * 8;
+    const bsv::CTxValidator validator("main");
+    const auto bin = SignedP2PKHBin(nInputs);
+    const InputThresholdGuard defaults(bsv::detail::DEFAULT_PARALLEL_INPUT_THRESHOLD);
+    BOOST_REQUIRE(PoolIsIdle());
+    const auto before = bsv::detail::InputCancellationSourceCountForTesting();
+    const auto helperCallsBefore = bsv::detail::HelperJobParticipationCountForTesting();
+    const TwoClaimsPerParticipant rounds(participants);
+    BOOST_REQUIRE(bsv::TxErrorIsOk(ValidateP2PKHSpend(validator, bin, nInputs, true)));
+    BOOST_REQUIRE(PoolIsIdle());
+    BOOST_REQUIRE(!rounds.timedOut);
+    BOOST_REQUIRE_EQUAL(rounds.claims.size(), participants);
+    for (const auto& [thread, claims] : rounds.claims)
+        BOOST_CHECK_GE(claims, 2u);
+    const auto nonemptyCalls = bsv::detail::HelperJobParticipationCountForTesting() - helperCallsBefore + 1;
+    const auto sources = bsv::detail::InputCancellationSourceCountForTesting() - before;
+    BOOST_CHECK_EQUAL(nonemptyCalls, participants);
+    BOOST_CHECK_EQUAL(sources, nonemptyCalls);
+    BOOST_CHECK_LT(sources, nInputs);
+    BOOST_TEST_MESSAGE(sources << " sources for " << nonemptyCalls << " nonempty Work calls and " << nInputs << " inputs");
 }
 
 // Helper threads get an 8 MiB stack, as a caller's main thread usually has,

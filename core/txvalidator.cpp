@@ -356,12 +356,13 @@ private:
 static_assert(bsv::detail::DEFAULT_PARALLEL_INPUT_THRESHOLD == 16);
 std::atomic<size_t> parallelInputThreshold{ bsv::detail::DEFAULT_PARALLEL_INPUT_THRESHOLD };
 // Test-only counters, written only while inputCountersEnabled (off by
-// default); each participant reads the flag once per job.
+// default); participation counters read the flag outside the input loop.
 std::atomic<bool> inputCountersEnabled{ false };
 std::atomic<uint64_t> helperVerifiedInputs{ 0 };
 std::atomic<uint64_t> jobVerifiedInputs{ 0 };  // caller and helpers, inside jobs
 std::atomic<uint64_t> helperJobParticipations{ 0 };  // helper Work() calls that verified an input
 std::atomic<uint64_t> helperWakesWithoutCore{ 0 };
+std::atomic<uint64_t> inputCancellationSources{ 0 };
 std::atomic<bsv::detail::InputHook> inputHook{ nullptr };  // tests only
 std::atomic<bsv::detail::HelperReleasedCoreHook> helperReleasedCoreHook{ nullptr };  // tests only
 std::atomic<bsv::detail::InputPoolHook> inputPoolHook{ nullptr };  // tests only
@@ -412,6 +413,7 @@ public:
     size_t Work(HelperTerms* helper = nullptr)
     {
         size_t verified = 0;
+        const bool count = inputCountersEnabled.load(std::memory_order_relaxed);
         std::shared_ptr<bsv::detail::InputCancellationSource> cancellation;
         std::optional<task::CCancellationToken> inputToken;
         for (;;) {
@@ -428,6 +430,8 @@ public:
                 // same exception handling as verification; no per-input allocation.
                 if (!inputToken) {
                     cancellation = std::make_shared<bsv::detail::InputCancellationSource>(lowestFailure_, callerToken_);
+                    if (count)
+                        inputCancellationSources.fetch_add(1, std::memory_order_relaxed);
                     inputToken.emplace(cancellation->GetToken());
                 }
                 cancellation->SetIndex(index);
@@ -842,6 +846,11 @@ uint64_t bsv::detail::HelperWakesWithoutCoreForTesting()
 uint64_t bsv::detail::HelperJobParticipationCountForTesting()
 {
     return helperJobParticipations.load();
+}
+
+uint64_t bsv::detail::InputCancellationSourceCountForTesting()
+{
+    return inputCancellationSources.load();
 }
 
 bsv::detail::InputHook bsv::detail::SetInputHookForTesting(InputHook hook)

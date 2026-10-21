@@ -81,6 +81,10 @@ uint64_t JobVerifiedInputCountForTesting();
 // process start. A job with every helper on it adds one per helper. Tests only.
 uint64_t HelperJobParticipationCountForTesting();
 
+// Input cancellation sources constructed by Work(), since process start,
+// while input counting is enabled. Tests only.
+uint64_t InputCancellationSourceCountForTesting();
+
 // Called on the verifying thread with an input's index when a participant of
 // a parallel job claims it, before verifying it (Claimed), and when it fails,
 // before the failure is recorded (Failed); nullptr for none. Lets a test fix
