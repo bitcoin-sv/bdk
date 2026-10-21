@@ -203,6 +203,7 @@ jobs:
       ## context variants over the plain call.
       - name: Print validation cancellation numbers
         if: runner.os != 'Windows'
+        continue-on-error: true
         run: |
           grep -E '^\[(cancelled_mid_script|cancelled_during_a_signature_hash)\]' build/Testing/Temporary/LastTest.log || true
           cd test/golang && go test -count=1 -timeout 10m -run '^$' -bench '^BenchmarkContextOverhead$' -benchtime=100ms Main_test.go CancelValidation_test.go
