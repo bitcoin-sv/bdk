@@ -3731,7 +3731,7 @@ public:
 private:
     static void Allocate(bool helper)
     {
-        auto& self = *active;
+        auto& self = *active.load();
         if (helper) {
             if (self.failHelpers) {
                 {
@@ -3758,7 +3758,7 @@ private:
     }
     static void Pool(bsv::detail::InputPoolEvent event)
     {
-        auto& self = *active;
+        auto& self = *active.load();
         if (event == bsv::detail::InputPoolEvent::JobClosed
             && std::this_thread::get_id() == self.owner)
             self.closed = true;
@@ -3771,7 +3771,7 @@ private:
     }
     static void Input(size_t, bsv::detail::InputEvent event)
     {
-        auto& self = *active;
+        auto& self = *active.load();
         const bool caller = std::this_thread::get_id() == self.owner;
         if (event == bsv::detail::InputEvent::Verified && caller)
             ++self.callerVerified;
@@ -3796,7 +3796,7 @@ private:
     const std::thread::id owner;
     bsv::detail::InputSourceAllocationHook previousAllocation;
     bsv::detail::InputHook previousInput;
-    static inline InputSourceAllocationFailure* active = nullptr;
+    static inline std::atomic<InputSourceAllocationFailure*> active{ nullptr };
 };
 
 BOOST_AUTO_TEST_CASE(participant_source_allocation_failure_preserves_valid_result, PARALLEL_TEST_CASE_DECORATORS)
