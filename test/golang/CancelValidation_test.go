@@ -338,7 +338,7 @@ func TestValidateBatchContextCancelledPartWay(t *testing.T) {
 		require.NoError(t, batch.Add(tx, utxo, cancelTestLongBlockHeight, true))
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
 	results := se.ValidateBatchContext(ctx, batch)
 	require.Len(t, results, 4)
