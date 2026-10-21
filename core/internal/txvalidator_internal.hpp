@@ -90,6 +90,9 @@ uint64_t HelperVerifiedInputCountForTesting();
 // process start, while counting is enabled. Tests only.
 uint64_t HelperWakesWithoutCoreForTesting();
 
+// ReleasedCore notifications while counting is enabled. Tests only.
+uint64_t HelperReleaseNotificationsForTesting();
+
 // Number of inputs verified inside parallel jobs, by callers and helpers,
 // since process start. Tests only.
 uint64_t JobVerifiedInputCountForTesting();
@@ -119,12 +122,15 @@ HelperReleasedCoreHook SetHelperReleasedCoreHookForTesting(HelperReleasedCoreHoo
 
 // BeforeOffer runs on the caller before publishing a job. Waiting runs on a
 // helper under the pool mutex, just before it waits: never block or call pool
-// functions from that event. Returns the previous hook. Tests only.
-enum class InputPoolEvent { BeforeOffer, Waiting };
+// functions from that event. CoreUnavailable observes a reserved helper place
+// after a failed core acquisition, under that mutex; only a bounded test pause
+// coordinated with a release that skips the mutex is allowed there.
+// Returns the previous hook. Tests only.
+enum class InputPoolEvent { BeforeOffer, Waiting, CoreUnavailable };
 using InputPoolHook = void (*)(InputPoolEvent event);
 InputPoolHook SetInputPoolHookForTesting(InputPoolHook hook);
 // Wake existing helpers so a test can observe each one's Waiting event.
-void WakeInputHelpersForTesting();
+void WakeInputHelpersForTesting(bool all = true);
 
 // Caps the cores the input pool sizes itself to (0: no cap) and returns the
 // previous cap. Takes effect only when set before the pool is created, so a

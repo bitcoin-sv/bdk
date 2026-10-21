@@ -362,6 +362,7 @@ std::atomic<uint64_t> helperVerifiedInputs{ 0 };
 std::atomic<uint64_t> jobVerifiedInputs{ 0 };  // caller and helpers, inside jobs
 std::atomic<uint64_t> helperJobParticipations{ 0 };  // helper Work() calls that verified an input
 std::atomic<uint64_t> helperWakesWithoutCore{ 0 };
+std::atomic<uint64_t> helperReleaseNotifications{ 0 };
 std::atomic<uint64_t> inputCancellationSources{ 0 };
 std::atomic<bsv::detail::InputHook> inputHook{ nullptr };  // tests only
 std::atomic<bsv::detail::HelperReleasedCoreHook> helperReleasedCoreHook{ nullptr };  // tests only
@@ -604,10 +605,11 @@ public:
             wake_.notify_one();
     }
 
-    void WakeHelpersForTesting()
+    void WakeHelpersForTesting(bool all)
     {
         std::lock_guard lock{ mutex_ };
-        wake_.notify_all();
+        if (all) wake_.notify_all();
+        else wake_.notify_one();
     }
 
     void Withdraw(const std::shared_ptr<InputJob>& job)
@@ -632,10 +634,16 @@ public:
     // seq_cst decrement of busyThreads and this seq_cst load pair with Offer's
     // increment of openJobs_ and its subsequent load of busyThreads, so either
     // this sees the job or Offer sees the freed core and wakes a helper.
+    // At the helper cap no notification can admit another helper. A temporary
+    // reservation that made the cap look full is returned with a seq_cst core
+    // recheck in Run(), so a skipped notification cannot lose that capacity.
     void ReleasedCore(size_t busyAfter)
     {
-        if (busyAfter >= cores_ || openJobs_.load(std::memory_order_seq_cst) == 0)
+        if (busyAfter >= cores_ || openJobs_.load(std::memory_order_seq_cst) == 0
+            || helpersOnJobs_.load(std::memory_order_seq_cst) >= HelperLimit())
             return;
+        if (inputCountersEnabled.load(std::memory_order_relaxed))
+            helperReleaseNotifications.fetch_add(1, std::memory_order_relaxed);
         { std::lock_guard lock{ mutex_ }; }  // a helper checking the budget is now waiting
         wake_.notify_one();
     }
@@ -750,12 +758,20 @@ private:
                 std::unique_lock lock{ mutex_ };
                 wake_.wait(lock, [&] {
                     job = NextJob();
-                    if (job && TryTakeHelperPlace()) {
+                    while (job && TryTakeHelperPlace()) {
                         if (TryTakeCore(cores_))
                             return true;
-                        helpersOnJobs_.fetch_sub(1, std::memory_order_relaxed);
+                        if (const auto hook = inputPoolHook.load(std::memory_order_relaxed))
+                            hook(bsv::detail::InputPoolEvent::CoreUnavailable);
+                        // Pair the returned reservation and the capacity check
+                        // with ReleasedCore's seq_cst helper-cap load. If that
+                        // release saw our reserved place as full, this check
+                        // sees its freed core; retry before going to sleep.
+                        helpersOnJobs_.fetch_sub(1, std::memory_order_seq_cst);
                         if (inputCountersEnabled.load(std::memory_order_relaxed))
                             helperWakesWithoutCore.fetch_add(1, std::memory_order_relaxed);
+                        if (busyThreads.load(std::memory_order_seq_cst) >= cores_)
+                            break;
                     }
                     job.reset();  // don't keep a finished job alive while asleep
                     if (const auto hook = inputPoolHook.load(std::memory_order_relaxed))
@@ -875,6 +891,11 @@ uint64_t bsv::detail::HelperWakesWithoutCoreForTesting()
     return helperWakesWithoutCore.load();
 }
 
+uint64_t bsv::detail::HelperReleaseNotificationsForTesting()
+{
+    return helperReleaseNotifications.load();
+}
+
 uint64_t bsv::detail::HelperJobParticipationCountForTesting()
 {
     return helperJobParticipations.load();
@@ -900,11 +921,13 @@ bsv::detail::InputPoolHook bsv::detail::SetInputPoolHookForTesting(InputPoolHook
     return inputPoolHook.exchange(hook);
 }
 
-void bsv::detail::WakeInputHelpersForTesting()
+void bsv::detail::WakeInputHelpersForTesting(bool all)
 {
 #if BDK_PARALLEL_INPUTS
     if (InputVerifyPool* pool = InputVerifyPool::Existing())
-        pool->WakeHelpersForTesting();
+        pool->WakeHelpersForTesting(all);
+#else
+    (void)all;
 #endif
 }
 
