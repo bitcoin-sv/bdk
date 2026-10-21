@@ -60,13 +60,11 @@ installed alongside the package (`CMakeLists.txt`).
       point; a CI job runs it under GCC ThreadSanitizer on x86-64 and ARM64 Linux, with a
       positive control that must be reported. Another CI job builds a macOS universal
       `bdk_core` and checks each slice carries its own backend and the load-time selection.
-    - **Released together with bitcoin-sv/bdk#68 and bitcoin-sv/bdk#67.** The committed
-      `libGoBDK_*.a` archives do not define `cgo_sha256_backend()`, and cgo links its stub
-      whether or not it is called, so Go consumers of untagged master fail to link until the
-      archives are refreshed. The three PRs merge back to back, `[GoBDKUpdate]`
-      (commit-built-artifacts) is dispatched straight after the last one, and
-      `module/gobdk/v1.4.0` is tagged on the bot commit. Tags only ever point at refresh
-      commits, so tagged consumers never see the gap.
+    - **Archives refreshed before each merge.** Each of #66, #68, #67 refreshes the gobdk
+      archives in its own branch before it merges: merge master in, dispatch
+      `build_bdk.yaml` on the PR branch (gobdk archives), which commits `[GoBDKUpdate]`
+      to the branch, then merge once green. Order #66, #68, #67, so master links for gobdk
+      importers at every commit. `module/gobdk/v1.4.0` is tagged on master after #67.
 - **Script validation of many-input transactions is linear in the input count.**
   `ValidateTransaction` and `VerifyScript` now build one `PrecomputedTransactionData` per
   transaction and share it across all inputs, as SV Node does; `VerifySpend` builds one per call

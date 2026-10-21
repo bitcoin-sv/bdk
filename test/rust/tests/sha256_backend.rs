@@ -1,7 +1,7 @@
 //! The SHA-256 backend getter. Cargo builds each file under `tests/` as its own
 //! binary, so this process has constructed no validator when the test starts.
 //! BDK selected the backend while the binary loaded, from the environment it
-//! started with, so concurrent first calls must all report it.
+//! started with, so concurrent getter calls must all report it.
 
 use std::sync::{Arc, Barrier};
 use std::thread;
