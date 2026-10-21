@@ -414,10 +414,18 @@ public:
     {
         size_t verified = 0;
         const bool count = inputCountersEnabled.load(std::memory_order_relaxed);
+        const auto pollHook = inputHook.load(std::memory_order_relaxed);
         std::shared_ptr<bsv::detail::InputCancellationSource> cancellation;
         std::optional<task::CCancellationToken> inputToken;
         for (;;) {
             if (helper != nullptr && HelperShouldLeave(*helper))
+                return verified;
+            if (helper == nullptr && callerToken_.IsCanceled()) {
+                callerCancelled_.store(true, std::memory_order_relaxed);
+                if (pollHook)
+                    pollHook(next_.load(std::memory_order_relaxed), bsv::detail::InputEvent::CallerCancelled);
+            }
+            if (callerCancelled_.load(std::memory_order_relaxed))
                 return verified;
             const size_t index = next_.fetch_add(1, std::memory_order_relaxed);
             if (index >= n_ || index > lowestFailure_.load(std::memory_order_relaxed))
@@ -429,7 +437,8 @@ public:
                 // Allocate the source and token once per participant, under the
                 // same exception handling as verification; no per-input allocation.
                 if (!inputToken) {
-                    cancellation = std::make_shared<bsv::detail::InputCancellationSource>(lowestFailure_, callerToken_);
+                    cancellation = std::make_shared<bsv::detail::InputCancellationSource>(
+                        lowestFailure_, callerCancelled_, helper == nullptr ? &callerToken_ : nullptr, pollHook);
                     if (count)
                         inputCancellationSources.fetch_add(1, std::memory_order_relaxed);
                     inputToken.emplace(cancellation->GetToken());
@@ -449,7 +458,8 @@ public:
     bool HasWork() const
     {
         const size_t next = next_.load(std::memory_order_relaxed);
-        return next < n_ && next <= lowestFailure_.load(std::memory_order_relaxed);
+        return !callerCancelled_.load(std::memory_order_relaxed)
+            && next < n_ && next <= lowestFailure_.load(std::memory_order_relaxed);
     }
 
     // A helper joins only an open job; the caller waits for every joined helper.
@@ -518,6 +528,7 @@ private:
     const size_t n_;
     const VerifyInput verify_;
     const task::CCancellationToken& callerToken_;
+    std::atomic<bool> callerCancelled_{ false };  // only the caller polls its token
     std::atomic<size_t> next_{ 0 };
     std::atomic<size_t> lowestFailure_;  // n_ while nothing failed; written under mutex_
 

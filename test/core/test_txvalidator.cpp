@@ -2041,6 +2041,97 @@ static std::vector<uint8_t> SignedP2PKHBin(size_t nInputs)
         /*nOutputs=*/1, /*precomputeForSigning=*/true));
 }
 
+// A real thread-CPU source, recording every cross-thread read as well.
+class CallerThreadBudget final : public task::CCancellationSource {
+public:
+    CallerThreadBudget()
+        : owner{ std::this_thread::get_id() },
+          timed{ task::CThreadTimedCancellationSource::Make(std::chrono::milliseconds(200))->GetToken() } {}
+    bool IsCanceled() override
+    {
+        if (std::this_thread::get_id() != owner)
+            ++otherThreadReads;
+        return timed.IsCanceled();
+    }
+    std::atomic<size_t> otherThreadReads{ 0 };
+private:
+    const std::thread::id owner;
+    const task::CCancellationToken timed;
+};
+
+class CpuBusyHelpers {
+public:
+    explicit CpuBusyHelpers(size_t helpers) : helpers{ helpers }
+    {
+        active = this;
+        previous = bsv::detail::SetInputHookForTesting(&Hook);
+    }
+    ~CpuBusyHelpers() { bsv::detail::SetInputHookForTesting(previous); }
+    std::atomic<size_t> burned{ 0 }, arrived{ 0 };
+    std::atomic<bool> timedOut{ false };
+    static inline thread_local bool isCaller = false;
+private:
+    static void Hook(size_t, bsv::detail::InputEvent event)
+    {
+        if (event != bsv::detail::InputEvent::Claimed)
+            return;
+        auto& self = *active;
+        if (isCaller) {
+            if (!WaitFor([&] { return self.burned.load() == self.helpers; }, std::chrono::milliseconds(20000)))
+                self.timedOut = true;
+        } else if (!burnedOnThisJob) {
+            burnedOnThisJob = true;
+            ++self.arrived;
+            if (!WaitFor([&] { return self.arrived.load() == self.helpers; }, std::chrono::milliseconds(20000)))
+                self.timedOut = true;
+            const auto start = task::thread_clock::now();
+            while (task::thread_clock::now() - start < std::chrono::milliseconds(500))
+                std::atomic_signal_fence(std::memory_order_seq_cst);
+            ++self.burned;
+        }
+    }
+    const size_t helpers;
+    bsv::detail::InputHook previous;
+    static inline CpuBusyHelpers* active = nullptr;
+    static inline thread_local bool burnedOnThisJob = false;
+};
+
+BOOST_AUTO_TEST_CASE(thread_cpu_budget_is_polled_only_by_the_caller, PARALLEL_TEST_CASE_DECORATORS)
+{
+#ifndef BOOST_CHRONO_HAS_THREAD_CLOCK
+    BOOST_TEST_MESSAGE("thread CPU clock unavailable");
+#else
+    const size_t helpers = bsv::detail::InputPoolHelperCountForTesting();
+    if (helpers == 0)
+        return;
+    const size_t nInputs = (helpers + 1) * 8;
+    const auto bin = SignedP2PKHBin(nInputs);
+    const std::vector<int32_t> heights(nInputs, P2PKH_UTXO_HEIGHT);
+    const bsv::CTxValidator validator("main");
+    const InputThresholdGuard defaults(bsv::detail::DEFAULT_PARALLEL_INPUT_THRESHOLD);
+    BOOST_REQUIRE(PoolIsIdle());
+    CpuBusyHelpers load(helpers);
+    TxError result = bsv::TxErrorException();
+    std::shared_ptr<CallerThreadBudget> source;
+    bool callerBudgetExpired = true;
+    // A fresh caller starts near zero thread CPU time. Each helper burns more
+    // than the caller's budget before its first interpreter poll on this job.
+    std::thread caller([&] {
+        CpuBusyHelpers::isCaller = true;
+        source = std::make_shared<CallerThreadBudget>();
+        result = validator.ValidateTransaction(bin, heights, P2PKH_BLOCK_HEIGHT, true, source->GetToken());
+        callerBudgetExpired = source->IsCanceled();
+    });
+    caller.join();
+    BOOST_CHECK(!load.timedOut);
+    BOOST_CHECK_EQUAL(load.burned.load(), helpers);
+    BOOST_CHECK_EQUAL(source->otherThreadReads.load(), 0u);
+    BOOST_CHECK(!callerBudgetExpired);
+    BOOST_CHECK(bsv::TxErrorIsOk(result));
+    BOOST_CHECK(PoolIsIdle());
+#endif
+}
+
 // Track real interpreter polls on inputs above the failing one. Hold the
 // failing input until a higher input has reached its eighth poll, ensuring
 // this exercises in-flight work rather than just unclaimed indices.
@@ -2049,7 +2140,6 @@ public:
     explicit EarlyStopProbe(size_t failingIndex, bool cancelOnFailure = false)
         : failingIndex{ failingIndex }, cancelOnFailure{ cancelOnFailure }
     {
-        currentIndex = std::numeric_limits<size_t>::max();
         active = this;
         previous = bsv::detail::SetInputHookForTesting(&Hook);
     }
@@ -2059,18 +2149,7 @@ public:
         active = nullptr;
     }
 
-    bool IsCanceled() override
-    {
-        if (currentIndex != std::numeric_limits<size_t>::max() && currentIndex > failingIndex) {
-            ++higherPolls;
-            if (++inputPolls == 8) {
-                ++entered;
-                if (!WaitFor([&] { return failed.load(); }))
-                    timedOut = true;
-            }
-        }
-        return CCancellationSource::IsCanceled();
-    }
+    bool IsCanceled() override { return CCancellationSource::IsCanceled(); }
 
     std::atomic<uint64_t> higherPolls{ 0 };
     std::atomic<size_t> entered{ 0 };
@@ -2081,10 +2160,16 @@ private:
     {
         auto& self = *active;
         if (event == bsv::detail::InputEvent::Claimed) {
-            currentIndex = index;
             inputPolls = 0;
             if (index == self.failingIndex && !WaitFor([&] { return self.entered.load() > 0; }))
                 self.timedOut = true;
+        } else if (event == bsv::detail::InputEvent::Polled && index > self.failingIndex) {
+            ++self.higherPolls;
+            if (++inputPolls == 8) {
+                ++self.entered;
+                if (!WaitFor([&] { return self.failed.load(); }))
+                    self.timedOut = true;
+            }
         } else if (event == bsv::detail::InputEvent::Failed && index == self.failingIndex) {
             if (self.cancelOnFailure)
                 self.Cancel();
@@ -2097,7 +2182,6 @@ private:
     std::atomic<bool> failed{ false };
     bsv::detail::InputHook previous;
     static inline EarlyStopProbe* active = nullptr;
-    static inline thread_local size_t currentIndex = std::numeric_limits<size_t>::max();
     static inline thread_local uint64_t inputPolls = 0;
 };
 
@@ -2155,7 +2239,8 @@ BOOST_AUTO_TEST_CASE(early_stop_source_preserves_equal_and_lower_indices)
     std::atomic<size_t> lowest{ 32 };
     const auto caller = task::CCancellationSource::Make();
     const auto callerToken = caller->GetToken();
-    const auto source = std::make_shared<bsv::detail::InputCancellationSource>(lowest, callerToken);
+    std::atomic<bool> cancelled{ false };
+    const auto source = std::make_shared<bsv::detail::InputCancellationSource>(lowest, cancelled, &callerToken);
     const auto token = source->GetToken();
     source->SetIndex(5);
     BOOST_CHECK(!token.IsCanceled());
@@ -2237,26 +2322,44 @@ BOOST_AUTO_TEST_CASE(early_stop_keeps_serial_verdict_for_mixed_failures, PARALLE
 // This catches dropping the caller token when constructing the input token.
 class CancelDuringInput final : public task::CCancellationSource {
 public:
-    CancelDuringInput()
+    CancelDuringInput() : owner{ std::this_thread::get_id() }
     {
         inJob = false;
+        active = this;
         previous = bsv::detail::SetInputHookForTesting(&Hook);
     }
     ~CancelDuringInput() { bsv::detail::SetInputHookForTesting(previous); }
     bool IsCanceled() override
     {
-        if (inJob && ++polls >= 20)
+        if (inJob && ++polls >= 20) {
+            if (!WaitFor([&] { return helperPolls.load() >= 8; }))
+                timedOut = true;
             Cancel();
+        }
         return CCancellationSource::IsCanceled();
     }
-    std::atomic<uint64_t> polls{ 0 };
+    std::atomic<uint64_t> polls{ 0 }, helperPolls{ 0 };
+    std::atomic<bool> published{ false }, timedOut{ false };
 private:
     static void Hook(size_t, bsv::detail::InputEvent event)
     {
-        if (event == bsv::detail::InputEvent::Claimed)
+        auto& self = *active;
+        if (event == bsv::detail::InputEvent::Claimed) {
             inJob = true;
+            helperInputPolls = 0;
+        }
+        if (event == bsv::detail::InputEvent::CallerCancelled)
+            self.published = true;
+        if (event == bsv::detail::InputEvent::Polled && std::this_thread::get_id() != self.owner) {
+            ++self.helperPolls;
+            if (++helperInputPolls == 8 && !WaitFor([&] { return self.published.load(); }))
+                self.timedOut = true;
+        }
     }
+    const std::thread::id owner;
+    static inline CancelDuringInput* active = nullptr;
     static inline thread_local bool inJob = false;
+    static inline thread_local size_t helperInputPolls = 0;
     bsv::detail::InputHook previous;
 };
 
@@ -2274,6 +2377,10 @@ BOOST_AUTO_TEST_CASE(caller_cancel_during_parallel_input_returns_cancelled, PARA
     const auto source = std::make_shared<CancelDuringInput>();
     const auto result = validator.ValidateTransaction(bin, heights, 20000, true, source->GetToken());
     BOOST_CHECK_GE(source->polls.load(), 20u);
+    BOOST_CHECK(!source->timedOut);
+    BOOST_CHECK(source->published);
+    BOOST_CHECK_GE(source->helperPolls.load(), 8u);
+    BOOST_CHECK_LT(source->helperPolls.load(), 1000u);
     BOOST_CHECK_EQUAL(result.domain, static_cast<int32_t>(TX_ERR_DOMAIN_CANCELLED));
 }
 

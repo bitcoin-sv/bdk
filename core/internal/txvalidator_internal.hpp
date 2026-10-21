@@ -14,24 +14,41 @@
 
 namespace bsv::detail {
 
+enum class InputEvent { Claimed, Failed, Polled, CallerCancelled };
+using InputHook = void (*)(size_t index, InputEvent event);
+
 // One source per job participant, reused for its successive inputs. The index
 // is private to that participant; the job owns lowestFailure and waits for all
-// participants before either it or the caller token can go away. Internal only.
+// participants before the job can go away. Only the caller participant receives
+// the caller token: helpers read the cancellation flag it publishes. Internal only.
 class InputCancellationSource final : public task::CCancellationSource {
 public:
     InputCancellationSource(const std::atomic<size_t>& lowestFailure,
-                            const task::CCancellationToken& callerToken)
-        : lowestFailure_{ lowestFailure }, callerToken_{ callerToken } {}
+                            std::atomic<bool>& callerCancelled,
+                            const task::CCancellationToken* callerToken = nullptr,
+                            InputHook hook = nullptr)
+        : lowestFailure_{ lowestFailure }, callerCancelled_{ callerCancelled },
+          callerToken_{ callerToken }, hook_{ hook } {}
 
     void SetIndex(size_t index) { index_ = index; }
     bool IsCanceled() override
     {
-        return callerToken_.IsCanceled() || lowestFailure_.load(std::memory_order_relaxed) < index_;
+        if (hook_)
+            hook_(index_, InputEvent::Polled);
+        if (callerToken_ && callerToken_->IsCanceled()) {
+            callerCancelled_.store(true, std::memory_order_relaxed);
+            if (hook_)
+                hook_(index_, InputEvent::CallerCancelled);
+        }
+        return callerCancelled_.load(std::memory_order_relaxed)
+            || lowestFailure_.load(std::memory_order_relaxed) < index_;
     }
 
 private:
     const std::atomic<size_t>& lowestFailure_;
-    const task::CCancellationToken& callerToken_;
+    std::atomic<bool>& callerCancelled_;
+    const task::CCancellationToken* const callerToken_;
+    const InputHook hook_;
     size_t index_{ 0 };
 };
 
@@ -86,12 +103,12 @@ uint64_t HelperJobParticipationCountForTesting();
 uint64_t InputCancellationSourceCountForTesting();
 
 // Called on the verifying thread with an input's index when a participant of
-// a parallel job claims it, before verifying it (Claimed), and when it fails,
-// before the failure is recorded (Failed); nullptr for none. Lets a test fix
+// a parallel job claims it (Claimed), fails (Failed), polls its input token
+// (Polled), or publishes caller cancellation (CallerCancelled); nullptr for none.
+// The poll hook is captured per participant and lives until that work drains.
+// Lets a test fix
 // the order in which failures reach a job, or make inputs take longer
 // without using CPU. Returns the previous hook. Tests only.
-enum class InputEvent { Claimed, Failed };
-using InputHook = void (*)(size_t index, InputEvent event);
 InputHook SetInputHookForTesting(InputHook hook);
 
 // Called by a helper after it releases its core and before it checks the

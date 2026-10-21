@@ -89,11 +89,12 @@ phase in the right-hand column. A token that fires after the last poll leaves th
 verdict, so callers must act on the result rather than on whether they cancelled. A cancelled
 `ValidateBatch` keeps the results of the entries it finished and returns `CANCELLED` for the rest.
 
-Use a token whose answer does not depend on the thread that polls it, such as SV Node's
-`task::CTimedCancellationSource` (steady clock). `task::CThreadTimedCancellationSource` measures the
-CPU clock of whichever thread polls it: today that is the calling thread, but a token may be read on
-other threads if inputs come to be verified in parallel, and a CPU-time budget would then be
-measured on the wrong thread.
+The caller's token is read only on the calling thread, including parallel verification. In a parallel job the caller
+polls between its own input claims and in its interpreter, and publishes observed cancellation to
+an atomic job flag. Helpers poll that flag rather than the caller's token. A
+`task::CThreadTimedCancellationSource` created on the calling thread therefore measures caller CPU, excluding helper CPU.
+Helpers stop at their next interpreter poll after the caller observes cancellation; while the
+caller only waits for helpers, it does not poll the token again.
 
 The token belongs to the call, not to the `CTxValidator`, so concurrent calls on one validator
 cancel independently. The C bindings take a pointer to a caller-owned `int32_t` instead of a token

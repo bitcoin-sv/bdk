@@ -49,11 +49,12 @@ enum class TxValidationNetwork {
  * the call runs; each call takes its own token, so concurrent calls on one validator
  * cancel independently.
  *
- * Use a source whose answer does not depend on the thread that asks, such as
- * task::CTimedCancellationSource (steady clock). task::CThreadTimedCancellationSource
- * measures the CPU clock of whichever thread polls it: today that is the calling
- * thread, but a token may be read on other threads if inputs come to be verified in
- * parallel, and a CPU-time budget would then be measured on the wrong thread.
+ * The caller's token is read only on the calling thread, including when inputs
+ * run in parallel. In a parallel job the caller polls between its input claims and in its
+ * interpreter, publishing observed cancellation to helpers through an atomic
+ * job flag. Helpers poll that flag, never the caller's token. A thread-CPU-time
+ * source created on the calling thread therefore measures its CPU, not helper CPU. While the
+ * caller only waits for helpers, no additional caller-token polling takes place.
  *
  * Checks present in bitcoin-sv's TxnValidation / BlockValidateTxns that are intentionally
  * absent here. In every case BDK is missing the chain / mempool / node-state context the
