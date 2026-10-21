@@ -24,8 +24,9 @@ Tag `module/gobdk/v1.4.0` on master after #67 merges.
   token; Go has `ValidateTransactionContext`, `VerifyScriptContext`,
   `VerifyScriptWithCustomFlagsContext` and `ValidateBatchContext`; Rust has `*_cancellable`
   methods with a `CancelFlag`. A cancelled call returns the new `TX_ERR_DOMAIN_CANCELLED` (5),
-  Go `*CancelledError` / `ErrCancelled`, Rust `TxError::Cancelled`: no verdict, never a script
-  or DoS error. Existing functions are unchanged. Rust's `TxError` is now `#[non_exhaustive]`;
+  Go `*CancelledError` / `ErrCancelled`, Rust `TxError::Cancelled`: no validation verdict.
+  Existing `CheckStandardness` calls now return `TX_ERR_DOMAIN_EXCEPTION` for mismatched
+  UTXO height counts or trailing bytes, as detailed below. Rust's `TxError` is now `#[non_exhaustive]`;
   as that breaks exhaustive matches, `rust-bdk` and `bdk-sys` move to 0.2.0.
   See [ObjectModel](documentation/docs/ObjectModel.md#cancellation).
 - **Go cancellation causes stay separate from validation errors.**
