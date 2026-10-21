@@ -314,8 +314,9 @@ private:
  * closed job drops it. Nested use (a helper's work calling back in) therefore
  * cannot deadlock.
  *
- * Oversubscription: busyThreads counts every thread inside implVerifyScript or
- * VerifySpend plus every helper on a job. A helper joins only while that count
+ * Oversubscription: busyThreads counts every VerifyScript, ValidateTransaction
+ * or VerifySpend caller after its entry poll, plus every helper on a job.
+ * Deserialization, hashing and transaction checks count against that budget. A helper joins only while that count
  * is below the core count, and checks it again before claiming each input,
  * leaving the job once the count exceeds the core count. So a helper holds a
  * core for at most one more input once the machine is oversubscribed. Callers
@@ -333,14 +334,15 @@ private:
  * lowered limit holds from each helper's next input. A limit of 0 never
  * creates the pool.
  *
- * Cancellation: a participant reuses a source that combines the caller's token
- * with lowestFailure < its current input index. The lowest failing input and
- * every lower input finish normally; higher in-flight inputs stop at their next
- * interpreter poll. The caller still waits for joined helpers, then checks its
- * own token before returning the lowest failure's verdict.
- * The cancellation token is read on whichever thread verifies
- * an input, so a token must not depend on the calling thread (a thread CPU
- * clock budget would measure a helper's clock against the caller's start).
+ * Cancellation: only the calling thread polls the caller's token, between its
+ * input claims and in its interpreter, publishing observed cancellation to a
+ * job flag. Each participant reuses a source combining that flag with
+ * lowestFailure < its current input index; helpers never read the caller token.
+ * Higher inputs stop at their next interpreter poll. After joined helpers drain,
+ * return a real failure only if every lower input completed, or success if all
+ * inputs passed. Necessary work abandoned due to cancellation returns CANCELLED.
+ * There is no post-drain token poll, so late cancellation keeps a completed
+ * verdict and a caller-thread CPU budget excludes helper CPU.
  *
  * Shared by all participants, read only: the CTransaction, its
  * PrecomputedTransactionData, the previous outputs, heights and flags, and the
@@ -813,7 +815,8 @@ private:
 };
 
 // Counts the calling thread in busyThreads for the duration of one
-// implVerifyScript or VerifySpend call, unless it is already counted.
+// VerifyScript, ValidateTransaction or VerifySpend call after its entry poll,
+// unless it is already counted.
 class BusyScope {
 public:
     BusyScope() : counted_{ !threadIsBusy }
