@@ -36,7 +36,9 @@ jobs:
   tsan:
     ## ARM64 orders memory more weakly than x86-64, so it is the stricter host for the
     ## atomics these tests exercise.
-    runs-on: ubuntu-22.04-arm
+    ## Ubuntu 22.04's GCC 11 TSAN misses pthread_cond_clockwait interception:
+    ## correctly locked timed waits report a double lock (GCC PR 101978).
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
     steps:
       - name: Check out repository
