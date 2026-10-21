@@ -112,9 +112,10 @@ the returned `TxError` into a Go `error` (`nil` on success, otherwise the error 
 
 `ValidateTransactionContext`, `VerifyScriptContext`, `VerifyScriptWithCustomFlagsContext` and
 `ValidateBatchContext` take a `context.Context` and stop when it is done. A cancelled call returns a
-`*CancelledError`: `errors.Is(err, script.ErrCancelled)` is true, and its `Cause()` method returns
+`*CancelledError`: `errors.Is(err, script.ErrCancelled)` is true, and its `ContextCause()` method returns
 `context.Cause(ctx)`, so `context.Canceled`, `context.DeadlineExceeded` or a custom cause can be told
-apart. The cause is not in the error chain (no `Unwrap`), so `errors.As` never finds a `ScriptError`,
+apart. It has neither `Cause()` nor `Unwrap()`: `github.com/pkg/errors.Cause(err)` returns the cancelled
+result itself, and `errors.As` never finds a `ScriptError`,
 `DoSError` or `ABIError` in a cancelled result, even when the cause is one. The context sets a heap `int32` through
 `context.AfterFunc`. For contexts built by the `context` package no goroutine runs unless the context
 is cancelled; for another `Context` implementation `AfterFunc` watches it with one goroutine until the

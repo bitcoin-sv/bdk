@@ -20,6 +20,10 @@ installed alongside the package (`CMakeLists.txt`).
   or DoS error. Existing functions are unchanged. Rust's `TxError` is now `#[non_exhaustive]`;
   as that breaks exhaustive matches, `rust-bdk` and `bdk-sys` move to 0.2.0.
   See [ObjectModel](documentation/docs/ObjectModel.md#cancellation).
+- **Go cancellation causes stay separate from validation errors.**
+  `CancelledError.ContextCause()` returns `context.Cause(ctx)`. It deliberately has neither
+  `Cause()` nor `Unwrap()`: `github.com/pkg/errors.Cause(err)` returns the cancelled result
+  itself, and `errors.As` does not expose a script error supplied as the context cause.
 - **`CheckStandardness` checks it has one UTXO height per input.** Where policy reads heights,
   a shorter span used to be read past its end. Where it does not (the post-Genesis default),
   mismatched sizes used to pass. Both cases now give `TX_ERR_DOMAIN_EXCEPTION`, as the other

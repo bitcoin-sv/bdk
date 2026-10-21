@@ -15,6 +15,7 @@ import (
 	"time"
 
 	goscript "github.com/bitcoin-sv/bdk/module/gobdk/script"
+	pkgerrors "github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -108,7 +109,7 @@ func requireCancelled(t *testing.T, err error, cause error) {
 	var cancelledErr *goscript.CancelledError
 	require.True(t, errors.As(err, &cancelledErr), "expected *CancelledError, got %T", err)
 	if cause != nil {
-		assert.True(t, errors.Is(cancelledErr.Cause(), cause), "expected cause %v, got %v", cause, cancelledErr.Cause())
+		assert.True(t, errors.Is(cancelledErr.ContextCause(), cause), "expected cause %v, got %v", cause, cancelledErr.ContextCause())
 	}
 	// The cause is not in the error chain: errors.Is/As on err see only the cancellation.
 	assert.False(t, errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded),
@@ -192,7 +193,7 @@ func TestContextCancelCauseIsCarried(t *testing.T) {
 	requireCancelled(t, err, slowLane)
 	var cancelledErr *goscript.CancelledError
 	require.True(t, errors.As(err, &cancelledErr))
-	assert.False(t, errors.Is(cancelledErr.Cause(), context.DeadlineExceeded))
+	assert.False(t, errors.Is(cancelledErr.ContextCause(), context.DeadlineExceeded))
 }
 
 // errShape names a result by its type, domain and code, so two results compare equal
@@ -254,6 +255,22 @@ func TestContextCauseIsNotAVerdict(t *testing.T) {
 	pre, cancelPre := context.WithCancelCause(context.Background())
 	cancelPre(verdictCause)
 	requireCancelled(t, se.ValidateTransactionContext(pre, tx, []int32{cancelTestLongUtxoHeight}, cancelTestLongBlockHeight, true), verdictCause)
+}
+
+// Legacy cause walkers must stop at the cancelled result, even for a script cause.
+func TestContextCauseIsNotAVerdictThroughPkgErrors(t *testing.T) {
+	ctx, cancel := context.WithCancelCause(context.Background())
+	cause := goscript.NewScriptError(goscript.SCRIPT_ERR_EVAL_FALSE)
+	cancel(cause)
+	se := goscript.NewTxValidator("main")
+	err := se.ValidateTransactionContext(ctx, nil, nil, 0, true)
+	requireCancelled(t, err, cause)
+	var cancelledErr *goscript.CancelledError
+	require.ErrorAs(t, err, &cancelledErr)
+	assert.Same(t, cancelledErr, pkgerrors.Cause(err))
+	assert.Same(t, cancelledErr, pkgerrors.Cause(pkgerrors.Wrap(err, "validation")))
+	var scriptErr goscript.ScriptError
+	assert.False(t, errors.As(err, &scriptErr))
 }
 
 // A context that is never cancelled, or cancelled only after the call returned, gives
