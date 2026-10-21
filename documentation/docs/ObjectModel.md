@@ -95,6 +95,12 @@ another input while work remains. There is no poll after the job drains. Cancell
 above an established lowest failure does not replace that verdict; cancellation leaving a lower
 input unfinished prevents reporting a higher failure. The serial loop keeps its existing poll sites.
 
+`VerifyScript`, `ValidateTransaction` (including each `ValidateBatch` entry) and
+`VerifySpend` count the calling thread against the shared core budget from after the
+entry cancellation poll until return. Deserialization, transaction hashing,
+transaction-level checks and shared signature-hash precomputation are included;
+helpers are admitted only against the remaining budget.
+
 The caller's token is read only on the calling thread, including parallel verification. In a parallel job the caller
 polls between its own input claims and in its interpreter, and publishes observed cancellation to
 an atomic job flag. Helpers poll that flag rather than the caller's token. A

@@ -115,6 +115,11 @@ uint64_t InputCancellationSourceCountForTesting();
 // without using CPU. Returns the previous hook. Tests only.
 InputHook SetInputHookForTesting(InputHook hook);
 
+// Caller-side phases before input work is offered. Internal observer for tests.
+enum class ValidationStage { Deserializing, TransactionChecks, PrecomputedData };
+using ValidationStageHook = void (*)(ValidationStage stage);
+ValidationStageHook SetValidationStageHookForTesting(ValidationStageHook hook);
+
 // Called by a helper after it releases its core and before it checks the
 // queue again, outside the pool mutex. Returns the previous hook. Tests only.
 using HelperReleasedCoreHook = void (*)();
@@ -143,7 +148,7 @@ size_t SetInputPoolCoresForTesting(size_t cores);
 size_t InputPoolHelperCountForTesting();
 
 // Threads currently counted against the core budget: callers inside
-// implVerifyScript or VerifySpend plus helpers on a job. Tests only.
+// VerifyScript, ValidateTransaction or VerifySpend plus helpers on a job. Tests only.
 size_t BusyThreadCountForTesting();
 
 // Jobs queued in the input pool (0 without a pool). Tests only.

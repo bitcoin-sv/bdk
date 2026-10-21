@@ -2041,6 +2041,45 @@ static std::vector<uint8_t> SignedP2PKHBin(size_t nInputs)
         /*nOutputs=*/1, /*precomputeForSigning=*/true));
 }
 
+// These phases are reached through the public APIs before a job can exist.
+// Counting them prevents hashing and transaction checks escaping the budget.
+class ValidationBudgetProbe {
+public:
+    ValidationBudgetProbe() { active = this; previous = bsv::detail::SetValidationStageHookForTesting(&Hook); }
+    ~ValidationBudgetProbe() { bsv::detail::SetValidationStageHookForTesting(previous); active = nullptr; }
+    std::array<size_t, 3> calls{}, outsideBudget{};
+private:
+    static void Hook(bsv::detail::ValidationStage stage)
+    {
+        const auto i = static_cast<size_t>(stage);
+        ++active->calls[i];
+        if (bsv::detail::BusyThreadCountForTesting() != 1)
+            ++active->outsideBudget[i];
+    }
+    bsv::detail::ValidationStageHook previous;
+    static inline ValidationBudgetProbe* active = nullptr;
+};
+
+BOOST_AUTO_TEST_CASE(hashing_and_transaction_checks_count_against_the_core_budget, PARALLEL_TEST_CASE_DECORATORS)
+{
+    if (!PoolHasHelpers())
+        return;
+    const bsv::CTxValidator validator("main");
+    const auto bin = SignedP2PKHBin(32);
+    const std::vector<int32_t> heights(32, P2PKH_UTXO_HEIGHT);
+    BOOST_REQUIRE(PoolIsIdle());
+    ValidationBudgetProbe probe;
+    BOOST_CHECK(bsv::TxErrorIsOk(validator.VerifyScript(bin, heights, P2PKH_BLOCK_HEIGHT, true)));
+    BOOST_REQUIRE(PoolIsIdle());
+    BOOST_CHECK(bsv::TxErrorIsOk(validator.ValidateTransaction(bin, heights, P2PKH_BLOCK_HEIGHT, true)));
+    BOOST_CHECK_EQUAL(probe.calls[0], 2);
+    BOOST_CHECK_EQUAL(probe.calls[1], 1);
+    BOOST_CHECK_EQUAL(probe.calls[2], 2);
+    for (const auto outside : probe.outsideBudget)
+        BOOST_CHECK_EQUAL(outside, 0);
+    BOOST_CHECK(PoolIsIdle());
+}
+
 // A real thread-CPU source, recording every cross-thread read as well.
 class CallerThreadBudget final : public task::CCancellationSource {
 public:

@@ -365,6 +365,7 @@ std::atomic<uint64_t> helperWakesWithoutCore{ 0 };
 std::atomic<uint64_t> helperReleaseNotifications{ 0 };
 std::atomic<uint64_t> inputCancellationSources{ 0 };
 std::atomic<bsv::detail::InputHook> inputHook{ nullptr };  // tests only
+std::atomic<bsv::detail::ValidationStageHook> validationStageHook{ nullptr };  // tests only
 std::atomic<bsv::detail::HelperReleasedCoreHook> helperReleasedCoreHook{ nullptr };  // tests only
 std::atomic<bsv::detail::InputPoolHook> inputPoolHook{ nullptr };  // tests only
 std::atomic<size_t> inputPoolCoresCap{ 0 };  // 0: no cap (tests only)
@@ -904,6 +905,11 @@ uint64_t bsv::detail::HelperJobParticipationCountForTesting()
 uint64_t bsv::detail::InputCancellationSourceCountForTesting()
 {
     return inputCancellationSources.load();
+}
+
+bsv::detail::ValidationStageHook bsv::detail::SetValidationStageHookForTesting(ValidationStageHook hook)
+{
+    return validationStageHook.exchange(hook);
 }
 
 bsv::detail::InputHook bsv::detail::SetInputHookForTesting(InputHook hook)
@@ -1535,7 +1541,13 @@ TxError bsv::CTxValidator::VerifyScript(std::span<const uint8_t> extendedTX, std
     if (token.IsCanceled())
         return bsv::TxErrorCancelled();
 
+#if BDK_PARALLEL_INPUTS
+    const BusyScope busy;  // count deserialization, hashing and transaction checks
+#endif
+
     try {
+        if (const auto hook = validationStageHook.load(std::memory_order_relaxed))
+            hook(bsv::detail::ValidationStage::Deserializing);
         const char* begin{ reinterpret_cast<const char*>(extendedTX.data()) };
         const char* end{ reinterpret_cast<const char*>(extendedTX.data() + extendedTX.size()) };
         CDataStream tx_stream(begin, end, SER_NETWORK, PROTOCOL_VERSION);
@@ -1710,6 +1722,8 @@ TxError bsv::CTxValidator::implVerifyScript(
     if (!customFlags.empty() && customFlags.size() != prevUTXO.size())
         throw std::runtime_error("inconsistent custom flags size");
 
+    if (const auto hook = validationStageHook.load(std::memory_order_relaxed))
+        hook(bsv::detail::ValidationStage::PrecomputedData);
     // Hashed once here and shared by every input's FORKID signature checks.
     const PrecomputedTransactionData txdata(ctx);
     // Building it is linear in the transaction size with no poll inside, so poll
@@ -1742,7 +1756,6 @@ TxError bsv::CTxValidator::implVerifyScript(
 
     const size_t nInputs = prevUTXO.size();
 #if BDK_PARALLEL_INPUTS
-    const BusyScope busy;
     const size_t threshold = parallelInputThreshold.load(std::memory_order_relaxed);
     // A limit of 0 never creates the pool, so no helper thread is started.
     const size_t helperLimit = nInputs >= threshold ? HelperLimit() : 0;
@@ -1947,7 +1960,13 @@ TxError bsv::CTxValidator::ValidateTransaction(std::span<const uint8_t> extended
     if (token.IsCanceled())
         return bsv::TxErrorCancelled();
 
+#if BDK_PARALLEL_INPUTS
+    const BusyScope busy;  // count deserialization, hashing and transaction checks
+#endif
+
     try {
+        if (const auto hook = validationStageHook.load(std::memory_order_relaxed))
+            hook(bsv::detail::ValidationStage::Deserializing);
         const char* begin{ reinterpret_cast<const char*>(extendedTX.data()) };
         const char* end{ reinterpret_cast<const char*>(extendedTX.data() + extendedTX.size()) };
         CDataStream tx_stream(begin, end, SER_NETWORK, PROTOCOL_VERSION);
@@ -1968,6 +1987,8 @@ TxError bsv::CTxValidator::ValidateTransaction(std::span<const uint8_t> extended
         if (token.IsCanceled())
             return bsv::TxErrorCancelled();
 
+        if (const auto hook = validationStageHook.load(std::memory_order_relaxed))
+            hook(bsv::detail::ValidationStage::TransactionChecks);
         if (ctx.IsCoinBase())
             return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::CoinbaseNotAllowed));
 
