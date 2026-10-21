@@ -221,7 +221,13 @@ foreach(_t test_cancellation test_cancellationd)
   endif()
 endforeach()
 add_custom_target(bdk_tsan_tests)
-set_tests_properties(test_txvalidator_parallel_inputs PROPERTIES LABELS tsan)
+## Keep wall-clock cache-performance assertions in the native suite; TSAN
+## instruments the complete parallel-input suite through its own entry.
+add_test(NAME test_txvalidator_parallel_inputs_tsan
+         COMMAND $<TARGET_FILE:test_txvalidator> --report_level=detailed
+                 --run_test=test_txvalidator/parallel_input_verification
+                 -- --parallel-input-threshold=2 --input-pool-cores=4)
+set_tests_properties(test_txvalidator_parallel_inputs_tsan PROPERTIES LABELS tsan TIMEOUT 600)
 add_dependencies(bdk_tsan_tests test_cancellation test_txvalidator)
 
 if(CMAKE_CONFIGURATION_TYPES)

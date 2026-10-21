@@ -1,7 +1,7 @@
 name: ThreadSanitizer
 
 ## Builds the core and the tests labelled `tsan` with -fsanitize=thread, then runs
-## them: cancellation tests and the forced-parallel transaction suite, including
+## them: cancellation tests and the complete parallel-input suite, including
 ## per-input early stop. To cover another test, label it `tsan` and
 ## add its target to bdk_tsan_tests in test/core/CMakeLists.txt.
 ##
