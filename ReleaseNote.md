@@ -9,6 +9,14 @@ generated version header (`core/BDKVersion.h` / `module/gobdk/version.go`) at bu
 For the detailed list of changes, see the project's commit history / changelog. This file is
 installed alongside the package (`CMakeLists.txt`).
 
+## Release sequence for #66, #68 and #67
+
+Merge in order: #66, #68, then #67. Before each PR merges, merge master into that
+PR branch and dispatch `build_bdk.yaml` on the branch to refresh the gobdk archives.
+The workflow commits `[GoBDKUpdate]` to that branch; merge only after its checks are
+green. This keeps master linkable for gobdk importers at every commit.
+Tag `module/gobdk/v1.4.0` on master after #67 merges.
+
 ## Recent changes
 
 - **Validation calls can be cancelled.** `CTxValidator` has overloads of `ValidateTransaction`,
