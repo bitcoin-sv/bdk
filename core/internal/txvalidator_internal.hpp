@@ -136,7 +136,8 @@ HelperReleasedCoreHook SetHelperReleasedCoreHookForTesting(HelperReleasedCoreHoo
 // after a failed core acquisition, under that mutex; only a bounded test pause
 // coordinated with a release that skips the mutex is allowed there.
 // Returns the previous hook. Tests only.
-enum class InputPoolEvent { BeforeOffer, Waiting, CoreUnavailable };
+// JobClosed runs under the job mutex; observers must not block or call pool functions.
+enum class InputPoolEvent { BeforeOffer, Waiting, CoreUnavailable, JobClosed };
 using InputPoolHook = void (*)(InputPoolEvent event);
 InputPoolHook SetInputPoolHookForTesting(InputPoolHook hook);
 // Wake existing helpers so a test can observe each one's Waiting event.

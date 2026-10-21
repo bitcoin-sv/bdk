@@ -3714,21 +3714,31 @@ public:
         active = this;
         previousAllocation = bsv::detail::SetInputSourceAllocationHookForTesting(&Allocate);
         previousInput = bsv::detail::SetInputHookForTesting(&Input);
+        previousPool = bsv::detail::SetInputPoolHookForTesting(&Pool);
     }
     ~InputSourceAllocationFailure()
     {
         bsv::detail::SetInputHookForTesting(previousInput);
         bsv::detail::SetInputSourceAllocationHookForTesting(previousAllocation);
+        bsv::detail::SetInputPoolHookForTesting(previousPool);
+        bsv::detail::WakeInputHelpersForTesting();
         active = nullptr;
     }
     std::atomic<size_t> helperFailures{ 0 }, callerFailures{ 0 }, helperClaims{ 0 }, callerClaims{ 0 };
-    std::atomic<bool> callerAttempted{ false }, timedOut{ false };
+    std::atomic<size_t> callerVerified{ 0 }, queuedAtClose{ std::numeric_limits<size_t>::max() };
+    std::atomic<bool> callerAttempted{ false }, timedOut{ false }, helperHeld{ false }, closed{ false };
+    std::atomic<bool> retriedHelper{ false }, failedHelperParked{ false };
 private:
     static void Allocate(bool helper)
     {
         auto& self = *active;
         if (helper) {
             if (self.failHelpers) {
+                {
+                    std::lock_guard lock{ self.mutex };
+                    if (++self.attempts[std::this_thread::get_id()] > 1)
+                        self.retriedHelper = true;
+                }
                 ++self.helperFailures;
                 throw std::bad_alloc{};
             }
@@ -3737,20 +3747,51 @@ private:
         } else {
             self.callerAttempted = true;
             if (!self.failHelpers) {
+                if (!WaitFor([&] { return self.helperHeld.load(); }))
+                    self.timedOut = true;
                 ++self.callerFailures;
                 throw std::bad_alloc{};
             }
-            if (!WaitFor([&] { return self.helperFailures.load() > 0; }))
+            if (!WaitFor([&] { return self.failedHelperParked.load() || self.retriedHelper.load(); }))
                 self.timedOut = true;
+        }
+    }
+    static void Pool(bsv::detail::InputPoolEvent event)
+    {
+        auto& self = *active;
+        if (event == bsv::detail::InputPoolEvent::JobClosed
+            && std::this_thread::get_id() == self.owner)
+            self.closed = true;
+        if (event == bsv::detail::InputPoolEvent::Waiting) {
+            std::lock_guard lock{ self.mutex };
+            const auto it = self.attempts.find(std::this_thread::get_id());
+            if (it != self.attempts.end())
+                self.failedHelperParked = true;
         }
     }
     static void Input(size_t, bsv::detail::InputEvent event)
     {
+        auto& self = *active;
+        const bool caller = std::this_thread::get_id() == self.owner;
+        if (event == bsv::detail::InputEvent::Verified && caller)
+            ++self.callerVerified;
         if (event != bsv::detail::InputEvent::Claimed)
             return;
-        if (std::this_thread::get_id() == active->owner) ++active->callerClaims;
-        else ++active->helperClaims;
+        if (caller) ++self.callerClaims;
+        else {
+            ++self.helperClaims;
+            if (!self.failHelpers) {
+                self.helperHeld = true;
+                if (!WaitFor([&] { return self.closed.load(); }))
+                    self.timedOut = true;
+                size_t none = std::numeric_limits<size_t>::max();
+                self.queuedAtClose.compare_exchange_strong(none, bsv::detail::QueuedJobCountForTesting());
+            }
+        }
     }
+    std::mutex mutex;
+    std::map<std::thread::id, size_t> attempts;
+    bsv::detail::InputPoolHook previousPool;
     const bool failHelpers;
     const std::thread::id owner;
     bsv::detail::InputSourceAllocationHook previousAllocation;
@@ -3775,9 +3816,13 @@ BOOST_AUTO_TEST_CASE(participant_source_allocation_failure_preserves_valid_resul
         if (failHelpers) {
             BOOST_CHECK_GT(failure.helperFailures.load(), 0u);
             BOOST_CHECK_EQUAL(failure.helperClaims.load(), 0u);
+            BOOST_CHECK(!failure.retriedHelper);
+            BOOST_CHECK(failure.failedHelperParked);
         } else {
             BOOST_CHECK_EQUAL(failure.callerFailures.load(), 1u);
             BOOST_CHECK_EQUAL(failure.callerClaims.load(), 0u);
+            BOOST_CHECK_EQUAL(failure.callerVerified.load(), 32u);
+            BOOST_CHECK_EQUAL(failure.queuedAtClose.load(), 0u);
         }
         BOOST_CHECK(PoolIsIdle());
     }

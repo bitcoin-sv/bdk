@@ -438,6 +438,10 @@ public:
                 inputCancellationSources.fetch_add(1, std::memory_order_relaxed);
             inputToken.emplace(cancellation->GetToken());
         } catch (const std::bad_alloc&) {
+            // Do not spend helper CPU retrying allocation on this job. The
+            // caller and participants already admitted can finish its inputs.
+            if (helper != nullptr)
+                helpersUnavailable_.store(true, std::memory_order_relaxed);
             return std::nullopt;
         }
         for (;;) {
@@ -484,11 +488,16 @@ public:
 
     bool HasWork() const { return UnclaimedInputs() != 0; }
 
+    size_t HelperUnclaimedInputs() const
+    {
+        return helpersUnavailable_.load(std::memory_order_relaxed) ? 0 : UnclaimedInputs();
+    }
+
     // A helper joins only an open job; the caller waits for every joined helper.
     bool TryJoin()
     {
         std::lock_guard lock{ mutex_ };
-        if (closed_)
+        if (closed_ || helpersUnavailable_.load(std::memory_order_relaxed))
             return false;
         ++joined_;
         return true;
@@ -507,6 +516,8 @@ public:
     {
         std::unique_lock lock{ mutex_ };
         closed_ = true;
+        if (const auto hook = inputPoolHook.load(std::memory_order_relaxed))
+            hook(bsv::detail::InputPoolEvent::JobClosed);
         left_.wait(lock, [this] { return joined_ == 0; });
     }
 
@@ -563,6 +574,7 @@ private:
     const VerifyInput verify_;
     const task::CCancellationToken& callerToken_;
     std::atomic<bool> callerCancelled_{ false };  // only the caller polls its token
+    std::atomic<bool> helpersUnavailable_{ false };  // setup allocation failed
     std::atomic<size_t> next_{ 0 };
     std::atomic<size_t> lowestFailure_;  // n_ while nothing failed; written under mutex_
     size_t lowestCancelled_;  // abandoned claims, under mutex_; never a real failure
@@ -762,7 +774,7 @@ private:
         std::shared_ptr<InputJob> largest;
         size_t most = 0;
         for (const auto& job : jobs_) {
-            const size_t remaining = job->UnclaimedInputs();
+            const size_t remaining = job->HelperUnclaimedInputs();
             if (remaining > most) {
                 most = remaining;
                 largest = job;
@@ -1807,6 +1819,8 @@ TxError bsv::CTxValidator::implVerifyScript(
                 {
                     const JobCaller caller(*pool, job);
                     verified = job->Work();
+                    if (!verified)
+                        pool->Withdraw(job);  // no new selections while joined helpers drain
                     if (inputCountersEnabled.load(std::memory_order_relaxed))
                         jobVerifiedInputs.fetch_add(verified.value_or(0), std::memory_order_relaxed);
                 }
