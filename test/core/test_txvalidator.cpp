@@ -2203,7 +2203,16 @@ BOOST_AUTO_TEST_CASE(early_stop_keeps_serial_verdict_for_mixed_failures, PARALLE
     for (const size_t failingIndex : { 0, 1, 2, 8 }) {
         auto tx = EarlyStopSpend(failingIndex);
         // A distinct later verdict must neither win nor cancel lower indices.
-        tx.vutxo[31].scriptPubKey = CScript() << OP_RETURN;
+        tx.vutxo[31].scriptPubKey = CScript() << OP_FALSE << OP_VERIFY;
+        CDataStream plain(SER_NETWORK, PROTOCOL_VERSION);
+        plain << tx.mtx;
+        const std::vector<uint8_t> txBin(plain.begin(), plain.end());
+        const auto& laterScript = tx.vutxo[31].scriptPubKey;
+        const auto later = validator.VerifySpend(txBin, 31,
+            std::span<const uint8_t>(laterScript.data(), laterScript.size()),
+            100000, 19000, 20000, true);
+        BOOST_REQUIRE_EQUAL(later.domain, static_cast<int32_t>(TX_ERR_DOMAIN_SCRIPT));
+        BOOST_REQUIRE_EQUAL(later.code, SCRIPT_ERR_VERIFY);
         const auto bin = SerializeExtended(tx);
         TxError serial;
         {
