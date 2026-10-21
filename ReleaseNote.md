@@ -46,6 +46,19 @@ installed alongside the package (`CMakeLists.txt`).
   verifying at once at `n`. Results are the same at every setting; it can be changed at any time.
   The WASM build has no helpers and does not expose it. The Go binding calls two new cgo symbols,
   so it needs GoBDK archives built from this version.
+- **Validation calls can be cancelled.** `CTxValidator` has overloads of `ValidateTransaction`,
+  `VerifyScript`, `VerifySpend`, `ValidateBatch` and `CheckStandardness` that take a cancellation
+  token; Go has `ValidateTransactionContext`, `VerifyScriptContext`,
+  `VerifyScriptWithCustomFlagsContext` and `ValidateBatchContext`; Rust has `*_cancellable`
+  methods with a `CancelFlag`. A cancelled call returns the new `TX_ERR_DOMAIN_CANCELLED` (5),
+  Go `*CancelledError` / `ErrCancelled`, Rust `TxError::Cancelled`: no verdict, never a script
+  or DoS error. Existing functions are unchanged. Rust's `TxError` is now `#[non_exhaustive]`;
+  as that breaks exhaustive matches, `rust-bdk` and `bdk-sys` move to 0.2.0.
+  See [ObjectModel](documentation/docs/ObjectModel.md#cancellation).
+- **`CheckStandardness` checks it has one UTXO height per input.** Where policy reads heights,
+  a shorter span used to be read past its end. Where it does not (the post-Genesis default),
+  mismatched sizes used to pass. Both cases now give `TX_ERR_DOMAIN_EXCEPTION`, as the other
+  entry points do for mismatched sizes.
 - **Script validation of many-input transactions is linear in the input count.**
   `ValidateTransaction` and `VerifyScript` now build one `PrecomputedTransactionData` per
   transaction and share it across all inputs, as SV Node does; `VerifySpend` builds one per call

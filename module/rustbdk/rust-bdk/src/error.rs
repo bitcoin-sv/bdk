@@ -279,11 +279,19 @@ impl fmt::Display for DosError {
 
 impl std::error::Error for DosError {}
 
+/// Result of a failed validation call.
+///
+/// `Script` and `DoS` are verdicts about the transaction. `Exception` and
+/// `Cancelled` are not: `Exception` is a fault of this process, and `Cancelled`
+/// means the caller's [`CancelFlag`](crate::CancelFlag) stopped the call before it
+/// reached a verdict.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum TxError {
     Script(ScriptError),
     DoS(DosError),
     Exception,
+    Cancelled,
 }
 
 impl TxError {
@@ -292,6 +300,7 @@ impl TxError {
             Self::Script(err) => err.message(),
             Self::DoS(err) => err.message(),
             Self::Exception => "C++ exception".to_owned(),
+            Self::Cancelled => "validation cancelled".to_owned(),
         }
     }
 }
@@ -302,6 +311,7 @@ impl fmt::Display for TxError {
             Self::Script(err) => write!(f, "script error {}: {}", err.code(), err),
             Self::DoS(err) => write!(f, "dos error {}: {}", err.code(), err),
             Self::Exception => f.write_str("C++ exception"),
+            Self::Cancelled => f.write_str("validation cancelled"),
         }
     }
 }
@@ -314,6 +324,7 @@ pub(crate) fn translate(raw: bdk_sys::TxError) -> Result<(), TxError> {
         bdk_sys::TX_ERR_DOMAIN_SCRIPT => Err(TxError::Script(ScriptError::from_code(raw.code))),
         bdk_sys::TX_ERR_DOMAIN_DOS => Err(TxError::DoS(DosError::from_code(raw.code))),
         bdk_sys::TX_ERR_DOMAIN_EXCEPTION => Err(TxError::Exception),
+        bdk_sys::TX_ERR_DOMAIN_CANCELLED => Err(TxError::Cancelled),
         _ => Err(TxError::Exception),
     }
 }

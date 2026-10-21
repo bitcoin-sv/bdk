@@ -207,6 +207,22 @@ add_executable(test_sigopcount "${CMAKE_CURRENT_SOURCE_DIR}/test_sigopcount.cpp"
 target_link_libraries(test_sigopcount PRIVATE bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono ${CMAKE_DL_LIBS})
 bdk_add_unit_test(test_sigopcount)
 
+add_executable(test_cancellation "${CMAKE_CURRENT_SOURCE_DIR}/test_cancellation.cpp" "${BSV_APPLICATION_HDR_FILES}" "${BSV_APPLICATION_SRC_FILES}")
+target_link_libraries(test_cancellation PRIVATE bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono ${CMAKE_DL_LIBS})
+bdk_add_unit_test(test_cancellation)
+
+## Tests labelled `tsan` also run in the ThreadSanitizer CI job
+## (.github/workflows/tsan.yaml), which builds bdk_tsan_tests and runs `ctest -L tsan`.
+## To cover another test there: give it the label and add its target here.
+## bdk_add_unit_test names the test test_cancellationd in a single-config Debug build.
+foreach(_t test_cancellation test_cancellationd)
+  if(TEST ${_t})
+    set_tests_properties(${_t} PROPERTIES LABELS tsan)
+  endif()
+endforeach()
+add_custom_target(bdk_tsan_tests)
+add_dependencies(bdk_tsan_tests test_cancellation)
+
 if(CMAKE_CONFIGURATION_TYPES)
   set_target_properties(test_bsv PROPERTIES FOLDER "test/core/bsv" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d
   set_target_properties(test_assembler PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d
@@ -217,6 +233,7 @@ if(CMAKE_CONFIGURATION_TYPES)
   set_target_properties(test_txvalidator PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d
   set_target_properties(test_chronicle PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d
   set_target_properties(test_sigopcount PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d
+  set_target_properties(test_cancellation PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d
 else()
   set_target_properties(test_bsv PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
   set_target_properties(test_assembler PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
@@ -227,6 +244,7 @@ else()
   set_target_properties(test_txvalidator PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
   set_target_properties(test_chronicle PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
   set_target_properties(test_sigopcount PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
+  set_target_properties(test_cancellation PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
 endif()
 
 ## Timing tests in test_txvalidator are disabled by default and labelled

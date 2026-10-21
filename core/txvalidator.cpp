@@ -1422,6 +1422,14 @@ uint64_t bsv::CTxValidator::implGetSigOpCount(
 
 TxError bsv::CTxValidator::VerifyScript(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool consensus, std::span<const uint32_t> customFlags) const
 {
+    return VerifyScript(extendedTX, utxoHeights, blockHeight, consensus, customFlags, source->GetToken());
+}
+
+TxError bsv::CTxValidator::VerifyScript(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool consensus, std::span<const uint32_t> customFlags, const task::CCancellationToken& token) const
+{
+    if (token.IsCanceled())
+        return bsv::TxErrorCancelled();
+
     try {
         const char* begin{ reinterpret_cast<const char*>(extendedTX.data()) };
         const char* end{ reinterpret_cast<const char*>(extendedTX.data() + extendedTX.size()) };
@@ -1433,7 +1441,12 @@ TxError bsv::CTxValidator::VerifyScript(std::span<const uint8_t> extendedTX, std
             throw std::runtime_error("error serializing extended tx");
 
         const CTransaction ctx(eTX.mtx);
-        return implVerifyScript(ctx, eTX.vutxo, utxoHeights, blockHeight, consensus, customFlags);
+        // Deserialising is linear in the transaction size with no poll inside;
+        // check before implVerifyScript's argument checks can throw. It polls again
+        // once it has built the shared signature-hash data.
+        if (token.IsCanceled())
+            return bsv::TxErrorCancelled();
+        return implVerifyScript(ctx, eTX.vutxo, utxoHeights, blockHeight, consensus, customFlags, token);
     }
     catch (const std::exception&) {
         return bsv::TxErrorException();
@@ -1451,9 +1464,29 @@ TxError bsv::CTxValidator::VerifySpend(
     std::optional<uint32_t> customFlags
 ) const
 {
+    return VerifySpend(transaction, inputIndex, lockingScript, sourceSatoshis, utxoHeight, blockHeight,
+                       consensus, customFlags, source->GetToken());
+}
+
+TxError bsv::CTxValidator::VerifySpend(
+    std::span<const uint8_t> transaction,
+    uint32_t inputIndex,
+    std::span<const uint8_t> lockingScript,
+    int64_t sourceSatoshis,
+    int32_t utxoHeight,
+    int32_t blockHeight,
+    bool consensus,
+    std::optional<uint32_t> customFlags,
+    const task::CCancellationToken& token
+) const
+{
+    if (token.IsCanceled())
+        return bsv::TxErrorCancelled();
+
 #if BDK_PARALLEL_INPUTS
     const BusyScope busy;  // one input, verified here, but it takes a core
 #endif
+
     try {
         if (sourceSatoshis < 0)
             throw std::runtime_error("source satoshis cannot be negative");
@@ -1468,6 +1501,10 @@ TxError bsv::CTxValidator::VerifySpend(
             throw std::runtime_error("error serializing transaction");
 
         const CTransaction tx(std::move(mutableTx));
+        // Deserialising is linear in the transaction size with no poll inside;
+        // check before the checks below can return a result.
+        if (token.IsCanceled())
+            return bsv::TxErrorCancelled();
         if (inputIndex >= tx.vin.size())
             throw std::runtime_error("input index is out of range");
         if (consensus && utxoHeight == MEMPOOL_HEIGHT)
@@ -1479,8 +1516,12 @@ TxError bsv::CTxValidator::VerifySpend(
         // One input can run several FORKID checks (multisig, contracts with
         // several CHECKSIGs); they all read these hashes.
         const PrecomputedTransactionData txdata(tx);
+        // Copying the locking script and building txdata are linear in their size
+        // with no poll inside.
+        if (token.IsCanceled())
+            return bsv::TxErrorCancelled();
         CachingScriptChecker checker(&tx, inputIndex, amount, txdata);
-        return bsvVerifyScript(tx.vin[inputIndex].scriptSig, script, consensus, flags, checker);
+        return bsvVerifyScript(tx.vin[inputIndex].scriptSig, script, consensus, flags, checker, token);
     }
     catch (const std::exception&) {
         return bsv::TxErrorException();
@@ -1488,6 +1529,11 @@ TxError bsv::CTxValidator::VerifySpend(
 }
 
 std::vector<TxError> bsv::CTxValidator::ValidateBatch(const bsv::ValidateBatch& batch) const
+{
+    return ValidateBatch(batch, source->GetToken());
+}
+
+std::vector<TxError> bsv::CTxValidator::ValidateBatch(const bsv::ValidateBatch& batch, const task::CCancellationToken& token) const
 {
     std::vector<TxError> results;
     results.reserve(batch.size());
@@ -1497,7 +1543,8 @@ std::vector<TxError> bsv::CTxValidator::ValidateBatch(const bsv::ValidateBatch& 
             elem.extendedTX,
             elem.utxoHeights,
             elem.blockHeight,
-            elem.consensus
+            elem.consensus,
+            token
         ));
     }
 
@@ -1508,6 +1555,17 @@ TxError bsv::CTxValidator::CheckStandardness(std::span<const uint8_t> extendedTX
                                               std::span<const int32_t> utxoHeights,
                                               int32_t blockHeight) const
 {
+    return CheckStandardness(extendedTX, utxoHeights, blockHeight, source->GetToken());
+}
+
+TxError bsv::CTxValidator::CheckStandardness(std::span<const uint8_t> extendedTX,
+                                              std::span<const int32_t> utxoHeights,
+                                              int32_t blockHeight,
+                                              const task::CCancellationToken& token) const
+{
+    if (token.IsCanceled())
+        return bsv::TxErrorCancelled();
+
     try {
         const char* begin{ reinterpret_cast<const char*>(extendedTX.data()) };
         const char* end{ reinterpret_cast<const char*>(extendedTX.data() + extendedTX.size()) };
@@ -1516,7 +1574,9 @@ TxError bsv::CTxValidator::CheckStandardness(std::span<const uint8_t> extendedTX
         tx_stream >> eTX;
 
         const CTransaction ctx(eTX.mtx);
-        return implCheckStandardness(ctx, eTX.vutxo, utxoHeights, blockHeight);
+        if (token.IsCanceled())
+            return bsv::TxErrorCancelled();
+        return implCheckStandardness(ctx, eTX.vutxo, utxoHeights, blockHeight, token);
     }
     catch (const std::exception&) {
         return bsv::TxErrorException();
@@ -1529,7 +1589,8 @@ TxError bsv::CTxValidator::implVerifyScript(
     std::span<const int32_t> utxoHeights,
     int32_t blockHeight,
     bool consensus,
-    std::span<const uint32_t> customFlags
+    std::span<const uint32_t> customFlags,
+    const task::CCancellationToken& token
 ) const
 {
     if (prevUTXO.size() != utxoHeights.size())
@@ -1543,6 +1604,12 @@ TxError bsv::CTxValidator::implVerifyScript(
 
     // Hashed once here and shared by every input's FORKID signature checks.
     const PrecomputedTransactionData txdata(ctx);
+    // Building it is linear in the transaction size with no poll inside, so poll
+    // after it, not before: a cancel that lands while it runs is then seen before
+    // the first script. No test pins this position; polling just before the build
+    // would give the same results and polls, only later on a large transaction.
+    if (token.IsCanceled())
+        return bsv::TxErrorCancelled();
 
     const bool useCustomFlags = !customFlags.empty();
     // Reads only shared state and its own checker, so inputs can run on any thread.
@@ -1559,10 +1626,10 @@ TxError bsv::CTxValidator::implVerifyScript(
         if (!ctx.vin.empty() && !ctx.vout.empty()) {
             const Amount amt{ amount };
             CachingScriptChecker sig_checker(&ctx, index, amt, txdata);
-            return bsvVerifyScript(uscript, lscript, consensus, flags, sig_checker);
+            return bsvVerifyScript(uscript, lscript, consensus, flags, sig_checker, token);
         }
         BaseSignatureChecker sig_checker;
-        return bsvVerifyScript(uscript, lscript, consensus, flags, sig_checker);
+        return bsvVerifyScript(uscript, lscript, consensus, flags, sig_checker, token);
     };
 
     const size_t nInputs = prevUTXO.size();
@@ -1611,19 +1678,20 @@ TxError bsv::CTxValidator::bsvVerifyScript(
     const CScript& locking_script,
     const bool consensus,
     const unsigned int flags,
-    BaseSignatureChecker& sig_checker
+    BaseSignatureChecker& sig_checker,
+    const task::CCancellationToken& token
 ) const
 {
     const verify_script_params veriParams{make_verify_script_params(policySettings, flags, consensus)};
     const auto ret = ::VerifyScript(veriParams,
-        source->GetToken(),
+        token,
         unlocking_script,
         locking_script,
         flags,
         sig_checker);
 
     if (!ret.has_value())
-        return bsv::TxErrorException();  // cancellation token fired
+        return bsv::TxErrorCancelled();  // cancellation token fired
 
     if (ret.value() == SCRIPT_ERR_OK)
         return bsv::TxErrorOk();
@@ -1665,9 +1733,14 @@ TxError bsv::CTxValidator::implCheckStandardness(
     const CTransaction& tx,
     const std::vector<CTxOut>& prevUTXO,
     std::span<const int32_t> utxoHeights,
-    int32_t blockHeight
+    int32_t blockHeight,
+    const task::CCancellationToken& token
 ) const
 {
+    // One previous output and one height per input; the input loop below indexes both.
+    if (prevUTXO.size() != tx.vin.size() || utxoHeights.size() != tx.vin.size())
+        throw std::runtime_error("implCheckStandardness: inconsistent inputs, utxos and utxo heights");
+
     // Replicate TxnValidation standardness logic from bitcoin-sv validation.cpp.
     // acceptNonStandardOutput is era-dependent:
     //   pre-Genesis  → !requireStandard
@@ -1696,14 +1769,17 @@ TxError bsv::CTxValidator::implCheckStandardness(
         const auto params = make_eval_script_params(policySettings, flags, consensus);
 
         for (size_t i = 0; i < tx.vin.size(); ++i) {
+            if (token.IsCanceled())
+                return bsv::TxErrorCancelled();
             const CScript& scriptSig = tx.vin[i].scriptSig;
             const CScript& prevScript = prevUTXO[i].scriptPubKey;
             const ProtocolEra utxoEra = GetProtocolEra(policySettings, resolveUtxoEraHeight(utxoHeights[i], blockHeight));
 
-            auto result = IsInputStandard(source->GetToken(), params, scriptSig, prevScript, utxoEra, flags);
-            if (!result.has_value() || !result.value()){
+            auto result = IsInputStandard(token, params, scriptSig, prevScript, utxoEra, flags);
+            if (!result.has_value())
+                return bsv::TxErrorCancelled();  // cancellation token fired, no verdict
+            if (!result.value())
                 return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::NotStandard));
-            }
         }
     }
 
@@ -1746,6 +1822,18 @@ TxError bsv::CTxValidator::ValidateTransaction(std::span<const uint8_t> extended
                                              int32_t blockHeight,
                                              bool consensus) const
 {
+    return ValidateTransaction(extendedTX, utxoHeights, blockHeight, consensus, source->GetToken());
+}
+
+TxError bsv::CTxValidator::ValidateTransaction(std::span<const uint8_t> extendedTX,
+                                             std::span<const int32_t> utxoHeights,
+                                             int32_t blockHeight,
+                                             bool consensus,
+                                             const task::CCancellationToken& token) const
+{
+    if (token.IsCanceled())
+        return bsv::TxErrorCancelled();
+
     try {
         const char* begin{ reinterpret_cast<const char*>(extendedTX.data()) };
         const char* end{ reinterpret_cast<const char*>(extendedTX.data() + extendedTX.size()) };
@@ -1757,6 +1845,15 @@ TxError bsv::CTxValidator::ValidateTransaction(std::span<const uint8_t> extended
             throw std::runtime_error("error serializing extended tx");
 
         const CTransaction ctx(eTX.mtx);
+
+        // Polled here, below between groups of checks, and in implVerifyScript once
+        // the shared signature-hash data is built. Within a group nothing polls:
+        // deserialising and hashing above, then the transaction-level, prevout and
+        // output checks, then the standardness (polled per input when inputs are
+        // checked), sigop, input-value and fee checks and the shared signature-hash
+        // data. Each is linear in the transaction size.
+        if (token.IsCanceled())
+            return bsv::TxErrorCancelled();
 
         if (ctx.IsCoinBase())
             return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::CoinbaseNotAllowed));
@@ -1775,8 +1872,10 @@ TxError bsv::CTxValidator::ValidateTransaction(std::span<const uint8_t> extended
         if (auto r = implCheckTransactionCommon(ctx, checkHeight);                              !bsv::TxErrorIsOk(r)) return r;
         if (auto r = implCheckPrevOutputs(ctx);                                                 !bsv::TxErrorIsOk(r)) return r;
         if (auto r = implCheckOutputs(ctx, checkHeight);                                        !bsv::TxErrorIsOk(r)) return r;
+        if (token.IsCanceled())
+            return bsv::TxErrorCancelled();
         if (!consensus) {
-            if (auto r = implCheckStandardness(ctx, eTX.vutxo, utxoHeights, checkHeight);      !bsv::TxErrorIsOk(r)) return r;
+            if (auto r = implCheckStandardness(ctx, eTX.vutxo, utxoHeights, checkHeight, token); !bsv::TxErrorIsOk(r)) return r;
             if (auto r = implCheckSigOpsPolicy(ctx, eTX.vutxo, utxoHeights, blockHeight);      !bsv::TxErrorIsOk(r)) return r;
         } else {
             if (auto r = implCheckConsensusSigops(ctx, eTX.vutxo, utxoHeights, blockHeight);   !bsv::TxErrorIsOk(r)) return r;
@@ -1787,7 +1886,8 @@ TxError bsv::CTxValidator::ValidateTransaction(std::span<const uint8_t> extended
         if (!consensus) {
             if (auto r = implCheckFee(ctx, eTX.vutxo, utxoHeights, blockHeight);               !bsv::TxErrorIsOk(r)) return r;
         }
-        return implVerifyScript(ctx, eTX.vutxo, utxoHeights, blockHeight, consensus);
+        // implVerifyScript polls once it has built the shared signature-hash data.
+        return implVerifyScript(ctx, eTX.vutxo, utxoHeights, blockHeight, consensus, {}, token);
     }
     catch (const std::exception&) {
         return bsv::TxErrorException();

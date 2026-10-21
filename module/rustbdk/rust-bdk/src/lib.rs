@@ -4,12 +4,14 @@ pub mod asm;
 #[cfg(feature = "bench")]
 #[doc(hidden)]
 pub mod bench_support;
+pub mod cancel;
 pub mod error;
 pub mod txvalidator;
 pub mod validatebatch;
 pub mod version;
 
 pub use asm::{from_asm, to_asm};
+pub use cancel::CancelFlag;
 pub use error::{DosError, ScriptError, TxError};
 pub use txvalidator::{
     ProtocolEra, TxValidator, parallel_input_helpers, set_parallel_input_helpers,

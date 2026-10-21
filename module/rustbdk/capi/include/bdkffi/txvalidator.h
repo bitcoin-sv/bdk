@@ -143,6 +143,51 @@ bdkffi_TxError* bdkffi_txvalidator_validate_batch(
     bdkffi_validatebatch_t batch,
     int* result_size);
 
+/*
+ * Cancellable variants.
+ *
+ * cancel_flag points to a 4-byte aligned int32_t owned by the caller: store a non-zero
+ * value with an atomic store, from any thread, to cancel the call. The call only reads it, and only
+ * until it returns. NULL means never cancelled.
+ *
+ * A cancelled call returns {BDKFFI_TX_ERR_DOMAIN_CANCELLED, 0}: no verdict about the
+ * transaction. The flag is polled at entry, between the transaction checks and before
+ * every opcode; a step already started (deserialising, one signature hash, one hash
+ * or arithmetic opcode) finishes first. A flag set after the last poll leaves the
+ * call to return its verdict.
+ *
+ * custom_flags_len == 0 means the calculated flags. The batch variant returns
+ * {BDKFFI_TX_ERR_DOMAIN_CANCELLED, 0} for every entry not finished when the flag was
+ * seen; finished entries keep their results.
+ */
+bdkffi_TxError bdkffi_txvalidator_verify_script_cancellable(
+    bdkffi_txvalidator_t validator,
+    const char* extended_tx,
+    int extended_tx_len,
+    const int32_t* utxo_heights,
+    int utxo_heights_len,
+    int32_t block_height,
+    bool consensus,
+    const uint32_t* custom_flags,
+    int custom_flags_len,
+    const int32_t* cancel_flag);
+
+bdkffi_TxError bdkffi_txvalidator_validate_transaction_cancellable(
+    bdkffi_txvalidator_t validator,
+    const char* extended_tx,
+    int extended_tx_len,
+    const int32_t* utxo_heights,
+    int utxo_heights_len,
+    int32_t block_height,
+    bool consensus,
+    const int32_t* cancel_flag);
+
+bdkffi_TxError* bdkffi_txvalidator_validate_batch_cancellable(
+    bdkffi_txvalidator_t validator,
+    bdkffi_validatebatch_t batch,
+    int* result_size,
+    const int32_t* cancel_flag);
+
 #ifdef __cplusplus
 }
 #endif

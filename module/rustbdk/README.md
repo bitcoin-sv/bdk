@@ -133,6 +133,28 @@ fn validate(extended_tx: &[u8], utxo_heights: &[i32], block_height: i32) -> Resu
 `extended_tx` must be BDK's extended transaction byte format, and
 `utxo_heights` must contain one height per input.
 
+### Cancellation
+
+`validate_transaction_cancellable`, `verify_script_cancellable`,
+`verify_script_with_custom_flags_cancellable` and `validate_batch_cancellable`
+take a `&CancelFlag`. Share the flag (for example in an `Arc`) with another
+thread and call `cancel()` to stop the call at its next check; it then returns
+`Err(TxError::Cancelled)`, which is not a verdict about the transaction. A step
+already started, such as one signature hash, finishes first.
+
+```rust
+use std::sync::Arc;
+use rust_bdk::{CancelFlag, TxValidator};
+
+let flag = Arc::new(CancelFlag::new());
+// hand Arc::clone(&flag) to whatever decides to give up, then:
+let result = validator.validate_transaction_cancellable(extended_tx, utxo_heights, block_height, true, &flag);
+```
+
+`TxError` gained the `Cancelled` variant and is now `#[non_exhaustive]`, so a
+`match` that listed every variant needs a wildcard arm. That breaks source
+compatibility, so `rust-bdk` and `bdk-sys` are 0.2.0.
+
 ## Supported Platforms
 
 The v1 Rust binding follows the BDK module platform set:
