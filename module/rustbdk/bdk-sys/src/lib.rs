@@ -16,11 +16,13 @@ pub const BDKFFI_TX_ERR_DOMAIN_OK: bdkffi_tx_error_domain = 0;
 pub const BDKFFI_TX_ERR_DOMAIN_SCRIPT: bdkffi_tx_error_domain = 1;
 pub const BDKFFI_TX_ERR_DOMAIN_DOS: bdkffi_tx_error_domain = 2;
 pub const BDKFFI_TX_ERR_DOMAIN_EXCEPTION: bdkffi_tx_error_domain = 3;
+pub const BDKFFI_TX_ERR_DOMAIN_CANCELLED: bdkffi_tx_error_domain = 5;
 
 pub const TX_ERR_DOMAIN_OK: i32 = BDKFFI_TX_ERR_DOMAIN_OK;
 pub const TX_ERR_DOMAIN_SCRIPT: i32 = BDKFFI_TX_ERR_DOMAIN_SCRIPT;
 pub const TX_ERR_DOMAIN_DOS: i32 = BDKFFI_TX_ERR_DOMAIN_DOS;
 pub const TX_ERR_DOMAIN_EXCEPTION: i32 = BDKFFI_TX_ERR_DOMAIN_EXCEPTION;
+pub const TX_ERR_DOMAIN_CANCELLED: i32 = BDKFFI_TX_ERR_DOMAIN_CANCELLED;
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -353,6 +355,41 @@ unsafe extern "C" {
         validator: TxValidatorHandle,
         batch: ValidateBatchHandle,
         result_size: *mut c_int,
+    ) -> *mut TxError;
+
+    /*
+     * Cancellable variants: cancel_flag points to caller memory, non-zero cancels,
+     * read only while the call runs; NULL never cancels. See bdkffi/txvalidator.h.
+     */
+    pub fn bdkffi_txvalidator_verify_script_cancellable(
+        validator: TxValidatorHandle,
+        extended_tx: *const c_char,
+        extended_tx_len: c_int,
+        utxo_heights: *const i32,
+        utxo_heights_len: c_int,
+        block_height: i32,
+        consensus: bool,
+        custom_flags: *const u32,
+        custom_flags_len: c_int,
+        cancel_flag: *const i32,
+    ) -> TxError;
+
+    pub fn bdkffi_txvalidator_validate_transaction_cancellable(
+        validator: TxValidatorHandle,
+        extended_tx: *const c_char,
+        extended_tx_len: c_int,
+        utxo_heights: *const i32,
+        utxo_heights_len: c_int,
+        block_height: i32,
+        consensus: bool,
+        cancel_flag: *const i32,
+    ) -> TxError;
+
+    pub fn bdkffi_txvalidator_validate_batch_cancellable(
+        validator: TxValidatorHandle,
+        batch: ValidateBatchHandle,
+        result_size: *mut c_int,
+        cancel_flag: *const i32,
     ) -> *mut TxError;
 }
 

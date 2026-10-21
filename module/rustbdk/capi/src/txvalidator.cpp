@@ -1,5 +1,6 @@
 #include <bdkffi/txvalidator.h>
 
+#include <core/cancellation.hpp>
 #include <core/txvalidator.hpp>
 #include <core/validatearg.hpp>
 
@@ -553,6 +554,71 @@ extern "C" bdkffi_TxError* bdkffi_txvalidator_validate_batch(
             *result_size = 0;
         }
         return malloc_error_array(checked_validator(validator)->ValidateBatch(*checked_batch(batch)), result_size);
+    } catch (const std::exception& e) {
+        log_exception(__func__, e.what());
+        return malloc_single_exception(result_size);
+    } catch (...) {
+        log_exception(__func__, "unknown C++ exception");
+        return malloc_single_exception(result_size);
+    }
+}
+
+extern "C" bdkffi_TxError bdkffi_txvalidator_verify_script_cancellable(
+    bdkffi_txvalidator_t validator,
+    const char* extended_tx,
+    int extended_tx_len,
+    const int32_t* utxo_heights,
+    int utxo_heights_len,
+    int32_t block_height,
+    bool consensus,
+    const uint32_t* custom_flags,
+    int custom_flags_len,
+    const int32_t* cancel_flag)
+{
+    try {
+        return to_ffi_error(checked_validator(validator)->VerifyScript(
+            byte_span(extended_tx, extended_tx_len),
+            int32_span(utxo_heights, utxo_heights_len),
+            block_height,
+            consensus,
+            uint32_span(custom_flags, custom_flags_len),
+            bsv::MakeFlagCancellationToken(cancel_flag)));
+    } BDKFFI_CATCH_RETURN(ffi_exception())
+}
+
+extern "C" bdkffi_TxError bdkffi_txvalidator_validate_transaction_cancellable(
+    bdkffi_txvalidator_t validator,
+    const char* extended_tx,
+    int extended_tx_len,
+    const int32_t* utxo_heights,
+    int utxo_heights_len,
+    int32_t block_height,
+    bool consensus,
+    const int32_t* cancel_flag)
+{
+    try {
+        return to_ffi_error(checked_validator(validator)->ValidateTransaction(
+            byte_span(extended_tx, extended_tx_len),
+            int32_span(utxo_heights, utxo_heights_len),
+            block_height,
+            consensus,
+            bsv::MakeFlagCancellationToken(cancel_flag)));
+    } BDKFFI_CATCH_RETURN(ffi_exception())
+}
+
+extern "C" bdkffi_TxError* bdkffi_txvalidator_validate_batch_cancellable(
+    bdkffi_txvalidator_t validator,
+    bdkffi_validatebatch_t batch,
+    int* result_size,
+    const int32_t* cancel_flag)
+{
+    try {
+        if (result_size != nullptr) {
+            *result_size = 0;
+        }
+        return malloc_error_array(
+            checked_validator(validator)->ValidateBatch(*checked_batch(batch), bsv::MakeFlagCancellationToken(cancel_flag)),
+            result_size);
     } catch (const std::exception& e) {
         log_exception(__func__, e.what());
         return malloc_single_exception(result_size);
