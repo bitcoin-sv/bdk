@@ -13,6 +13,7 @@
 #include <chainparams_bdk.hpp>
 #include <extendedTx.hpp>
 #include <txvalidator.hpp>
+#include <sha256_backend.hpp>
 
 #include <cstddef>
 #include <cstdint>
@@ -355,6 +356,9 @@ static Consensus::Params consensusParameters(bsv::TxValidationNetwork network)
 bsv::CTxValidator::CTxValidator(const std::string chainName)
     : source{ task::CCancellationSource::Make() }
 {
+    // Before the chain params below, which already hash the genesis block
+    bsv::SelectSha256Backend();
+
     // SV's CStnParams does not initialize BIP65Height, BIP66Height or
     // CSVHeight. Reading those indeterminate fields makes script flags depend
     // on the compiler and whatever happened to occupy the object storage.
@@ -388,6 +392,8 @@ bsv::CTxValidator::CTxValidator(
     : consensusParams{consensusParamsIn}
     , source{task::CCancellationSource::Make()}
 {
+    bsv::SelectSha256Backend();
+
     std::string errStr;
     bool ok {true};
 

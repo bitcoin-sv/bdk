@@ -43,6 +43,7 @@ set(_GO_MODULE_CGO_PUBLIC_HEADER_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/txvalidator_cgo.h
     ${CMAKE_CURRENT_SOURCE_DIR}/validatebatch_cgo.h
     ${CMAKE_CURRENT_SOURCE_DIR}/version_cgo.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/sha256_cgo.h
     ${CMAKE_CURRENT_SOURCE_DIR}/secp256k1_cloned.h # added here to be installed but won't be include twice as it use the same guard SECP256K1_H
 )
 set(_GO_MODULE_HEADER_FILES
@@ -57,6 +58,7 @@ set(_GO_MODULE_SOURCE_FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/src/abierror_cgo.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/txvalidator_cgo.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/src/validatebatch_cgo.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/sha256_cgo.cpp
 )
 
 set(_GO_MODULE_SOURCE_FILES
@@ -130,15 +132,16 @@ if(UNIX)
   endforeach()
 
   # extract all archive files to object files #############################
+  set(extractCommands)
   foreach(archive IN LISTS listArchive)
     get_filename_component(archiveName ${archive} NAME_WE)
     set(objDir "${buildDir}/merge_gobdk/${archiveName}")
-    file(MAKE_DIRECTORY "${objDir}")
-
-    add_custom_command(TARGET static-${_GO_MODULE_NAME} POST_BUILD
-    COMMAND ${CMAKE_AR} x ${archive}
-    WORKING_DIRECTORY "${objDir}"
-    COMMENT "Extract object files from [${archive}]")
+    ## Start from an empty directory: objects left from an earlier build would
+    ## otherwise be merged too, alongside the ones that replaced them
+    list(APPEND extractCommands
+    COMMAND ${CMAKE_COMMAND} -E rm -rf "${objDir}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${objDir}"
+    COMMAND ${CMAKE_COMMAND} -E chdir "${objDir}" ${CMAKE_AR} x ${archive})
   endforeach()
 
   # merge all object files to a single archive file #######################
@@ -157,6 +160,8 @@ if(UNIX)
   string(TOLOWER ${OsArch} os_arch)
   set(mergedArchive "libGoBDK_${os_arch}.a")
   add_custom_target(MergeGoBDK ALL
+                  ${extractCommands}
+                  COMMAND ${CMAKE_COMMAND} -E rm -f "${mergedArchive}"
                   COMMAND ${CMAKE_AR} rcs "${mergedArchive}" "${buildDir}/merge_gobdk/*/*.o"
                   DEPENDS static-${_GO_MODULE_NAME}
                   WORKING_DIRECTORY ${buildDir}

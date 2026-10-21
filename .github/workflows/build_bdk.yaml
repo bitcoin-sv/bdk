@@ -138,6 +138,19 @@ jobs:
           cmake --build build --parallel 4
           ctest --output-on-failure --test-dir build
 
+      - name: Report SHA-256 backend and throughput
+        if: runner.os != 'Windows'
+        run: |
+          uname -m
+          if [[ -r /proc/cpuinfo ]]; then
+            lscpu | grep 'Model name' || true
+            grep -m1 'CPU part' /proc/cpuinfo || true  ## ARM: 0xd0c Neoverse N1, 0xd40 V1, 0xd49 N2, 0xd4f V2
+            grep -o -m1 -w -E 'sha_ni|sha2' /proc/cpuinfo || echo "cpuinfo: no sha_ni / sha2 flag"
+          else
+            sysctl -n machdep.cpu.brand_string
+          fi
+          ctest --test-dir build -R '^test_sha256_backends$' --verbose
+
       - name: Check GoBDK has changed
         id: gobdk_change
         if: runner.os != 'Windows' && github.event_name == 'workflow_dispatch'
@@ -202,6 +215,140 @@ jobs:
           ctest --output-on-failure --test-dir build -C Debug --parallel 4
           cmake --build build --config Release --parallel 4
           ctest --output-on-failure --test-dir build -C Release --parallel 4
+
+  ## ThreadSanitizer check that the first SHA-256 backend selection cannot race
+  ## with hashing: GCC, Linux, both architectures. BDK force-sets CMAKE_CXX_FLAGS,
+  ## so -fsanitize=thread goes in through a compiler launcher. The positive
+  ## control hashes without selecting first and must be reported.
+  tsan-sha256-selection:
+    if: github.event_name == 'pull_request'
+    strategy:
+      matrix:
+        os: [ubuntu-22.04, ubuntu-22.04-arm]
+      fail-fast: false
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    ## Read-only token, set on this job only: commit-built-artifacts needs write
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Check out bitcoin-sv and dependencies
+        run: |
+          git clone -q https://github.com/bitcoin-sv/bitcoin-sv.git bitcoin-sv
+          git -C bitcoin-sv checkout -q ${{ env.DEFAULT_BITCOIN_SV_COMMIT }}
+          arch="$(uname -m)"
+          wget -q "https://github.com/bitcoin-sv/bdk/releases/download/depcy/dependancies_linux_${arch}.tar.gz"
+          tar -xzf "dependancies_linux_${arch}.tar.gz"
+          echo "DEPS=${{ github.workspace }}/dependancies_linux_${arch}" >> "$GITHUB_ENV"
+          ## Recent runner kernels randomise more address bits than TSAN's shadow layout allows
+          sudo sysctl -w vm.mmap_rnd_bits=28
+
+      - name: Build test_sha256_select_race with -fsanitize=thread
+        run: |
+          printf '#!/bin/sh\nexec "$@" -fsanitize=thread\n' > "$RUNNER_TEMP/tsan-launcher"
+          chmod +x "$RUNNER_TEMP/tsan-launcher"
+          cmake -B build-tsan -S . -DCMAKE_BUILD_TYPE=RelWithDebInfo -DBDK_BUILD_MODULES=OFF \
+            -DCMAKE_C_COMPILER=gcc -DCMAKE_CXX_COMPILER=g++ \
+            -DCMAKE_C_COMPILER_LAUNCHER="$RUNNER_TEMP/tsan-launcher" \
+            -DCMAKE_CXX_COMPILER_LAUNCHER="$RUNNER_TEMP/tsan-launcher" \
+            -DCMAKE_EXE_LINKER_FLAGS=-fsanitize=thread \
+            -DBSV_ROOT="${{ github.workspace }}/bitcoin-sv" \
+            -DBOOST_ROOT="$DEPS/boost_1.85.0" -DOPENSSL_ROOT_DIR="$DEPS/openssl_3.4.0"
+          cmake --build build-tsan --target test_sha256_select_race --parallel 4
+          test -n "$(nm -C "$(find build-tsan -name test_sha256_select_race -type f)" | grep -m1 __tsan_read)"
+
+      - name: No race on the selecting entry points
+        run: |
+          bin="$(find build-tsan -name test_sha256_select_race -type f)"
+          for i in 1 2 3 4 5; do
+            TSAN_OPTIONS="halt_on_error=1 exitcode=66" timeout 300 "$bin" --catch_system_errors=no
+          done
+          BDK_SHA256_FORCE_SCALAR=1 TSAN_OPTIONS="halt_on_error=1 exitcode=66" timeout 300 "$bin" --catch_system_errors=no
+
+      - name: Positive control is reported
+        run: |
+          bin="$(find build-tsan -name test_sha256_select_race -type f)"
+          set +e
+          BDK_TEST_SHA256_RACE_CONTROL=1 TSAN_OPTIONS="halt_on_error=0 exitcode=66" \
+            timeout 300 "$bin" --catch_system_errors=no > control.log 2>&1
+          rc=$?
+          set -e
+          grep -m1 -A12 "WARNING: ThreadSanitizer: data race" control.log || true
+          echo "exit code $rc"
+          test "$rc" -eq 66
+          grep -q "sha256_dispatch::stream" control.log
+
+  ## The SHA-256 instruction-set code follows the compiler's target, not the
+  ## build machine: a macOS universal build must carry the ARMv8 SHA-2 transforms
+  ## in its arm64 slice only and SHA-NI / SSE4 in its x86_64 slice only, both with
+  ## the load-time selection. Builds bdk_core only (the dependency bundle is arm64).
+  universal-sha256-slices:
+    if: github.event_name == 'pull_request'
+    runs-on: macos-15
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Check out bitcoin-sv and dependencies
+        run: |
+          git clone -q https://github.com/bitcoin-sv/bitcoin-sv.git bitcoin-sv
+          git -C bitcoin-sv checkout -q ${{ env.DEFAULT_BITCOIN_SV_COMMIT }}
+          wget -q https://github.com/bitcoin-sv/bdk/releases/download/depcy/dependancies_darwin_arm64.tar.gz
+          tar -xzf dependancies_darwin_arm64.tar.gz
+          echo "DEPS=${{ github.workspace }}/dependancies_darwin_arm64" >> "$GITHUB_ENV"
+
+      - name: Compile ARMv8 SHA-2 wrapper with generic clang target
+        timeout-minutes: 2
+        run: |
+          clang++ -std=c++20 -arch arm64 -mcpu=generic -c core/sha256_arm_shani_target.cpp \
+            -o "$RUNNER_TEMP/sha256_arm_generic.o"
+
+      - name: Build a universal bdk_core
+        run: |
+          cmake -B build-universal -S . -DCMAKE_BUILD_TYPE=Release "-DCMAKE_OSX_ARCHITECTURES=arm64;x86_64" \
+            -DBDK_BUILD_MODULES=OFF -DBDK_BUILD_CORE_TESTS=OFF \
+            -DBSV_ROOT="${{ github.workspace }}/bitcoin-sv" \
+            -DBOOST_ROOT="$DEPS/boost_1.85.0" -DOPENSSL_ROOT_DIR="$DEPS/openssl_3.4.0"
+          cmake --build build-universal --target bdk_core --parallel 4
+
+      - name: Each slice has its own backend and only that
+        run: |
+          lib="$(find build-universal -name libbdk_core.a | head -1)"
+          lipo -info "$lib"
+          for arch in arm64 x86_64; do
+            lipo -thin "$arch" "$lib" -o "core_$arch.a"
+            nm -C "core_$arch.a" 2>/dev/null | grep -E ' T (sha256_arm_shani|sha256d64_arm_shani|sha256_x86_shani|sha256d64_x86_shani)::' | sed "s/^/$arch: /" || true
+            mkdir -p "obj_$arch" && (cd "obj_$arch" && ar x "../core_$arch.a" sha256_arm_shani_target.cpp.o sha256_x86_shani.cpp.o sha256_hasher.cpp.o)
+          done
+          count() { otool -tV "$1" | grep -c "$2" || true; }
+          test "$(count obj_arm64/sha256_arm_shani_target.cpp.o 'sha256h\.4s')" -gt 0
+          test "$(count obj_arm64/sha256_x86_shani.cpp.o sha256rnds2)" -eq 0
+          test "$(count obj_x86_64/sha256_x86_shani.cpp.o sha256rnds2)" -gt 0
+          test "$(count obj_x86_64/sha256_arm_shani_target.cpp.o 'sha256h\.4s')" -eq 0
+          for arch in arm64 x86_64; do
+            test -n "$(nm -C "core_$arch.a" 2>/dev/null | grep 'RunSelectSha256BackendAtLoad')"
+          done
+          echo "arm64: ARMv8 SHA-2 only; x86_64: SHA-NI only; both select at load"
 
   ## The wasm leg runs on EVERY dispatch, regardless of either checkbox. That is what
   ## makes the all-or-nothing gate meaningful: a red wasm leg blocks the gobdk commit

@@ -29,8 +29,34 @@ endif()
 
 ## Canonical native core: OpenSSL-linked, no exclusions, no extra definitions
 ## (OpenSSL discovery runs at root scope, visible to core/, module/ and test/)
+## SV's src/crypto/sha256.cpp (CSHA256) is compiled by core/sha256_hasher.cpp
+## instead, together with the load-time SHA-256 backend selection
 bdk_add_core_library(bdk_core
+  EXCLUDE_BSV_SOURCES "${BDK_BSV_ROOT_DIR}/src/crypto/sha256.cpp"
   LINK_LIBRARIES OpenSSL::Crypto OpenSSL::SSL)
+
+## Hardware SHA-256, native core only (the wasm variant stays scalar).
+## sha256_dispatch.cpp defines sha256_dispatch::AutoDetect(), declared in the
+## installed crypto/sha256_dispatch.h. The x86-64 sources below are built for
+## every target: each guards itself with the compiler's own target macros, so
+## a macOS universal, Rosetta or cross build gets them in the x86-64 code only.
+## No file gets instruction-set flags: core/sha256_x86_shani.cpp (SV's
+## sha256d64_shani.cpp) and core/sha256_arm_shani_target.cpp enable SHA-NI and
+## the ARMv8 SHA-2 instructions with target pragmas around the included code.
+## bsv::SelectSha256Backend() (sha256_backend.cpp) picks at run time.
+## The source properties are directory-scoped, so they never reach the wasm
+## variant, which builds the same core/ files from its own directory.
+set(_bsv_crypto_dir "${BDK_BSV_ROOT_DIR}/src/crypto")
+target_sources(bdk_core PRIVATE
+  "${_bsv_crypto_dir}/sha256_dispatch.cpp"
+  "${_bsv_crypto_dir}/sha256_sse4.cpp"
+  "${_bsv_crypto_dir}/sha256_sse4_shim.cpp"
+  "${_bsv_crypto_dir}/sha256_shani_shim.cpp"
+  "${_bsv_crypto_dir}/sha256d64_shani_shim.cpp")
+## SV defines USE_ASM per target rather than in bitcoin-config.h; without it
+## AutoDetect() silently skips SSE4. Only read under __x86_64__.
+set_source_files_properties("${_bsv_crypto_dir}/sha256_dispatch.cpp" PROPERTIES
+  COMPILE_DEFINITIONS "USE_ASM")
 
 ## Install the binary library
 if(BDK_INSTALL_CORE_ARCHIVE)

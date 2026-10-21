@@ -51,6 +51,7 @@
 #include <bitset>
 #include <chrono>
 #include <cstdint>
+#include <iostream>
 #include <optional>
 #include <string>
 #include <tuple>
@@ -60,6 +61,8 @@
 #include <boost/algorithm/hex.hpp>
 
 #include <univalue.h>
+
+#include "sha256_backend.hpp"
 
 // SCRIPT_ENGINE_BUILD_TEST ++++++++++++++++++++++++++++++++++++++++++++++++++++
 /**
@@ -71,8 +74,13 @@ struct BasicTestingSetup {
     ConfigInit& testConfig;
     BasicTestingSetup():testConfig(GlobalConfig::GetModifiableGlobalConfig())
     {
-        // No sha256_dispatch::AutoDetect(): the bindings never call it, so they run
-        // the scalar transform, and this suite must cover the path they ship.
+        // The bindings select the SHA-256 backend when they construct a
+        // CTxValidator; this suite must run on the same transforms
+        static const bool logged = [] {
+            std::cout << "SHA-256 backend: " << bsv::SelectSha256Backend() << std::endl;
+            return true;
+        }();
+        (void)logged;
         RandomInit();
         SetupEnvironment();
         SetupNetworking();
