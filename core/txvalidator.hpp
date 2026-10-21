@@ -41,9 +41,8 @@ enum class TxValidationNetwork {
  * TxErrorCancelled() (TX_ERR_DOMAIN_CANCELLED) when cancellation leaves necessary
  * verification unfinished: no verdict, in either mode. A completed verdict is kept:
  * all inputs passed, or a real failure and every lower input finished. The token is
- * polled only at the points each overload lists, and by
- * the interpreter before every opcode it runs (also before each signature of
- * OP_CHECKMULTISIG and each chunk of OP_LSHIFT / OP_RSHIFT). Work between two polls
+ * polled at the points each overload lists and at the interpreter's loop,
+ * multisig signature-search and shift-chunk poll points. Work between two polls
  * finishes before a cancel is seen: deserialising and hashing the transaction, the
  * linear transaction checks, building the shared signature-hash data, one signature
  * hash, one hash or big-number opcode. A token that fires after the call's last poll
@@ -54,9 +53,12 @@ enum class TxValidationNetwork {
  * The caller's token is read only on the calling thread, including when inputs
  * run in parallel. In a parallel job the caller polls between its input claims and in its
  * interpreter, publishing observed cancellation to helpers through an atomic
- * job flag. Helpers poll that flag, never the caller's token. A thread-CPU-time
- * source created on the calling thread therefore measures its CPU, not helper CPU. While the
- * caller only waits for helpers, no additional caller-token polling takes place.
+ * job flag. While waiting for joined helpers, the caller also polls after each
+ * 10 ms condition-variable wait timeout. Helpers poll the flag, never the caller's
+ * token. A thread-CPU-time source created on the caller therefore measures its
+ * CPU, not helper CPU. A drained job needs no further poll; a completed verdict
+ * survives cancellation observed as helpers finish. Scheduling and work between
+ * interpreter polls can delay cancellation beyond the nominal wait interval.
  *
  * Checks present in bitcoin-sv's TxnValidation / BlockValidateTxns that are intentionally
  * absent here. In every case BDK is missing the chain / mempool / node-state context the

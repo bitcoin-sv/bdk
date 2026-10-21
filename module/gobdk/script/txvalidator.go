@@ -589,15 +589,19 @@ func (se *TxValidator) ValidateBatchContext(ctx context.Context, batch *Validate
 
 // ValidateTransactionContext is ValidateTransaction, cancellable through ctx.
 //
-// When ctx is done before BDK reaches a verdict, the result is a *CancelledError:
+// When cancellation leaves necessary verification unfinished, the result is a *CancelledError:
 // errors.Is(err, ErrCancelled) is true, its ContextCause() method returns context.Cause(ctx),
 // and errors.As never finds a ScriptError, DoSError or ABIError in it, whatever the
 // cause. It says nothing about the
 // transaction, in consensus and policy mode alike. BDK checks for cancellation at
-// entry, between its checks and before every script opcode; a step already started
-// (deserialising, one signature hash, one hash or arithmetic opcode) finishes first.
-// If ctx is done after BDK's last check, the verdict is returned as usual: use the
-// result, not ctx.Err(), as the outcome.
+// entry, between transaction checks and at interpreter poll points (loop,
+// multisig signature search and shift chunks). In parallel validation, the caller
+// also polls after each 10 ms wait timeout while helpers remain and publishes to
+// a flag helpers read. Only the caller reads the caller's token. A step already
+// started (deserialising, one signature hash, one hash or arithmetic opcode)
+// finishes first. Scheduling can add to the nominal wait interval. Completed
+// success or a definitive lowest failure is retained: use the result, not
+// ctx.Err(), as the outcome.
 //
 // A context that can never be cancelled (Done returns nil, as for context.Background
 // and context.TODO) costs nothing over ValidateTransaction. Otherwise the call

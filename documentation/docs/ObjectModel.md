@@ -83,15 +83,16 @@ inputs passed, or a real failure and every lower input finished. The token is po
 | `CheckStandardness` | entry; after deserialising; before each input's check when inputs are checked | deserialising and hashing; the output standardness check |
 | `ValidateBatch` | as `ValidateTransaction`, per entry | as `ValidateTransaction` |
 
-On top of these, the interpreter polls before every opcode it runs (SV Node's own check), before each
-signature of `OP_CHECKMULTISIG` and each chunk of `OP_LSHIFT` / `OP_RSHIFT`. A step that has
+The interpreter also checks cancellation at its main-loop, multisig signature-search-loop and
+shift-chunk poll points. A step that has
 started finishes before the next poll: one signature hash, one hash or big-number opcode, or any
 phase in the right-hand column. A token that fires after the last poll leaves the call to return its
 verdict, so callers must act on the result rather than on whether they cancelled. A cancelled
 `ValidateBatch` keeps the results of the entries it finished and returns `CANCELLED` for the rest.
 
 In parallel `ValidateTransaction` / `VerifyScript` jobs, the caller also polls before claiming
-another input while work remains. There is no poll after the job drains. Cancellation of an input
+another input while work remains and after each 10 ms condition-variable wait timeout while
+joined helpers remain. An already drained job returns without another poll. Cancellation of an input
 above an established lowest failure does not replace that verdict; cancellation leaving a lower
 input unfinished prevents reporting a higher failure. The serial loop keeps its existing poll sites.
 
@@ -111,8 +112,13 @@ The caller's token is read only on the calling thread, including parallel verifi
 polls between its own input claims and in its interpreter, and publishes observed cancellation to
 an atomic job flag. Helpers poll that flag rather than the caller's token. A
 `task::CThreadTimedCancellationSource` created on the calling thread therefore measures caller CPU, excluding helper CPU.
-Helpers stop at their next interpreter poll after the caller observes cancellation; while the
-caller only waits for helpers, it does not poll the token again.
+Helpers stop at their next interpreter poll after the caller observes cancellation, including
+while the caller waits for them. The timed wait applies only to a caller with joined helpers;
+idle pool helpers stay parked, and completion notification wakes the caller immediately.
+Ten milliseconds is the nominal observation interval, not a wall-time bound: scheduling,
+token polling and work between interpreter polls can add delay. Polling runs outside the job
+mutex. If a token poll throws, helpers drain before that exception reaches the public entry point;
+cleanup during unwinding does not invoke the token again.
 
 The token belongs to the call, not to the `CTxValidator`, so concurrent calls on one validator
 cancel independently. The C bindings take a pointer to a caller-owned `int32_t` instead of a token

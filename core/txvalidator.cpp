@@ -31,6 +31,7 @@
 
 #if BDK_PARALLEL_INPUTS
 #include <algorithm>
+#include <chrono>
 #include <condition_variable>
 #include <deque>
 #include <exception>
@@ -449,8 +450,8 @@ public:
         for (;;) {
             if (helper != nullptr && HelperShouldLeave(*helper))
                 return verified;
-            // Do not observe a late cancellation after all necessary work was
-            // claimed or a lower failure already made this work unnecessary.
+            // Stop claiming once no necessary input remains. The caller's
+            // drain wait separately polls while joined helpers remain.
             if (!HasWork())
                 return verified;
             if (helper == nullptr && callerToken_.IsCanceled()) {
@@ -512,15 +513,40 @@ public:
             left_.notify_one();
     }
 
-    // Called once the caller stops claiming. Drain joined helpers before
+    // Close once the caller stops claiming. Drain joined helpers before
     // deciding whether all inputs needed for a verdict completed.
-    void CloseAndWait()
+    void CloseAndWait(bool pollCancellation = true)
     {
         std::unique_lock lock{ mutex_ };
-        closed_ = true;
-        if (const auto hook = inputPoolHook.load(std::memory_order_relaxed))
-            hook(bsv::detail::InputPoolEvent::JobClosed);
-        left_.wait(lock, [this] { return joined_ == 0; });
+        if (!closed_) {
+            closed_ = true;
+            if (const auto hook = inputPoolHook.load(std::memory_order_relaxed))
+                hook(bsv::detail::InputPoolEvent::JobClosed);
+        }
+        while (joined_ != 0) {
+            if (!pollCancellation || callerCancelled_.load(std::memory_order_relaxed)) {
+                left_.wait(lock, [this] { return joined_ == 0; });
+                break;
+            }
+            // Only an active caller tail wait has a timer. Idle pool helpers
+            // remain parked; an already-drained job never polls here.
+            if (left_.wait_for(lock, std::chrono::milliseconds{ 10 }, [this] { return joined_ == 0; }))
+                break;
+            // A token can invoke caller code. Do not hold the job mutex while
+            // polling it, and never invoke it from noexcept unwind cleanup.
+            lock.unlock();
+            try {
+                if (callerToken_.IsCanceled()) {
+                    callerCancelled_.store(true, std::memory_order_relaxed);
+                    if (const auto hook = inputHook.load(std::memory_order_relaxed))
+                        hook(next_.load(std::memory_order_relaxed), bsv::detail::InputEvent::CallerCancelled);
+                }
+            } catch (...) {
+                callerCancelled_.store(true, std::memory_order_relaxed);
+                throw;  // JobCaller drains helpers before the exception escapes
+            }
+            lock.lock();
+        }
     }
 
     // A completed verdict, or no result if necessary inputs were abandoned or
@@ -884,8 +910,15 @@ public:
     JobCaller(InputVerifyPool& pool, std::shared_ptr<InputJob> job) : pool_{ pool }, job_{ std::move(job) } {}
     ~JobCaller()
     {
-        job_->CloseAndWait();
+        if (!drained_)
+            job_->CloseAndWait(false);
         pool_.Withdraw(job_);
+    }
+    void Finish()
+    {
+        // Normal draining may invoke the caller's token; unwind cleanup does not.
+        job_->CloseAndWait();
+        drained_ = true;
     }
     JobCaller(const JobCaller&) = delete;
     JobCaller& operator=(const JobCaller&) = delete;
@@ -893,6 +926,7 @@ public:
 private:
     InputVerifyPool& pool_;
     const std::shared_ptr<InputJob> job_;
+    bool drained_{ false };
 };
 
 #endif // BDK_PARALLEL_INPUTS
@@ -1828,12 +1862,13 @@ TxError bsv::CTxValidator::implVerifyScript(
             if (job) {
                 std::optional<size_t> verified;
                 {
-                    const JobCaller caller(*pool, job);
+                    JobCaller caller(*pool, job);
                     verified = job->Work();
                     if (!verified)
                         pool->Withdraw(job);  // no new selections while joined helpers drain
                     if (inputCountersEnabled.load(std::memory_order_relaxed))
                         jobVerifiedInputs.fetch_add(verified.value_or(0), std::memory_order_relaxed);
+                    caller.Finish();
                 }
                 // Setup failure must not discard a verdict already completed
                 // by helpers. Replay serially only if that job is unfinished.
