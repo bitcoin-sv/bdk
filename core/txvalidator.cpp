@@ -364,6 +364,7 @@ std::atomic<uint64_t> helperJobParticipations{ 0 };  // helper Work() calls that
 std::atomic<uint64_t> helperWakesWithoutCore{ 0 };
 std::atomic<bsv::detail::InputHook> inputHook{ nullptr };  // tests only
 std::atomic<bsv::detail::HelperReleasedCoreHook> helperReleasedCoreHook{ nullptr };  // tests only
+std::atomic<bsv::detail::InputPoolHook> inputPoolHook{ nullptr };  // tests only
 std::atomic<size_t> inputPoolCoresCap{ 0 };  // 0: no cap (tests only)
 std::atomic<int64_t> parallelInputHelpers{ -1 };  // SetParallelInputHelpers; < 0: automatic
 
@@ -552,15 +553,25 @@ public:
         return std::min({ helpers_, cores_ - busy, limit - onJobs });
     }
 
-    void Offer(const std::shared_ptr<InputJob>& job, size_t helpers)
+    void Offer(const std::shared_ptr<InputJob>& job, size_t maxHelpers)
     {
         {
             std::lock_guard lock{ mutex_ };
             jobs_.push_back(job);
             openJobs_.fetch_add(1, std::memory_order_seq_cst);
         }
+        // Publish before the decisive capacity read. A release that saw no
+        // open job is visible here; a later release sees the published job
+        // and notifies through ReleasedCore. Do not wake a genuinely full pool.
+        const size_t helpers = std::min(AvailableHelpers(HelperLimit()), maxHelpers);
         for (size_t i = 0; i < helpers; ++i)
             wake_.notify_one();
+    }
+
+    void WakeHelpersForTesting()
+    {
+        std::lock_guard lock{ mutex_ };
+        wake_.notify_all();
     }
 
     void Withdraw(const std::shared_ptr<InputJob>& job)
@@ -583,8 +594,8 @@ public:
     // now join. Nothing to do while the count is still at or above the core
     // count; the decrement that takes it below does the check. The leaving thread's
     // seq_cst decrement of busyThreads and this seq_cst load pair with Offer's
-    // increment of openJobs_ and the helper's load of busyThreads, so either
-    // this sees the job or the helper sees the freed core.
+    // increment of openJobs_ and its subsequent load of busyThreads, so either
+    // this sees the job or Offer sees the freed core and wakes a helper.
     void ReleasedCore(size_t busyAfter)
     {
         if (busyAfter >= cores_ || openJobs_.load(std::memory_order_seq_cst) == 0)
@@ -711,6 +722,8 @@ private:
                             helperWakesWithoutCore.fetch_add(1, std::memory_order_relaxed);
                     }
                     job.reset();  // don't keep a finished job alive while asleep
+                    if (const auto hook = inputPoolHook.load(std::memory_order_relaxed))
+                        hook(bsv::detail::InputPoolEvent::Waiting);
                     return false;
                 });
             }
@@ -839,6 +852,19 @@ bsv::detail::InputHook bsv::detail::SetInputHookForTesting(InputHook hook)
 bsv::detail::HelperReleasedCoreHook bsv::detail::SetHelperReleasedCoreHookForTesting(HelperReleasedCoreHook hook)
 {
     return helperReleasedCoreHook.exchange(hook);
+}
+
+bsv::detail::InputPoolHook bsv::detail::SetInputPoolHookForTesting(InputPoolHook hook)
+{
+    return inputPoolHook.exchange(hook);
+}
+
+void bsv::detail::WakeInputHelpersForTesting()
+{
+#if BDK_PARALLEL_INPUTS
+    if (InputVerifyPool* pool = InputVerifyPool::Existing())
+        pool->WakeHelpersForTesting();
+#endif
 }
 
 uint64_t bsv::detail::JobVerifiedInputCountForTesting()
@@ -1660,11 +1686,12 @@ TxError bsv::CTxValidator::implVerifyScript(
             const size_t participants = (nInputs + perParticipant - 1) / perParticipant;
             // With every core already busy the job is still queued, waking no
             // one: a helper joins it when a core frees.
-            const size_t helpers = std::min(pool->AvailableHelpers(helperLimit), participants - 1);
+            if (const auto hook = inputPoolHook.load(std::memory_order_relaxed))
+                hook(bsv::detail::InputPoolEvent::BeforeOffer);
             std::shared_ptr<InputJob> job;
             try {
                 job = std::make_shared<InputJob>(nInputs, verifyInput, token);
-                pool->Offer(job, helpers);
+                pool->Offer(job, participants - 1);
             } catch (const std::exception&) {
                 job.reset();  // not queued (bad_alloc, system_error): verify serially below
             }

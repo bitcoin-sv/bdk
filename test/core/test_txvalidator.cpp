@@ -2859,6 +2859,154 @@ BOOST_AUTO_TEST_CASE(large_tx_started_with_every_core_busy_takes_a_helper_when_o
     BOOST_CHECK_EQUAL(bsv::detail::QueuedJobCountForTesting(), 0u);
 }
 
+// Coordinate the missing release-before-publication interval. Waiting events
+// acknowledge that every helper has parked; the callback never blocks while
+// holding the pool mutex. Only BeforeOffer and claimed inputs may wait.
+class ReleaseBeforeOffer {
+public:
+    ReleaseBeforeOffer()
+    {
+        active.store(this);
+        previousPool = bsv::detail::SetInputPoolHookForTesting(&PoolHook);
+        previousInput = bsv::detail::SetInputHookForTesting(&InputHook);
+        bsv::detail::WakeInputHelpersForTesting();
+    }
+    ~ReleaseBeforeOffer()
+    {
+        bsv::detail::SetInputHookForTesting(previousInput);
+        bsv::detail::SetInputPoolHookForTesting(previousPool);
+        // Synchronize with any old Waiting callback before destroying its state.
+        bsv::detail::WakeInputHelpersForTesting();
+        active.store(nullptr);
+    }
+    size_t ParkedCount()
+    {
+        std::lock_guard lock{ mutex };
+        return parked.size();
+    }
+    static inline thread_local bool largeCaller = false;
+    std::atomic<bool> beforeOffer{ false }, resumeOffer{ false };
+    std::atomic<bool> helperClaimed{ false }, releaseInputs{ false }, timedOut{ false };
+
+private:
+    static void PoolHook(bsv::detail::InputPoolEvent event)
+    {
+        auto& self = *active.load();
+        if (event == bsv::detail::InputPoolEvent::Waiting) {
+            std::lock_guard lock{ self.mutex };
+            self.parked[std::this_thread::get_id()] = true;
+        } else {
+            self.beforeOffer = true;
+            if (!WaitFor([&] { return self.resumeOffer.load(); }, std::chrono::milliseconds(20000)))
+                self.timedOut = true;
+        }
+    }
+    static void InputHook(size_t, bsv::detail::InputEvent event)
+    {
+        if (event != bsv::detail::InputEvent::Claimed)
+            return;
+        auto& self = *active.load();
+        if (!largeCaller)
+            self.helperClaimed = true;
+        if (!WaitFor([&] { return self.releaseInputs.load(); }, std::chrono::milliseconds(20000)))
+            self.timedOut = true;
+    }
+    std::mutex mutex;
+    std::map<std::thread::id, bool> parked;
+    bsv::detail::InputPoolHook previousPool;
+    bsv::detail::InputHook previousInput;
+    static inline std::atomic<ReleaseBeforeOffer*> active{ nullptr };
+};
+
+// The second VerifySpend token poll is after BusyScope construction. Holding
+// there keeps a real ordinary caller on a core; releasing it exercises that
+// caller's actual BusyScope destruction and ReleasedCore notification path.
+class HeldSpendSource final : public task::CCancellationSource {
+public:
+    bool IsCanceled() override
+    {
+        if (++polls == 2) {
+            entered = true;
+            if (!WaitFor([&] { return release.load(); }, std::chrono::milliseconds(20000)))
+                timedOut = true;
+        }
+        return false;
+    }
+    std::atomic<bool> entered{ false }, release{ false }, timedOut{ false };
+private:
+    size_t polls = 0;  // read only by this source's one VerifySpend caller
+};
+
+BOOST_AUTO_TEST_CASE(release_before_job_publication_recruits_a_helper, PARALLEL_TEST_CASE_DECORATORS)
+{
+    const size_t helpers = bsv::detail::InputPoolHelperCountForTesting();
+    if (helpers == 0)
+        return;
+    const bsv::CTxValidator validator("main");
+    const auto spend = MakeSignedP2PKHSpend({ SigHashType().withForkId() }, 1);
+    CDataStream plain(SER_NETWORK, PROTOCOL_VERSION);
+    plain << spend.mtx;
+    const std::vector<uint8_t> txBin(plain.begin(), plain.end());
+    const auto& locking = spend.vutxo[0].scriptPubKey;
+    const auto bin = SignedP2PKHBin(200);
+    const InputThresholdGuard defaults(bsv::detail::DEFAULT_PARALLEL_INPUT_THRESHOLD);
+    BOOST_REQUIRE(PoolIsIdle());
+    const uint64_t helperInputs = bsv::detail::HelperVerifiedInputCountForTesting();
+    ReleaseBeforeOffer order;
+    BOOST_REQUIRE(WaitFor([&] { return order.ParkedCount() == helpers; }));
+
+    std::vector<std::shared_ptr<HeldSpendSource>> sources;
+    std::vector<TxError> results(helpers, bsv::TxErrorException());
+    std::vector<std::thread> busyCallers;
+    for (size_t i = 0; i < helpers; ++i) {
+        const auto source = std::make_shared<HeldSpendSource>();
+        sources.push_back(source);
+        busyCallers.emplace_back([&, i, source] {
+            results[i] = validator.VerifySpend(txBin, 0,
+                std::span<const uint8_t>(locking.data(), locking.size()),
+                spend.vutxo[0].nValue.GetSatoshis(), P2PKH_UTXO_HEIGHT,
+                P2PKH_BLOCK_HEIGHT, true, std::nullopt, source->GetToken());
+        });
+    }
+    const bool occupied = WaitFor([&] {
+        return std::all_of(sources.begin(), sources.end(), [](const auto& s) { return s->entered.load(); });
+    });
+    TxError result = bsv::TxErrorException();
+    std::thread caller([&] {
+        ReleaseBeforeOffer::largeCaller = true;
+        result = ValidateP2PKHSpend(validator, bin, 200, true);
+    });
+    const bool sampled = WaitFor([&] { return order.beforeOffer.load(); });
+    const size_t busyAtSample = bsv::detail::BusyThreadCountForTesting();
+    const size_t queuedBefore = bsv::detail::QueuedJobCountForTesting();
+    for (const auto& source : sources)
+        source->release = true;
+    for (auto& worker : busyCallers)
+        worker.join();
+    const size_t busyAfterRelease = bsv::detail::BusyThreadCountForTesting();
+    const size_t queuedAfterRelease = bsv::detail::QueuedJobCountForTesting();
+    order.resumeOffer = true;
+    const bool recruited = WaitFor([&] { return order.helperClaimed.load(); }, std::chrono::milliseconds(1000));
+    order.releaseInputs = true;
+    caller.join();
+
+    BOOST_REQUIRE(occupied);
+    BOOST_REQUIRE(sampled);
+    BOOST_CHECK_EQUAL(busyAtSample, helpers + 1);
+    BOOST_CHECK_EQUAL(queuedBefore, 0u);
+    BOOST_CHECK_EQUAL(busyAfterRelease, 1u);
+    BOOST_CHECK_EQUAL(queuedAfterRelease, 0u);
+    for (size_t i = 0; i < helpers; ++i) {
+        BOOST_CHECK(!sources[i]->timedOut);
+        BOOST_CHECK(bsv::TxErrorIsOk(results[i]));
+    }
+    BOOST_CHECK(!order.timedOut);
+    BOOST_CHECK(bsv::TxErrorIsOk(result));
+    BOOST_CHECK_MESSAGE(recruited, "no helper joined after capacity was released before job publication");
+    BOOST_CHECK_GT(bsv::detail::HelperVerifiedInputCountForTesting(), helperInputs);
+    BOOST_CHECK(PoolIsIdle());
+}
+
 // Helpers parked over budget come back when exactly one core frees: the
 // decrement that takes the busy count from the core count to one below it
 // wakes a helper, which rejoins the running job.

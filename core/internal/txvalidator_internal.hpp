@@ -95,6 +95,15 @@ InputHook SetInputHookForTesting(InputHook hook);
 using HelperReleasedCoreHook = void (*)();
 HelperReleasedCoreHook SetHelperReleasedCoreHookForTesting(HelperReleasedCoreHook hook);
 
+// BeforeOffer runs on the caller before publishing a job. Waiting runs on a
+// helper under the pool mutex, just before it waits: never block or call pool
+// functions from that event. Returns the previous hook. Tests only.
+enum class InputPoolEvent { BeforeOffer, Waiting };
+using InputPoolHook = void (*)(InputPoolEvent event);
+InputPoolHook SetInputPoolHookForTesting(InputPoolHook hook);
+// Wake existing helpers so a test can observe each one's Waiting event.
+void WakeInputHelpersForTesting();
+
 // Caps the cores the input pool sizes itself to (0: no cap) and returns the
 // previous cap. Takes effect only when set before the pool is created, so a
 // test binary sets it at start-up to reproduce a CI-sized pool on a bigger

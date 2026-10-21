@@ -191,6 +191,11 @@ add_test(NAME test_txvalidator_helper_release
          COMMAND $<TARGET_FILE:test_txvalidator> --report_level=detailed
                  --run_test=test_txvalidator/parallel_input_verification/leaving_helper_wakes_another_for_a_queued_job
                  -- --input-pool-cores=3)
+## Coordinate release before publication, independently of the queued-job case.
+add_test(NAME test_txvalidator_release_before_offer
+         COMMAND $<TARGET_FILE:test_txvalidator> --report_level=detailed
+                 --run_test=test_txvalidator/parallel_input_verification/release_before_job_publication_recruits_a_helper
+                 -- --input-pool-cores=4)
 ## A hang in the input pool fails the run instead of waiting for the CI job timeout
 get_directory_property(_bdk_core_tests TESTS)
 foreach(_t IN LISTS _bdk_core_tests)
