@@ -38,8 +38,10 @@ enum class TxValidationNetwork {
  * token use it, so they always run to a verdict.
  *
  * Cancellation. The overloads that take a task::CCancellationToken return
- * TxErrorCancelled() (TX_ERR_DOMAIN_CANCELLED) once the token has fired: no verdict,
- * in either mode. The token is polled only at the points each overload lists, and by
+ * TxErrorCancelled() (TX_ERR_DOMAIN_CANCELLED) when cancellation leaves necessary
+ * verification unfinished: no verdict, in either mode. A completed verdict is kept:
+ * all inputs passed, or a real failure and every lower input finished. The token is
+ * polled only at the points each overload lists, and by
  * the interpreter before every opcode it runs (also before each signature of
  * OP_CHECKMULTISIG and each chunk of OP_LSHIFT / OP_RSHIFT). Work between two polls
  * finishes before a cancel is seen: deserialising and hashing the transaction, the

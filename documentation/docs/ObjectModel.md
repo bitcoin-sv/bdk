@@ -71,8 +71,9 @@ classDiagram
 
 Long-running validation can be cancelled. `ValidateTransaction`, `VerifyScript`, `VerifySpend`,
 `ValidateBatch` and `CheckStandardness` each have an overload that takes a
-`task::CCancellationToken`; once the token has fired the call returns `CANCELLED` with code 0, in
-consensus and policy mode alike. The token is polled only at fixed points:
+`task::CCancellationToken`. Cancellation that leaves necessary verification unfinished returns
+`CANCELLED` with code 0, in consensus and policy mode alike. A completed verdict is retained: all
+inputs passed, or a real failure and every lower input finished. The token is polled only at fixed points:
 
 | Call | Polls | Not polled (each linear in the transaction size) |
 |---|---|---|
@@ -88,6 +89,11 @@ started finishes before the next poll: one signature hash, one hash or big-numbe
 phase in the right-hand column. A token that fires after the last poll leaves the call to return its
 verdict, so callers must act on the result rather than on whether they cancelled. A cancelled
 `ValidateBatch` keeps the results of the entries it finished and returns `CANCELLED` for the rest.
+
+In parallel `ValidateTransaction` / `VerifyScript` jobs, the caller also polls before claiming
+another input while work remains. There is no poll after the job drains. Cancellation of an input
+above an established lowest failure does not replace that verdict; cancellation leaving a lower
+input unfinished prevents reporting a higher failure. The serial loop keeps its existing poll sites.
 
 The caller's token is read only on the calling thread, including parallel verification. In a parallel job the caller
 polls between its own input claims and in its interpreter, and publishes observed cancellation to

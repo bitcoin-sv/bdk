@@ -393,7 +393,8 @@ public:
     using VerifyInput = std::function<TxError(size_t, const task::CCancellationToken&)>;
 
     InputJob(size_t n, VerifyInput verify, const task::CCancellationToken& callerToken)
-        : n_{ n }, verify_{ std::move(verify) }, callerToken_{ callerToken }, lowestFailure_{ n } {}
+        : n_{ n }, verify_{ std::move(verify) }, callerToken_{ callerToken },
+          lowestFailure_{ n }, lowestCancelled_{ n } {}
 
     // What a helper's Work() call checks before each claim.
     struct HelperTerms {
@@ -403,7 +404,8 @@ public:
         bool placeReturned = false;       // set when the helper left over the limit
     };
 
-    // Verifies inputs until none below the lowest known failure is left, or,
+    // Verifies inputs until caller cancellation is observed, no input below
+    // the lowest known failure is left, or,
     // for a helper, until more threads than cores are busy or more helpers
     // hold places than the helper limit allows; then the helper gives its
     // place back itself, so exactly the excess leaves. Both are checked
@@ -419,6 +421,10 @@ public:
         std::optional<task::CCancellationToken> inputToken;
         for (;;) {
             if (helper != nullptr && HelperShouldLeave(*helper))
+                return verified;
+            // Do not observe a late cancellation after all necessary work was
+            // claimed or a lower failure already made this work unnecessary.
+            if (!HasWork())
                 return verified;
             if (helper == nullptr && callerToken_.IsCanceled()) {
                 callerCancelled_.store(true, std::memory_order_relaxed);
@@ -445,6 +451,8 @@ public:
                 }
                 cancellation->SetIndex(index);
                 const TxError result = verify_(index, *inputToken);
+                if (pollHook)
+                    pollHook(index, bsv::detail::InputEvent::Verified);
                 if (!bsv::TxErrorIsOk(result))
                     Fail(index, result, nullptr);
             } catch (...) {
@@ -479,8 +487,8 @@ public:
             left_.notify_one();
     }
 
-    // Called by the caller once its own Work() returned: no index below the
-    // lowest failure is unclaimed, so waiting for the joined helpers finishes it.
+    // Called once the caller stops claiming. Drain joined helpers before
+    // deciding whether all inputs needed for a verdict completed.
     void CloseAndWait()
     {
         std::unique_lock lock{ mutex_ };
@@ -488,13 +496,21 @@ public:
         left_.wait(lock, [this] { return joined_ == 0; });
     }
 
-    // The lowest failure's outcome, rethrown if it was an exception.
+    // A completed verdict, or cancellation if necessary inputs were abandoned.
     TxError Result()
     {
         std::lock_guard lock{ mutex_ };
-        if (failureException_)
-            std::rethrow_exception(failureException_);
-        return failure_;
+        // Claims form a contiguous prefix, and every joined participant has
+        // drained. A real failure is definitive only if no lower claim was
+        // abandoned. Higher cancellations cannot replace that verdict.
+        if (lowestFailure_.load(std::memory_order_relaxed) < lowestCancelled_) {
+            if (failureException_)
+                std::rethrow_exception(failureException_);
+            return failure_;
+        }
+        if (lowestCancelled_ < n_ || next_.load(std::memory_order_relaxed) < n_)
+            return bsv::TxErrorCancelled();
+        return bsv::TxErrorOk();
     }
 
 private:
@@ -518,6 +534,10 @@ private:
         if (const auto hook = inputHook.load(std::memory_order_relaxed))
             hook(index, bsv::detail::InputEvent::Failed);
         std::lock_guard lock{ mutex_ };
+        if (result.domain == TX_ERR_DOMAIN_CANCELLED) {
+            lowestCancelled_ = std::min(lowestCancelled_, index);
+            return;
+        }
         if (index >= lowestFailure_.load(std::memory_order_relaxed))
             return;
         lowestFailure_.store(index, std::memory_order_relaxed);
@@ -531,6 +551,7 @@ private:
     std::atomic<bool> callerCancelled_{ false };  // only the caller polls its token
     std::atomic<size_t> next_{ 0 };
     std::atomic<size_t> lowestFailure_;  // n_ while nothing failed; written under mutex_
+    size_t lowestCancelled_;  // abandoned claims, under mutex_; never a real failure
 
     std::mutex mutex_;
     std::condition_variable left_;
@@ -1725,11 +1746,8 @@ TxError bsv::CTxValidator::implVerifyScript(
                     if (inputCountersEnabled.load(std::memory_order_relaxed))
                         jobVerifiedInputs.fetch_add(verified, std::memory_order_relaxed);
                 }
-                // The caller token takes priority even when a real failure was
-                // recorded before it fired. Early-stop cancellations only occur
-                // above an already recorded failure and cannot replace its result.
-                if (token.IsCanceled())
-                    return bsv::TxErrorCancelled();
+                // All joined work has drained. Completion, not a fresh token
+                // poll, decides whether this call has a verdict.
                 return job->Result();
             }
         }
@@ -1737,6 +1755,8 @@ TxError bsv::CTxValidator::implVerifyScript(
 #endif
     for (size_t index = 0; index < nInputs; ++index) {
         const TxError verifyResult = verifyInput(index, token);
+        if (const auto hook = inputHook.load(std::memory_order_relaxed))
+            hook(index, bsv::detail::InputEvent::Verified);
         if (!bsv::TxErrorIsOk(verifyResult))
             return verifyResult;
     }

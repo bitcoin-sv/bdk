@@ -14,7 +14,7 @@
 
 namespace bsv::detail {
 
-enum class InputEvent { Claimed, Failed, Polled, CallerCancelled };
+enum class InputEvent { Claimed, Verified, Failed, Polled, CallerCancelled };
 using InputHook = void (*)(size_t index, InputEvent event);
 
 // One source per job participant, reused for its successive inputs. The index
@@ -103,7 +103,8 @@ uint64_t HelperJobParticipationCountForTesting();
 uint64_t InputCancellationSourceCountForTesting();
 
 // Called on the verifying thread with an input's index when a participant of
-// a parallel job claims it (Claimed), fails (Failed), polls its input token
+// a parallel job claims it (Claimed), completes a check (Verified), fails
+// (Failed), polls its input token
 // (Polled), or publishes caller cancellation (CallerCancelled); nullptr for none.
 // The poll hook is captured per participant and lives until that work drains.
 // Lets a test fix

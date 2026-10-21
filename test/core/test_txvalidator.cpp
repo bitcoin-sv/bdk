@@ -2170,9 +2170,18 @@ private:
                 if (!WaitFor([&] { return self.failed.load(); }))
                     self.timedOut = true;
             }
+        } else if (event == bsv::detail::InputEvent::Verified) {
+            self.finished[index] = true;
         } else if (event == bsv::detail::InputEvent::Failed && index == self.failingIndex) {
-            if (self.cancelOnFailure)
+            if (self.cancelOnFailure) {
+                if (!WaitFor([&] {
+                        for (size_t i = 0; i < index; ++i)
+                            if (!self.finished[i]) return false;
+                        return true;
+                    }))
+                    self.timedOut = true;
                 self.Cancel();
+            }
             self.failed = true;
         }
     }
@@ -2180,6 +2189,7 @@ private:
     const size_t failingIndex;
     const bool cancelOnFailure;
     std::atomic<bool> failed{ false };
+    std::array<std::atomic<bool>, 32> finished{};
     bsv::detail::InputHook previous;
     static inline EarlyStopProbe* active = nullptr;
     static inline thread_local uint64_t inputPolls = 0;
@@ -2259,9 +2269,9 @@ BOOST_AUTO_TEST_CASE(early_stop_source_preserves_equal_and_lower_indices)
     BOOST_CHECK(token.IsCanceled());
 }
 
-// Removing the final caller-token check would return EVAL_FALSE here: input
-// 0 has a real verdict, and cancellation of higher indices cannot replace it.
-BOOST_AUTO_TEST_CASE(caller_cancel_racing_early_failure_returns_cancelled, PARALLEL_TEST_CASE_DECORATORS)
+// A completed failure and all lower inputs establish the serial verdict, even
+// when cancellation stops still-running higher inputs.
+BOOST_AUTO_TEST_CASE(completed_early_failure_survives_caller_cancellation, PARALLEL_TEST_CASE_DECORATORS)
 {
     if (!PoolHasHelpers())
         return;
@@ -2275,7 +2285,8 @@ BOOST_AUTO_TEST_CASE(caller_cancel_racing_early_failure_returns_cancelled, PARAL
         const auto result = validator.ValidateTransaction(bin, heights, 20000, true, probe->GetToken());
         BOOST_CHECK(!probe->timedOut);
         BOOST_CHECK_GT(probe->entered.load(), 0u);
-        BOOST_CHECK_EQUAL(result.domain, static_cast<int32_t>(TX_ERR_DOMAIN_CANCELLED));
+        BOOST_CHECK_EQUAL(result.domain, static_cast<int32_t>(TX_ERR_DOMAIN_SCRIPT));
+        BOOST_CHECK_EQUAL(result.code, SCRIPT_ERR_EVAL_FALSE);
     }
 }
 
@@ -2382,6 +2393,157 @@ BOOST_AUTO_TEST_CASE(caller_cancel_during_parallel_input_returns_cancelled, PARA
     BOOST_CHECK_GE(source->helperPolls.load(), 8u);
     BOOST_CHECK_LT(source->helperPolls.load(), 1000u);
     BOOST_CHECK_EQUAL(result.domain, static_cast<int32_t>(TX_ERR_DOMAIN_CANCELLED));
+}
+
+// Cancel after the requested verdict is already established: after the last
+// valid input, or after a bad input and every lower input have finished.
+class CancelAfterVerdict final : public task::CCancellationSource {
+public:
+    explicit CancelAfterVerdict(size_t failingIndex) : failingIndex{ failingIndex }
+    {
+        active = this;
+        previous = bsv::detail::SetInputHookForTesting(&Hook);
+    }
+    ~CancelAfterVerdict() { bsv::detail::SetInputHookForTesting(previous); }
+    std::atomic<bool> timedOut{ false };
+private:
+    static void Hook(size_t index, bsv::detail::InputEvent event)
+    {
+        if (event != bsv::detail::InputEvent::Verified)
+            return;
+        auto& self = *active;
+        self.finished[index] = true;
+        const size_t count = ++self.count;
+        if (index == self.failingIndex) {
+            if (!WaitFor([&] {
+                    for (size_t i = 0; i < index; ++i)
+                        if (!self.finished[i]) return false;
+                    return true;
+                }))
+                self.timedOut = true;
+            self.Cancel();
+        } else if (self.failingIndex == self.finished.size() && count == self.finished.size()) {
+            self.Cancel();
+        }
+    }
+    const size_t failingIndex;
+    std::array<std::atomic<bool>, 32> finished{};
+    std::atomic<size_t> count{ 0 };
+    bsv::detail::InputHook previous;
+    static inline CancelAfterVerdict* active = nullptr;
+};
+
+BOOST_AUTO_TEST_CASE(completed_verdict_survives_cancellation_in_serial_and_parallel, PARALLEL_TEST_CASE_DECORATORS)
+{
+    if (!PoolHasHelpers())
+        return;
+    const bsv::CTxValidator validator(CBaseChainParams::REGTEST);
+    const std::vector<int32_t> heights(32, 19000);
+    for (const size_t bad : { size_t{32}, size_t{0}, size_t{1}, size_t{2}, size_t{8} }) {
+        auto tx = EarlyStopSpend(0);
+        for (size_t i = 0; i < 32; ++i) {
+            tx.mtx.vin[i].scriptSig = CScript();
+            tx.vutxo[i].scriptPubKey = i == bad ? CScript() << OP_FALSE : CScript() << OP_TRUE;
+        }
+        const auto bin = SerializeExtended(tx);
+        TxError serial = bsv::TxErrorException();
+        for (const size_t threshold : { FORCE_SERIAL, FORCE_PARALLEL }) {
+            BOOST_REQUIRE(PoolIsIdle());
+            const InputThresholdGuard guard(threshold);
+            const auto source = std::make_shared<CancelAfterVerdict>(bad);
+            const auto result = validator.VerifyScript(bin, heights, 20000, true, {}, source->GetToken());
+            BOOST_CHECK(!source->timedOut);
+            BOOST_CHECK(source->IsCanceled());
+            if (threshold == FORCE_SERIAL) {
+                serial = result;
+                BOOST_REQUIRE_EQUAL(result.domain, bad == 32 ? TX_ERR_DOMAIN_OK : TX_ERR_DOMAIN_SCRIPT);
+            } else {
+                BOOST_CHECK_MESSAGE(SameTxError(result, serial), "bad=" << bad << " parallel="
+                    << result.domain << "/" << result.code << " serial=" << serial.domain << "/" << serial.code);
+            }
+        }
+    }
+}
+
+// A helper's higher failure does not establish a verdict when input zero
+// stops without completing. The caller observes cancellation in its interpreter.
+class CancelBelowFailure final : public task::CCancellationSource {
+public:
+    CancelBelowFailure() : owner{ std::this_thread::get_id() }
+    {
+        inJob = false;
+        active = this;
+        previous = bsv::detail::SetInputHookForTesting(&Hook);
+    }
+    ~CancelBelowFailure() { bsv::detail::SetInputHookForTesting(previous); }
+    bool IsCanceled() override
+    {
+        if (inJob) {
+            if (!WaitFor([&] { return failure.load(); }))
+                timedOut = true;
+            Cancel();
+        }
+        return CCancellationSource::IsCanceled();
+    }
+    std::atomic<bool> failure{ false }, published{ false }, timedOut{ false }, callerClaimed{ false };
+private:
+    static void Hook(size_t index, bsv::detail::InputEvent event)
+    {
+        auto& self = *active;
+        const bool caller = std::this_thread::get_id() == self.owner;
+        if (event == bsv::detail::InputEvent::Claimed && caller) {
+            inJob = true;
+            self.callerClaimed = true;
+        }
+        if (event == bsv::detail::InputEvent::Failed && index > 0) {
+            // Keep the real failure unpublished until the caller owns input
+            // work on which it can observe cancellation.
+            if (!caller && !WaitFor([&] { return self.callerClaimed.load(); }))
+                self.timedOut = true;
+            self.failure = true;
+        }
+        if (event == bsv::detail::InputEvent::CallerCancelled)
+            self.published = true;
+        if (event == bsv::detail::InputEvent::Polled && index == 0 && !caller
+            && !WaitFor([&] { return self.published.load(); }))
+            self.timedOut = true;
+    }
+    const std::thread::id owner;
+    bsv::detail::InputHook previous;
+    static inline CancelBelowFailure* active = nullptr;
+    static inline thread_local bool inJob = false;
+};
+
+BOOST_AUTO_TEST_CASE(cancelled_lower_input_prevents_a_higher_failure_verdict, PARALLEL_TEST_CASE_DECORATORS)
+{
+    if (bsv::detail::InputPoolHelperCountForTesting() < 2) {
+        BOOST_TEST_MESSAGE("needs two helpers: one holds input zero while another fails");
+        return;
+    }
+    auto tx = EarlyStopSpend(0);
+    for (size_t i = 0; i < 32; ++i) {
+        tx.mtx.vin[i].scriptSig = CScript();
+        tx.vutxo[i].scriptPubKey = i == 0 ? CScript() << OP_TRUE : CScript() << OP_FALSE;
+    }
+    const auto bin = SerializeExtended(tx);
+    const std::vector<int32_t> heights(32, 19000);
+    const bsv::CTxValidator validator(CBaseChainParams::REGTEST);
+    const auto alreadyCancelled = task::CCancellationSource::Make();
+    alreadyCancelled->Cancel();
+    TxError serial;
+    {
+        const InputThresholdGuard guard(FORCE_SERIAL);
+        serial = validator.VerifyScript(bin, heights, 20000, true, {}, alreadyCancelled->GetToken());
+    }
+    BOOST_REQUIRE_EQUAL(serial.domain, TX_ERR_DOMAIN_CANCELLED);
+    BOOST_REQUIRE(PoolIsIdle());
+    const InputThresholdGuard parallel(FORCE_PARALLEL);
+    const auto source = std::make_shared<CancelBelowFailure>();
+    const auto result = validator.VerifyScript(bin, heights, 20000, true, {}, source->GetToken());
+    BOOST_CHECK(!source->timedOut);
+    BOOST_CHECK(source->failure);
+    BOOST_CHECK(source->published);
+    BOOST_CHECK(SameTxError(result, serial));
 }
 
 // Every input claimed inside a parallel job sleeps for `delay` before it is
