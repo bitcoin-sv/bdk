@@ -475,12 +475,14 @@ public:
         }
     }
 
-    bool HasWork() const
+    size_t UnclaimedInputs() const
     {
         const size_t next = next_.load(std::memory_order_relaxed);
         return !callerCancelled_.load(std::memory_order_relaxed)
-            && next < n_ && next <= lowestFailure_.load(std::memory_order_relaxed);
+            && next < n_ && next <= lowestFailure_.load(std::memory_order_relaxed) ? n_ - next : 0;
     }
+
+    bool HasWork() const { return UnclaimedInputs() != 0; }
 
     // A helper joins only an open job; the caller waits for every joined helper.
     bool TryJoin()
@@ -750,14 +752,23 @@ private:
         return false;
     }
 
-    // The first queued job with inputs left, dropping finished ones.
+    // Prefer the most unclaimed inputs; retain queue order for equal counts.
     std::shared_ptr<InputJob> NextJob()
     {
         while (!jobs_.empty() && !jobs_.front()->HasWork()) {
             jobs_.pop_front();
             openJobs_.fetch_sub(1, std::memory_order_relaxed);
         }
-        return jobs_.empty() ? nullptr : jobs_.front();
+        std::shared_ptr<InputJob> largest;
+        size_t most = 0;
+        for (const auto& job : jobs_) {
+            const size_t remaining = job->UnclaimedInputs();
+            if (remaining > most) {
+                most = remaining;
+                largest = job;
+            }
+        }
+        return largest;
     }
 
     void Run()

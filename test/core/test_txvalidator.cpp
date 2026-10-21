@@ -4094,6 +4094,136 @@ BOOST_AUTO_TEST_CASE(released_core_is_rechecked_after_a_failed_helper_reservatio
     BOOST_CHECK(PoolIsIdle());
 }
 
+// Both callers stop at distinct next indices. With every core occupied, the
+// queue order is small then large; a real core release must recruit for large.
+class LargestQueuedJob {
+public:
+    LargestQueuedJob()
+    {
+        active = this;
+        previousPool = bsv::detail::SetInputPoolHookForTesting(&Pool);
+        previousInput = bsv::detail::SetInputHookForTesting(&Input);
+        bsv::detail::WakeInputHelpersForTesting();
+    }
+    ~LargestQueuedJob()
+    {
+        bsv::detail::SetInputHookForTesting(previousInput);
+        bsv::detail::SetInputPoolHookForTesting(previousPool);
+        bsv::detail::WakeInputHelpersForTesting();
+        active = nullptr;
+    }
+    size_t ParkedCount() { std::lock_guard lock{ mutex }; return parked.size(); }
+    std::atomic<bool> smallHeld{ false }, largeHeld{ false }, releaseInputs{ false }, timedOut{ false };
+    std::atomic<size_t> firstHelperIndex{ std::numeric_limits<size_t>::max() };
+    static inline thread_local int caller = 0;  // 1 small, 2 large, 0 helper
+private:
+    static void Pool(bsv::detail::InputPoolEvent event)
+    {
+        if (event != bsv::detail::InputPoolEvent::Waiting)
+            return;
+        auto& self = *active.load();
+        std::lock_guard lock{ self.mutex };
+        self.parked[std::this_thread::get_id()] = true;
+    }
+    static void Input(size_t index, bsv::detail::InputEvent event)
+    {
+        if (event != bsv::detail::InputEvent::Claimed)
+            return;
+        auto& self = *active.load();
+        if (caller == 1 && index == 0) self.smallHeld = true;
+        else if (caller == 2 && index == 2) self.largeHeld = true;
+        else if (caller == 0) {
+            size_t none = std::numeric_limits<size_t>::max();
+            self.firstHelperIndex.compare_exchange_strong(none, index);
+        } else return;
+        if (!WaitFor([&] { return self.releaseInputs.load(); }, std::chrono::milliseconds(20000)))
+            self.timedOut = true;
+    }
+    std::mutex mutex;
+    std::map<std::thread::id, bool> parked;
+    bsv::detail::InputPoolHook previousPool;
+    bsv::detail::InputHook previousInput;
+    static inline std::atomic<LargestQueuedJob*> active{ nullptr };
+};
+
+BOOST_AUTO_TEST_CASE(released_core_recruits_for_the_largest_queued_job, PARALLEL_TEST_CASE_DECORATORS)
+{
+    const size_t helpers = bsv::detail::InputPoolHelperCountForTesting();
+    if (helpers < 2) {
+        BOOST_TEST_MESSAGE("needs two callers and a free helper core");
+        return;
+    }
+    const bsv::CTxValidator validator("main");
+    const auto small = SignedP2PKHBin(16), large = SignedP2PKHBin(128);
+    const auto spend = MakeSignedP2PKHSpend({ SigHashType().withForkId() }, 1);
+    CDataStream plain(SER_NETWORK, PROTOCOL_VERSION);
+    plain << spend.mtx;
+    const std::vector<uint8_t> txBin(plain.begin(), plain.end());
+    const auto& locking = spend.vutxo[0].scriptPubKey;
+    const InputThresholdGuard parallel(FORCE_PARALLEL);
+    const HelperLimitGuard limit(1);
+    BOOST_REQUIRE(PoolIsIdle());
+    LargestQueuedJob probe;
+    BOOST_REQUIRE(WaitFor([&] { return probe.ParkedCount() == helpers; }));
+    std::vector<std::shared_ptr<HeldSpendSource>> sources;
+    std::vector<std::thread> ordinary;
+    std::vector<TxError> results(helpers, bsv::TxErrorException());
+    for (size_t i = 0; i < helpers; ++i) {
+        auto source = std::make_shared<HeldSpendSource>();
+        sources.push_back(source);
+        ordinary.emplace_back([&, source, i] {
+            results[i] = validator.VerifySpend(txBin, 0,
+                std::span<const uint8_t>(locking.data(), locking.size()), spend.vutxo[0].nValue.GetSatoshis(),
+                P2PKH_UTXO_HEIGHT, P2PKH_BLOCK_HEIGHT, true, std::nullopt, source->GetToken());
+        });
+    }
+    const bool full = WaitFor([&] {
+        return std::all_of(sources.begin(), sources.end(), [](const auto& source) { return source->entered.load(); });
+    });
+    TxError smallResult = bsv::TxErrorException(), largeResult = bsv::TxErrorException();
+    std::thread smallCaller([&] {
+        LargestQueuedJob::caller = 1;
+        smallResult = ValidateP2PKHSpend(validator, small, 16, true);
+    });
+    const bool smallQueued = WaitFor([&] { return probe.smallHeld.load(); });
+    std::thread largeCaller([&] {
+        LargestQueuedJob::caller = 2;
+        largeResult = ValidateP2PKHSpend(validator, large, 128, true);
+    });
+    const bool largeQueued = WaitFor([&] { return probe.largeHeld.load(); });
+    const bool bothQueued = WaitFor([] { return bsv::detail::QueuedJobCountForTesting() == 2; });
+    const bool notRecruited = probe.firstHelperIndex == std::numeric_limits<size_t>::max();
+    // Two callers have arrived on top of the held ordinary callers: the first
+    // release leaves all cores busy; the second frees exactly one helper core.
+    sources[0]->release = true;
+    ordinary[0].join();
+    sources[1]->release = true;
+    ordinary[1].join();
+    const bool recruited = WaitFor([&] { return probe.firstHelperIndex != std::numeric_limits<size_t>::max(); });
+    probe.releaseInputs = true;
+    for (const auto& source : sources) source->release = true;
+    for (size_t i = 2; i < ordinary.size(); ++i) ordinary[i].join();
+    smallCaller.join();
+    largeCaller.join();
+    BOOST_REQUIRE(full);
+    BOOST_REQUIRE(smallQueued);
+    BOOST_REQUIRE(largeQueued);
+    BOOST_REQUIRE(bothQueued);
+    BOOST_CHECK(notRecruited);
+    BOOST_CHECK(!probe.timedOut);
+    BOOST_REQUIRE(recruited);
+    // Small's next index is 1; large's is 3. The first claim identifies which
+    // public validation received the woken helper, without a selection hook.
+    BOOST_CHECK_EQUAL(probe.firstHelperIndex.load(), 3u);
+    BOOST_CHECK(bsv::TxErrorIsOk(smallResult));
+    BOOST_CHECK(bsv::TxErrorIsOk(largeResult));
+    for (size_t i = 0; i < helpers; ++i) {
+        BOOST_CHECK(!sources[i]->timedOut);
+        BOOST_CHECK(bsv::TxErrorIsOk(results[i]));
+    }
+    BOOST_CHECK(PoolIsIdle());
+}
+
 // Every input claimed inside a parallel job sleeps for `delay`; records the
 // most helpers verifying an input at the same moment, process-wide. A helper
 // is any thread other than the test's callers, which mark themselves with
