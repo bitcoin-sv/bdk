@@ -76,6 +76,60 @@ Tag `module/gobdk/v1.4.0` on master after #67 merges.
   entry points do for mismatched sizes. Both overloads also reject trailing bytes with
   `TX_ERR_DOMAIN_EXCEPTION`, as `VerifyScript` and `ValidateTransaction` already do;
   `CheckStandardness` previously ignored those bytes.
+- **Hardware SHA-256 on x86-64 and ARM64.** Every SHA-256 BDK computes during validation
+  (sighash, txid, the hashing opcodes) now runs on the fastest transform the CPU supports,
+  chosen at run time. The 2-way merkle-pair transform is installed too, but BDK validation never
+  computes a merkle root. On x86-64 BDK builds bitcoin-sv's SSE4 and SHA-NI transforms and lets
+  bitcoin-sv's own `sha256_dispatch::AutoDetect()` pick by CPUID. On 64-bit ARM it uses a new
+  backend for the ARMv8 SHA-2 instructions, vendored unchanged from Bitcoin Core v29.0
+  (`core/sha256_arm_shani.cpp`, MIT), for both the streaming transform and the 2-way merkle-pair
+  transform. It is enabled when Linux reports `HWCAP_SHA2` or macOS reports
+  `hw.optional.arm.FEAT_SHA256`; other ARM operating systems, MSVC/clang-cl builds and the WASM build
+  keep the scalar transforms. No file gets instruction-set flags and nothing is built with
+  `-march=native`: the SHA-NI and ARMv8 SHA-2 code is compiled through wrappers
+  (`core/sha256_x86_shani.cpp`, `core/sha256_arm_shani_target.cpp`) that enable the instructions
+  with target pragmas for their own architecture, chosen by the compiler's target macros, so
+  macOS universal, Rosetta and cross builds get the right code in each slice. Each candidate
+  passes a known-answer self-test before it is installed, and the scalar transforms remain the
+  fallback. One M3 core goes from 471 to 2,611 MB/s of raw hashing. Validation speeds up only
+  where hashing is the main cost: txids of large transactions, large scriptCodes in sighash
+  preimages, and the hashing opcodes on large data. Ordinary P2PKH validation, which is mostly
+  signature checks since the shared precompute below, does not change.
+    - **Selection happens once, while BDK is loaded.** A load-time initializer in the object
+      that holds `CSHA256` (`core/sha256_hasher.cpp`, which compiles bitcoin-sv's
+      `crypto/sha256.cpp` for the native core) calls the new `bsv::SelectSha256Backend()`
+      (`core/sha256_backend.hpp`). Anything that can hash links that object, so the dispatch
+      pointers are written before `main()`, before Go runs any `init` function and before any
+      thread can hash; afterwards they are only read. `SelectSha256Backend()` returns what was
+      installed, e.g. `shani,shani(2way)` or `arm_shani,arm_shani(2way)`, and
+      `bsv::Sha256SupportedBackends()` lists every backend the CPU can run. Go has
+      `gobdk.SHA256_BACKEND()` and Rust has `rust_bdk::sha256_backend()` (C ABI
+      `cgo_sha256_backend()` / `bdkffi_sha256_backend()`) for a startup log line.
+    - **`BDK_SHA256_FORCE_SCALAR=1`** keeps the scalar transforms, for debugging and for
+      comparing backends. It is read at load, so it must be in the environment the process
+      starts with: setting it later, for example with Go's `os.Setenv`, has no effect.
+    - **`bdk_core` now defines `sha256_dispatch::AutoDetect()`**, declared in the installed
+      `crypto/sha256_dispatch.h`, so the link gap is closed. Consumers must not call it. On
+      x86-64 it installs SSE4 / SHA-NI regardless of `BDK_SHA256_FORCE_SCALAR`: under forced
+      scalar BDK never calls it, so a direct call is the first write to the dispatch pointers,
+      while the backend string still says `standard(forced)`. Called before any selection, it
+      writes the pointers outside BDK's once-only guard (only possible from another static
+      initializer, since BDK selects at load). On ARM64 it installs nothing. Call
+      `bsv::SelectSha256Backend()` instead.
+    - `test_sha256_backends` checks every backend the runner supports against FIPS 180-4
+      vectors and a seeded differential run, and prints the selected backend and its
+      throughput; CI logs it for each runner. `test_txvalidator`, `test_bsv` and
+      `test_sha256_backends` also run a second time with the scalar transforms forced.
+      `test_sha256_select_race` checks, in a fresh process, that the backend is installed
+      before anything runs, then hashes on 20 threads at once through every binding entry
+      point; a CI job runs it under GCC ThreadSanitizer on x86-64 and ARM64 Linux, with a
+      positive control that must be reported. Another CI job builds a macOS universal
+      `bdk_core` and checks each slice carries its own backend and the load-time selection.
+    - **Archives refreshed before each merge.** Each of #66, #68, #67 refreshes the gobdk
+      archives in its own branch before it merges: merge master in, dispatch
+      `build_bdk.yaml` on the PR branch (gobdk archives), which commits `[GoBDKUpdate]`
+      to the branch, then merge once green. Order #66, #68, #67, so master links for gobdk
+      importers at every commit. `module/gobdk/v1.4.0` is tagged on master after #67.
 - **Script validation of many-input transactions is linear in the input count.**
   `ValidateTransaction` and `VerifyScript` now build one `PrecomputedTransactionData` per
   transaction and share it across all inputs, as SV Node does; `VerifySpend` builds one per call
@@ -109,11 +163,9 @@ Tag `module/gobdk/v1.4.0` on master after #67 merges.
 - **Built against bitcoin-sv 1.2.3** (`6504a3aff65ba97c0f6c80962b033e35ecbfed4b`, tag `v1.2.3`),
   up from 1.2.2. `BSV_CLIENT_VERSION_REVISION` is now `3`. The curated source list gains the
   new SHA-256 dispatcher's header, its scalar stream transform and its scalar 1-way double-SHA-256
-  transform; merkle hashing calls the 1-way transform twice, since the 2-way pointer stays null. The dispatcher's
-  `AutoDetect()` (`src/crypto/sha256_dispatch.cpp`) and the SSE4 and SHA-NI transforms it would
-  install are not built: BDK never calls it, so hashing stays on the scalar path, as it did
-  before. The installed `crypto/sha256_dispatch.h` still declares `sha256_dispatch::AutoDetect()`,
-  but `bdk_core` does not define it, so a C++ consumer that calls it fails to link. Behaviour
+  transform; merkle hashing calls the 1-way transform twice, since the 2-way pointer stays null. (Superseded by the hardware SHA-256
+  entry above: the dispatcher's `AutoDetect()` and its SSE4 and SHA-NI transforms are now built
+  and used.) Behaviour
   changes from upstream that reach BDK: `CScriptNum` now throws `scriptnum_overflow_error` for non-big-int numbers that overflow `int64_t`,
   `OP_SPLIT` rejects split positions above `INT32_MAX`, and `CScriptBase` grows from 28
   to 32 inline bytes. `sizeof(CScript)` stays 40 on 64-bit and wasm32.

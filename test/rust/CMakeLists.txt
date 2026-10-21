@@ -46,3 +46,12 @@ add_test(NAME test_RustBDKLinkage
 set_tests_properties(test_RustBDKLinkage PROPERTIES
   WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
   ENVIRONMENT "CMAKE_BINARY_DIR=${CMAKE_BINARY_DIR};BDK_BUILD_DIR=${CMAKE_BINARY_DIR}")
+
+## The SHA-256 backend getter again, with the scalar transforms forced
+add_test(NAME test_RustBDKSHA256Backend_scalar
+  COMMAND ${CARGO_EXECUTABLE} test --manifest-path ${CMAKE_CURRENT_SOURCE_DIR}/Cargo.toml --test sha256_backend)
+set_tests_properties(test_RustBDKSHA256Backend_scalar PROPERTIES
+  WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+  DEPENDS test_RustBDKLinkage
+  ENVIRONMENT "CMAKE_BINARY_DIR=${CMAKE_BINARY_DIR};BDK_BUILD_DIR=${CMAKE_BINARY_DIR};BDK_SHA256_FORCE_SCALAR=1"
+  TIMEOUT 1200)
