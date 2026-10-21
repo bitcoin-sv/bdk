@@ -9,14 +9,6 @@ generated version header (`core/BDKVersion.h` / `module/gobdk/version.go`) at bu
 For the detailed list of changes, see the project's commit history / changelog. This file is
 installed alongside the package (`CMakeLists.txt`).
 
-## Release sequence for #66, #68 and #67
-
-Merge in order: #66, #68, then #67. Before each PR merges, merge master into that
-PR branch and dispatch `build_bdk.yaml` on the branch to refresh the gobdk archives.
-The workflow commits `[GoBDKUpdate]` to that branch; merge only after its checks are
-green. This keeps master linkable for gobdk importers at every commit.
-Tag `module/gobdk/v1.4.0` on master after #67 merges.
-
 ## Recent changes
 
 - **A transaction with 16 or more inputs is verified on several cores.** `ValidateTransaction`,
@@ -62,8 +54,9 @@ Tag `module/gobdk/v1.4.0` on master after #67 merges.
   token; Go has `ValidateTransactionContext`, `VerifyScriptContext`,
   `VerifyScriptWithCustomFlagsContext` and `ValidateBatchContext`; Rust has `*_cancellable`
   methods with a `CancelFlag`. A cancelled call returns the new `TX_ERR_DOMAIN_CANCELLED` (5),
-  Go `*CancelledError` / `ErrCancelled`, Rust `TxError::Cancelled`: no verdict, never a script
-  or DoS error. Existing functions are unchanged. Rust's `TxError` is now `#[non_exhaustive]`;
+  Go `*CancelledError` / `ErrCancelled`, Rust `TxError::Cancelled`: no validation verdict.
+  Existing `CheckStandardness` calls now return `TX_ERR_DOMAIN_EXCEPTION` for mismatched
+  UTXO height counts or trailing bytes, as detailed below. Rust's `TxError` is now `#[non_exhaustive]`;
   as that breaks exhaustive matches, `rust-bdk` and `bdk-sys` move to 0.2.0.
   See [ObjectModel](documentation/docs/ObjectModel.md#cancellation).
 - **Go cancellation causes stay separate from validation errors.**
@@ -125,11 +118,6 @@ Tag `module/gobdk/v1.4.0` on master after #67 merges.
       point; a CI job runs it under GCC ThreadSanitizer on x86-64 and ARM64 Linux, with a
       positive control that must be reported. Another CI job builds a macOS universal
       `bdk_core` and checks each slice carries its own backend and the load-time selection.
-    - **Archives refreshed before each merge.** Each of #66, #68, #67 refreshes the gobdk
-      archives in its own branch before it merges: merge master in, dispatch
-      `build_bdk.yaml` on the PR branch (gobdk archives), which commits `[GoBDKUpdate]`
-      to the branch, then merge once green. Order #66, #68, #67, so master links for gobdk
-      importers at every commit. `module/gobdk/v1.4.0` is tagged on master after #67.
 - **Script validation of many-input transactions is linear in the input count.**
   `ValidateTransaction` and `VerifyScript` now build one `PrecomputedTransactionData` per
   transaction and share it across all inputs, as SV Node does; `VerifySpend` builds one per call
