@@ -45,3 +45,10 @@ func BDK_GOLANG_VERSION_MAJOR() int     { return int(C.BDK_GOLANG_VERSION_MAJOR)
 func BDK_GOLANG_VERSION_MINOR() int     { return int(C.BDK_GOLANG_VERSION_MINOR) }
 func BDK_GOLANG_VERSION_PATCH() int     { return int(C.BDK_GOLANG_VERSION_PATCH) }
 func BDK_GOLANG_VERSION_STRING() string { return C.GoString(C.BDK_GOLANG_VERSION_STRING) }
+
+// SHA256_BACKEND returns the SHA-256 transforms BDK hashes with on this CPU, e.g.
+// "shani,shani(2way)", "sse4", "arm_shani,arm_shani(2way)" or "standard", and
+// "standard(forced)" when BDK_SHA256_FORCE_SCALAR is set. BDK selects the backend
+// while the program is loaded, from the environment it starts with; this only
+// reports it.
+func SHA256_BACKEND() string { return C.GoString(C.cgo_sha256_backend()) }

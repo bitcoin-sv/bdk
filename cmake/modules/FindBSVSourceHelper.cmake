@@ -184,9 +184,9 @@ function(bdkSetMinimumListBSVSource)############################################
       "src/crypto/hmac_sha512.cpp"
       "src/crypto/ripemd160.cpp"
       "src/crypto/sha1.cpp"
-      "src/crypto/sha256.cpp"  ##  The dispatcher's AutoDetect() (sha256_dispatch.cpp) and the SSE4 and
-                               ##  SHA-NI transforms it installs are not built: BDK never calls it, so
-                               ##  the header's scalar defaults are the only transforms in use
+      "src/crypto/sha256.cpp"  ##  The dispatcher's AutoDetect() (sha256_dispatch.cpp) and the x86 SSE4 and
+                               ##  SHA-NI transforms are added to the native bdk_core only, in
+                               ##  core/CMakeLists.txt; the wasm variant keeps the scalar defaults
       "src/crypto/sha256_stream_scalar.cpp"
       "src/crypto/sha256d64_scalar.cpp"
       "src/crypto/sha512.cpp"

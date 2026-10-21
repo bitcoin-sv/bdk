@@ -34,6 +34,11 @@ pub struct TxError {
 
 pub type bdkffi_TxError = TxError;
 
+// bdkffi/sha256.h
+unsafe extern "C" {
+    pub fn bdkffi_sha256_backend() -> *const c_char;
+}
+
 // bdkffi/txvalidator.h
 // bdkffi_*_t mirrors the C typedef; *Handle preserves the Stage-2 Rust alias.
 pub type bdkffi_txvalidator_t = *mut c_void;
