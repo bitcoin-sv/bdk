@@ -27,7 +27,9 @@ installed alongside the package (`CMakeLists.txt`).
 - **`CheckStandardness` checks it has one UTXO height per input.** Where policy reads heights,
   a shorter span used to be read past its end. Where it does not (the post-Genesis default),
   mismatched sizes used to pass. Both cases now give `TX_ERR_DOMAIN_EXCEPTION`, as the other
-  entry points do for mismatched sizes.
+  entry points do for mismatched sizes. Both overloads also reject trailing bytes with
+  `TX_ERR_DOMAIN_EXCEPTION`, as `VerifyScript` and `ValidateTransaction` already do;
+  `CheckStandardness` previously ignored those bytes.
 - **Script validation of many-input transactions is linear in the input count.**
   `ValidateTransaction` and `VerifyScript` now build one `PrecomputedTransactionData` per
   transaction and share it across all inputs, as SV Node does; `VerifySpend` builds one per call
