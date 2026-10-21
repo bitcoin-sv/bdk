@@ -4270,6 +4270,100 @@ BOOST_AUTO_TEST_CASE(uncancelled_tail_wait_does_not_busy_poll, PARALLEL_TEST_CAS
 #endif
 }
 
+// Throw between claims, before normal close/Finish. Later token reads count
+// instead of throwing again, so polling during unwind fails without terminating.
+class ThrowBeforeCallerCloses final : public task::CCancellationSource {
+public:
+    ThrowBeforeCallerCloses() : owner{ std::this_thread::get_id() }
+    {
+        active = this;
+        previousAllocation = bsv::detail::SetInputSourceAllocationHookForTesting(&Allocate);
+        previousInput = bsv::detail::SetInputHookForTesting(&Input);
+        previousPool = bsv::detail::SetInputPoolHookForTesting(&Pool);
+    }
+    ~ThrowBeforeCallerCloses()
+    {
+        bsv::detail::SetInputSourceAllocationHookForTesting(previousAllocation);
+        bsv::detail::SetInputHookForTesting(previousInput);
+        bsv::detail::SetInputPoolHookForTesting(previousPool);
+        bsv::detail::WakeInputHelpersForTesting();
+        active = nullptr;
+    }
+    bool IsCanceled() override
+    {
+        if (std::this_thread::get_id() != owner) { ++wrongThreadReads; return false; }
+        if (threw.load()) { ++cleanupPolls; return false; }
+        if (callerVerifiedZero.load()) {
+            threw = true;
+            throw std::runtime_error("pre-claim token failure");
+        }
+        return false;
+    }
+    std::atomic<bool> callerClaimed{ false }, helperClaimed{ false }, callerVerifiedZero{ false };
+    std::atomic<bool> closed{ false }, threw{ false }, timedOut{ false }, helperHeld{ false };
+    std::atomic<size_t> cleanupPolls{ 0 }, wrongThreadReads{ 0 }, closeCalls{ 0 };
+private:
+    static void Allocate(bool helper)
+    {
+        auto& self = *active.load();
+        if (helper && !WaitFor([&] { return self.callerClaimed.load(); })) self.timedOut = true;
+    }
+    static void Pool(bsv::detail::InputPoolEvent event)
+    {
+        if (event != bsv::detail::InputPoolEvent::JobClosed) return;
+        auto& self = *active.load();
+        if (std::this_thread::get_id() == self.owner) {
+            ++self.closeCalls;
+            self.closed = true;
+        }
+    }
+    static void Input(size_t index, bsv::detail::InputEvent event)
+    {
+        auto& self = *active.load();
+        const bool caller = std::this_thread::get_id() == self.owner;
+        if (caller && index == 0 && event == bsv::detail::InputEvent::Claimed) {
+            self.callerClaimed = true;
+            if (!WaitFor([&] { return self.helperClaimed.load(); })) self.timedOut = true;
+        }
+        if (!caller && index == 1 && event == bsv::detail::InputEvent::Claimed) self.helperClaimed = true;
+        if (caller && index == 0 && event == bsv::detail::InputEvent::Verified) self.callerVerifiedZero = true;
+        if (!caller && index == 1 && event == bsv::detail::InputEvent::Polled && !self.helperHeld.exchange(true)) {
+            if (!WaitFor([&] { return self.closed.load(); })) self.timedOut = true;
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+    }
+    const std::thread::id owner;
+    bsv::detail::InputSourceAllocationHook previousAllocation;
+    bsv::detail::InputHook previousInput;
+    bsv::detail::InputPoolHook previousPool;
+    static inline std::atomic<ThrowBeforeCallerCloses*> active{ nullptr };
+};
+
+BOOST_AUTO_TEST_CASE(preclaim_token_throw_never_repolls_in_unwind, PARALLEL_TEST_CASE_DECORATORS)
+{
+    if (!PoolHasHelpers()) return;
+    const bsv::CTxValidator validator(CBaseChainParams::REGTEST);
+    auto tx = EarlyStopSpend(0);
+    for (size_t i = 0; i < 32; ++i)
+        if (i != 1) tx.vutxo[i].scriptPubKey = CScript() << OP_TRUE;
+    const InputThresholdGuard parallel(FORCE_PARALLEL);
+    const HelperLimitGuard oneHelper(1);
+    BOOST_REQUIRE(PoolIsIdle());
+    const auto source = std::make_shared<ThrowBeforeCallerCloses>();
+    const auto result = validator.ValidateTransaction(SerializeExtended(tx), std::vector<int32_t>(32, 19000), 20000, true, source->GetToken());
+    BOOST_CHECK(source->callerVerifiedZero);
+    BOOST_CHECK(source->helperClaimed);
+    BOOST_CHECK(source->helperHeld);
+    BOOST_CHECK(source->threw);
+    BOOST_CHECK(!source->timedOut);
+    BOOST_CHECK_EQUAL(source->closeCalls.load(), 1u);
+    BOOST_CHECK_EQUAL(source->cleanupPolls.load(), 0u);
+    BOOST_CHECK_EQUAL(source->wrongThreadReads.load(), 0u);
+    BOOST_CHECK_EQUAL(result.domain, TX_ERR_DOMAIN_EXCEPTION);
+    BOOST_CHECK(PoolIsIdle());
+    BOOST_TEST_MESSAGE("preclaim throw cleanup polls=" << source->cleanupPolls);
+}
+
 class HeldJobInputs {
 public:
     HeldJobInputs()
