@@ -832,15 +832,16 @@ TxError bsv::CTxValidator::VerifyScript(std::span<const uint8_t> extendedTX, std
         bsv::CMutableTransactionExtended eTX;
         tx_stream >> eTX;
 
-        if (!tx_stream.empty())
-            throw std::runtime_error("error serializing extended tx");
-
         const CTransaction ctx(eTX.mtx);
         // Deserialising is linear in the transaction size with no poll inside;
         // check before implVerifyScript's argument checks can throw. It polls again
         // once it has built the shared signature-hash data.
         if (token.IsCanceled())
             return bsv::TxErrorCancelled();
+
+        if (!tx_stream.empty())
+            throw std::runtime_error("error serializing extended tx");
+
         return implVerifyScript(ctx, eTX.vutxo, utxoHeights, blockHeight, consensus, customFlags, token);
     }
     catch (const std::exception&) {
@@ -888,14 +889,15 @@ TxError bsv::CTxValidator::VerifySpend(
         CMutableTransaction mutableTx;
         tx_stream >> mutableTx;
 
-        if (!tx_stream.empty())
-            throw std::runtime_error("error serializing transaction");
-
         const CTransaction tx(std::move(mutableTx));
         // Deserialising is linear in the transaction size with no poll inside;
         // check before the checks below can return a result.
         if (token.IsCanceled())
             return bsv::TxErrorCancelled();
+
+        if (!tx_stream.empty())
+            throw std::runtime_error("error serializing transaction");
+
         if (inputIndex >= tx.vin.size())
             throw std::runtime_error("input index is out of range");
         if (consensus && utxoHeight == MEMPOOL_HEIGHT)
@@ -964,12 +966,13 @@ TxError bsv::CTxValidator::CheckStandardness(std::span<const uint8_t> extendedTX
         bsv::CMutableTransactionExtended eTX;
         tx_stream >> eTX;
 
-        if (!tx_stream.empty())
-            throw std::runtime_error("error serializing extended tx");
-
         const CTransaction ctx(eTX.mtx);
         if (token.IsCanceled())
             return bsv::TxErrorCancelled();
+
+        if (!tx_stream.empty())
+            throw std::runtime_error("error serializing extended tx");
+
         return implCheckStandardness(ctx, eTX.vutxo, utxoHeights, blockHeight, token);
     }
     catch (const std::exception&) {
@@ -1200,9 +1203,6 @@ TxError bsv::CTxValidator::ValidateTransaction(std::span<const uint8_t> extended
         bsv::CMutableTransactionExtended eTX;
         tx_stream >> eTX;
 
-        if (!tx_stream.empty())
-            throw std::runtime_error("error serializing extended tx");
-
         const CTransaction ctx(eTX.mtx);
 
         // Polled here, below between groups of checks, and in implVerifyScript once
@@ -1213,6 +1213,9 @@ TxError bsv::CTxValidator::ValidateTransaction(std::span<const uint8_t> extended
         // data. Each is linear in the transaction size.
         if (token.IsCanceled())
             return bsv::TxErrorCancelled();
+
+        if (!tx_stream.empty())
+            throw std::runtime_error("error serializing extended tx");
 
         if (ctx.IsCoinBase())
             return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::CoinbaseNotAllowed));

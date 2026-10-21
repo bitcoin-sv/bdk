@@ -688,6 +688,45 @@ BOOST_AUTO_TEST_CASE(check_standardness_rejects_trailing_bytes)
     }
 }
 
+// Cancellation after the entry poll wins over a suffix found after parsing.
+BOOST_AUTO_TEST_CASE(post_deserialisation_cancel_precedes_trailing_bytes)
+{
+    const bsv::CTxValidator validator("main");
+    auto extended = ParseHex(kValidTxHex);
+    extended.push_back(0);
+    auto plain = PlainEmptyScriptSigTx();
+    plain.push_back(0);
+    const std::vector<uint8_t> lockingScript{ OP_TRUE };
+
+    const auto check = [&](const char* entry, const auto& call) {
+        BOOST_TEST_CONTEXT(entry) {
+            const auto liveToken = task::CCancellationSource::Make()->GetToken();
+            BOOST_CHECK_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_EXCEPTION), call(liveToken).domain);
+            // First poll answers false, then cancels: parsing starts with a live
+            // result from the poll, but finishes with the source already cancelled.
+            const auto source = RecordingSource::Make(1);
+            BOOST_CHECK_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_CANCELLED), call(source->GetToken()).domain);
+            BOOST_CHECK_EQUAL(2u, source->polls());
+        }
+    };
+    for (const bool consensus : { true, false }) {
+        BOOST_TEST_CONTEXT("consensus=" << consensus) {
+            check("VerifyScript", [&](const auto& token) {
+                return validator.VerifyScript(extended, kValidTxUtxoHeights, kValidTxBlockHeight, consensus, {}, token);
+            });
+            check("ValidateTransaction", [&](const auto& token) {
+                return validator.ValidateTransaction(extended, kValidTxUtxoHeights, kValidTxBlockHeight, consensus, token);
+            });
+            check("VerifySpend", [&](const auto& token) {
+                return validator.VerifySpend(plain, 0, lockingScript, 1000, kSimpleUtxoHeights[0], kSimpleBlockHeight, consensus, std::nullopt, token);
+            });
+        }
+    }
+    check("CheckStandardness", [&](const auto& token) {
+        return validator.CheckStandardness(extended, kValidTxUtxoHeights, kValidTxBlockHeight, token);
+    });
+}
+
 // VerifySpend passes the caller's token to the interpreter: a cancel from another
 // thread while its script runs stops it, as for ValidateTransaction.
 BOOST_AUTO_TEST_CASE(verify_spend_cancelled_mid_script_returns_cancelled_promptly)
