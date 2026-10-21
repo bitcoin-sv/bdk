@@ -337,14 +337,16 @@ private:
  * creates the pool.
  *
  * Cancellation: only the calling thread polls the caller's token, between its
- * input claims and in its interpreter, publishing observed cancellation to a
- * job flag. Each participant reuses a source combining that flag with
- * lowestFailure < its current input index; helpers never read the caller token.
+ * input claims, at interpreter poll points and during its wait for joined
+ * helpers, publishing observed cancellation to a job flag. A pre-claim token
+ * exception also publishes that flag before unwinding. Each participant reuses
+ * a source combining it with lowestFailure < its current input index; helpers
+ * never read the caller token.
  * Higher inputs stop at their next interpreter poll. After joined helpers drain,
  * return a real failure only if every lower input completed, or success if all
  * inputs passed. Necessary work abandoned due to cancellation returns CANCELLED.
- * There is no post-drain token poll, so late cancellation keeps a completed
- * verdict and a caller-thread CPU budget excludes helper CPU.
+ * A completed verdict survives cancellation or a token exception observed
+ * during the wait. A caller-thread CPU budget excludes helper CPU.
  *
  * Shared by all participants, read only: the CTransaction, its
  * PrecomputedTransactionData, the previous outputs, heights and flags, and the
@@ -454,10 +456,17 @@ public:
             // drain wait separately polls while joined helpers remain.
             if (!HasWork())
                 return verified;
-            if (helper == nullptr && callerToken_.IsCanceled()) {
-                callerCancelled_.store(true, std::memory_order_relaxed);
-                if (pollHook)
-                    pollHook(next_.load(std::memory_order_relaxed), bsv::detail::InputEvent::CallerCancelled);
+            if (helper == nullptr) {
+                try {
+                    if (callerToken_.IsCanceled()) {
+                        callerCancelled_.store(true, std::memory_order_relaxed);
+                        if (pollHook)
+                            pollHook(next_.load(std::memory_order_relaxed), bsv::detail::InputEvent::CallerCancelled);
+                    }
+                } catch (...) {
+                    callerCancelled_.store(true, std::memory_order_relaxed);
+                    throw;
+                }
             }
             if (callerCancelled_.load(std::memory_order_relaxed))
                 return verified;
@@ -1861,7 +1870,7 @@ TxError bsv::CTxValidator::implVerifyScript(
             }
             if (job) {
                 std::optional<size_t> verified;
-                {
+                try {
                     JobCaller caller(*pool, job);
                     verified = job->Work();
                     if (!verified)
@@ -1869,6 +1878,12 @@ TxError bsv::CTxValidator::implVerifyScript(
                     if (inputCountersEnabled.load(std::memory_order_relaxed))
                         jobVerifiedInputs.fetch_add(verified.value_or(0), std::memory_order_relaxed);
                     caller.Finish();
+                } catch (...) {
+                    // JobCaller has drained every joined helper. A token
+                    // exception must not discard their definitive verdict.
+                    if (const auto result = job->CompletedResult())
+                        return *result;
+                    throw;
                 }
                 // Setup failure must not discard a verdict already completed
                 // by helpers. Replay serially only if that job is unfinished.

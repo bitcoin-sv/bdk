@@ -4068,7 +4068,7 @@ private:
 // inputs are short. Cancellation starts only after the caller closes the job.
 class CancelWhileCallerWaits final : public task::CCancellationSource {
 public:
-    enum class Action { CancelRunning, CancelCompleted, Throw, Idle };
+    enum class Action { CancelRunning, CancelCompleted, Throw, ThrowAfterFailure, ThrowCompleted, Idle };
     explicit CancelWhileCallerWaits(Action action = Action::CancelRunning)
         : owner{ std::this_thread::get_id() }, action{ action }
     {
@@ -4090,7 +4090,8 @@ public:
         if (std::this_thread::get_id() != owner) ++wrongThreadReads;
         else if (closed.load()) {
             ++waitPolls;
-            if (action == Action::Throw) {
+            if (action == Action::Throw || action == Action::ThrowAfterFailure
+                || (action == Action::ThrowCompleted && completed.load())) {
                 threw = true;
                 throw std::runtime_error("wait token failure");
             }
@@ -4098,7 +4099,7 @@ public:
         return CCancellationSource::IsCanceled();
     }
     std::atomic<bool> callerClaimed{ false }, helperClaimed{ false }, closed{ false };
-    std::atomic<bool> published{ false }, timedOut{ false }, threw{ false };
+    std::atomic<bool> published{ false }, timedOut{ false }, threw{ false }, completed{ false };
     std::atomic<size_t> helperPolls{ 0 }, waitPolls{ 0 }, wrongThreadReads{ 0 }, closeCalls{ 0 };
     auto WaitWallMicros() const { return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - closeWall).count(); }
 #ifdef BOOST_CHRONO_HAS_THREAD_CLOCK
@@ -4136,18 +4137,22 @@ private:
         if (event == bsv::detail::InputEvent::Polled && !caller && index == 1) {
             if (!WaitFor([&] { return self.closed.load(); })) self.timedOut = true;
             const size_t count = ++self.helperPolls;
+            if (self.action == Action::ThrowAfterFailure && count == 1)
+                self.Trigger();
             if (self.action == Action::Idle && count == 1)
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
             if ((self.action == Action::CancelRunning || self.action == Action::Throw) && count == 8)
                 self.Trigger();
         }
         if (event == bsv::detail::InputEvent::Verified && !caller && index == 1
-            && self.action == Action::CancelCompleted)
+            && (self.action == Action::CancelCompleted || self.action == Action::ThrowCompleted)) {
+            self.completed = true;
             self.Trigger();
+        }
     }
     void Trigger()
     {
-        if (action != Action::Throw) Cancel();
+        if (action == Action::CancelRunning || action == Action::CancelCompleted) Cancel();
         // A missing wait poll releases after a diagnostic timeout, so it fails
         // assertions rather than hanging the binary.
         if (!WaitFor([&] { return published.load() || threw.load(); }, std::chrono::milliseconds(1000)))
@@ -4247,6 +4252,44 @@ BOOST_AUTO_TEST_CASE(throwing_wait_token_drains_helpers_before_return, PARALLEL_
     BOOST_CHECK(PoolIsIdle());
 }
 
+BOOST_AUTO_TEST_CASE(throwing_wait_token_keeps_completed_verdict, PARALLEL_TEST_CASE_DECORATORS)
+{
+    if (!PoolHasHelpers()) return;
+    const bsv::CTxValidator validator(CBaseChainParams::REGTEST);
+    const std::vector<int32_t> heights(32, 19000);
+    const HelperLimitGuard oneHelper(1);
+    for (const size_t bad : { size_t{0}, size_t{1}, size_t{32} }) {
+        auto tx = EarlyStopSpend(0);
+        for (size_t i = 0; i < 32; ++i)
+            if (i != 1) tx.vutxo[i].scriptPubKey = i == bad ? CScript() << OP_FALSE : CScript() << OP_TRUE;
+        if (bad == 1) tx.vutxo[1].scriptPubKey << OP_FALSE;
+        const auto bin = SerializeExtended(tx);
+        TxError serial;
+        {
+            const InputThresholdGuard serialOnly(FORCE_SERIAL);
+            serial = validator.ValidateTransaction(bin, heights, 20000, true);
+            BOOST_REQUIRE_EQUAL(serial.domain, bad < 32 ? TX_ERR_DOMAIN_SCRIPT : TX_ERR_DOMAIN_OK);
+        }
+        const InputThresholdGuard parallel(FORCE_PARALLEL);
+        BOOST_REQUIRE(PoolIsIdle());
+        const auto action = bad == 0 ? CancelWhileCallerWaits::Action::ThrowAfterFailure
+                                     : CancelWhileCallerWaits::Action::ThrowCompleted;
+        const auto source = std::make_shared<CancelWhileCallerWaits>(action);
+        const auto result = validator.ValidateTransaction(bin, heights, 20000, true, source->GetToken());
+        BOOST_CHECK(source->callerClaimed);
+        BOOST_CHECK(source->helperClaimed);
+        BOOST_CHECK(source->threw);
+        if (bad != 0) BOOST_CHECK(source->completed);
+        BOOST_CHECK(!source->timedOut);
+        BOOST_CHECK_GT(source->waitPolls.load(), 0u);
+        BOOST_CHECK_EQUAL(source->wrongThreadReads.load(), 0u);
+        BOOST_CHECK_EQUAL(source->closeCalls.load(), 1u);
+        BOOST_CHECK_MESSAGE(SameTxError(result, serial), "bad=" << bad << " parallel="
+            << result.domain << "/" << result.code << " serial=" << serial.domain << "/" << serial.code);
+        BOOST_CHECK(PoolIsIdle());
+    }
+}
+
 BOOST_AUTO_TEST_CASE(uncancelled_tail_wait_does_not_busy_poll, PARALLEL_TEST_CASE_DECORATORS)
 {
     if (!PoolHasHelpers()) return;
@@ -4274,7 +4317,8 @@ BOOST_AUTO_TEST_CASE(uncancelled_tail_wait_does_not_busy_poll, PARALLEL_TEST_CAS
 // instead of throwing again, so polling during unwind fails without terminating.
 class ThrowBeforeCallerCloses final : public task::CCancellationSource {
 public:
-    ThrowBeforeCallerCloses() : owner{ std::this_thread::get_id() }
+    explicit ThrowBeforeCallerCloses(bool promptStop = false)
+        : owner{ std::this_thread::get_id() }, promptStop_{ promptStop }
     {
         active = this;
         previousAllocation = bsv::detail::SetInputSourceAllocationHookForTesting(&Allocate);
@@ -4302,6 +4346,7 @@ public:
     std::atomic<bool> callerClaimed{ false }, helperClaimed{ false }, callerVerifiedZero{ false };
     std::atomic<bool> closed{ false }, threw{ false }, timedOut{ false }, helperHeld{ false };
     std::atomic<size_t> cleanupPolls{ 0 }, wrongThreadReads{ 0 }, closeCalls{ 0 };
+    std::atomic<size_t> helperPolls{ 0 }, helperClaims{ 0 };
 private:
     static void Allocate(bool helper)
     {
@@ -4325,14 +4370,21 @@ private:
             self.callerClaimed = true;
             if (!WaitFor([&] { return self.helperClaimed.load(); })) self.timedOut = true;
         }
-        if (!caller && index == 1 && event == bsv::detail::InputEvent::Claimed) self.helperClaimed = true;
+        if (!caller && event == bsv::detail::InputEvent::Claimed) {
+            ++self.helperClaims;
+            if (index == 1) self.helperClaimed = true;
+        }
         if (caller && index == 0 && event == bsv::detail::InputEvent::Verified) self.callerVerifiedZero = true;
-        if (!caller && index == 1 && event == bsv::detail::InputEvent::Polled && !self.helperHeld.exchange(true)) {
-            if (!WaitFor([&] { return self.closed.load(); })) self.timedOut = true;
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        if (!caller && index == 1 && event == bsv::detail::InputEvent::Polled) {
+            ++self.helperPolls;
+            if (!self.helperHeld.exchange(true)) {
+                if (!WaitFor([&] { return self.closed.load(); })) self.timedOut = true;
+                if (!self.promptStop_) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
         }
     }
     const std::thread::id owner;
+    const bool promptStop_;
     bsv::detail::InputSourceAllocationHook previousAllocation;
     bsv::detail::InputHook previousInput;
     bsv::detail::InputPoolHook previousPool;
@@ -4362,6 +4414,34 @@ BOOST_AUTO_TEST_CASE(preclaim_token_throw_never_repolls_in_unwind, PARALLEL_TEST
     BOOST_CHECK_EQUAL(result.domain, TX_ERR_DOMAIN_EXCEPTION);
     BOOST_CHECK(PoolIsIdle());
     BOOST_TEST_MESSAGE("preclaim throw cleanup polls=" << source->cleanupPolls);
+}
+
+BOOST_AUTO_TEST_CASE(preclaim_token_throw_stops_helpers_at_next_poll, PARALLEL_TEST_CASE_DECORATORS)
+{
+    if (!PoolHasHelpers()) return;
+    const bsv::CTxValidator validator(CBaseChainParams::REGTEST);
+    auto tx = EarlyStopSpend(0);
+    for (size_t i = 0; i < 32; ++i)
+        if (i != 1) tx.vutxo[i].scriptPubKey = CScript() << OP_TRUE;
+    const InputThresholdGuard parallel(FORCE_PARALLEL);
+    const HelperLimitGuard oneHelper(1);
+    BOOST_REQUIRE(PoolIsIdle());
+    const auto source = std::make_shared<ThrowBeforeCallerCloses>(true);
+    const auto result = validator.ValidateTransaction(SerializeExtended(tx), std::vector<int32_t>(32, 19000), 20000, true, source->GetToken());
+    BOOST_CHECK(source->callerVerifiedZero);
+    BOOST_CHECK(source->helperClaimed);
+    BOOST_CHECK(source->helperHeld);
+    BOOST_CHECK(source->threw);
+    BOOST_CHECK(!source->timedOut);
+    BOOST_CHECK_EQUAL(source->closeCalls.load(), 1u);
+    BOOST_CHECK_EQUAL(source->cleanupPolls.load(), 0u);
+    BOOST_CHECK_EQUAL(source->wrongThreadReads.load(), 0u);
+    BOOST_CHECK_GE(source->helperPolls.load(), 1u);
+    BOOST_CHECK_LT(source->helperPolls.load(), 32u);
+    BOOST_CHECK_EQUAL(source->helperClaims.load(), 1u);
+    BOOST_CHECK_EQUAL(result.domain, TX_ERR_DOMAIN_EXCEPTION);
+    BOOST_CHECK(PoolIsIdle());
+    BOOST_TEST_MESSAGE("preclaim throw helper polls=" << source->helperPolls << " claims=" << source->helperClaims);
 }
 
 class HeldJobInputs {
