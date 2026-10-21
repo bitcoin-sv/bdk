@@ -450,28 +450,25 @@ func TestContextCallsLeaveNoGoroutines(t *testing.T) {
 // one P2PKH input (one signature check), valid at block 620940.
 const cancelTestP2PKHTxHex = "010000000000000000ef0120fa0d2c5974cfe6e3aec71f7f6539cfa1c1e474082d2cdb41fb830f6267b7d7000000006b4830450221008788b545ebd6ebcb15f938045b71c1fa7efafd55d1f4e64e96602a04f3214cda0220717ddadfa7d1dc6a22ccb077350aef7a2073ee58fe780d86b77a31c24c664a21412103ef28c47337b05ec3f14b63d904db7ae023e897389dbdbf531221e13fd5e5b105ffffffffdc3de103000000001976a91437fb14a40d021abbb1763497f963a130286d1ad188ac017239e103000000001976a914962eba38504bcfb140ff0246afa795658812b42788ac00000000"
 
-// Prints the cost of a live context over the plain call to the test log (ctest keeps
-// it in LastTest.log), per platform. Not an assertion: CI machines are too noisy.
-func TestContextOverheadReport(t *testing.T) {
+// Measures the cost of a live context over the plain call when explicitly requested.
+func BenchmarkContextOverhead(b *testing.B) {
 	se := goscript.NewTxValidator("main")
 	tx, err := hex.DecodeString(cancelTestP2PKHTxHex)
-	require.NoError(t, err)
+	require.NoError(b, err)
 	utxo := []int32{574441}
 	const height = int32(620940)
-	require.NoError(t, se.ValidateTransaction(tx, utxo, height, true))
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	plain := testing.Benchmark(func(b *testing.B) {
+	require.NoError(b, se.ValidateTransaction(tx, utxo, height, true))
+	require.NoError(b, se.ValidateTransactionContext(ctx, tx, utxo, height, true))
+	b.Run("Plain", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			_ = se.ValidateTransaction(tx, utxo, height, true)
 		}
 	})
-	withCtx := testing.Benchmark(func(b *testing.B) {
+	b.Run("Context", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			_ = se.ValidateTransactionContext(ctx, tx, utxo, height, true)
 		}
 	})
-	fmt.Printf("[context_overhead] goos=%s goarch=%s inputs=1 plain_ns=%d context_ns=%d delta_ns=%d\n",
-		runtime.GOOS, runtime.GOARCH, plain.NsPerOp(), withCtx.NsPerOp(), withCtx.NsPerOp()-plain.NsPerOp())
 }
