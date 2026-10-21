@@ -590,7 +590,7 @@ func (se *TxValidator) ValidateBatchContext(ctx context.Context, batch *Validate
 // ValidateTransactionContext is ValidateTransaction, cancellable through ctx.
 //
 // When ctx is done before BDK reaches a verdict, the result is a *CancelledError:
-// errors.Is(err, ErrCancelled) is true, its Cause() method returns context.Cause(ctx),
+// errors.Is(err, ErrCancelled) is true, its ContextCause() method returns context.Cause(ctx),
 // and errors.As never finds a ScriptError, DoSError or ABIError in it, whatever the
 // cause. It says nothing about the
 // transaction, in consensus and policy mode alike. BDK checks for cancellation at
@@ -683,7 +683,7 @@ func translateTxError(r C.TxError) error {
 }
 
 // translateTxErrorContext is translateTxError for a call cancellable through ctx: a
-// cancelled result records context.Cause(ctx), returned by its Cause method.
+// cancelled result records context.Cause(ctx), returned by its ContextCause method.
 func translateTxErrorContext(ctx context.Context, r C.TxError) error {
 	if r.domain == C.TX_ERR_DOMAIN_CANCELLED {
 		return newCancelledError(ctx)
