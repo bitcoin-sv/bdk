@@ -164,14 +164,18 @@ func run(sh *shape, r *result, cacheDir string, minTime, maxTime time.Duration, 
 		iters = minIters
 	}
 
+	// Run at least iters iterations, and keep going until minTime has passed: the
+	// first call carries one-time costs, so the estimate above can fall short.
 	cpu0 := cpuTime()
 	t0 = time.Now()
-	for i := 0; i < iters; i++ {
+	n := 0
+	for ; n < iters || time.Since(t0) < minTime; n++ {
 		if err := validate(); !check(err) {
-			r.Status, r.Error = "wrong_verdict", fmt.Sprintf("iteration %d: want valid=%v, got %v", i, sh.wantValid, err)
+			r.Status, r.Error = "wrong_verdict", fmt.Sprintf("iteration %d: want valid=%v, got %v", n, sh.wantValid, err)
 			return 1
 		}
 	}
+	iters = n
 	wall := time.Since(t0)
 	cpu := cpuTime() - cpu0
 
