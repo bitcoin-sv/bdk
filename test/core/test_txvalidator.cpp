@@ -58,9 +58,9 @@ class MyParams : public CChainParams {
 public:
     static const std::string CustomName;
 
-    MyParams() {
-    }
+    MyParams() = default;
 };
+
 const std::string MyParams::CustomName = "MyParams";
 
 // Registration custom chain params
