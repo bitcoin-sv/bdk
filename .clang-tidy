@@ -49,7 +49,6 @@ Checks: >
   performance-*,
   -performance-enum-size,
   -performance-inefficient-vector-operation,
-  -performance-move-const-arg,
 
   readability-container-size-empty,
   readability-delete-null-pointer,

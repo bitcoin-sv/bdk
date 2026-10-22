@@ -48,7 +48,7 @@ cpp_int ParseDecimal(const std::string& text)
         result += text[position] - '0';
         ++position;
     }
-    return SignedMagnitude(std::move(result), negative);
+    return SignedMagnitude(result, negative);
 }
 
 std::vector<uint8_t> MagnitudeBytes(const cpp_int& value)

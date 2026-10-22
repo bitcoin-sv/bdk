@@ -94,7 +94,7 @@ extern "C" void bdkffi_validatebatch_add(
             int32_span(utxo_heights, utxo_heights_len),
             block_height,
             consensus);
-        checked_batch(batch)->add(std::move(arg));
+        checked_batch(batch)->add(arg);
     } catch (const std::exception& e) {
         log_exception(__func__, e.what());
     } catch (...) {

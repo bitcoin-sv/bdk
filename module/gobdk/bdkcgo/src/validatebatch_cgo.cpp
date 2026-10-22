@@ -58,7 +58,7 @@ TxError ValidateBatch_Add(
 
         // Create ValidateArg and add to batch
         bsv::ValidateArg arg(extendedTx, hUTXOs, blockHeight, consensus);
-        static_cast<bsv::ValidateBatch*>(cgoBatch)->add(std::move(arg));
+        static_cast<bsv::ValidateBatch*>(cgoBatch)->add(arg);
         return bsv::TxErrorOk();
     }
     catch (const bdkcgo::AbiArgumentError& e) {
