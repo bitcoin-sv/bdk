@@ -41,7 +41,6 @@ Checks: >
   modernize-use-nullptr,
   modernize-use-override,
   modernize-use-using,
-  -modernize-deprecated-headers,
 
   performance-*,
   -performance-enum-size,

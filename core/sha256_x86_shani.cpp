@@ -11,8 +11,6 @@
 
 // The included source's own headers, first, so their inline functions keep the
 // default target
-#include <stdint.h>
-#include <immintrin.h>
 #include <attributes.h>
 
 #define ENABLE_X86_SHANI 1
