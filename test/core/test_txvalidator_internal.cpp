@@ -376,13 +376,25 @@ BOOST_AUTO_TEST_CASE(concurrent_first_callers_share_one_pool)
     std::array<InputVerifyPool*, 8> pools{};
     std::atomic<bool> start{ false };
     {
-        std::vector<std::jthread> callers;
+        struct JoinedCallers {
+            std::vector<std::thread> threads;
+            JoinedCallers() = default;
+            ~JoinedCallers()
+            {
+                for (auto& thread : threads)
+                    if (thread.joinable()) thread.join();
+            }
+            JoinedCallers(const JoinedCallers&) = delete;
+            JoinedCallers& operator=(const JoinedCallers&) = delete;
+            JoinedCallers(JoinedCallers&&) = delete;
+            JoinedCallers& operator=(JoinedCallers&&) = delete;
+        } callers;
         struct StartTogether {
             std::atomic<bool>& start;
             ~StartTogether() { start.store(true); }
         } together{ start };
         for (size_t i = 0; i < pools.size(); ++i) {
-            callers.emplace_back([&, i] {
+            callers.threads.emplace_back([&, i] {
                 while (!start.load()) std::this_thread::yield();
                 pools[i] = InputVerifyPool::Get();
             });
