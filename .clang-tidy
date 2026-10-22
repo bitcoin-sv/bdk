@@ -50,7 +50,6 @@ Checks: >
   -performance-enum-size,
   -performance-inefficient-vector-operation,
   -performance-move-const-arg,
-  -performance-use-std-move,
 
   readability-container-size-empty,
   readability-delete-null-pointer,

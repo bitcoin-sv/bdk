@@ -1070,11 +1070,11 @@ static bsv::CMutableTransactionExtended MakeSignedExtendedTx(
     scriptSig << sig << ToByteVector(pubkey);
     scriptSig.insert(scriptSig.end(), operandPushes.begin(), operandPushes.end());
 
-    txSpend.vin[0].scriptSig = scriptSig;
+    txSpend.vin[0].scriptSig = std::move(scriptSig);
 
     bsv::CMutableTransactionExtended eTX;
     eTX.vutxo = txCredit.vout;
-    eTX.mtx   = txSpend;
+    eTX.mtx   = std::move(txSpend);
     return eTX;
 }
 

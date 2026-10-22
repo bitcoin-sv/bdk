@@ -254,7 +254,7 @@ bsv::CMutableTransactionExtended BuildReguarTransaction(const std::string& netwo
 
     bsv::CMutableTransactionExtended eTX;
     eTX.vutxo = txFrom.vout;
-    eTX.mtx = txTo;
+    eTX.mtx = std::move(txTo);
     return eTX;
 }
 
@@ -317,10 +317,10 @@ bsv::CMutableTransactionExtended BuildP2SHTransaction(const std::string& network
 
     // Create final spending transaction with complete scriptSig
     // Update the scriptSig on the EXISTING transaction (don't create a new one!)
-    txSpend.vin[0].scriptSig = completeScriptSig;
+    txSpend.vin[0].scriptSig = std::move(completeScriptSig);
 
     bsv::CMutableTransactionExtended eTX;
     eTX.vutxo = txP2SH.vout;
-    eTX.mtx = txSpend;
-    return std::move(eTX);
+    eTX.mtx = std::move(txSpend);
+    return eTX;
 }

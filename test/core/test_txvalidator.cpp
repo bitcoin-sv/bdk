@@ -1053,7 +1053,7 @@ static MultisigSpend MakeSpendWithMultisigInput(size_t nInputs, size_t index, si
         sig.push_back(static_cast<uint8_t>(allForkId.getRawSigHashType()));
         scriptSig << sig;
     }
-    spend.eTx.mtx.vin[index].scriptSig = scriptSig;
+    spend.eTx.mtx.vin[index].scriptSig = std::move(scriptSig);
     return spend;
 }
 
@@ -1348,7 +1348,7 @@ static ManyKeyMultisigSpend MakeManyKeyMultisigSpend(size_t nInputs, size_t nKey
         sig.push_back(static_cast<uint8_t>(allForkId.getRawSigHashType()));
         scriptSig << sig;
     }
-    mtx.vin[index].scriptSig = scriptSig;
+    mtx.vin[index].scriptSig = std::move(scriptSig);
 
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
     ss << mtx;
