@@ -54,7 +54,7 @@ Checks: >
   readability-misleading-indentation,
   readability-redundant-smartptr-get,
   readability-redundant-string-cstr,
-  -readability-container-size-empty
+
 WarningsAsErrors: '*'
 FormatStyle: none
 CheckOptions:

@@ -50,7 +50,7 @@ const char* cgo_from_asm_v2(const char* asmPtr, uint64_t asmLen, uint64_t* scrip
         }
 
         auto script = bsv::from_asm(asmStr);
-        if (script.size() == 0) {
+        if (script.empty()) {
             return nullptr;
         }
 
