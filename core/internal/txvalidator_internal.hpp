@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 
 #include "taskcancellation.h"
 
@@ -190,6 +191,10 @@ public:
 private:
     size_t count_;
 };
+
+// A whole-string base-10 integer from a cgroup file, no surrounding
+// whitespace; nullopt otherwise, or when it does not fit.
+std::optional<int64_t> ParseCgroupInt(std::string_view text);
 
 // The CPU bandwidth limit (quota / period, in CPUs) of the cgroup this process
 // is in, read from the files under `root` ("/" on a live system): cgroup v2

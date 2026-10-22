@@ -52,8 +52,9 @@ std::vector<std::string_view> Split(std::string_view text, char sep)
     }
 }
 
-// Whole-string base-10 integer, no surrounding whitespace.
-std::optional<int64_t> ParseInt(std::string_view text)
+} // namespace
+
+std::optional<int64_t> bsv::detail::ParseCgroupInt(std::string_view text)
 {
     if (text.empty())
         return std::nullopt;
@@ -63,6 +64,8 @@ std::optional<int64_t> ParseInt(std::string_view text)
         return std::nullopt;
     return value;
 }
+
+namespace {
 
 // The single line of a cgroup file, without its newline.
 std::optional<std::string_view> SingleLine(std::string_view content)
@@ -194,8 +197,8 @@ std::optional<double> ParseV2Limit(std::string_view content)
         return std::nullopt;
     if (line->substr(0, space) == "max")
         return std::nullopt;
-    const auto quota = ParseInt(line->substr(0, space));
-    const auto period = ParseInt(line->substr(space + 1));
+    const auto quota = bsv::detail::ParseCgroupInt(line->substr(0, space));
+    const auto period = bsv::detail::ParseCgroupInt(line->substr(space + 1));
     if (!quota || !period || *quota <= 0 || *period <= 0)
         return std::nullopt;
     return static_cast<double>(*quota) / static_cast<double>(*period);
@@ -225,12 +228,12 @@ std::optional<double> bsv::detail::CgroupCpuLimit(const std::string& root)
     }
     const auto quotaFile = ReadFile(base + *dir + "/cpu.cfs_quota_us");
     const auto quotaLine = quotaFile ? SingleLine(*quotaFile) : std::nullopt;
-    const auto quota = quotaLine ? ParseInt(*quotaLine) : std::nullopt;
+    const auto quota = quotaLine ? bsv::detail::ParseCgroupInt(*quotaLine) : std::nullopt;
     if (!quota || *quota < 0)
         return std::nullopt;  // -1: no limit
     const auto periodFile = ReadFile(base + *dir + "/cpu.cfs_period_us");
     const auto periodLine = periodFile ? SingleLine(*periodFile) : std::nullopt;
-    const auto period = periodLine ? ParseInt(*periodLine) : std::nullopt;
+    const auto period = periodLine ? bsv::detail::ParseCgroupInt(*periodLine) : std::nullopt;
     if (!period || *period <= 0 || *quota == 0)
         return std::nullopt;
     return static_cast<double>(*quota) / static_cast<double>(*period);

@@ -576,6 +576,22 @@ BOOST_AUTO_TEST_CASE(effective_cpu_count_applies_the_affinity_mask)
 }
 #endif
 
+// cgroup integers are whole-string base 10: anything after the digits, and
+// any surrounding whitespace, rejects the value.
+BOOST_AUTO_TEST_CASE(cgroup_integers_parse_the_whole_string)
+{
+    using bsv::detail::ParseCgroupInt;
+    BOOST_CHECK(ParseCgroupInt("100000") == std::optional<int64_t>(100000));
+    BOOST_CHECK(ParseCgroupInt("0") == std::optional<int64_t>(0));
+    BOOST_CHECK(ParseCgroupInt("-1") == std::optional<int64_t>(-1));
+    BOOST_CHECK(ParseCgroupInt("9223372036854775807") == std::optional<int64_t>(INT64_MAX));
+    BOOST_CHECK(ParseCgroupInt("-9223372036854775808") == std::optional<int64_t>(INT64_MIN));
+    for (const char* text : { "250000x", "100000 ", "100000\n", "1 2", "12.5", "0x10" })
+        BOOST_CHECK_MESSAGE(!ParseCgroupInt(text), "trailing characters accepted: '" << text << "'");
+    for (const char* text : { "", " 5", "\t5", "+5", "-", "x1", "9223372036854775808", "-9223372036854775809" })
+        BOOST_CHECK_MESSAGE(!ParseCgroupInt(text), "accepted: '" << text << "'");
+}
+
 BOOST_AUTO_TEST_CASE(cpu_count_rounds_the_limit_like_gomaxprocs)
 {
     using bsv::detail::LimitCpuCount;
