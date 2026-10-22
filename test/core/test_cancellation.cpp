@@ -674,7 +674,8 @@ BOOST_AUTO_TEST_CASE(check_standardness_rejects_trailing_bytes)
     BOOST_REQUIRE(bsv::TxErrorIsOk(validator.CheckStandardness(tx, kValidTxUtxoHeights, kValidTxBlockHeight)));
     BOOST_REQUIRE(bsv::TxErrorIsOk(validator.CheckStandardness(tx, kValidTxUtxoHeights, kValidTxBlockHeight, token)));
 
-    for (const std::vector<uint8_t> suffix : { std::vector<uint8_t>{ 0 }, std::vector<uint8_t>{ 1, 2, 3 } }) {
+    for(const auto& suffix : { std::vector<uint8_t>{ 0 }, std::vector<uint8_t>{ 1, 2, 3 } })
+    {
         auto trailing = tx;
         trailing.insert(trailing.end(), suffix.begin(), suffix.end());
         BOOST_CHECK_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_EXCEPTION),
