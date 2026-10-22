@@ -180,8 +180,11 @@ bdk_add_unit_test(test_big_int_boost)
 
 add_executable(test_txvalidator "${CMAKE_CURRENT_SOURCE_DIR}/test_txvalidator.cpp" "${BSV_APPLICATION_HDR_FILES}" "${BSV_APPLICATION_SRC_FILES}")
 target_link_libraries(test_txvalidator PRIVATE bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono ${CMAKE_DL_LIBS})
-target_compile_definitions(test_txvalidator PRIVATE BDK_CGROUP_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data/cgroup")
 bdk_add_unit_test(test_txvalidator)
+add_executable(test_txvalidator_internal "${CMAKE_CURRENT_SOURCE_DIR}/test_txvalidator_internal.cpp" "${BSV_APPLICATION_HDR_FILES}" "${BSV_APPLICATION_SRC_FILES}")
+target_link_libraries(test_txvalidator_internal PRIVATE bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono ${CMAKE_DL_LIBS})
+target_compile_definitions(test_txvalidator_internal PRIVATE BDK_CGROUP_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data/cgroup")
+bdk_add_unit_test(test_txvalidator_internal)
 add_test(NAME test_txvalidator_pool_creation_retry
          COMMAND $<TARGET_FILE:test_txvalidator> --report_level=detailed
                  --run_test=test_txvalidator/parallel_input_verification/pool_creation_failure_is_retried
@@ -237,7 +240,12 @@ add_test(NAME test_txvalidator_parallel_inputs_tsan
                  --run_test=test_txvalidator/parallel_input_verification
                  -- --parallel-input-threshold=2 --input-pool-cores=4)
 set_tests_properties(test_txvalidator_parallel_inputs_tsan PROPERTIES LABELS tsan TIMEOUT 600)
-add_dependencies(bdk_tsan_tests test_cancellation test_txvalidator)
+add_dependencies(bdk_tsan_tests test_cancellation test_txvalidator test_txvalidator_internal)
+foreach(_t test_txvalidator_internal test_txvalidator_internald)
+  if(TEST ${_t})
+    set_tests_properties(${_t} PROPERTIES LABELS tsan TIMEOUT 600)
+  endif()
+endforeach()
 add_executable(test_sha256_backends "${CMAKE_CURRENT_SOURCE_DIR}/test_sha256_backends.cpp")
 target_link_libraries(test_sha256_backends PRIVATE bdk_core OpenSSL::Crypto)
 bdk_add_unit_test(test_sha256_backends)
@@ -280,6 +288,7 @@ if(CMAKE_CONFIGURATION_TYPES)
   set_target_properties(test_big_int PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")
   set_target_properties(test_big_int_boost PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")
   set_target_properties(test_txvalidator PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d
+  set_target_properties(test_txvalidator_internal PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")
   set_target_properties(test_chronicle PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d
   set_target_properties(test_sigopcount PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d
   set_target_properties(test_cancellation PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d
@@ -293,6 +302,7 @@ else()
   set_target_properties(test_big_int PROPERTIES DEBUG_POSTFIX "")
   set_target_properties(test_big_int_boost PROPERTIES DEBUG_POSTFIX "")
   set_target_properties(test_txvalidator PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
+  set_target_properties(test_txvalidator_internal PROPERTIES DEBUG_POSTFIX "")
   set_target_properties(test_chronicle PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
   set_target_properties(test_sigopcount PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
   set_target_properties(test_cancellation PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode

@@ -12,6 +12,14 @@
 
 #include "taskcancellation.h"
 
+// Builds without threads (WASM without pthreads) verify inputs serially only.
+#if defined(__EMSCRIPTEN__) && !defined(__EMSCRIPTEN_PTHREADS__)
+#define BDK_PARALLEL_INPUTS 0 // NOLINT(cppcoreguidelines-macro-usage): remove threading code in WASM.
+#else
+#define BDK_PARALLEL_INPUTS 1 // NOLINT(cppcoreguidelines-macro-usage): remove threading code in WASM.
+#endif
+
+
 namespace bsv::detail {
 
 enum class InputEvent : uint8_t { Claimed, Verified, Failed, Polled, CallerCancelled };
@@ -92,9 +100,6 @@ uint64_t HelperVerifiedInputCountForTesting();
 // process start, while counting is enabled. Tests only.
 uint64_t HelperWakesWithoutCoreForTesting();
 
-// ReleasedCore notifications while counting is enabled. Tests only.
-uint64_t HelperReleaseNotificationsForTesting();
-
 // Number of inputs verified inside parallel jobs, by callers and helpers,
 // since process start. Tests only.
 uint64_t JobVerifiedInputCountForTesting();
@@ -102,10 +107,6 @@ uint64_t JobVerifiedInputCountForTesting();
 // Times a helper's Work() call on a job verified at least one input, since
 // process start. A job with every helper on it adds one per helper. Tests only.
 uint64_t HelperJobParticipationCountForTesting();
-
-// Input cancellation sources constructed by Work(), since process start,
-// while input counting is enabled. Tests only.
-uint64_t InputCancellationSourceCountForTesting();
 
 // Called on the verifying thread with an input's index when a participant of
 // a parallel job claims it (Claimed), completes a check (Verified), fails

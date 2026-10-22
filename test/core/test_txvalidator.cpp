@@ -2342,34 +2342,6 @@ BOOST_AUTO_TEST_CASE(early_failure_abandons_inflight_higher_inputs, PARALLEL_TES
     BOOST_CHECK_LT(probe->higherPolls.load(), 1000u);
 }
 
-// Pin the strict boundary on the actual source: a finished failure at index
-// 5 must leave both index 5 and all lower inputs uncancelled. A <= mutation
-// is otherwise invisible once that input has already finished verifying.
-BOOST_AUTO_TEST_CASE(early_stop_source_preserves_equal_and_lower_indices)
-{
-    std::atomic<size_t> lowest{ 32 };
-    const auto caller = task::CCancellationSource::Make();
-    const auto callerToken = caller->GetToken();
-    std::atomic<bool> cancelled{ false };
-    const auto source = std::make_shared<bsv::detail::InputCancellationSource>(lowest, cancelled, &callerToken);
-    const auto token = source->GetToken();
-    source->SetIndex(5);
-    BOOST_CHECK(!token.IsCanceled());
-    lowest = 5;
-    BOOST_CHECK(!token.IsCanceled());
-    source->SetIndex(4);
-    BOOST_CHECK(!token.IsCanceled());
-    source->SetIndex(6);
-    BOOST_CHECK(token.IsCanceled());
-    lowest = 3;
-    source->SetIndex(4);
-    BOOST_CHECK(token.IsCanceled());
-    source->SetIndex(2);
-    BOOST_CHECK(!token.IsCanceled());
-    caller->Cancel();
-    BOOST_CHECK(token.IsCanceled());
-}
-
 // A completed failure and all lower inputs establish the serial verdict, even
 // when cancellation stops still-running higher inputs.
 BOOST_AUTO_TEST_CASE(completed_early_failure_survives_caller_cancellation, PARALLEL_TEST_CASE_DECORATORS)
@@ -3657,7 +3629,7 @@ private:
     bsv::detail::InputHook previous = nullptr;
 };
 
-// The test-only counters (inputs, participations, source constructions)
+// The test-only counters (inputs and participations)
 // stay untouched unless a test turns them on, so production does no
 // per-input write to them; helpers still verify inputs either way.
 BOOST_AUTO_TEST_CASE(input_counters_count_only_when_enabled, PARALLEL_TEST_CASE_DECORATORS)
@@ -3670,11 +3642,9 @@ BOOST_AUTO_TEST_CASE(input_counters_count_only_when_enabled, PARALLEL_TEST_CASE_
     const InputThresholdGuard parallel(FORCE_PARALLEL);
     BOOST_REQUIRE(PoolIsIdle());
     const auto counters = [] {
-        return std::array<uint64_t, 5>{ bsv::detail::HelperVerifiedInputCountForTesting(),
+        return std::array<uint64_t, 3>{ bsv::detail::HelperVerifiedInputCountForTesting(),
                                         bsv::detail::JobVerifiedInputCountForTesting(),
-                                        bsv::detail::HelperJobParticipationCountForTesting(),
-                                        bsv::detail::InputCancellationSourceCountForTesting(),
-                                        bsv::detail::HelperReleaseNotificationsForTesting() };
+                                        bsv::detail::HelperJobParticipationCountForTesting() };
     };
     const ClaimRecorder recorder(/*holdCallerOnFirstInput=*/true);
     {
@@ -3697,72 +3667,8 @@ BOOST_AUTO_TEST_CASE(input_counters_count_only_when_enabled, PARALLEL_TEST_CASE_
         ClaimRecorder::Reset();
         BOOST_REQUIRE(bsv::TxErrorIsOk(ValidateP2PKHSpend(se, etxBin, nInputs, /*consensus=*/true)));
         BOOST_CHECK_GT(counters()[1], before[1]);
-        BOOST_CHECK_GT(counters()[3], before[3]);
+        BOOST_CHECK_GT(counters()[0], before[0]);
     }
-}
-
-// Hold each participant's first two claims until every participant reaches
-// that round. This makes reuse observable without relying on scheduling speed.
-class TwoClaimsPerParticipant {
-public:
-    explicit TwoClaimsPerParticipant(size_t participants) : participants{ participants }
-    {
-        active = this;
-        previous = bsv::detail::SetInputHookForTesting(&Hook);
-    }
-    ~TwoClaimsPerParticipant() { bsv::detail::SetInputHookForTesting(previous); }
-    std::map<std::thread::id, size_t> claims;
-    bool timedOut = false;
-
-private:
-    static void Hook(size_t, bsv::detail::InputEvent event)
-    {
-        if (event != bsv::detail::InputEvent::Claimed)
-            return;
-        auto& self = *active;
-        std::unique_lock lock{ self.mutex };
-        const size_t round = ++self.claims[std::this_thread::get_id()];
-        self.changed.notify_all();
-        if (round <= 2 && !self.changed.wait_for(lock, std::chrono::seconds(5), [&] {
-                return self.claims.size() == self.participants
-                    && std::all_of(self.claims.begin(), self.claims.end(),
-                        [round](const auto& entry) { return entry.second >= round; });
-            }))
-            self.timedOut = true;
-    }
-    const size_t participants;
-    std::mutex mutex;
-    std::condition_variable changed;
-    bsv::detail::InputHook previous;
-    static inline TwoClaimsPerParticipant* active = nullptr;
-};
-
-BOOST_AUTO_TEST_CASE(cancellation_source_is_reused_for_each_participant, PARALLEL_TEST_CASE_DECORATORS)
-{
-    const size_t helpers = bsv::detail::InputPoolHelperCountForTesting();
-    if (helpers == 0)
-        return;
-    const size_t participants = helpers + 1;
-    const size_t nInputs = participants * 8;
-    const bsv::CTxValidator validator("main");
-    const auto bin = SignedP2PKHBin(nInputs);
-    const InputThresholdGuard defaults(bsv::detail::DEFAULT_PARALLEL_INPUT_THRESHOLD);
-    BOOST_REQUIRE(PoolIsIdle());
-    const auto before = bsv::detail::InputCancellationSourceCountForTesting();
-    const auto helperCallsBefore = bsv::detail::HelperJobParticipationCountForTesting();
-    const TwoClaimsPerParticipant rounds(participants);
-    BOOST_REQUIRE(bsv::TxErrorIsOk(ValidateP2PKHSpend(validator, bin, nInputs, true)));
-    BOOST_REQUIRE(PoolIsIdle());
-    BOOST_REQUIRE(!rounds.timedOut);
-    BOOST_REQUIRE_EQUAL(rounds.claims.size(), participants);
-    for (const auto& [thread, claims] : rounds.claims)
-        BOOST_CHECK_GE(claims, 2u);
-    const auto nonemptyCalls = bsv::detail::HelperJobParticipationCountForTesting() - helperCallsBefore + 1;
-    const auto sources = bsv::detail::InputCancellationSourceCountForTesting() - before;
-    BOOST_CHECK_EQUAL(nonemptyCalls, participants);
-    BOOST_CHECK_EQUAL(sources, nonemptyCalls);
-    BOOST_CHECK_LT(sources, nInputs);
-    BOOST_TEST_MESSAGE(sources << " sources for " << nonemptyCalls << " nonempty Work calls and " << nInputs << " inputs");
 }
 
 // Allocation is a scheduling failure, not an invalid input. The helper-only
@@ -4479,75 +4385,6 @@ BOOST_AUTO_TEST_CASE(preclaim_token_throw_stops_helpers_at_next_poll, PARALLEL_T
     BOOST_TEST_MESSAGE("preclaim throw helper polls=" << source->helperPolls << " claims=" << source->helperClaims);
 }
 
-class HeldJobInputs {
-public:
-    HeldJobInputs()
-    {
-        active = this;
-        previous = bsv::detail::SetInputHookForTesting(&Hook);
-    }
-    ~HeldJobInputs() { bsv::detail::SetInputHookForTesting(previous); }
-    std::atomic<size_t> claims{ 0 };
-    std::atomic<bool> release{ false }, timedOut{ false };
-private:
-    static void Hook(size_t, bsv::detail::InputEvent event)
-    {
-        if (event != bsv::detail::InputEvent::Claimed)
-            return;
-        auto& self = *active;
-        ++self.claims;
-        if (!WaitFor([&] { return self.release.load(); }, std::chrono::milliseconds(20000)))
-            self.timedOut = true;
-    }
-    bsv::detail::InputHook previous;
-    static inline HeldJobInputs* active = nullptr;
-};
-
-BOOST_AUTO_TEST_CASE(releasing_a_core_does_not_notify_at_the_helper_limit, PARALLEL_TEST_CASE_DECORATORS)
-{
-    if (bsv::detail::InputPoolHelperCountForTesting() < 2) {
-        BOOST_TEST_MESSAGE("needs a free core while one caller and one helper are held");
-        return;
-    }
-    const bsv::CTxValidator validator("main");
-    const auto large = SignedP2PKHBin(32);
-    const auto spend = MakeSignedP2PKHSpend({ SigHashType().withForkId() }, 1);
-    CDataStream plain(SER_NETWORK, PROTOCOL_VERSION);
-    plain << spend.mtx;
-    const std::vector<uint8_t> txBin(plain.begin(), plain.end());
-    const auto& locking = spend.vutxo[0].scriptPubKey;
-    const auto verifyOne = [&] {
-        return validator.VerifySpend(txBin, 0,
-            std::span<const uint8_t>(locking.data(), locking.size()),
-            spend.vutxo[0].nValue.GetSatoshis(), P2PKH_UTXO_HEIGHT, P2PKH_BLOCK_HEIGHT, true);
-    };
-    const InputThresholdGuard parallel(FORCE_PARALLEL);
-    const HelperLimitGuard limit(1);
-    BOOST_REQUIRE(PoolIsIdle());
-    HeldJobInputs hold;
-    TxError largeResult = bsv::TxErrorException();
-    std::thread caller([&] { largeResult = ValidateP2PKHSpend(validator, large, 32, true); });
-    const bool occupied = WaitFor([&] { return hold.claims.load() == 2; });
-    const auto before = bsv::detail::HelperReleaseNotificationsForTesting();
-    const auto fullResult = verifyOne();
-    const auto atLimit = bsv::detail::HelperReleaseNotificationsForTesting();
-    // Positive control: capacity under the helper cap now permits a notification.
-    bsv::SetParallelInputHelpers(2);
-    const auto freeResult = verifyOne();
-    const auto belowLimit = bsv::detail::HelperReleaseNotificationsForTesting();
-    const bool positive = belowLimit > atLimit || WaitFor([&] { return hold.claims.load() > 2; });
-    hold.release = true;
-    caller.join();
-    BOOST_REQUIRE(occupied);
-    BOOST_CHECK(!hold.timedOut);
-    BOOST_CHECK(bsv::TxErrorIsOk(fullResult));
-    BOOST_CHECK(bsv::TxErrorIsOk(freeResult));
-    BOOST_CHECK(bsv::TxErrorIsOk(largeResult));
-    BOOST_CHECK_EQUAL(atLimit, before);
-    BOOST_CHECK(positive);
-    BOOST_CHECK(PoolIsIdle());
-}
-
 class ReservedPlaceRelease {
 public:
     ReservedPlaceRelease()
@@ -5107,175 +4944,7 @@ BOOST_AUTO_TEST_CASE(results_hold_at_every_helper_limit_and_while_it_changes, PA
 
 BOOST_AUTO_TEST_SUITE_END()
 
-// The helper pool sizes itself from the CPUs this process may use. On Linux a
-// container's CPU limit comes from its cgroup; these tests read fixture trees
-// under test/core/data/cgroup, each laid out as a root with proc/self/cgroup,
-// proc/self/mountinfo and the cgroup files, never the live system.
-BOOST_AUTO_TEST_SUITE(container_cpu_limit)
 
-static std::optional<double> FixtureCpuLimit(const std::string& name)
-{
-    return bsv::detail::CgroupCpuLimit(std::string(BDK_CGROUP_FIXTURE_DIR) + "/" + name);
-}
-
-BOOST_AUTO_TEST_CASE(cgroup_v2_quota_in_a_container)
-{
-    const auto limit = FixtureCpuLimit("v2_quota");
-    BOOST_REQUIRE(limit.has_value());
-    BOOST_CHECK_CLOSE(*limit, 2.5, 1e-9);
-}
-
-BOOST_AUTO_TEST_CASE(cgroup_v2_quota_of_a_nested_cgroup)
-{
-    // The process's own cgroup has the limit; the root's cpu.max says max.
-    const auto limit = FixtureCpuLimit("v2_nested");
-    BOOST_REQUIRE(limit.has_value());
-    BOOST_CHECK_CLOSE(*limit, 1.5, 1e-9);
-}
-
-BOOST_AUTO_TEST_CASE(cgroup_v2_max_is_no_limit)
-{
-    BOOST_CHECK(!FixtureCpuLimit("v2_max").has_value());
-}
-
-BOOST_AUTO_TEST_CASE(cgroup_v1_quota_in_a_container)
-{
-    const auto limit = FixtureCpuLimit("v1_quota");
-    BOOST_REQUIRE(limit.has_value());
-    BOOST_CHECK_CLOSE(*limit, 2.0, 1e-9);
-}
-
-BOOST_AUTO_TEST_CASE(cgroup_v1_quota_minus_one_is_no_limit)
-{
-    BOOST_CHECK(!FixtureCpuLimit("v1_unlimited").has_value());
-}
-
-// A v1 cpuset hierarchy listed before cpu,cpuacct: only the hierarchy whose
-// controller list contains exactly "cpu" counts (the cpuset mount holds a
-// decoy 4-CPU quota).
-BOOST_AUTO_TEST_CASE(cgroup_v1_cpu_controller_is_matched_exactly)
-{
-    const auto limit = FixtureCpuLimit("v1_cpuset_first");
-    BOOST_REQUIRE(limit.has_value());
-    BOOST_CHECK_CLOSE(*limit, 2.0, 1e-9);
-}
-
-// mountinfo escapes a space in the mount point as \040.
-BOOST_AUTO_TEST_CASE(cgroup_mount_point_is_unescaped)
-{
-    const auto limit = FixtureCpuLimit("v2_escaped_mount");
-    BOOST_REQUIRE(limit.has_value());
-    BOOST_CHECK_CLOSE(*limit, 1.2, 1e-9);
-}
-
-// A cgroup shown as /../.. lies outside the mount this namespace sees; the
-// path it would resolve to holds a decoy limit.
-BOOST_AUTO_TEST_CASE(cgroup_outside_the_namespace_gives_no_limit)
-{
-    BOOST_CHECK(!FixtureCpuLimit("v2_outside_namespace").has_value());
-}
-
-// A mount rooted at /kubepods/podA does not contain /kubepods/podAB/ctr; the
-// next mount, rooted at /, does (the wrong one would read a decoy 0.5).
-BOOST_AUTO_TEST_CASE(cgroup_mount_root_matches_whole_path_components)
-{
-    const auto limit = FixtureCpuLimit("v2_prefix_not_boundary");
-    BOOST_REQUIRE(limit.has_value());
-    BOOST_CHECK_CLOSE(*limit, 3.0, 1e-9);
-}
-
-// A malformed mountinfo line (no " - " separator, or too few fields after
-// it), a mount root not starting with /, or a bad \ooo escape in a mount
-// point makes the file unreadable even when a valid cgroup2 mount follows,
-// as in Go. Where the malformed line would otherwise resolve to a cgroup
-// directory, that directory holds a decoy limit.
-BOOST_AUTO_TEST_CASE(malformed_mountinfo_gives_no_limit)
-{
-    for (const char* name : { "malformed_mount_line", "malformed_mount_root", "malformed_mount_tail", "malformed_mount_escape" })
-        BOOST_CHECK_MESSAGE(!FixtureCpuLimit(name).has_value(), name);
-}
-
-BOOST_AUTO_TEST_CASE(unreadable_cgroup_files_give_no_limit)
-{
-    for (const char* name : { "garbage", "garbage_cgroup", "missing", "missing_cpu_max", "no_such_fixture" })
-        BOOST_CHECK_MESSAGE(!FixtureCpuLimit(name).has_value(), name);
-}
-
-// Go's default GOMAXPROCS rule (runtime/cgroup_linux.go, the same from go1.25.0 on,
-// adjustCgroupGOMAXPROCS): the CPUs available to the process, lowered to the
-// cgroup limit rounded up, and never below 2 because of the limit.
-// On this machine, whatever its cgroup: at least one CPU, never more than
-// hardware_concurrency(). On Linux this reads the live affinity mask and cgroup.
-BOOST_AUTO_TEST_CASE(effective_cpu_count_is_within_the_machine)
-{
-    const size_t effective = bsv::detail::EffectiveCpuCount();
-    const size_t hardware = std::thread::hardware_concurrency();
-    const auto limit = bsv::detail::CgroupCpuLimit("/");
-    BOOST_TEST_MESSAGE("effective=" << effective << " hardware_concurrency=" << hardware
-        << " cgroup_limit=" << (limit ? std::to_string(*limit) : std::string("none")));
-    BOOST_CHECK_GE(effective, 1u);
-    if (hardware > 0)
-        BOOST_CHECK_LE(effective, hardware);
-}
-
-#if defined(__linux__)
-static std::string FixtureRoot(const std::string& name)
-{
-    return std::string(BDK_CGROUP_FIXTURE_DIR) + "/" + name;
-}
-
-// EffectiveCpuCount lowers the count to the cgroup limit under the root it is
-// given. A machine with more than 3 CPUs shows it: 2.5 CPUs round up to 3.
-BOOST_AUTO_TEST_CASE(effective_cpu_count_applies_the_cgroup_limit)
-{
-    const size_t unlimited = bsv::detail::EffectiveCpuCount(FixtureRoot("v2_max"));
-    const size_t limited = bsv::detail::EffectiveCpuCount(FixtureRoot("v2_quota"));
-    BOOST_CHECK_EQUAL(limited, bsv::detail::LimitCpuCount(unlimited, 2.5));
-    if (unlimited > 3)
-        BOOST_CHECK_EQUAL(limited, 3u);
-    else
-        BOOST_TEST_MESSAGE("only " << unlimited << " CPUs: the 2.5-CPU limit cannot lower the count here");
-}
-
-// EffectiveCpuCount respects the calling thread's affinity mask, which
-// hardware_concurrency() ignores. The pool is created first, so pinning this
-// thread cannot size it.
-BOOST_AUTO_TEST_CASE(effective_cpu_count_applies_the_affinity_mask)
-{
-    (void)bsv::detail::InputPoolHelperCountForTesting();
-    cpu_set_t original;
-    CPU_ZERO(&original);
-    BOOST_REQUIRE_EQUAL(sched_getaffinity(0, sizeof(original), &original), 0);
-    int pinned = -1;
-    for (int cpu = 0; cpu < CPU_SETSIZE && pinned < 0; ++cpu)
-        if (CPU_ISSET(cpu, &original))
-            pinned = cpu;
-    BOOST_REQUIRE_GE(pinned, 0);
-    cpu_set_t one;
-    CPU_ZERO(&one);
-    CPU_SET(pinned, &one);
-    struct RestoreAffinity {
-        const cpu_set_t& mask;
-        ~RestoreAffinity() { sched_setaffinity(0, sizeof(mask), &mask); }
-    } restore{ original };
-    BOOST_REQUIRE_EQUAL(sched_setaffinity(0, sizeof(one), &one), 0);
-    BOOST_CHECK_EQUAL(bsv::detail::EffectiveCpuCount(FixtureRoot("v2_max")), 1u);
-}
-#endif
-
-BOOST_AUTO_TEST_CASE(cpu_count_rounds_the_limit_like_gomaxprocs)
-{
-    using bsv::detail::LimitCpuCount;
-    BOOST_CHECK_EQUAL(LimitCpuCount(16, std::nullopt), 16u);
-    BOOST_CHECK_EQUAL(LimitCpuCount(16, 4.0), 4u);
-    BOOST_CHECK_EQUAL(LimitCpuCount(16, 2.5), 3u);
-    BOOST_CHECK_EQUAL(LimitCpuCount(16, 1.01), 2u);
-    BOOST_CHECK_EQUAL(LimitCpuCount(16, 0.5), 2u);
-    BOOST_CHECK_EQUAL(LimitCpuCount(4, 8.0), 4u);
-    BOOST_CHECK_EQUAL(LimitCpuCount(1, 0.5), 1u);
-}
-
-BOOST_AUTO_TEST_SUITE_END()
 
 // Throughput numbers for choosing and checking the parallel input threshold,
 // about 45 s. Disabled by default and not registered with ctest; run it alone
