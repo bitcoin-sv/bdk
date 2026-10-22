@@ -23,6 +23,7 @@ static void helper_log_cgo_exception(const char* where, const char* what) noexce
 ValidateBatchCGO ValidateBatch_CreateV2()
 {
     try {
+        // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
         return new bsv::ValidateBatch();
     }
     catch (const std::exception& e) {
@@ -40,6 +41,7 @@ ValidateBatchCGO ValidateBatch_CreateV2()
 void ValidateBatch_Destroy(ValidateBatchCGO cgoBatch)
 {
     bsv::ValidateBatch* ptr = static_cast<bsv::ValidateBatch*>(cgoBatch);
+    // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
     delete ptr;
 }
 

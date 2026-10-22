@@ -96,6 +96,7 @@ BOOST_FIXTURE_TEST_CASE(sigopcount_reports_abi_failure_through_errstr, Validator
 
     BOOST_CHECK_EQUAL(count, uint64_t{ 0 });
     BOOST_REQUIRE(errStr != nullptr);
+    // NOLINTNEXTLINE(cppcoreguidelines-no-malloc, cppcoreguidelines-owning-memory)
     free(errStr);
 }
 

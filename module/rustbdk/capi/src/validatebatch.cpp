@@ -58,6 +58,7 @@ std::span<const int32_t> int32_span(const int32_t* ptr, int len)
 extern "C" bdkffi_validatebatch_t bdkffi_validatebatch_create(void)
 {
     try {
+        // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
         return new bsv::ValidateBatch();
     } catch (const std::exception& e) {
         log_exception(__func__, e.what());
@@ -71,6 +72,7 @@ extern "C" bdkffi_validatebatch_t bdkffi_validatebatch_create(void)
 extern "C" void bdkffi_validatebatch_destroy(bdkffi_validatebatch_t batch)
 {
     try {
+        // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
         delete static_cast<bsv::ValidateBatch*>(batch);
     } catch (const std::exception& e) {
         log_exception(__func__, e.what());

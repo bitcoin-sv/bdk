@@ -35,6 +35,7 @@ const char* helper_string2char(const std::string& stdStr) {
     }
 
     char* charPtr = nullptr;
+    // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
     charPtr = new char[stdStr.size() + 1];
     std::strcpy(charPtr, stdStr.c_str());
     return charPtr;
@@ -47,6 +48,7 @@ TxValidatorCGO TxValidator_CreateV2(const char* networkNamePtr, uint64_t network
         if (!nameSpan.empty()) {
             networkName.assign(reinterpret_cast<const char*>(nameSpan.data()), nameSpan.size());
         }
+        // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
         return new bsv::CTxValidator(networkName);
     }
     catch (const std::exception& e) {
@@ -64,6 +66,7 @@ TxValidatorCGO TxValidator_CreateV2(const char* networkNamePtr, uint64_t network
 void TxValidator_Destroy(TxValidatorCGO cgoEngine)
 {
     bsv::CTxValidator* ptr = static_cast<bsv::CTxValidator*>(cgoEngine);
+    // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
     delete ptr;
 }
 
@@ -391,6 +394,7 @@ TxError TxValidator_ValidateTransactionCancellable(TxValidatorCGO cgoEngine, con
 // Internal helper building the single-element array TxValidator_ValidateBatch uses to
 // report a failure that has no per-entry result to attach itself to.
 static TxError* helper_single_result(TxError result, uint64_t* resultSize) {
+    // NOLINTNEXTLINE(cppcoreguidelines-no-malloc, cppcoreguidelines-owning-memory)
     TxError* resultArray = static_cast<TxError*>(malloc(sizeof(TxError)));
     if (resultArray == nullptr) {
         *resultSize = 0;
@@ -432,6 +436,7 @@ TxError* TxValidator_ValidateBatchCancellable(TxValidatorCGO cgoEngine, Validate
             return helper_single_result(bsv::AbiErrorToTxError(bsv::AbiError_t::LengthOverflow), resultSize);
         }
 
+        // NOLINTNEXTLINE(cppcoreguidelines-no-malloc, cppcoreguidelines-owning-memory)
         TxError* resultArray = static_cast<TxError*>(malloc(size * sizeof(TxError)));
         if (resultArray == nullptr) {
             return nullptr;

@@ -38,6 +38,7 @@ char* malloc_c_string(const std::string& value)
         return nullptr;
     }
 
+    // NOLINTNEXTLINE(cppcoreguidelines-no-malloc, cppcoreguidelines-owning-memory)
     char* out = static_cast<char*>(std::malloc(value.size() + 1));
     if (out == nullptr) {
         return nullptr;
@@ -118,7 +119,9 @@ bdkffi_TxError* malloc_error_array(const std::vector<TxError>& results, int* res
         return nullptr;
     }
 
+    // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
     bdkffi_TxError* out = static_cast<bdkffi_TxError*>(
+        // NOLINTNEXTLINE(cppcoreguidelines-no-malloc)
         std::malloc(results.size() * sizeof(bdkffi_TxError)));
     if (out == nullptr) {
         if (result_size != nullptr) {
@@ -139,6 +142,7 @@ bdkffi_TxError* malloc_single_exception(int* result_size)
         return nullptr;
     }
 
+    // NOLINTNEXTLINE(cppcoreguidelines-no-malloc, cppcoreguidelines-owning-memory)
     bdkffi_TxError* out = static_cast<bdkffi_TxError*>(std::malloc(sizeof(bdkffi_TxError)));
     if (out == nullptr) {
         *result_size = 0;
@@ -205,6 +209,7 @@ extern "C" bdkffi_txvalidator_t bdkffi_txvalidator_create(const char* network_na
             throw std::invalid_argument("null network name pointer with positive length");
         }
         const std::string network(network_name == nullptr ? "" : network_name, static_cast<size_t>(network_name_len));
+        // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
         return new bsv::CTxValidator(network);
     } BDKFFI_CATCH_RETURN(nullptr)
 }
@@ -212,6 +217,7 @@ extern "C" bdkffi_txvalidator_t bdkffi_txvalidator_create(const char* network_na
 extern "C" void bdkffi_txvalidator_destroy(bdkffi_txvalidator_t validator)
 {
     try {
+        // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
         delete static_cast<bsv::CTxValidator*>(validator);
     } BDKFFI_CATCH_VOID
 }

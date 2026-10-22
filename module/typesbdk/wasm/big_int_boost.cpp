@@ -96,7 +96,7 @@ std::string HexMagnitude(const cpp_int& value)
 
 void bsv::bint::empty_bn_deleter::operator()(bignum_st* value) const
 {
-    delete value;
+    delete value; // NOLINT(cppcoreguidelines-owning-memory)
 }
 
 bsv::bint::bint()
