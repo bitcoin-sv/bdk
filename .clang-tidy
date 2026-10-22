@@ -21,7 +21,6 @@ Checks: >
   -bugprone-misplaced-widening-cast,
   -bugprone-narrowing-conversions,
   -bugprone-reserved-identifier,
-  -bugprone-signed-bitwise,
   -bugprone-suspicious-include,
   -bugprone-throwing-static-initialization,
   -bugprone-unused-local-non-trivial-variable,

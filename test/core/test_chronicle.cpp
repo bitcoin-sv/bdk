@@ -89,22 +89,28 @@ static const std::string WIF_KEY = "5HxWvvfubhXpYYpS3tJkw6fq9jE9j18THftkZjHHfmFi
 //   src/policy/policy.h  : PRE_CHRONICLE_STANDARD_SCRIPT_VERIFY_FLAGS
 //   src/policy/policy.h  : StandardScriptVerifyFlags()
 //   src/policy/policy.h  : InputScriptVerifyFlags()
-static constexpr uint32_t POLICY_FLAGS_PRE_CHRONICLE =
-    SCRIPT_VERIFY_P2SH                       |  // (1U <<  0) mandatory
-    SCRIPT_VERIFY_STRICTENC                  |  // (1U <<  1) mandatory
-    SCRIPT_VERIFY_DERSIG                     |  // (1U <<  2) standard
-    SCRIPT_VERIFY_LOW_S                      |  // (1U <<  3) mandatory
-    SCRIPT_VERIFY_NULLDUMMY                  |  // (1U <<  4) standard
-    SCRIPT_VERIFY_SIGPUSHONLY                |  // (1U <<  5) Genesis per-input
-    SCRIPT_VERIFY_MINIMALDATA                |  // (1U <<  6) standard
-    SCRIPT_VERIFY_DISCOURAGE_UPGRADABLE_NOPS |  // (1U <<  7) standard (key flag)
-    SCRIPT_VERIFY_CLEANSTACK                 |  // (1U <<  8) standard
-    SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY        |  // (1U <<  9) standard
-    SCRIPT_VERIFY_CHECKSEQUENCEVERIFY        |  // (1U << 10) standard
-    SCRIPT_VERIFY_NULLFAIL                   |  // (1U << 14) mandatory
-    SCRIPT_ENABLE_SIGHASH_FORKID             |  // (1U << 16) mandatory
-    SCRIPT_GENESIS                           |  // (1U << 18) Genesis block flag
-    SCRIPT_UTXO_AFTER_GENESIS;                  // (1U << 19) Genesis UTXO flag
+// bitcoin-sv's script flags are an unscoped enum: OR them as explicit uint32_t bits
+template <typename... Flag>
+static constexpr uint32_t ScriptFlags(Flag... flags) {
+    return (static_cast<uint32_t>(flags) | ...);
+}
+
+static constexpr uint32_t POLICY_FLAGS_PRE_CHRONICLE = ScriptFlags(
+    SCRIPT_VERIFY_P2SH,                         // (1U <<  0) mandatory
+    SCRIPT_VERIFY_STRICTENC,                    // (1U <<  1) mandatory
+    SCRIPT_VERIFY_DERSIG,                       // (1U <<  2) standard
+    SCRIPT_VERIFY_LOW_S,                        // (1U <<  3) mandatory
+    SCRIPT_VERIFY_NULLDUMMY,                    // (1U <<  4) standard
+    SCRIPT_VERIFY_SIGPUSHONLY,                  // (1U <<  5) Genesis per-input
+    SCRIPT_VERIFY_MINIMALDATA,                  // (1U <<  6) standard
+    SCRIPT_VERIFY_DISCOURAGE_UPGRADABLE_NOPS,   // (1U <<  7) standard (key flag)
+    SCRIPT_VERIFY_CLEANSTACK,                   // (1U <<  8) standard
+    SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY,          // (1U <<  9) standard
+    SCRIPT_VERIFY_CHECKSEQUENCEVERIFY,          // (1U << 10) standard
+    SCRIPT_VERIFY_NULLFAIL,                     // (1U << 14) mandatory
+    SCRIPT_ENABLE_SIGHASH_FORKID,               // (1U << 16) mandatory
+    SCRIPT_GENESIS,                             // (1U << 18) Genesis block flag
+    SCRIPT_UTXO_AFTER_GENESIS);                 // (1U << 19) Genesis UTXO flag
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Helper forward declarations
