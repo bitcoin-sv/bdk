@@ -43,6 +43,10 @@ option(BDK_BUILD_WASM "Build the TypeScript/JavaScript WASM module (standalone; 
 # Independent install gates: FreeBSD/gobdk-only packages set both OFF.
 option(BDK_INSTALL_CORE_ARCHIVE "Install the bdk_core static archive" ON)
 option(BDK_INSTALL_BSV_HEADERS "Install Bitcoin SV headers and bundled support files" ON)
+# Static analysis gate: runs clang-tidy on first-party C++ during the compile; a finding fails the build (cmake/BDKClangTidy.cmake)
+option(BDK_ENABLE_CLANG_TIDY "Run clang-tidy on core/, module/ and test/ sources as part of the build" OFF)
+# Upstream-style warning set is always on for first-party C++ (cmake/BDKBuildSetting.cmake); this adds -Werror
+option(BDK_WARNINGS_AS_ERRORS "Treat compiler warnings in core/, module/ and test/ sources as errors" OFF)
 
 # Language binding modules are all built by default. Activate one will deactivate other
 option(BUILD_MODULE_GOLANG "Build and test the Golang module" ON)
@@ -144,6 +148,13 @@ endif()
 ## Init CMake, find all external packages and eventually build them if necessary
 include(cmake/BDKInit.cmake)
 bdkInitCMake()
+
+## Must precede the first add_subdirectory(): CMAKE_CXX_CLANG_TIDY is inherited by
+## directory scope, and the bitcoin-sv/generated exclusions run deferred at the end
+if(BDK_ENABLE_CLANG_TIDY)
+  include(cmake/BDKClangTidy.cmake)
+  bdkEnableClangTidy()
+endif()
 
 ## Everything in core should be includable from everywhere
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/core)

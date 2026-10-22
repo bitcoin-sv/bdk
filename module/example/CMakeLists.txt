@@ -15,6 +15,9 @@ foreach(comp IN LISTS "filesystem" "program_options" "thread" "chrono")
     endif()
 endforeach()
 
+## first-party sources get the warning set (+ -Werror), bitcoin-sv sources keep upstream's
+bdkApplySourceWarningPolicy()
+
 add_executable(example_txvalidator_create_validate "${CMAKE_CURRENT_SOURCE_DIR}/example_txvalidator_create_validate.cpp" "${BSV_APPLICATION_HDR_FILES}" "${BSV_APPLICATION_SRC_FILES}")
 target_link_libraries(example_txvalidator_create_validate PRIVATE bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono ${CMAKE_DL_LIBS})
 set_target_properties(example_txvalidator_create_validate PROPERTIES  FOLDER "module/example" DEBUG_POSTFIX ${CMAKE_DEBUG_POSTFIX})

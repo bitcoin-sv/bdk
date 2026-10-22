@@ -1,0 +1,71 @@
+# clang-tidy configuration for BDK's first-party C++ (core/, module/, test/).
+#
+# CI runs this with LLVM 23 (job `clang-tidy` in .github/workflows/build_bdk.yaml).
+# Locally: cmake -S . -B ../build -DCMAKE_CXX_COMPILER=clang++-23 -DBDK_ENABLE_CLANG_TIDY=ON
+# The CMake option also passes --header-filter/--exclude-header-filter as absolute
+# paths, which is why no HeaderFilterRegex lives here: BSV_ROOT can be anywhere.
+# bitcoin-sv, secp256k1, univalue, leveldb, generated sources and the upstream-derived
+# files listed in BDK_UPSTREAM_DERIVED_SOURCES (cmake/BDKBuildSetting.cmake) are never linted.
+#
+# WarningsAsErrors: '*' turns every finding into a build failure. Suppress one line
+# with `// NOLINT(check-name)` and a short reason; never disable a check for a file.
+Checks: >
+  -*,
+
+  bugprone-*,
+  -bugprone-casting-through-void,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-empty-catch,
+  -bugprone-exception-escape,
+  -bugprone-implicit-widening-of-multiplication-result,
+  -bugprone-misplaced-widening-cast,
+  -bugprone-narrowing-conversions,
+  -bugprone-reserved-identifier,
+  -bugprone-signed-bitwise,
+  -bugprone-suspicious-include,
+  -bugprone-throwing-static-initialization,
+  -bugprone-unused-local-non-trivial-variable,
+
+  clang-analyzer-*,
+  -clang-analyzer-security.insecureAPI.strcpy,
+
+  cppcoreguidelines-slicing,
+  cppcoreguidelines-virtual-class-destructor,
+
+  misc-definitions-in-headers,
+  misc-static-assert,
+  misc-unused-alias-decls,
+  misc-unused-using-decls,
+  -misc-unused-alias-decls,
+
+  modernize-deprecated-headers,
+  modernize-loop-convert,
+  modernize-use-emplace,
+  modernize-use-equals-default,
+  modernize-use-equals-delete,
+  modernize-use-nullptr,
+  modernize-use-override,
+  modernize-use-using,
+  -modernize-deprecated-headers,
+  -modernize-use-equals-default,
+  -modernize-use-equals-delete,
+
+  performance-*,
+  -performance-avoid-endl,
+  -performance-enum-size,
+  -performance-for-range-copy,
+  -performance-inefficient-vector-operation,
+  -performance-move-const-arg,
+  -performance-unnecessary-value-param,
+  -performance-use-std-move,
+
+  readability-container-size-empty,
+  readability-delete-null-pointer,
+  readability-misleading-indentation,
+  readability-redundant-smartptr-get,
+  readability-redundant-string-cstr,
+  -readability-container-size-empty
+WarningsAsErrors: '*'
+FormatStyle: none
+CheckOptions:
+  bugprone-signed-bitwise.IgnorePositiveIntegerLiterals: true

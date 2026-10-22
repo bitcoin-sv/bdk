@@ -17,6 +17,7 @@
 # platform. Proves the merged core archive links and runs from a C++ app.
 if(TARGET MergeBDKFFI AND BDKFFI_MERGED_ARCHIVE)
   find_package(Threads REQUIRED)
+  bdkApplySourceWarningPolicy()
   add_executable(bdkffi_smoke ${CMAKE_CURRENT_SOURCE_DIR}/smoke.cpp)
   add_dependencies(bdkffi_smoke MergeBDKFFI)
   target_include_directories(bdkffi_smoke PRIVATE ${CMAKE_SOURCE_DIR}/module/rustbdk/capi/include)
