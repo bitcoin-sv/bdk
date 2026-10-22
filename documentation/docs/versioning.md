@@ -7,16 +7,16 @@ This page describes both the **versioning scheme as currently implemented** in t
 
 BDK carries several distinct version numbers:
 
-- **Overall BDK version — `1.3.0`.** The root `CMakeLists.txt` sets
-  `BDK_VERSION_MAJOR/MINOR/PATCH` to `1`, `3` and `0`, respectively.
+- **Overall BDK version — `1.4.0`.** The root `CMakeLists.txt` sets
+  `BDK_VERSION_MAJOR/MINOR/PATCH` to `1`, `4` and `0`, respectively.
   CPack uses these values for its package version.
-- **Go-binding version — `1.3.0`.** A separate `BDK_GOLANG_VERSION_{MAJOR,MINOR,PATCH}`, exposed
+- **Go-binding version — `1.4.0`.** A separate `BDK_GOLANG_VERSION_{MAJOR,MINOR,PATCH}`, exposed
   from Go via `module/gobdk/version.go` (`BDK_GOLANG_VERSION_STRING()` and friends). It is
   **derived** from the overall version in `module/gobdk/bdkcgo/CMakeLists.txt` with zero
   increments, so it equals the overall version. Releases tag it as `module/gobdk/v<version>`.
   Up to `module/gobdk/v1.2.4` the patch carried a `+2` offset, which is why that tag pairs with
   BDK `1.2.2`.
-- **Rust C ABI version — `1.3.0`.** `module/rustbdk/capi/CMakeLists.txt` derives all three components from the overall BDK version with zero increments. This records the C ABI build version, not a promise that every Cargo package manifest uses the same number.
+- **Rust C ABI version — `1.4.0`.** `module/rustbdk/capi/CMakeLists.txt` derives all three components from the overall BDK version with zero increments. This records the C ABI build version; the `rust-bdk` and `bdk-sys` Cargo packages remain at `0.2.0`.
 - **Captured bitcoin-sv (BSV) version / commit.** Version and Git metadata from the selected
   BSV checkout are captured when CMake configures the build: `core/BDKVersion.h` is the static declaration of the version symbols, and
   their concrete values are generated into `BDKVersion.cpp` from `core/BDKVersion.cpp.in`. They are
