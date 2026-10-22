@@ -23,6 +23,7 @@ namespace {
 char* _helper_malloc_literal(const char* msg) noexcept
 {
     const size_t nbBytes = std::strlen(msg) + 1;
+    // NOLINTNEXTLINE(cppcoreguidelines-no-malloc)
     char* out = static_cast<char*>(malloc(nbBytes));
     if (out == nullptr) {
         return nullptr;
@@ -54,6 +55,7 @@ const char* cgo_from_asm_v2(const char* asmPtr, uint64_t asmLen, uint64_t* scrip
             return nullptr;
         }
 
+        // NOLINTNEXTLINE(cppcoreguidelines-no-malloc)
         char* scriptPtr = static_cast<char*>(malloc(script.size()));
         if (scriptPtr == nullptr) {
             return nullptr;
@@ -76,6 +78,7 @@ const char* cgo_to_asm_v2(const char* scriptPtr, uint64_t scriptLen)
         auto asmStr = bsv::to_asm(script);
         auto asmLen = asmStr.size()+1; // extra null terminator in C-String
 
+        // NOLINTNEXTLINE(cppcoreguidelines-no-malloc)
         char* asmPtr = static_cast<char*>(malloc(asmLen));
         if (asmPtr == nullptr) {
             return nullptr;

@@ -36,16 +36,14 @@ bool IsAbiError(TxError result, AbiError_t code)
 }
 
 struct ValidatorFixture {
-    TxValidatorCGO engine{ nullptr };
+    TxValidatorCGO engine{ TxValidator_CreateV2(kNetwork, sizeof(kNetwork) - 1) };
 
-    ValidatorFixture() { engine = TxValidator_CreateV2(kNetwork, sizeof(kNetwork) - 1); }
     ~ValidatorFixture() { TxValidator_Destroy(engine); }
 };
 
 struct BatchFixture {
-    ValidateBatchCGO batch{ nullptr };
+    ValidateBatchCGO batch{ ValidateBatch_CreateV2() };
 
-    BatchFixture() { batch = ValidateBatch_CreateV2(); }
     ~BatchFixture() { ValidateBatch_Destroy(batch); }
 };
 
