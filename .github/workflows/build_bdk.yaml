@@ -63,12 +63,10 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Set up Go 1.24.9
-        # ubuntu-22.04 already have go 1.24.9
-        if: matrix.os != 'ubuntu-22.04'
+      - name: Set up Go 1.26.0
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24.9'
+          go-version: '1.26.0'
           check-latest: false
 
       - name: Define dependant bitcoin-sv commit
