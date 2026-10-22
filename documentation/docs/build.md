@@ -34,7 +34,7 @@ a build. A newer version is not automatically a tested version.
 | bitcoin-sv | `6504a3aff65ba97c0f6c80962b033e35ecbfed4b` | `build_bdk.yaml`, `DEFAULT_BITCOIN_SV_COMMIT` |
 | Boost | 1.85.0 | `prebuild_dependancies.yaml`, `BOOST_VERSION` |
 | OpenSSL, native only | 3.4.0 | `prebuild_dependancies.yaml`, `OPENSSL_VERSION` |
-| Go | CI requests 1.24.9 except on ubuntu-22.04, where it assumes the runner supplies it; `go.mod` declares 1.24.0 | `build_bdk.yaml`, `Set up Go 1.24.9`; `module/gobdk/go.mod` |
+| Go | CI requests 1.26.0 on every native runner; gobdk requires Go 1.26.0 or later | `build_bdk.yaml`, `Set up Go 1.26.0`; `module/gobdk/go.mod` |
 | Rust | 1.98.1, with clippy and rustfmt | `module/rustbdk/rust-toolchain.toml`; identical copy in `test/rust` |
 | C++ | C++20 | `cmake/BDKBuildSetting.cmake`, `CMAKE_CXX_STANDARD` |
 | CMake | Minimum 3.16; CI does not pin a version | root `CMakeLists.txt` |
