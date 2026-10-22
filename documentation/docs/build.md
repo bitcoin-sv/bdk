@@ -194,6 +194,8 @@ CI job `clang-tidy` in `build_bdk.yaml` compiles every first-party C++ target
 (core, examples, C++ tests, and the Go/Rust shims) on ubuntu-22.04 with clang and
 clang-tidy from apt.llvm.org, pinned to **LLVM 23** (`LLVM_VERSION` in the job).
 It is C++ only: no ctest, so no `go test` or `cargo` runs, and Go is not installed. The check list lives in the root `.clang-tidy`; `WarningsAsErrors: '*'`
+It runs first: the build matrix and the SHA-256 sanitiser jobs in the same workflow
+wait for it, so a C++ finding fails one job rather than every leg.
 there turns every finding into a compile error, so the job goes red on any new
 finding in `core/`, `module/` or `test/`. bitcoin-sv, secp256k1, univalue, leveldb and
 generated sources are never linted, and neither are the first-party files that are

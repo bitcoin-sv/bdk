@@ -37,6 +37,9 @@ env:
 
 jobs:
   build-bdk:
+    ## The C++ gate runs first: a clang-tidy finding or a compiler warning in
+    ## first-party code fails one job instead of every leg below
+    needs: clang-tidy
     strategy:
       matrix:
         include:
@@ -229,6 +232,7 @@ jobs:
   ## so -fsanitize=thread goes in through a compiler launcher. The positive
   ## control hashes without selecting first and must be reported.
   tsan-sha256-selection:
+    needs: clang-tidy
     if: github.event_name == 'pull_request'
     strategy:
       matrix:
@@ -301,6 +305,7 @@ jobs:
   ## in its arm64 slice only and SHA-NI / SSE4 in its x86_64 slice only, both with
   ## the load-time selection. Builds bdk_core only (the dependency bundle is arm64).
   universal-sha256-slices:
+    needs: clang-tidy
     if: github.event_name == 'pull_request'
     runs-on: macos-15
     timeout-minutes: 45
