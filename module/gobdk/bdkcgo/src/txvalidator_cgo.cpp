@@ -14,13 +14,15 @@ uint64_t TxValidator_ABI_EchoLength(uint64_t len){
 }
 
 // Internal helper to emit a diagnostic from a catch handler.
-// Stream insertion and the flush in std::endl can allocate, so they can throw — and a
+// Stream insertion and the explicit flush can allocate, so they can throw — and a
 // catch handler that throws leaves an extern "C" function with an exception already in
 // flight, which is undefined behaviour. The emission is therefore best effort: if it
 // fails, the diagnostic is dropped and the caller still gets its documented result.
+// The flush is deliberate: the Go side may abort right after this returns, and an
+// unflushed stdout buffer would lose the only record of the exception.
 static void _helper_log_cgo_exception(const char* where, const char* what) noexcept {
     try {
-        std::cout << "CGO EXCEPTION : " << where << " " << what << std::endl;
+        std::cout << "CGO EXCEPTION : " << where << " " << what << '\n' << std::flush;
     }
     catch (...) {
     }

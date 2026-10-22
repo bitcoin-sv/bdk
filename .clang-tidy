@@ -51,7 +51,6 @@ Checks: >
   -modernize-use-equals-delete,
 
   performance-*,
-  -performance-avoid-endl,
   -performance-enum-size,
   -performance-for-range-copy,
   -performance-inefficient-vector-operation,

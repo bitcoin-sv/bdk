@@ -146,7 +146,7 @@ BOOST_AUTO_TEST_SUITE(test_sha256_backends)
 BOOST_AUTO_TEST_CASE(selects_the_best_backend_the_cpu_supports)
 {
     const std::string& active = bsv::SelectSha256Backend();
-    std::cout << "SHA-256 backend: " << active << std::endl;
+    std::cout << "SHA-256 backend: " << active << '\n';
 
     BOOST_TEST(active == sha256_test::ExpectedSelection());
     const auto& supported = bsv::Sha256SupportedBackends();
@@ -166,7 +166,7 @@ BOOST_AUTO_TEST_CASE(known_answers_through_every_backend, *boost::unit_test::tim
 {
     for(const auto& backend : bsv::Sha256SupportedBackends())
     {
-        std::cout << "known answers through " << backend.name << std::endl;
+        std::cout << "known answers through " << backend.name << '\n';
         const UseBackend use{backend};
         for(const auto& ka : KnownAnswers())
         {
@@ -217,7 +217,7 @@ BOOST_AUTO_TEST_CASE(double_sha256_of_64_byte_pairs)
     {
         if(backend.d_block_2way == nullptr)
             continue;
-        std::cout << "2-way double SHA-256 through " << backend.name << std::endl;
+        std::cout << "2-way double SHA-256 through " << backend.name << '\n';
         std::array<uint8_t, 64> out{};
         backend.d_block_2way(pairs, out);
         BOOST_TEST(Hex(out) == expected, backend.name << " 2way vector");
@@ -235,7 +235,7 @@ BOOST_AUTO_TEST_CASE(double_sha256_of_64_byte_pairs)
 BOOST_AUTO_TEST_CASE(every_backend_matches_scalar_on_random_messages, *boost::unit_test::timeout(120))
 {
     const uint64_t seed = TestSeed();
-    std::cout << "differential seed (BDK_SHA256_TEST_SEED): " << seed << std::endl;
+    std::cout << "differential seed (BDK_SHA256_TEST_SEED): " << seed << '\n';
     std::mt19937_64 rng{seed};
     std::uniform_int_distribution<size_t> length{0, 4200};
 
@@ -320,7 +320,7 @@ BOOST_AUTO_TEST_CASE(throughput_per_backend, *boost::unit_test::timeout(120))
     std::array<uint8_t, 128> pairs{};
     std::array<uint8_t, 64> out{};
 
-    std::cout << "SHA-256 throughput, " << (rounds * buffer_bytes >> 20) << " MiB per backend:" << std::endl;
+    std::cout << "SHA-256 throughput, " << (rounds * buffer_bytes >> 20) << " MiB per backend:" << '\n';
     for(const auto& backend : bsv::Sha256SupportedBackends())
     {
         std::array<uint32_t, 8> state{};
@@ -344,7 +344,7 @@ BOOST_AUTO_TEST_CASE(throughput_per_backend, *boost::unit_test::timeout(120))
             const double secs2 = std::chrono::duration<double>(std::chrono::steady_clock::now() - start2).count();
             std::cout << ", 2way " << std::setw(6) << (2.0 * calls / 1e6) / secs2 << " M pair-hashes/s";
         }
-        std::cout << std::endl;
+        std::cout << '\n';
         BOOST_TEST((state != std::array<uint32_t, 8>{}));
     }
 }

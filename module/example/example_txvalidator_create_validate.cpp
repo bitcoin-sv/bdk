@@ -213,7 +213,7 @@ int main(int argc, char* argv[])
     const TxError ret = se.ValidateTransaction(etxBin, std::span<const int32_t>(utxoArray) , blockHeight, consensus);
 
     const std::string etxHex = bsv::Bin2Hex(etxBin);
-    std::cout << std::endl << std::endl << "ExtendedTX Hex" << std::endl << std::endl << etxHex << std::endl << std::endl;
+    std::cout << '\n' << '\n' << "ExtendedTX Hex" << '\n' << '\n' << etxHex << '\n' << '\n';
     if (!bsv::TxErrorIsOk(ret)) {
         throw std::runtime_error("ERROR verify script for tx " + etxHex);
     }
@@ -235,7 +235,7 @@ bsv::CMutableTransactionExtended BuildReguarTransaction(const std::string& netwo
     keystore.AddKey(key1);
 
     if(key1.VerifyPubKey(pubkey1))
-        std::cout << "PubKey verified" << std::endl;
+        std::cout << "PubKey verified" << '\n';
 
     // Construct a tx
     const Amount amount{1000000};

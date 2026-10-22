@@ -143,7 +143,7 @@ BOOST_AUTO_TEST_CASE(selected_at_load_before_threads_hash, *boost::unit_test::ti
     sha256_test::CheckInstalledBackend();
     const std::string expected = sha256_test::ExpectedSelection();
     BOOST_TEST(bsv::SelectSha256Backend() == expected);
-    std::cout << "SHA-256 backend: " << bsv::SelectSha256Backend() << std::endl;
+    std::cout << "SHA-256 backend: " << bsv::SelectSha256Backend() << '\n';
 
     // BDK_SHA256_FORCE_SCALAR was read at load: changing it now changes nothing
     const bool forced_at_start = sha256_test::ForcedScalar();
