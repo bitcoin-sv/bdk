@@ -26,7 +26,7 @@ cpp_int Magnitude(const cpp_int& value)
     return value < 0 ? -value : value;
 }
 
-cpp_int SignedMagnitude(cpp_int magnitude, bool negative)
+cpp_int SignedMagnitude(const cpp_int& magnitude, bool negative)
 {
     return negative && magnitude != 0 ? -magnitude : magnitude;
 }

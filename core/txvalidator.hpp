@@ -119,9 +119,10 @@ enum class TxValidationNetwork {
  *   For free-consolidation classification itself (the gate that bypasses the floor),
  *   BDK runs the same rules as bitcoin-sv IsFreeConsolidationTxn — see implIsFreeConsolidation.
  */
-class CTxValidator {
+class CTxValidator 
+{
     public:
-        CTxValidator(const std::string chainName);
+        CTxValidator(const std::string& chainName);
         CTxValidator(TxValidationNetwork network);
         CTxValidator(const Consensus::Params& consensusParams, bool requireStandard);
 
