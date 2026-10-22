@@ -1,5 +1,4 @@
-#ifndef __ABIGUARD_HPP__
-#define __ABIGUARD_HPP__
+#pragma once
 
 #include <cstddef>
 #include <cstdint>
@@ -98,5 +97,3 @@ inline std::span<const uint32_t> uint32_span(const uint32_t* ptr, uint64_t len)
 }
 
 } // namespace bdkcgo
-
-#endif /* __ABIGUARD_HPP__ */

@@ -11,7 +11,7 @@
 // fails, the diagnostic is dropped and the caller still gets its documented result.
 // The flush is deliberate: the Go side may abort right after this returns, and an
 // unflushed stdout buffer would lose the only record of the exception.
-static void _helper_log_cgo_exception(const char* where, const char* what) noexcept
+static void helper_log_cgo_exception(const char* where, const char* what) noexcept
 {
     try {
         std::cout << "CGO EXCEPTION : " << where << " " << what << '\n' << std::flush;
@@ -26,13 +26,13 @@ ValidateBatchCGO ValidateBatch_CreateV2()
         return new bsv::ValidateBatch();
     }
     catch (const std::exception& e) {
-        _helper_log_cgo_exception(__FILE__ " at ValidateBatch_CreateV2", e.what());
+        helper_log_cgo_exception(__FILE__ " at ValidateBatch_CreateV2", e.what());
         return nullptr;
     }
     catch (...) {
         // Nothing may cross the extern "C" boundary; a non-std exception takes the
         // same channel as any other construction failure.
-        _helper_log_cgo_exception(__FILE__ " at ValidateBatch_CreateV2", "unknown exception");
+        helper_log_cgo_exception(__FILE__ " at ValidateBatch_CreateV2", "unknown exception");
         return nullptr;
     }
 }
@@ -67,7 +67,7 @@ TxError ValidateBatch_Add(
         return bsv::AbiErrorToTxError(e.code());
     }
     catch (const std::exception& e) {
-        _helper_log_cgo_exception(__FILE__ " at ValidateBatch_Add", e.what());
+        helper_log_cgo_exception(__FILE__ " at ValidateBatch_Add", e.what());
         return bsv::TxErrorException();
     }
     catch (...) {

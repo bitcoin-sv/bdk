@@ -1,5 +1,4 @@
-#ifndef __GO_BDK_H__
-#define __GO_BDK_H__
+#pragma once
 
 /**
  *  File globing all headers to a single one
@@ -15,5 +14,3 @@
 #include <bdkcgo/doserror_cgo.h>
 #include <bdkcgo/abierror_cgo.h>
 #include <bdkcgo/txvalidator_cgo.h>
-
-#endif /* __GO_BDK_H__ */

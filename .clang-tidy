@@ -20,7 +20,6 @@ Checks: >
   -bugprone-implicit-widening-of-multiplication-result,
   -bugprone-misplaced-widening-cast,
   -bugprone-narrowing-conversions,
-  -bugprone-reserved-identifier,
   -bugprone-suspicious-include,
   -bugprone-throwing-static-initialization,
   -bugprone-unused-local-non-trivial-variable,

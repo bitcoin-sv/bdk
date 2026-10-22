@@ -1,5 +1,4 @@
-#ifndef __TXVALIDATOR_HPP__
-#define __TXVALIDATOR_HPP__
+#pragma once
 
 #include <string>
 #include <cstdint>
@@ -474,4 +473,3 @@ int CPP_SCRIPT_ERR_ERROR_COUNT();
 
 } // namespace bsv
 
-#endif /* __TXVALIDATOR_HPP__ */

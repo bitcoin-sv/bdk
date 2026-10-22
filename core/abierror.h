@@ -1,5 +1,4 @@
-#ifndef __ABIERROR_H__
-#define __ABIERROR_H__
+#pragma once
 
 #include <cstdint>
 #include <string_view>
@@ -35,4 +34,3 @@ inline TxError AbiErrorToTxError(AbiError_t e) {
 
 } // namespace bsv
 
-#endif /* __ABIERROR_H__ */

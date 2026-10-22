@@ -1,5 +1,4 @@
-#ifndef __ABIERROR_CGO_H__
-#define __ABIERROR_CGO_H__
+#pragma once
 
 #ifdef __cplusplus
 extern "C" {
@@ -30,5 +29,3 @@ const char* abi_error_string(int error);
 #ifdef __cplusplus
 }
 #endif
-
-#endif /* __ABIERROR_CGO_H__ */

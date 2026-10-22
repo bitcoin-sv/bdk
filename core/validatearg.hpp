@@ -1,5 +1,4 @@
-#ifndef __VALIDATEARG_HPP__
-#define __VALIDATEARG_HPP__
+#pragma once
 
 #include <cstdint>
 #include <span>
@@ -90,4 +89,3 @@ private:
 
 } // namespace bsv
 
-#endif /* __VALIDATEARG_HPP__ */

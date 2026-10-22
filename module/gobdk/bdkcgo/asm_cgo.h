@@ -1,5 +1,4 @@
-#ifndef __ASM_CGO_H__
-#define __ASM_CGO_H__
+#pragma once
 
 #include <stdint.h>
 
@@ -38,5 +37,3 @@ const char* cgo_to_asm_v2(const char* scriptPtr, uint64_t scriptLen);
 #ifdef __cplusplus
 }
 #endif
-
-#endif /* __ASM_CGO_H__ */

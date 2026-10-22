@@ -1,5 +1,4 @@
-#ifndef __TXERROR_CGO_H__
-#define __TXERROR_CGO_H__
+#pragma once
 
 #ifdef __cplusplus
 /* In C++ bridge compilation, use the authoritative core header to avoid duplicate
@@ -25,5 +24,3 @@ typedef struct {
 } TxError;
 
 #endif /* __cplusplus */
-
-#endif /* __TXERROR_CGO_H__ */

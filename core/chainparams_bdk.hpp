@@ -1,5 +1,4 @@
-#ifndef __CHAINPARAMS_BDK_HPP__
-#define __CHAINPARAMS_BDK_HPP__
+#pragma once
 
 #include <string>
 #include <functional>
@@ -61,4 +60,3 @@ namespace bsv
     };
 }
 
-#endif /* __CHAINPARAMS_BDK_HPP__ */
