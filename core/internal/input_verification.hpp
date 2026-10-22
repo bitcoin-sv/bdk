@@ -106,6 +106,7 @@ private:
     std::atomic<size_t> helpersOnJobs_{ 0 };  // helpers holding a place under HelperLimit()
 
     static std::atomic<InputVerifyPool*> created_;
+    static std::atomic<bool> tooFewCores_;  // set once Create finds fewer than 2 CPUs
 };
 
 class BusyScope {

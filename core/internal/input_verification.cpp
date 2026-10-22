@@ -257,10 +257,14 @@ InputVerifyPool* InputVerifyPool::Get()
 {
     if (auto* pool = Existing())
         return pool;
+    if (tooFewCores_.load(std::memory_order_acquire))
+        return nullptr;
     static std::mutex creationMutex;
     std::scoped_lock lock{ creationMutex };
     if (auto* pool = Existing())
         return pool;
+    if (tooFewCores_.load(std::memory_order_relaxed))
+        return nullptr;
     try {
         return Create();
     } catch (const std::bad_alloc&) {
@@ -335,12 +339,15 @@ InputVerifyPool* InputVerifyPool::Create()
 {
     if (const auto hook = inputPoolCreationHook.load(std::memory_order_relaxed))
         hook();
-    // The first successful creation retains this effective CPU count.
+    // Read once: a pool keeps this count, and fewer than 2 CPUs means no pool
+    // for the process lifetime. Only allocation or thread-start failure retries.
     size_t cores = bsv::detail::EffectiveCpuCount();
     if (const size_t cap = inputPoolCoresCap.load(); cap != 0)
         cores = std::min(cores, cap);
-    if (cores < 2)
+    if (cores < 2) {
+        tooFewCores_.store(true, std::memory_order_release);
         return nullptr;
+    }
     auto pool = std::make_unique<InputVerifyPool>(cores);
     for (size_t i = 0; i + 1 < cores && StartHelper(pool.get()); ++i)
         ++pool->helpers_;
@@ -518,6 +525,7 @@ void JobCaller::Finish()
 }
 
 std::atomic<InputVerifyPool*> InputVerifyPool::created_{ nullptr };
+std::atomic<bool> InputVerifyPool::tooFewCores_{ false };
 #endif
 } // namespace bsv::detail
 

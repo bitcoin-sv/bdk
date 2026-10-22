@@ -1673,6 +1673,40 @@ BOOST_AUTO_TEST_CASE(pool_creation_failure_is_retried, *boost::unit_test::disabl
     BOOST_CHECK_GT(bsv::detail::HelperVerifiedInputCountForTesting(), helpersBefore);
 }
 
+// A separate CTest process runs this with the pool capped to one core. Each
+// creation attempt that does not throw reads the CPU count once; finding
+// fewer than 2 CPUs is final, so later large txs neither lock nor read again.
+BOOST_AUTO_TEST_CASE(pool_below_two_cores_is_not_retried, *boost::unit_test::disabled()
+    *boost::unit_test::timeout(PARALLEL_TEST_TIMEOUT_S))
+{
+    static std::atomic<unsigned> attempts{ 0 };
+    attempts.store(0);
+    struct CreationHookGuard {
+        bsv::detail::InputPoolCreationHook previous = bsv::detail::SetInputPoolCreationHookForTesting(+[] {
+            if (attempts.fetch_add(1) == 0)
+                throw std::bad_alloc{};
+        });
+        ~CreationHookGuard() { bsv::detail::SetInputPoolCreationHookForTesting(previous); }
+    } hook;
+    const InputThresholdGuard parallel(FORCE_PARALLEL);
+    constexpr size_t inputs = 200;
+    const bsv::CTxValidator validator("main");
+    const auto bytes = SerializeExtended(MakeSignedP2PKHSpend(
+        std::vector<SigHashType>(inputs, SigHashType().withForkId()), 2, true));
+    const auto helpersBefore = bsv::detail::HelperVerifiedInputCountForTesting();
+    // The first attempt fails to allocate, which is transient.
+    BOOST_REQUIRE(bsv::TxErrorIsOk(ValidateP2PKHSpend(validator, bytes, inputs, true)));
+    BOOST_CHECK_EQUAL(attempts.load(), 1u);
+    // The second reads one CPU and records that no pool can exist.
+    for (int tx = 0; tx < 5; ++tx)
+        BOOST_REQUIRE(bsv::TxErrorIsOk(ValidateP2PKHSpend(validator, bytes, inputs, true)));
+    BOOST_CHECK_EQUAL(attempts.load(), 2u);
+    // Asking for the pool directly does not try again either.
+    BOOST_CHECK_EQUAL(bsv::detail::InputPoolHelperCountForTesting(), 0u);
+    BOOST_CHECK_EQUAL(attempts.load(), 2u);
+    BOOST_CHECK_EQUAL(bsv::detail::HelperVerifiedInputCountForTesting(), helpersBefore);
+}
+
 BOOST_AUTO_TEST_CASE(valid_tx_validates_with_inputs_spread_over_helpers, *boost::unit_test::timeout(PARALLEL_TEST_TIMEOUT_S))
 {
     constexpr size_t nInputs = 200;

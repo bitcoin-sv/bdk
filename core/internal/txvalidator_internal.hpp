@@ -147,9 +147,9 @@ InputPoolHook SetInputPoolHookForTesting(InputPoolHook hook);
 void WakeInputHelpersForTesting(bool all = true);
 
 // Caps the cores the input pool sizes itself to (0: no cap) and returns the
-// previous cap. Takes effect only when set before the pool is created, so a
-// test binary sets it at start-up to reproduce a CI-sized pool on a bigger
-// machine. Tests only.
+// previous cap. Takes effect only when set before the pool reads the CPU
+// count, so a test binary sets it at start-up to reproduce a CI-sized pool on
+// a bigger machine. Tests only.
 size_t SetInputPoolCoresForTesting(size_t cores);
 
 // Helper threads in the input pool, creating the pool if it does not exist
@@ -211,7 +211,8 @@ size_t LimitCpuCount(size_t cpus, std::optional<double> cgroupLimit);
 // of the thread that creates it, the first caller with a large tx) and, by
 // LimitCpuCount, to the cgroup limit read under `cgroupRoot` ("/" on a live
 // system; tests pass a fixture root). Reads the system on every call; the
-// input pool calls it once.
+// input pool calls it once, again only after failing to allocate or to start
+// a helper.
 size_t EffectiveCpuCount(const std::string& cgroupRoot = "/");
 
 } // namespace bsv::detail

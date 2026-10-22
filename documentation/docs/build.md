@@ -445,6 +445,7 @@ The native tests separate internal mechanics from transaction-level integration:
 | `test_txvalidator_internal` | Cancellation index boundaries and caller flags; job claims, completed verdicts, cancellation and exception order; admission against the helper cap and core budget; largest-job selection and stable ties; CPU-count and cgroup fixtures. |
 | `test_txvalidator` and `test_txvalidator_parallel_inputs` | Real script verification, serial parity, caller-only token access, helper recruitment and lifetime, allocation fallback, wait cancellation, and configured helper limits. |
 | `test_txvalidator_pool_creation_retry` | A fresh process injects a creation failure: the first large transaction runs serially, then a later transaction creates the pool and uses helpers. |
+| `test_txvalidator_pool_below_two_cores` | A fresh process capped to one core: after one injected creation failure, a single attempt reads the CPU count, finds fewer than 2 and is not repeated by later large transactions. |
 
 The internal target also starts concurrent first callers and checks that they
 share one pool. Most internal tests instantiate a pool without workers or run a
