@@ -3505,52 +3505,6 @@ BOOST_AUTO_TEST_CASE(leaving_helper_wakes_another_for_a_queued_job, PARALLEL_TES
     BOOST_CHECK_EQUAL(bsv::detail::QueuedJobCountForTesting(), 0u);
 }
 
-// A helper keeps working while the busy count equals the core count, its
-// own core included: only a count above the core count sends it away. One
-// helper works a job of slow inputs (40 ms each, SlowInputs); the count is
-// raised to exactly the core count, and the helper must verify at least two
-// more inputs (the one in flight would finish either way).
-BOOST_AUTO_TEST_CASE(helper_stays_with_the_busy_count_at_the_core_count, PARALLEL_TEST_CASE_DECORATORS)
-{
-    const size_t helpers = bsv::detail::InputPoolHelperCountForTesting();
-    if (helpers == 0) {
-        BOOST_TEST_MESSAGE("no helpers on this machine; nothing to check");
-        return;
-    }
-    const size_t cores = helpers + 1;
-    const size_t nInputs = bsv::detail::DEFAULT_PARALLEL_INPUT_THRESHOLD;
-    const auto etxBin = SignedP2PKHBin(nInputs);
-    const bsv::CTxValidator se("main");
-    const InputThresholdGuard defaults(bsv::detail::DEFAULT_PARALLEL_INPUT_THRESHOLD);
-    BOOST_REQUIRE(PoolIsIdle());
-    const SlowInputs slow(std::chrono::milliseconds(40));
-
-    const auto busy = [] { return bsv::detail::BusyThreadCountForTesting(); };
-    const auto helperInputs = [] { return bsv::detail::HelperVerifiedInputCountForTesting(); };
-    std::atomic<bool> done{ false };
-    TxError status = bsv::TxErrorOk();
-    std::thread caller([&] {
-        status = ValidateP2PKHSpend(se, etxBin, nInputs, /*consensus=*/true);
-        done.store(true);
-    });
-    // A job at the threshold is offered one helper: the caller and it are busy.
-    const bool joined = WaitFor([&] { return busy() == 2 || done.load(); }) && !done.load();
-    const size_t extra = cores - 2;
-    bsv::detail::AddBusyThreadsForTesting(extra);
-    const size_t atCores = busy();
-    const uint64_t before = helperInputs();
-    const bool kept = WaitFor([&] { return helperInputs() >= before + 2 || done.load(); }, std::chrono::milliseconds(3000))
-        && helperInputs() >= before + 2;
-    bsv::detail::ReleaseBusyThreadsForTesting(extra);
-    caller.join();
-
-    BOOST_CHECK(bsv::TxErrorIsOk(status));
-    BOOST_REQUIRE_MESSAGE(joined, "the slow job did not get exactly one helper");
-    BOOST_REQUIRE_EQUAL(atCores, cores);
-    BOOST_CHECK_MESSAGE(kept, "the helper verified " << helperInputs() - before
-        << " more inputs with the busy count at the core count; expected at least 2");
-}
-
 // Records, from the claim hook, which thread claimed each input of a parallel
 // job and that thread's stack size; optionally holds the caller on input 0 so
 // helpers claim the rest.

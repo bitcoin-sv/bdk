@@ -258,6 +258,20 @@ BOOST_AUTO_TEST_CASE(participant_reuses_one_source_for_successive_inputs)
     BOOST_CHECK_EQUAL(observed[2], 2u);
 }
 
+BOOST_AUTO_TEST_CASE(helper_keeps_working_at_the_core_budget)
+{
+    const auto source = task::CCancellationSource::Make();
+    const auto token = source->GetToken();
+    auto job = ValidJob(3, token);
+    std::atomic<size_t> places{ 1 };
+    InputJob::HelperTerms terms{ .cores = 2, .places = &places };
+    busyThreads.store(2);
+    BOOST_CHECK_EQUAL(job->Work(&terms).value(), 3u);
+    BOOST_CHECK_EQUAL(job->UnclaimedInputs(), 0u);
+    BOOST_CHECK(!terms.placeReturned);
+    BOOST_CHECK_EQUAL(places.load(), 1u);
+}
+
 BOOST_AUTO_TEST_CASE(excess_helper_leaves_before_claiming)
 {
     const auto source = task::CCancellationSource::Make();
