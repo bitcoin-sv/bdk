@@ -1638,6 +1638,41 @@ BOOST_AUTO_TEST_CASE(input_counters_are_off_by_default)
     BOOST_CHECK(!shippedInputCountersEnabled);
 }
 
+// A separate CTest process runs this before any validation creates the pool.
+BOOST_AUTO_TEST_CASE(pool_creation_failure_is_retried, *boost::unit_test::disabled()
+    *boost::unit_test::timeout(PARALLEL_TEST_TIMEOUT_S))
+{
+    if (bsv::detail::EffectiveCpuCount() < 2) {
+        BOOST_TEST_MESSAGE("requires at least two effective CPUs to observe retry using helpers");
+        return;
+    }
+    static std::atomic<unsigned> attempts{ 0 };
+    attempts.store(0);
+    struct CreationHookGuard {
+        bsv::detail::InputPoolCreationHook previous = bsv::detail::SetInputPoolCreationHookForTesting(+[] {
+            if (attempts.fetch_add(1) == 0)
+                throw std::bad_alloc{};
+        });
+        ~CreationHookGuard() { bsv::detail::SetInputPoolCreationHookForTesting(previous); }
+    } hook;
+    const InputThresholdGuard parallel(FORCE_PARALLEL);
+    constexpr size_t inputs = 200;
+    const bsv::CTxValidator validator("main");
+    const auto bytes = SerializeExtended(MakeSignedP2PKHSpend(
+        std::vector<SigHashType>(inputs, SigHashType().withForkId()), 2, true));
+    const auto jobsBefore = bsv::detail::JobVerifiedInputCountForTesting();
+    const auto helpersBefore = bsv::detail::HelperVerifiedInputCountForTesting();
+    BOOST_REQUIRE(bsv::TxErrorIsOk(ValidateP2PKHSpend(validator, bytes, inputs, true)));
+    BOOST_CHECK_EQUAL(attempts.load(), 1u);
+    BOOST_CHECK_EQUAL(bsv::detail::JobVerifiedInputCountForTesting(), jobsBefore);
+    BOOST_CHECK_EQUAL(bsv::detail::HelperVerifiedInputCountForTesting(), helpersBefore);
+    for (unsigned retry = 0; retry < 50 && bsv::detail::HelperVerifiedInputCountForTesting() == helpersBefore; ++retry)
+        BOOST_REQUIRE(bsv::TxErrorIsOk(ValidateP2PKHSpend(validator, bytes, inputs, true)));
+    BOOST_CHECK_EQUAL(attempts.load(), 2u);
+    BOOST_CHECK_GT(bsv::detail::JobVerifiedInputCountForTesting(), jobsBefore);
+    BOOST_CHECK_GT(bsv::detail::HelperVerifiedInputCountForTesting(), helpersBefore);
+}
+
 BOOST_AUTO_TEST_CASE(valid_tx_validates_with_inputs_spread_over_helpers, *boost::unit_test::timeout(PARALLEL_TEST_TIMEOUT_S))
 {
     constexpr size_t nInputs = 200;

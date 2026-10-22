@@ -376,6 +376,7 @@ std::atomic<bsv::detail::ValidationStageHook> validationStageHook{ nullptr };  /
 std::atomic<bsv::detail::HelperReleasedCoreHook> helperReleasedCoreHook{ nullptr };  // tests only
 std::atomic<bsv::detail::InputPoolHook> inputPoolHook{ nullptr };  // tests only
 std::atomic<size_t> inputPoolCoresCap{ 0 };  // 0: no cap (tests only)
+std::atomic<bsv::detail::InputPoolCreationHook> inputPoolCreationHook{ nullptr };
 std::atomic<int64_t> parallelInputHelpers{ -1 };  // SetParallelInputHelpers; < 0: automatic
 
 #if BDK_PARALLEL_INPUTS
@@ -630,11 +631,21 @@ private:
 // inside BDK.
 class InputVerifyPool {
 public:
-    // nullptr when the machine has a single core or no helper could be started.
+    // Failed creation is local to this call; a later caller retries. The
+    // acquire/release publication keeps the existing-pool path lock-free.
     static InputVerifyPool* Get()
     {
-        static InputVerifyPool* const pool = Create();
-        return pool;
+        if (auto* pool = Existing())
+            return pool;
+        static std::mutex creationMutex;
+        std::lock_guard lock{ creationMutex };
+        if (auto* pool = Existing())
+            return pool;
+        try {
+            return Create();
+        } catch (const std::bad_alloc&) {
+            return nullptr;
+        }
     }
 
     // The pool if Get() already created it; never creates one.
@@ -711,39 +722,30 @@ public:
         wake_.notify_one();
     }
 
-private:
-    InputVerifyPool(size_t cores) : cores_{ cores } {}
+    // Internal type: public so make_unique can construct its owned candidate.
+    explicit InputVerifyPool(size_t cores) : cores_{ cores } {}
 
+private:
     static InputVerifyPool* Create()
     {
-        // hardware_concurrency(), lowered on Linux to the container's cgroup
-        // CPU limit and to the affinity mask of the thread that creates the
-        // pool, i.e. of the first caller with a large tx; the size is kept for
-        // the life of the process.
-        size_t cores = 0;
-        try {
-            cores = bsv::detail::EffectiveCpuCount();
-        } catch (const std::exception&) {
-            // e.g. bad_alloc reading the cgroup files. Get() keeps this
-            // nullptr, so the process stays serial: a lost speed-up, never a
-            // failed call.
-            return nullptr;
-        }
+        if (const auto hook = inputPoolCreationHook.load(std::memory_order_relaxed))
+            hook();
+        // The first successful creation retains this effective CPU count.
+        size_t cores = bsv::detail::EffectiveCpuCount();
         if (const size_t cap = inputPoolCoresCap.load(); cap != 0)
             cores = std::min(cores, cap);
         if (cores < 2)
             return nullptr;
-        auto* pool = new (std::nothrow) InputVerifyPool(cores);
-        if (pool == nullptr)
-            return nullptr;
-        for (size_t i = 0; i + 1 < cores && StartHelper(pool); ++i)
+        auto pool = std::make_unique<InputVerifyPool>(cores);
+        for (size_t i = 0; i + 1 < cores && StartHelper(pool.get()); ++i)
             ++pool->helpers_;
-        if (pool->helpers_ == 0) {
-            delete pool;
+        if (pool->helpers_ == 0)
             return nullptr;
-        }
-        created_.store(pool, std::memory_order_release);
-        return pool;
+        // Detached helpers retain this address for process lifetime. No
+        // throwing operation may follow their first successful start.
+        auto* published = pool.release();
+        created_.store(published, std::memory_order_release);
+        return published;
     }
 
     // Starts one detached helper thread running pool->Run(). On POSIX it gets
@@ -955,6 +957,11 @@ int64_t bsv::GetParallelInputHelpers()
 size_t bsv::detail::SetParallelInputThresholdForTesting(size_t minInputs)
 {
     return parallelInputThreshold.exchange(minInputs);
+}
+
+bsv::detail::InputPoolCreationHook bsv::detail::SetInputPoolCreationHookForTesting(InputPoolCreationHook hook)
+{
+    return inputPoolCreationHook.exchange(hook);
 }
 
 uint64_t bsv::detail::HelperVerifiedInputCountForTesting()

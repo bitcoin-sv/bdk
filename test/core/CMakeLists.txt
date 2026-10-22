@@ -182,6 +182,10 @@ add_executable(test_txvalidator "${CMAKE_CURRENT_SOURCE_DIR}/test_txvalidator.cp
 target_link_libraries(test_txvalidator PRIVATE bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono ${CMAKE_DL_LIBS})
 target_compile_definitions(test_txvalidator PRIVATE BDK_CGROUP_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data/cgroup")
 bdk_add_unit_test(test_txvalidator)
+add_test(NAME test_txvalidator_pool_creation_retry
+         COMMAND $<TARGET_FILE:test_txvalidator> --report_level=detailed
+                 --run_test=test_txvalidator/parallel_input_verification/pool_creation_failure_is_retried
+                 -- --input-pool-cores=4)
 ## The same suite with every multi-input transaction verified on several threads,
 ## on a pool of at most 4 cores (CI-sized, on any machine)
 add_test(NAME test_txvalidator_parallel_inputs

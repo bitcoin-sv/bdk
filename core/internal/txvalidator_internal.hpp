@@ -153,6 +153,10 @@ size_t SetInputPoolCoresForTesting(size_t cores);
 // yet; 0 without a pool. Tests only.
 size_t InputPoolHelperCountForTesting();
 
+// Before allocating a new pool; may throw bad_alloc to exercise serial fallback.
+using InputPoolCreationHook = void (*)();
+InputPoolCreationHook SetInputPoolCreationHookForTesting(InputPoolCreationHook hook);
+
 // Threads currently counted against the core budget: callers inside
 // VerifyScript, ValidateTransaction or VerifySpend plus helpers on a job. Tests only.
 size_t BusyThreadCountForTesting();
