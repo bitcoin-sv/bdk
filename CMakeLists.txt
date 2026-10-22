@@ -132,7 +132,7 @@ HelpFindBSVSource()
 
 ## Global version should be the maximum of all version numbers
 set(BDK_VERSION_MAJOR "1" CACHE INTERNAL "Bitcoin Development Kit major version")
-set(BDK_VERSION_MINOR "3" CACHE INTERNAL "Bitcoin Development Kit minor version")
+set(BDK_VERSION_MINOR "4" CACHE INTERNAL "Bitcoin Development Kit minor version")
 set(BDK_VERSION_PATCH "0" CACHE INTERNAL "Bitcoin Development Kit patch version")
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)## Always include the current directory

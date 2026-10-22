@@ -1,15 +1,16 @@
 # Release Notes
 
-**Current version: BDK 1.3.0** (`BDK_VERSION_MAJOR/MINOR/PATCH` in `CMakeLists.txt`).
+**Current version: BDK 1.4.0** (`BDK_VERSION_MAJOR/MINOR/PATCH` in `CMakeLists.txt`).
 
 BDK is built against a pinned `bitcoin-sv` commit; the exact source commit and toolchain versions
 are recorded in [documentation/docs/build.md](documentation/docs/build.md) and captured into the
-generated version header (`core/BDKVersion.h` / `module/gobdk/version.go`) at build time.
+generated version values (declared in `core/BDKVersion.h` and exposed by
+`module/gobdk/version.go`) at build time.
 
 For the detailed list of changes, see the project's commit history / changelog. This file is
 installed alongside the package (`CMakeLists.txt`).
 
-## Recent changes
+## Unreleased
 
 - **A transaction with 16 or more inputs is verified on several cores.** `ValidateTransaction`,
   `VerifyScript` and `ValidateBatch` hand such a transaction's inputs to the calling thread plus
@@ -49,6 +50,22 @@ installed alongside the package (`CMakeLists.txt`).
   verifying at once at `n`. Results are the same at every setting; it can be changed at any time.
   The WASM build has no helpers and does not expose it. The Go binding calls two new cgo symbols,
   so it needs GoBDK archives built from this version.
+## 1.4.0
+
+- **Hardware SHA-256** on x86-64 and ARM64, selected at load time with known-answer
+  self-tests and a scalar fallback; Go and Rust expose the selected backend
+  ([#66](https://github.com/bitcoin-sv/bdk/pull/66)).
+- **Cancellable validation** in C++, Go and Rust, including Go `*Context` functions and
+  Rust `CancelFlag`. Cancellation returns a distinct error rather than a validation verdict.
+  `CheckStandardness` also rejects mismatched UTXO height counts and trailing bytes.
+  The Rust crates are `0.2.0` because `TxError` is now `#[non_exhaustive]`
+  ([#68](https://github.com/bitcoin-sv/bdk/pull/68)).
+- **Go dependency and toolchain updates:** `golang.org/x/crypto` is `v0.58.0`;
+  gobdk now requires **Go 1.26.0 or later**, matching the CI toolchain
+  ([#72](https://github.com/bitcoin-sv/bdk/pull/72)).
+
+## Recent changes
+
 - **Validation calls can be cancelled.** `CTxValidator` has overloads of `ValidateTransaction`,
   `VerifyScript`, `VerifySpend`, `ValidateBatch` and `CheckStandardness` that take a cancellation
   token; Go has `ValidateTransactionContext`, `VerifyScriptContext`,
@@ -130,8 +147,8 @@ installed alongside the package (`CMakeLists.txt`).
   with it. Verdicts are unchanged, and signatures on the original sighash algorithm (without
   FORKID, with the Chronicle flag, or any signature in consensus mode before the UAHF fork) never
   read the shared data. No API change in C++, Go, Rust or WASM.
-- **The Go binding version equals the BDK version again.** The `+2` patch offset is gone, so
-  this release's Go module is `1.3.0` rather than `1.3.2`, and it sorts after the last published
+- **The Go binding version equals the BDK version again.** BDK `1.3.0` removed the `+2`
+  patch offset, making its Go module `1.3.0` rather than `1.3.2`, sorting after
   `module/gobdk/v1.2.4`. The configure-time check that the overall version is the maximum of
   all component versions never fired: it compared dotted versions with the numeric `LESS`. It
   now uses `VERSION_LESS`, fails the configure, and covers the Rust C ABI version as well.
