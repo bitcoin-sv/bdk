@@ -43,7 +43,6 @@ Checks: >
   modernize-use-override,
   modernize-use-using,
   -modernize-deprecated-headers,
-  -modernize-use-equals-delete,
 
   performance-*,
   -performance-enum-size,

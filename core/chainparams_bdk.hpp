@@ -34,11 +34,12 @@ namespace bsv
         // Create the chain param object based on its name
         std::unique_ptr<CChainParams> Create(const std::string& name) const;
 
+        ChainParamsRegistry(const ChainParamsRegistry&) = delete;
+        ChainParamsRegistry& operator=(const ChainParamsRegistry&) = delete;
+
     private:
         // Prevent construction from outside
         ChainParamsRegistry() = default;
-        ChainParamsRegistry(const ChainParamsRegistry&) = delete;
-        ChainParamsRegistry& operator=(const ChainParamsRegistry&) = delete;
 
         std::unordered_map<std::string, ChainParamsCreator> registry_;
     };
