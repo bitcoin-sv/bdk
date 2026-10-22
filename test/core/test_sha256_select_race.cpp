@@ -81,6 +81,7 @@ BOOST_AUTO_TEST_CASE(selected_at_load_before_threads_hash, *boost::unit_test::ti
     std::latch go{threads};
     std::vector<int> ok(hashers, 0);
     std::vector<std::thread> pool;
+    pool.reserve(hashers);
     for(int i = 0; i < hashers; ++i)
     {
         pool.emplace_back([&, i] {
