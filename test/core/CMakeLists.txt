@@ -187,7 +187,7 @@ target_compile_definitions(test_txvalidator_internal PRIVATE BDK_CGROUP_FIXTURE_
 bdk_add_unit_test(test_txvalidator_internal)
 add_test(NAME test_txvalidator_pool_creation_retry
          COMMAND $<TARGET_FILE:test_txvalidator> --report_level=detailed
-                 --run_test=test_txvalidator/parallel_input_verification/pool_creation_failure_is_retried
+                 --run_test=test_txvalidator/pool_creation_failure_is_retried
                  -- --input-pool-cores=4)
 add_test(NAME test_txvalidator_pool_below_two_cores
          COMMAND $<TARGET_FILE:test_txvalidator> --report_level=detailed
