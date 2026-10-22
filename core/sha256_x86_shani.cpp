@@ -24,6 +24,7 @@
 #pragma GCC target("sha,sse4.1,ssse3")
 #endif
 
+// NOLINTNEXTLINE(bugprone-suspicious-include)
 #include "crypto/sha256d64_shani.cpp"
 
 #if defined(__clang__)

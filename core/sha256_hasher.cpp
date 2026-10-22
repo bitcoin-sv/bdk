@@ -12,7 +12,7 @@
 
 #if !defined(__EMSCRIPTEN__)
 
-#include "crypto/sha256.cpp"
+#include "crypto/sha256.cpp" // NOLINT(bugprone-suspicious-include)
 
 #include "sha256_backend.hpp"
 
