@@ -21,7 +21,6 @@
 #include "txvalidator.hpp"
 
 namespace po = boost::program_options;
-namespace pt = boost::property_tree;
 
 // CsvDataRecord structure matching the Go version
 struct CsvDataRecord {

@@ -46,8 +46,6 @@
 #include "extendedTx.hpp"
 #include "txerror.h"
 
-namespace ba = boost::algorithm;
-
 using namespace std;
 using namespace bsv;
 

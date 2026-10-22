@@ -32,7 +32,6 @@ Checks: >
   misc-static-assert,
   misc-unused-alias-decls,
   misc-unused-using-decls,
-  -misc-unused-alias-decls,
 
   modernize-deprecated-headers,
   modernize-loop-convert,
