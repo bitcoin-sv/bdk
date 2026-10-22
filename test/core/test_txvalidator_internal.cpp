@@ -374,12 +374,16 @@ BOOST_AUTO_TEST_CASE(core_release_notifies_only_with_queued_work_and_capacity)
 
 BOOST_AUTO_TEST_SUITE_END()
 
-BOOST_AUTO_TEST_CASE(concurrent_first_callers_share_one_pool)
+// Skips, rather than passes, a case that needs a pool on a 1-CPU machine.
+static boost::test_tools::assertion_result TwoEffectiveCpus(boost::unit_test::test_unit_id)
 {
-    if (EffectiveCpuCount() < 2) {
-        BOOST_TEST_MESSAGE("requires at least two effective CPUs");
-        return;
-    }
+    boost::test_tools::assertion_result result(EffectiveCpuCount() >= 2);
+    result.message() << "requires at least two effective CPUs";
+    return result;
+}
+
+BOOST_AUTO_TEST_CASE(concurrent_first_callers_share_one_pool, *boost::unit_test::precondition(TwoEffectiveCpus))
+{
     BOOST_REQUIRE(InputVerifyPool::Existing() == nullptr);
     static std::atomic<unsigned> attempts{ 0 };
     struct CreationGuard {

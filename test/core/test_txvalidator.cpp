@@ -1638,14 +1638,19 @@ BOOST_AUTO_TEST_CASE(input_counters_are_off_by_default)
     BOOST_CHECK(!shippedInputCountersEnabled);
 }
 
+// Skips, rather than passes, a case that needs a helper on a 1-CPU machine.
+static boost::test_tools::assertion_result TwoEffectiveCpus(boost::unit_test::test_unit_id)
+{
+    boost::test_tools::assertion_result result(bsv::detail::EffectiveCpuCount() >= 2);
+    result.message() << "requires at least two effective CPUs to observe retry using helpers";
+    return result;
+}
+
 // A separate CTest process runs this before any validation creates the pool.
 BOOST_AUTO_TEST_CASE(pool_creation_failure_is_retried, *boost::unit_test::disabled()
-    *boost::unit_test::timeout(PARALLEL_TEST_TIMEOUT_S))
+    *boost::unit_test::timeout(PARALLEL_TEST_TIMEOUT_S)
+    *boost::unit_test::precondition(TwoEffectiveCpus))
 {
-    if (bsv::detail::EffectiveCpuCount() < 2) {
-        BOOST_TEST_MESSAGE("requires at least two effective CPUs to observe retry using helpers");
-        return;
-    }
     static std::atomic<unsigned> attempts{ 0 };
     attempts.store(0);
     struct CreationHookGuard {
