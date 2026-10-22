@@ -86,7 +86,6 @@ std::string trim(const std::string& str) {
 // Enhanced split function to handle quotes
 std::vector<std::string> split(const std::string& line, char delimiter = ',') {
     std::vector<std::string> result;
-    std::string token;
     bool inQuotes = false;
     std::stringstream ss;
 

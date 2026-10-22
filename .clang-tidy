@@ -22,7 +22,6 @@ Checks: >
   -bugprone-narrowing-conversions,
   -bugprone-suspicious-include,
   -bugprone-throwing-static-initialization,
-  -bugprone-unused-local-non-trivial-variable,
 
   clang-analyzer-*,
   -clang-analyzer-security.insecureAPI.strcpy,
