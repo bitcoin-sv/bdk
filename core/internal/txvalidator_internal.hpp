@@ -14,7 +14,7 @@
 
 namespace bsv::detail {
 
-enum class InputEvent { Claimed, Verified, Failed, Polled, CallerCancelled };
+enum class InputEvent : uint8_t { Claimed, Verified, Failed, Polled, CallerCancelled };
 using InputHook = void (*)(size_t index, InputEvent event);
 
 // One source per job participant, reused for its successive inputs. The index
@@ -64,7 +64,7 @@ size_t SetParallelInputThresholdForTesting(size_t minInputs);
 
 // Helper threads of the input pool are created with this stack size where
 // the platform lets BDK choose it (POSIX), rather than the platform default.
-inline constexpr size_t INPUT_HELPER_STACK_BYTES = size_t{ 8 } << 20;
+inline constexpr size_t INPUT_HELPER_STACK_BYTES = size_t{ 8 } << 20U;
 
 // The counters below (helper inputs, job inputs, helper participations) count
 // only while enabled; off by default, so production does no per-input write
@@ -77,6 +77,8 @@ public:
     ~ScopedInputCountersForTesting() { SetInputCountersEnabledForTesting(previous_); }
     ScopedInputCountersForTesting(const ScopedInputCountersForTesting&) = delete;
     ScopedInputCountersForTesting& operator=(const ScopedInputCountersForTesting&) = delete;
+    ScopedInputCountersForTesting(ScopedInputCountersForTesting&&) = delete;
+    ScopedInputCountersForTesting& operator=(ScopedInputCountersForTesting&&) = delete;
 
 private:
     const bool previous_;
@@ -121,7 +123,7 @@ using InputSourceAllocationHook = void (*)(bool helper);
 InputSourceAllocationHook SetInputSourceAllocationHookForTesting(InputSourceAllocationHook hook);
 
 // Caller-side phases before input work is offered. Internal observer for tests.
-enum class ValidationStage { Deserializing, TransactionChecks, PrecomputedData };
+enum class ValidationStage : uint8_t { Deserializing, TransactionChecks, PrecomputedData };
 using ValidationStageHook = void (*)(ValidationStage stage);
 ValidationStageHook SetValidationStageHookForTesting(ValidationStageHook hook);
 
@@ -137,7 +139,7 @@ HelperReleasedCoreHook SetHelperReleasedCoreHookForTesting(HelperReleasedCoreHoo
 // coordinated with a release that skips the mutex is allowed there.
 // Returns the previous hook. Tests only.
 // JobClosed runs under the job mutex; observers must not block or call pool functions.
-enum class InputPoolEvent { BeforeOffer, Waiting, CoreUnavailable, JobClosed };
+enum class InputPoolEvent : uint8_t { BeforeOffer, Waiting, CoreUnavailable, JobClosed };
 using InputPoolHook = void (*)(InputPoolEvent event);
 InputPoolHook SetInputPoolHookForTesting(InputPoolHook hook);
 // Wake existing helpers so a test can observe each one's Waiting event.
@@ -181,6 +183,8 @@ public:
     }
     ScopedBusyThreadsForTesting(const ScopedBusyThreadsForTesting&) = delete;
     ScopedBusyThreadsForTesting& operator=(const ScopedBusyThreadsForTesting&) = delete;
+    ScopedBusyThreadsForTesting(ScopedBusyThreadsForTesting&&) = delete;
+    ScopedBusyThreadsForTesting& operator=(ScopedBusyThreadsForTesting&&) = delete;
 
 private:
     size_t count_;

@@ -10,10 +10,10 @@
 #include <internal/txvalidator_internal.hpp>
 
 #include <algorithm>
-#include <cctype>
+#include <charconv>
 #include <cerrno>
 #include <cmath>
-#include <cstdlib>
+#include <memory>
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -57,13 +57,11 @@ std::optional<int64_t> ParseInt(std::string_view text)
 {
     if (text.empty())
         return std::nullopt;
-    const std::string s(text);
-    char* end = nullptr;
-    errno = 0;
-    const long long value = std::strtoll(s.c_str(), &end, 10);
-    if (errno != 0 || end != s.c_str() + s.size() || !(std::isdigit(static_cast<unsigned char>(s[0])) || s[0] == '-'))
+    int64_t value{};
+    const auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), value);
+    if (error != std::errc{} || end != text.data() + text.size())
         return std::nullopt;
-    return static_cast<int64_t>(value);
+    return value;
 }
 
 // The single line of a cgroup file, without its newline.
@@ -88,7 +86,7 @@ bool HasPathPrefix(std::string_view path, std::string_view root)
 {
     if (root == "/")
         return true;
-    return path.substr(0, root.size()) == root && (path.size() == root.size() || path[root.size()] == '/');
+    return path.starts_with(root) && (path.size() == root.size() || path[root.size()] == '/');
 }
 
 // mountinfo escapes space, tab, newline and backslash as \ooo.
@@ -115,7 +113,7 @@ std::optional<std::string> UnescapeMountPath(std::string_view text)
     return out;
 }
 
-enum class CgroupVersion { V1, V2 };
+enum class CgroupVersion : uint8_t { V1, V2 };
 
 struct CpuCgroup {
     CgroupVersion version;
@@ -140,9 +138,9 @@ std::optional<CpuCgroup> FindCpuCgroup(std::string_view content)
         if (path.empty() || path[0] != '/')
             return std::nullopt;
         if (hierarchy == "0")
-            v2 = CpuCgroup{ CgroupVersion::V2, std::string(path) };
+            v2 = CpuCgroup{ .version = CgroupVersion::V2, .path = std::string(path) };
         else if (ContainsCpu(controllers))
-            return CpuCgroup{ CgroupVersion::V1, std::string(path) };
+            return CpuCgroup{ .version = CgroupVersion::V1, .path = std::string(path) };
     }
     return v2;
 }
@@ -158,7 +156,7 @@ std::optional<std::string> FindCpuCgroupDir(std::string_view content, const CpuC
         const auto fields = Split(line, ' ');
         // ID, parent ID, major:minor, root, mount point, options, optional
         // fields..., "-", filesystem type, source, super options.
-        const auto separator = std::find(fields.begin(), fields.end(), std::string_view("-"));
+        const auto separator = std::ranges::find(fields, std::string_view("-"));
         if (fields.size() < 6 || separator == fields.end() || separator - fields.begin() < 6
             || fields.end() - separator < 4)
             return std::nullopt;
@@ -250,16 +248,19 @@ size_t bsv::detail::LimitCpuCount(size_t cpus, std::optional<double> cgroupLimit
 // CPUs in the calling thread's affinity mask, sized for any CPU count.
 static std::optional<size_t> AffinityCpuCount()
 {
-    for (int ncpus = 1024; ncpus <= (1 << 20); ncpus *= 2) {
-        cpu_set_t* mask = CPU_ALLOC(ncpus);
+    constexpr int INITIAL_AFFINITY_CPUS = 1024;
+    // Bound probing to a 128 KiB mask even if the kernel rejects its size.
+    constexpr int MAX_AFFINITY_CPUS = 1 << 20;
+    const auto freeMask = [](cpu_set_t* mask) { CPU_FREE(mask); };
+    for (int ncpus = INITIAL_AFFINITY_CPUS; ncpus <= MAX_AFFINITY_CPUS; ncpus *= 2) {
+        std::unique_ptr<cpu_set_t, decltype(freeMask)> mask{ CPU_ALLOC(ncpus), freeMask };
         if (mask == nullptr)
             return std::nullopt;
         const size_t size = CPU_ALLOC_SIZE(ncpus);
-        CPU_ZERO_S(size, mask);
-        const int rc = sched_getaffinity(0, size, mask);
+        CPU_ZERO_S(size, mask.get());
+        const int rc = sched_getaffinity(0, size, mask.get());
         const int saved = errno;
-        const int count = rc == 0 ? CPU_COUNT_S(size, mask) : 0;
-        CPU_FREE(mask);
+        const int count = rc == 0 ? CPU_COUNT_S(size, mask.get()) : 0;
         if (rc == 0)
             return count > 0 ? std::optional<size_t>(static_cast<size_t>(count)) : std::nullopt;
         if (saved != EINVAL)

@@ -24,9 +24,9 @@
 
 // Builds without threads (WASM without pthreads) verify inputs serially only.
 #if defined(__EMSCRIPTEN__) && !defined(__EMSCRIPTEN_PTHREADS__)
-#define BDK_PARALLEL_INPUTS 0
+#define BDK_PARALLEL_INPUTS 0 // NOLINT(cppcoreguidelines-macro-usage): remove threading code in WASM.
 #else
-#define BDK_PARALLEL_INPUTS 1
+#define BDK_PARALLEL_INPUTS 1 // NOLINT(cppcoreguidelines-macro-usage): remove threading code in WASM.
 #endif
 
 #if BDK_PARALLEL_INPUTS
@@ -384,6 +384,7 @@ std::atomic<int64_t> parallelInputHelpers{ -1 };  // SetParallelInputHelpers; < 
 // Each extra participant is worth at least this many inputs (fewer when the
 // threshold is lower, so a tx at the threshold is offered a helper).
 constexpr size_t MIN_INPUTS_PER_PARTICIPANT = 8;
+constexpr std::chrono::milliseconds CALLER_CANCELLATION_POLL_INTERVAL{ 10 };
 
 std::atomic<size_t> busyThreads{ 0 };
 thread_local bool threadIsBusy{ false };
@@ -408,9 +409,9 @@ public:
 
     // What a helper's Work() call checks before each claim.
     struct HelperTerms {
-        size_t cores;                     // leave once more threads than this are busy
-        std::atomic<size_t>* places;      // helpers holding a place under HelperLimit()
-        std::atomic<uint64_t>* inputs;    // counts each input verified, or nullptr
+        size_t cores{ 0 };                // leave once more threads than this are busy
+        std::atomic<size_t>* places{ nullptr }; // helpers holding a place under HelperLimit()
+        std::atomic<uint64_t>* inputs{ nullptr }; // counts each input verified, or nullptr
         bool placeReturned = false;       // set when the helper left over the limit
     };
 
@@ -509,7 +510,7 @@ public:
     // A helper joins only an open job; the caller waits for every joined helper.
     bool TryJoin()
     {
-        std::lock_guard lock{ mutex_ };
+        std::scoped_lock lock{ mutex_ };
         if (closed_ || helpersUnavailable_.load(std::memory_order_relaxed))
             return false;
         ++joined_;
@@ -518,7 +519,7 @@ public:
 
     void Leave()
     {
-        std::lock_guard lock{ mutex_ };
+        std::scoped_lock lock{ mutex_ };
         if (--joined_ == 0 && closed_)
             left_.notify_one();
     }
@@ -540,7 +541,7 @@ public:
             }
             // Only an active caller tail wait has a timer. Idle pool helpers
             // remain parked; an already-drained job never polls here.
-            if (left_.wait_for(lock, std::chrono::milliseconds{ 10 }, [this] { return joined_ == 0; }))
+            if (left_.wait_for(lock, CALLER_CANCELLATION_POLL_INTERVAL, [this] { return joined_ == 0; }))
                 break;
             // A token can invoke caller code. Do not hold the job mutex while
             // polling it, and never invoke it from noexcept unwind cleanup.
@@ -563,7 +564,7 @@ public:
     // never claimed. Called only after every joined participant has drained.
     std::optional<TxError> CompletedResult()
     {
-        std::lock_guard lock{ mutex_ };
+        std::scoped_lock lock{ mutex_ };
         // Claims form a contiguous prefix, and every joined participant has
         // drained. A real failure is definitive only if no lower claim was
         // abandoned. Higher cancellations cannot replace that verdict.
@@ -597,7 +598,7 @@ private:
     {
         if (const auto hook = inputHook.load(std::memory_order_relaxed))
             hook(index, bsv::detail::InputEvent::Failed);
-        std::lock_guard lock{ mutex_ };
+        std::scoped_lock lock{ mutex_ };
         if (result.domain == TX_ERR_DOMAIN_CANCELLED) {
             lowestCancelled_ = std::min(lowestCancelled_, index);
             return;
@@ -638,7 +639,7 @@ public:
         if (auto* pool = Existing())
             return pool;
         static std::mutex creationMutex;
-        std::lock_guard lock{ creationMutex };
+        std::scoped_lock lock{ creationMutex };
         if (auto* pool = Existing())
             return pool;
         try {
@@ -667,7 +668,7 @@ public:
     void Offer(const std::shared_ptr<InputJob>& job, size_t maxHelpers)
     {
         {
-            std::lock_guard lock{ mutex_ };
+            std::scoped_lock lock{ mutex_ };
             jobs_.push_back(job);
             openJobs_.fetch_add(1, std::memory_order_seq_cst);
         }
@@ -681,15 +682,15 @@ public:
 
     void WakeHelpersForTesting(bool all)
     {
-        std::lock_guard lock{ mutex_ };
+        std::scoped_lock lock{ mutex_ };
         if (all) wake_.notify_all();
         else wake_.notify_one();
     }
 
     void Withdraw(const std::shared_ptr<InputJob>& job)
     {
-        std::lock_guard lock{ mutex_ };
-        const auto it = std::find(jobs_.begin(), jobs_.end(), job);
+        std::scoped_lock lock{ mutex_ };
+        const auto it = std::ranges::find(jobs_, job);
         if (it != jobs_.end()) {
             jobs_.erase(it);
             openJobs_.fetch_sub(1, std::memory_order_relaxed);
@@ -698,7 +699,7 @@ public:
 
     size_t QueuedJobs()
     {
-        std::lock_guard lock{ mutex_ };
+        std::scoped_lock lock{ mutex_ };
         return jobs_.size();
     }
 
@@ -718,7 +719,7 @@ public:
             return;
         if (inputCountersEnabled.load(std::memory_order_relaxed))
             helperReleaseNotifications.fetch_add(1, std::memory_order_relaxed);
-        { std::lock_guard lock{ mutex_ }; }  // a helper checking the budget is now waiting
+        { std::scoped_lock lock{ mutex_ }; }  // a helper checking the budget is now waiting
         wake_.notify_one();
     }
 
@@ -758,19 +759,28 @@ private:
         try {
             std::thread([pool] { pool->Run(); }).detach();
             return true;
-        } catch (const std::exception&) {  // system_error, bad_alloc
+        } catch (const std::system_error&) {
+            return false;
+        } catch (const std::bad_alloc&) {
             return false;
         }
 #else
-        pthread_attr_t attr;
-        if (pthread_attr_init(&attr) != 0)
+        struct Attributes {
+            pthread_attr_t value{};
+            const bool initialized = pthread_attr_init(&value) == 0;
+            Attributes() = default;
+            ~Attributes() { if (initialized) pthread_attr_destroy(&value); }
+            Attributes(const Attributes&) = delete;
+            Attributes& operator=(const Attributes&) = delete;
+            Attributes(Attributes&&) = delete;
+            Attributes& operator=(Attributes&&) = delete;
+        } attributes;
+        if (!attributes.initialized)
             return false;
-        pthread_t thread;
-        const bool started = pthread_attr_setstacksize(&attr, bsv::detail::INPUT_HELPER_STACK_BYTES) == 0
-            && pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED) == 0
-            && pthread_create(&thread, &attr, &InputVerifyPool::RunHelper, pool) == 0;
-        pthread_attr_destroy(&attr);
-        return started;
+        pthread_t thread{};
+        return pthread_attr_setstacksize(&attributes.value, bsv::detail::INPUT_HELPER_STACK_BYTES) == 0
+            && pthread_attr_setdetachstate(&attributes.value, PTHREAD_CREATE_DETACHED) == 0
+            && pthread_create(&thread, &attributes.value, &InputVerifyPool::RunHelper, pool) == 0;
 #endif
     }
 
@@ -854,7 +864,7 @@ private:
                 });
             }
             const bool count = inputCountersEnabled.load(std::memory_order_relaxed);
-            InputJob::HelperTerms terms{ cores_, &helpersOnJobs_, count ? &helperVerifiedInputs : nullptr };
+            InputJob::HelperTerms terms{ .cores = cores_, .places = &helpersOnJobs_, .inputs = count ? &helperVerifiedInputs : nullptr };
             if (job->TryJoin()) {
                 const size_t verified = job->Work(&terms).value_or(0);
                 if (count) {
@@ -908,6 +918,8 @@ public:
     }
     BusyScope(const BusyScope&) = delete;
     BusyScope& operator=(const BusyScope&) = delete;
+    BusyScope(BusyScope&&) = delete;
+    BusyScope& operator=(BusyScope&&) = delete;
 
 private:
     const bool counted_;
@@ -933,6 +945,8 @@ public:
     }
     JobCaller(const JobCaller&) = delete;
     JobCaller& operator=(const JobCaller&) = delete;
+    JobCaller(JobCaller&&) = delete;
+    JobCaller& operator=(JobCaller&&) = delete;
 
 private:
     InputVerifyPool& pool_;
