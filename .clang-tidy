@@ -24,7 +24,6 @@ Checks: >
   -cppcoreguidelines-pro-type-*,
   -cppcoreguidelines-rvalue-reference-param-not-moved,
   -cppcoreguidelines-special-member-functions,
-  -cppcoreguidelines-use-enum-class,
 
   misc-definitions-in-headers,
   misc-static-assert,

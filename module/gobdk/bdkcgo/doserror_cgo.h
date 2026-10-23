@@ -8,6 +8,7 @@ extern "C" {
  * DoSError_t mirrors bsv::DoSError_t from core/doserror.hpp.
  * Explicit values guarantee 1:1 correspondence — the bridge static_cast's between them.
  */
+//NOLINTNEXTLINE(cppcoreguidelines-use-enum-class)
 typedef enum {
     DOS_ERR_OK                       = 0,
     DOS_ERR_NULL_PREVOUT             = 1,
