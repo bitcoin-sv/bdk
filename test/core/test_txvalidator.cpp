@@ -12,6 +12,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <set>
 #include <string>
 #include <thread>
 #include <tuple>
@@ -1609,6 +1610,101 @@ struct InputThresholdGuard {
 constexpr size_t FORCE_PARALLEL = 2;
 constexpr size_t FORCE_SERIAL = std::numeric_limits<size_t>::max();
 
+// Polls until `done()` holds or `deadline` passes; returns done().
+template <typename Done>
+static bool WaitFor(Done done, std::chrono::milliseconds deadline = std::chrono::milliseconds(5000))
+{
+    const auto stop = std::chrono::steady_clock::now() + deadline;
+    while (!done() && std::chrono::steady_clock::now() < stop)
+        std::this_thread::sleep_for(std::chrono::microseconds(200));
+    return done();
+}
+
+// Waits up to `deadline` for `done`. A timeout is recorded in `timedOut`
+// instead of hanging the binary, so a missing event fails assertions.
+template <typename Done>
+static void Await(std::atomic<bool>& timedOut, Done done,
+                  std::chrono::milliseconds deadline = std::chrono::milliseconds(5000))
+{
+    if (!WaitFor(done, deadline))
+        timedOut = true;
+}
+
+// Installs a test hook for a scope and restores the previous one. `Set` is
+// one of the bsv::detail::Set*HookForTesting functions.
+template <auto Set>
+struct ScopedHook {
+    using Hook = decltype(Set(nullptr));
+    explicit ScopedHook(Hook hook) : previous{ Set(hook) } {}
+    ~ScopedHook() { Set(previous); }
+    ScopedHook(const ScopedHook&) = delete;
+    ScopedHook& operator=(const ScopedHook&) = delete;
+    const Hook previous;
+};
+using ScopedInputHook = ScopedHook<&bsv::detail::SetInputHookForTesting>;
+using ScopedPoolHook = ScopedHook<&bsv::detail::SetInputPoolHookForTesting>;
+using ScopedAllocationHook = ScopedHook<&bsv::detail::SetInputSourceAllocationHookForTesting>;
+using ScopedReleaseHook = ScopedHook<&bsv::detail::SetHelperReleasedCoreHookForTesting>;
+using ScopedStageHook = ScopedHook<&bsv::detail::SetValidationStageHookForTesting>;
+
+// The probe a probe class's static hooks read. A probe declares this member
+// before its ScopedHook members: a helper can call a hook the moment it is
+// installed, and the probe is cleared only after its hooks are restored.
+template <typename Probe>
+struct ActiveProbe {
+    explicit ActiveProbe(Probe* probe) { current.store(probe); }
+    ~ActiveProbe() { current.store(nullptr); }
+    ActiveProbe(const ActiveProbe&) = delete;
+    ActiveProbe& operator=(const ActiveProbe&) = delete;
+    static Probe& Get() { return *current.load(); }
+    static inline std::atomic<Probe*> current{ nullptr };
+};
+
+// Declared between a probe's ActiveProbe and its pool hook: wakes the helpers
+// once that hook is restored, which takes the pool mutex, so a Waiting
+// callback still running has returned before the probe is cleared.
+struct WakeHelpersAfterHooks {
+    WakeHelpersAfterHooks() = default;
+    ~WakeHelpersAfterHooks() { bsv::detail::WakeInputHelpersForTesting(); }
+    WakeHelpersAfterHooks(const WakeHelpersAfterHooks&) = delete;
+    WakeHelpersAfterHooks& operator=(const WakeHelpersAfterHooks&) = delete;
+};
+
+// Sets the process-wide helper limit for a scope and restores the previous one.
+class HelperLimitGuard {
+public:
+    explicit HelperLimitGuard(int64_t helpers) : previous_{ bsv::GetParallelInputHelpers() }
+    {
+        bsv::SetParallelInputHelpers(helpers);
+    }
+    ~HelperLimitGuard() { bsv::SetParallelInputHelpers(previous_); }
+    HelperLimitGuard(const HelperLimitGuard&) = delete;
+    HelperLimitGuard& operator=(const HelperLimitGuard&) = delete;
+
+private:
+    const int64_t previous_;
+};
+
+// The distinct helpers that have parked, recorded from a Waiting event (which
+// runs under the pool mutex, so this only takes its own short lock).
+class ParkedHelpers {
+public:
+    void Record()
+    {
+        const std::lock_guard lock{ mutex_ };
+        threads_.insert(std::this_thread::get_id());
+    }
+    size_t Count()
+    {
+        const std::lock_guard lock{ mutex_ };
+        return threads_.size();
+    }
+
+private:
+    std::mutex mutex_;
+    std::set<std::thread::id> threads_;
+};
+
 // Skips, rather than passes, a case that needs a helper on a 1-CPU machine.
 static boost::test_tools::assertion_result TwoEffectiveCpus(boost::unit_test::test_unit_id)
 {
@@ -1617,68 +1713,56 @@ static boost::test_tools::assertion_result TwoEffectiveCpus(boost::unit_test::te
     return result;
 }
 
-// A separate CTest process runs this before any validation creates the pool.
-// Outside parallel_input_verification, so running that suite by name does not
-// enable it after its cases have created the pool.
-BOOST_AUTO_TEST_CASE(pool_creation_failure_is_retried, *boost::unit_test::disabled()
+// The pool creation tests below each run in their own CTest process, before
+// anything creates the pool, and stay outside parallel_input_verification so
+// running that suite by name does not run them after its cases have created
+// it. The first creation attempt throws bad_alloc; every attempt is counted.
+struct FirstPoolCreationFails {
+    FirstPoolCreationFails() { attempts.store(0); }
+    bool Validate() const { return bsv::TxErrorIsOk(ValidateP2PKHSpend(validator, bytes, INPUTS, true)); }
+    static constexpr size_t INPUTS = 200;
+    static inline std::atomic<unsigned> attempts{ 0 };
+    const ScopedHook<&bsv::detail::SetInputPoolCreationHookForTesting> hook{ +[] {
+        if (attempts.fetch_add(1) == 0)
+            throw std::bad_alloc{};
+    } };
+    const InputThresholdGuard parallel{ FORCE_PARALLEL };
+    const bsv::CTxValidator validator{ "main" };
+    const std::vector<uint8_t> bytes{ SerializeExtended(MakeSignedP2PKHSpend(
+        std::vector<SigHashType>(INPUTS, SigHashType().withForkId()), 2, true)) };
+};
+
+// A failed creation verifies that tx serially; a later one creates the pool.
+BOOST_FIXTURE_TEST_CASE(pool_creation_failure_is_retried, FirstPoolCreationFails, *boost::unit_test::disabled()
     *boost::unit_test::timeout(60)
     *boost::unit_test::precondition(TwoEffectiveCpus))
 {
-    static std::atomic<unsigned> attempts{ 0 };
-    attempts.store(0);
-    struct CreationHookGuard {
-        bsv::detail::InputPoolCreationHook previous = bsv::detail::SetInputPoolCreationHookForTesting(+[] {
-            if (attempts.fetch_add(1) == 0)
-                throw std::bad_alloc{};
-        });
-        ~CreationHookGuard() { bsv::detail::SetInputPoolCreationHookForTesting(previous); }
-    } hook;
-    const InputThresholdGuard parallel(FORCE_PARALLEL);
-    constexpr size_t inputs = 200;
-    const bsv::CTxValidator validator("main");
-    const auto bytes = SerializeExtended(MakeSignedP2PKHSpend(
-        std::vector<SigHashType>(inputs, SigHashType().withForkId()), 2, true));
     const auto jobsBefore = bsv::detail::JobVerifiedInputCountForTesting();
     const auto helpersBefore = bsv::detail::HelperVerifiedInputCountForTesting();
-    BOOST_REQUIRE(bsv::TxErrorIsOk(ValidateP2PKHSpend(validator, bytes, inputs, true)));
+    BOOST_REQUIRE(Validate());
     BOOST_CHECK_EQUAL(attempts.load(), 1u);
     BOOST_CHECK_EQUAL(bsv::detail::JobVerifiedInputCountForTesting(), jobsBefore);
     BOOST_CHECK_EQUAL(bsv::detail::HelperVerifiedInputCountForTesting(), helpersBefore);
     for (unsigned retry = 0; retry < 50 && bsv::detail::HelperVerifiedInputCountForTesting() == helpersBefore; ++retry)
-        BOOST_REQUIRE(bsv::TxErrorIsOk(ValidateP2PKHSpend(validator, bytes, inputs, true)));
+        BOOST_REQUIRE(Validate());
     BOOST_CHECK_EQUAL(attempts.load(), 2u);
     BOOST_CHECK_GT(bsv::detail::JobVerifiedInputCountForTesting(), jobsBefore);
     BOOST_CHECK_GT(bsv::detail::HelperVerifiedInputCountForTesting(), helpersBefore);
 }
 
-// A separate CTest process runs this with the pool capped to one core. Each
-// creation attempt that does not throw reads the CPU count once; finding
-// fewer than 2 CPUs is final, so later large txs neither lock nor read again.
-// Outside parallel_input_verification for the same reason as the case above.
-BOOST_AUTO_TEST_CASE(pool_below_two_cores_is_not_retried, *boost::unit_test::disabled()
+// Run with the pool capped to one core. Each creation attempt that does not
+// throw reads the CPU count once; finding fewer than 2 CPUs is final, so
+// later large txs neither lock nor read again.
+BOOST_FIXTURE_TEST_CASE(pool_below_two_cores_is_not_retried, FirstPoolCreationFails, *boost::unit_test::disabled()
     *boost::unit_test::timeout(60))
 {
-    static std::atomic<unsigned> attempts{ 0 };
-    attempts.store(0);
-    struct CreationHookGuard {
-        bsv::detail::InputPoolCreationHook previous = bsv::detail::SetInputPoolCreationHookForTesting(+[] {
-            if (attempts.fetch_add(1) == 0)
-                throw std::bad_alloc{};
-        });
-        ~CreationHookGuard() { bsv::detail::SetInputPoolCreationHookForTesting(previous); }
-    } hook;
-    const InputThresholdGuard parallel(FORCE_PARALLEL);
-    constexpr size_t inputs = 200;
-    const bsv::CTxValidator validator("main");
-    const auto bytes = SerializeExtended(MakeSignedP2PKHSpend(
-        std::vector<SigHashType>(inputs, SigHashType().withForkId()), 2, true));
     const auto helpersBefore = bsv::detail::HelperVerifiedInputCountForTesting();
     // The first attempt fails to allocate, which is transient.
-    BOOST_REQUIRE(bsv::TxErrorIsOk(ValidateP2PKHSpend(validator, bytes, inputs, true)));
+    BOOST_REQUIRE(Validate());
     BOOST_CHECK_EQUAL(attempts.load(), 1u);
     // The second reads one CPU and records that no pool can exist.
     for (int tx = 0; tx < 5; ++tx)
-        BOOST_REQUIRE(bsv::TxErrorIsOk(ValidateP2PKHSpend(validator, bytes, inputs, true)));
+        BOOST_REQUIRE(Validate());
     BOOST_CHECK_EQUAL(attempts.load(), 2u);
     // Asking for the pool directly does not try again either.
     BOOST_CHECK_EQUAL(bsv::detail::InputPoolHelperCountForTesting(), 0u);
@@ -1693,6 +1777,75 @@ BOOST_AUTO_TEST_CASE(pool_below_two_cores_is_not_retried, *boost::unit_test::dis
 // every case after the first depends on it: a job that never closes hangs the
 // first case, which fails at the timeout, and the rest are skipped instead of
 // each hanging for its own timeout.
+//
+// Behaviour fixed during review, and the tests that keep it fixed ("unit":
+// test_txvalidator_internal; the rest are in this suite or just above it):
+//   Lowest failing input wins, whatever order failures are recorded in:
+//     failures_recorded_out_of_index_order_keep_the_lowest (2, 0, 1),
+//     exception_and_failure_keep_index_order, lowest_failing_input_wins;
+//     unit lowest_failure_wins_and_higher_cancellation_cannot_replace_it,
+//     unit stored_exception_keeps_input_order
+//   Inputs above a failure stop claiming and stop at their next poll:
+//     early_failure_abandons_inflight_higher_inputs; unit
+//     claims_stop_above_the_lowest_failure, unit
+//     early_stop_source_preserves_equal_and_lower_indices
+//   A cancelled lower input leaves no failure verdict above it:
+//     cancelled_lower_input_prevents_a_higher_failure_verdict; unit
+//     lower_cancelled_input_prevents_a_higher_failure_verdict
+//   Only the caller reads its token; helpers read the published flag:
+//     thread_cpu_budget_is_polled_only_by_the_caller,
+//     caller_token_during_parallel_job_and_wait; unit
+//     helper_work_never_polls_caller_token, unit
+//     helper_reads_published_flag_without_calling_caller
+//   The caller's wait for helpers polls its token, without spinning:
+//     caller_token_during_parallel_job_and_wait rows
+//     wait_poll_publishes_cancellation_to_helpers,
+//     uncancelled_tail_wait_does_not_busy_poll
+//   A completed verdict survives cancellation or a token exception:
+//     completed_verdict_survives_cancellation_in_serial_and_parallel,
+//     caller_token_during_parallel_job_and_wait rows cancel_after_* and
+//     throw_after_*
+//   A token exception drains helpers and stops them; unwind never re-polls:
+//     caller_token_during_parallel_job_and_wait rows
+//     throwing_wait_token_drains_helpers_before_return, preclaim_token_throw_*
+//   Caller setup allocation failure keeps a verdict helpers completed, and
+//   otherwise falls back to serial:
+//     completed_helpers_keep_verdict_after_caller_setup_failure,
+//     participant_source_allocation_failure_preserves_valid_result
+//   One cancellation source per participant, not per input: unit
+//     participant_reuses_one_source_for_successive_inputs
+//   A core freed before a job is published still recruits a helper:
+//     release_before_job_publication_recruits_a_helper,
+//     released_core_is_rechecked_after_a_failed_helper_reservation
+//   A helper leaving a job wakes another for a queued job:
+//     leaving_helper_wakes_another_for_a_queued_job
+//   The release that leaves a core idle wakes a parked helper; helpers leave
+//   an oversubscribed machine: helpers_leave_an_oversubscribed_machine_and_return;
+//     unit core_release_notifies_only_with_queued_work_and_capacity
+//   A helper stays at the core budget and leaves above it: unit
+//     helper_keeps_working_at_the_core_budget, unit
+//     excess_helper_leaves_before_claiming
+//   A tx started with every core busy takes a helper when one frees:
+//     large_tx_started_with_every_core_busy_takes_a_helper_when_one_frees
+//   Hashing, transaction checks and VerifySpend count against the budget:
+//     hashing_and_transaction_checks_count_against_the_core_budget,
+//     verify_spend_counts_against_the_core_budget
+//   The helper limit holds process-wide and when lowered mid-job:
+//     helper_limit_caps_concurrent_helpers,
+//     lowering_the_helper_limit_sends_helpers_away_mid_job,
+//     no_helpers_verifies_every_tx_on_its_caller
+//   Most unclaimed inputs wins a released core; ties keep queue order:
+//     released_core_recruits_for_the_largest_queued_job; unit
+//     next_job_takes_the_most_unclaimed_inputs
+//   A finished job behind a live one leaves the queue:
+//     finished_job_behind_a_live_one_leaves_the_queue; unit
+//     finished_front_jobs_are_removed
+//   Pool creation failure is retried, fewer than 2 CPUs is not:
+//     pool_creation_failure_is_retried, pool_below_two_cores_is_not_retried
+//   Helpers run on an 8 MiB stack: helpers_run_on_an_8_mib_stack,
+//     deep_scripts_verify_on_a_helper
+//   Test-only counters are off by default:
+//     input_counters_are_off_by_default, input_counters_count_only_when_enabled
 BOOST_AUTO_TEST_SUITE(parallel_input_verification)
 
 constexpr unsigned PARALLEL_TEST_TIMEOUT_S = 60;
@@ -1735,15 +1888,21 @@ BOOST_AUTO_TEST_CASE(valid_tx_validates_with_inputs_spread_over_helpers, *boost:
         "no input was verified on a helper thread");
 }
 
+// A tx's plain (not extended) serialization, as VerifySpend takes it.
+static std::vector<uint8_t> PlainTxBin(const CMutableTransaction& mtx)
+{
+    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
+    ss << mtx;
+    return { ss.begin(), ss.end() };
+}
+
 // The serial reference: VerifySpend on each input in order, the first failure wins.
 static TxError FirstFailingSpend(const bsv::CTxValidator& se,
                                  const bsv::CMutableTransactionExtended& eTx,
                                  const std::vector<int32_t>& utxoHeights,
                                  bool consensus)
 {
-    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-    ss << eTx.mtx;
-    const std::vector<uint8_t> txBin(ss.begin(), ss.end());
+    const auto txBin = PlainTxBin(eTx.mtx);
     for (size_t i = 0; i < eTx.vutxo.size(); ++i) {
         const CTxOut& source = eTx.vutxo[i];
         const TxError status = se.VerifySpend(std::span<const uint8_t>(txBin), static_cast<uint32_t>(i),
@@ -1901,9 +2060,7 @@ BOOST_AUTO_TEST_CASE(custom_flags_per_input_through_verify_script, PARALLEL_TEST
                 CorruptP2PKHSignature(eTx, 25);
             const auto etxBin = SerializeExtended(eTx);
 
-            CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-            ss << eTx.mtx;
-            const std::vector<uint8_t> txBin(ss.begin(), ss.end());
+            const auto txBin = PlainTxBin(eTx.mtx);
             TxError reference = bsv::TxErrorOk();
             for (size_t i = 0; i < PARITY_INPUTS && bsv::TxErrorIsOk(reference); ++i) {
                 const CTxOut& source = eTx.vutxo[i];
@@ -2125,16 +2282,6 @@ static bool PoolHasHelpers()
     return false;
 }
 
-// Polls until `done()` holds or `deadline` passes; returns done().
-template <typename Done>
-static bool WaitFor(Done done, std::chrono::milliseconds deadline = std::chrono::milliseconds(5000))
-{
-    const auto stop = std::chrono::steady_clock::now() + deadline;
-    while (!done() && std::chrono::steady_clock::now() < stop)
-        std::this_thread::sleep_for(std::chrono::microseconds(200));
-    return done();
-}
-
 static bool PoolIsIdle()
 {
     return WaitFor([] { return bsv::detail::BusyThreadCountForTesting() == 0; });
@@ -2146,49 +2293,101 @@ static std::vector<uint8_t> SignedP2PKHBin(size_t nInputs)
         /*nOutputs=*/1, /*precomputeForSigning=*/true));
 }
 
-// Hooks a probe replaced, in the order it installed them; the probe restores
-// them from its destructor.
-struct PreviousPoolAndInputHooks {
-    bsv::detail::InputPoolHook pool;
-    bsv::detail::InputHook input;
+// The second VerifySpend token poll is after BusyScope construction. Holding
+// there keeps a real ordinary caller on a core; releasing it exercises that
+// caller's actual BusyScope destruction and ReleasedCore notification path.
+class HeldSpendSource final : public task::CCancellationSource {
+public:
+    bool IsCanceled() override
+    {
+        if (++polls == 2) {
+            entered = true;
+            Await(timedOut, [&] { return release.load(); }, std::chrono::milliseconds(20000));
+        }
+        return false;
+    }
+    std::atomic<bool> entered{ false }, release{ false }, timedOut{ false };
+    size_t polls = 0;  // read only by this source's one VerifySpend caller
 };
-struct PreviousAllocationAndInputHooks {
-    bsv::detail::InputSourceAllocationHook allocation;
-    bsv::detail::InputHook input;
-};
-struct PreviousAllocationInputAndPoolHooks {
-    bsv::detail::InputSourceAllocationHook allocation;
-    bsv::detail::InputHook input;
-    bsv::detail::InputPoolHook pool;
-};
-struct PreviousInputAndReleaseHooks {
-    bsv::detail::InputHook input;
-    bsv::detail::HelperReleasedCoreHook release;
+
+// `count` ordinary VerifySpend callers, each held on a core inside its call by
+// a HeldSpendSource: they fill the core budget the way real callers do, and
+// Release(i) frees a core through that caller's real BusyScope exit.
+class HeldSpenders {
+public:
+    HeldSpenders(const bsv::CTxValidator& validator, size_t count)
+        : spend_{ MakeSignedP2PKHSpend({ SigHashType().withForkId() }, 1) }, txBin_{ PlainTxBin(spend_.mtx) },
+          results_(count, bsv::TxErrorException())
+    {
+        sources_.reserve(count);
+        threads_.reserve(count);
+        for (size_t i = 0; i < count; ++i) {
+            sources_.push_back(std::make_shared<HeldSpendSource>());
+            threads_.emplace_back([this, &validator, i] {
+                const CTxOut& source = spend_.vutxo[0];
+                results_[i] = validator.VerifySpend(txBin_, 0,
+                    std::span<const uint8_t>(source.scriptPubKey.data(), source.scriptPubKey.size()),
+                    source.nValue.GetSatoshis(), P2PKH_UTXO_HEIGHT, P2PKH_BLOCK_HEIGHT, true, std::nullopt,
+                    sources_[i]->GetToken());
+            });
+        }
+    }
+    ~HeldSpenders() { ReleaseAll(); }
+    HeldSpenders(const HeldSpenders&) = delete;
+    HeldSpenders& operator=(const HeldSpenders&) = delete;
+    // Whether every caller is on its core.
+    bool Entered()
+    {
+        return WaitFor([&] {
+            return std::all_of(sources_.begin(), sources_.end(), [](const auto& source) { return source->entered.load(); });
+        });
+    }
+    // Releases caller `i` and waits for it to return.
+    void Release(size_t i)
+    {
+        sources_[i]->release = true;
+        if (threads_[i].joinable())
+            threads_[i].join();
+    }
+    void ReleaseAll()
+    {
+        for (size_t i = 0; i < threads_.size(); ++i)
+            Release(i);
+    }
+    // Releases every caller; whether each was held without a timeout and passed.
+    bool AllPassed()
+    {
+        ReleaseAll();
+        for (size_t i = 0; i < results_.size(); ++i)
+            if (sources_[i]->timedOut || !bsv::TxErrorIsOk(results_[i]))
+                return false;
+        return true;
+    }
+
+private:
+    const bsv::CMutableTransactionExtended spend_;
+    const std::vector<uint8_t> txBin_;
+    std::vector<TxError> results_;
+    std::vector<std::shared_ptr<HeldSpendSource>> sources_;
+    std::vector<std::thread> threads_;
 };
 
 // These phases are reached through the public APIs before a job can exist.
 // Counting them prevents hashing and transaction checks escaping the budget.
 class ValidationBudgetProbe {
 public:
-    ValidationBudgetProbe() : previous{ Install(this) } {}
-    ~ValidationBudgetProbe() { bsv::detail::SetValidationStageHookForTesting(previous); active = nullptr; }
     std::array<size_t, 3> calls{}, outsideBudget{};
-    const bsv::detail::ValidationStageHook previous;
+    const ActiveProbe<ValidationBudgetProbe> active{ this };
+    const ScopedStageHook hook{ &Hook };
 private:
-    // Publishes the probe before installing the hook that reads it.
-    static bsv::detail::ValidationStageHook Install(ValidationBudgetProbe* self)
-    {
-        active = self;
-        return bsv::detail::SetValidationStageHookForTesting(&Hook);
-    }
     static void Hook(bsv::detail::ValidationStage stage)
     {
+        auto& self = ActiveProbe<ValidationBudgetProbe>::Get();
         const auto i = static_cast<size_t>(stage);
-        ++active->calls[i];
+        ++self.calls[i];
         if (bsv::detail::BusyThreadCountForTesting() != 1)
-            ++active->outsideBudget[i];
+            ++self.outsideBudget[i];
     }
-    static inline ValidationBudgetProbe* active = nullptr;
 };
 
 BOOST_AUTO_TEST_CASE(hashing_and_transaction_checks_count_against_the_core_budget, PARALLEL_TEST_CASE_DECORATORS)
@@ -2230,40 +2429,32 @@ public:
 
 class CpuBusyHelpers {
 public:
-    explicit CpuBusyHelpers(size_t helpers) : helpers{ helpers }, previous{ Install(this) } {}
-    ~CpuBusyHelpers() { bsv::detail::SetInputHookForTesting(previous); }
+    explicit CpuBusyHelpers(size_t helpers) : helpers{ helpers } {}
     std::atomic<size_t> burned{ 0 }, arrived{ 0 };
     std::atomic<bool> timedOut{ false };
     const size_t helpers;
-    const bsv::detail::InputHook previous;
+    const ActiveProbe<CpuBusyHelpers> active{ this };
+    const ScopedInputHook hook{ &Hook };
     static inline thread_local bool isCaller = false;
 private:
-    // Publishes the probe before installing the hook that reads it.
-    static bsv::detail::InputHook Install(CpuBusyHelpers* self)
-    {
-        active = self;
-        return bsv::detail::SetInputHookForTesting(&Hook);
-    }
     static void Hook(size_t, bsv::detail::InputEvent event)
     {
         if (event != bsv::detail::InputEvent::Claimed)
             return;
-        auto& self = *active;
+        auto& self = ActiveProbe<CpuBusyHelpers>::Get();
+        constexpr auto deadline = std::chrono::milliseconds(20000);
         if (isCaller) {
-            if (!WaitFor([&] { return self.burned.load() == self.helpers; }, std::chrono::milliseconds(20000)))
-                self.timedOut = true;
+            Await(self.timedOut, [&] { return self.burned.load() == self.helpers; }, deadline);
         } else if (!burnedOnThisJob) {
             burnedOnThisJob = true;
             ++self.arrived;
-            if (!WaitFor([&] { return self.arrived.load() == self.helpers; }, std::chrono::milliseconds(20000)))
-                self.timedOut = true;
+            Await(self.timedOut, [&] { return self.arrived.load() == self.helpers; }, deadline);
             const auto start = task::thread_clock::now();
             while (task::thread_clock::now() - start < std::chrono::milliseconds(500))
                 std::atomic_signal_fence(std::memory_order_seq_cst);
             ++self.burned;
         }
     }
-    static inline CpuBusyHelpers* active = nullptr;
     static inline thread_local bool burnedOnThisJob = false;
 };
 
@@ -2303,18 +2494,20 @@ BOOST_AUTO_TEST_CASE(thread_cpu_budget_is_polled_only_by_the_caller, PARALLEL_TE
 #endif
 }
 
+// Whether every input below `index` has finished verifying.
+static bool FinishedBelow(const std::array<std::atomic<bool>, 32>& finished, size_t index)
+{
+    return std::all_of(finished.begin(), finished.begin() + static_cast<std::ptrdiff_t>(index),
+        [](const auto& done) { return done.load(); });
+}
+
 // Track real interpreter polls on inputs above the failing one. Hold the
 // failing input until a higher input has reached its eighth poll, ensuring
 // this exercises in-flight work rather than just unclaimed indices.
 class EarlyStopProbe final : public task::CCancellationSource {
 public:
     explicit EarlyStopProbe(size_t failingIndex, bool cancelOnFailure = false)
-        : failingIndex{ failingIndex }, cancelOnFailure{ cancelOnFailure }, previous{ Install(this) } {}
-    ~EarlyStopProbe() override
-    {
-        bsv::detail::SetInputHookForTesting(previous);
-        active = nullptr;
-    }
+        : failingIndex{ failingIndex }, cancelOnFailure{ cancelOnFailure } {}
 
     bool IsCanceled() override { return CCancellationSource::IsCanceled(); }
 
@@ -2325,47 +2518,34 @@ public:
     const bool cancelOnFailure;
     std::atomic<bool> failed{ false };
     std::array<std::atomic<bool>, 32> finished{};
-    const bsv::detail::InputHook previous;
+    const ActiveProbe<EarlyStopProbe> active{ this };
+    const ScopedInputHook hook{ &Hook };
 
 private:
-    // Publishes the probe before installing the hook that reads it.
-    static bsv::detail::InputHook Install(EarlyStopProbe* self)
-    {
-        active = self;
-        return bsv::detail::SetInputHookForTesting(&Hook);
-    }
-
     static void Hook(size_t index, bsv::detail::InputEvent event)
     {
-        auto& self = *active;
+        auto& self = ActiveProbe<EarlyStopProbe>::Get();
         if (event == bsv::detail::InputEvent::Claimed) {
             inputPolls = 0;
-            if (index == self.failingIndex && !WaitFor([&] { return self.entered.load() > 0; }))
-                self.timedOut = true;
+            if (index == self.failingIndex)
+                Await(self.timedOut, [&] { return self.entered.load() > 0; });
         } else if (event == bsv::detail::InputEvent::Polled && index > self.failingIndex) {
             ++self.higherPolls;
             if (++inputPolls == 8) {
                 ++self.entered;
-                if (!WaitFor([&] { return self.failed.load(); }))
-                    self.timedOut = true;
+                Await(self.timedOut, [&] { return self.failed.load(); });
             }
         } else if (event == bsv::detail::InputEvent::Verified) {
             self.finished[index] = true;
         } else if (event == bsv::detail::InputEvent::Failed && index == self.failingIndex) {
             if (self.cancelOnFailure) {
-                if (!WaitFor([&] {
-                        for (size_t i = 0; i < index; ++i)
-                            if (!self.finished[i]) return false;
-                        return true;
-                    }))
-                    self.timedOut = true;
+                Await(self.timedOut, [&] { return FinishedBelow(self.finished, index); });
                 self.Cancel();
             }
             self.failed = true;
         }
     }
 
-    static inline EarlyStopProbe* active = nullptr;
     static inline thread_local uint64_t inputPolls = 0;
 };
 
@@ -2393,85 +2573,49 @@ static bsv::CMutableTransactionExtended EarlyStopSpend(size_t failingIndex)
     return tx;
 }
 
+// Inputs already running above the failing input stop at their next
+// interpreter poll, and the result is the serial verdict, that input's
+// EVAL_FALSE: also when the caller cancels once it and every lower input have
+// finished, and when a later input would fail with another error.
 BOOST_AUTO_TEST_CASE(early_failure_abandons_inflight_higher_inputs, PARALLEL_TEST_CASE_DECORATORS)
 {
     if (!PoolHasHelpers())
         return;
     const bsv::CTxValidator validator(CBaseChainParams::REGTEST);
-    const auto bin = SerializeExtended(EarlyStopSpend(0));
     const std::vector<int32_t> heights(32, 19000);
-    const InputThresholdGuard parallel(FORCE_PARALLEL);
-    BOOST_REQUIRE(PoolIsIdle());
-    const auto probe = std::make_shared<EarlyStopProbe>(0);
-    const auto result = validator.ValidateTransaction(bin, heights, 20000, true, probe->GetToken());
-    BOOST_CHECK_EQUAL(result.domain, static_cast<int32_t>(TX_ERR_DOMAIN_SCRIPT));
-    BOOST_CHECK_EQUAL(result.code, SCRIPT_ERR_EVAL_FALSE);
-    BOOST_CHECK(!probe->timedOut);
-    BOOST_REQUIRE_GT(probe->entered.load(), 0u);
-    BOOST_TEST_MESSAGE("in-flight higher inputs=" << probe->entered.load()
-        << " interpreter polls=" << probe->higherPolls.load());
-    // Completing even one higher script takes over 6,000 polls. Early stop
-    // should need only its initial polls, plus the polls until failure is seen.
-    BOOST_CHECK_LT(probe->higherPolls.load(), 1000u);
-}
-
-// A completed failure and all lower inputs establish the serial verdict, even
-// when cancellation stops still-running higher inputs.
-BOOST_AUTO_TEST_CASE(completed_early_failure_survives_caller_cancellation, PARALLEL_TEST_CASE_DECORATORS)
-{
-    if (!PoolHasHelpers())
-        return;
-    const bsv::CTxValidator validator(CBaseChainParams::REGTEST);
-    const std::vector<int32_t> heights(32, 19000);
-    const InputThresholdGuard parallel(FORCE_PARALLEL);
-    for (const size_t failingIndex : { 0, 1, 2, 8 }) {
-        BOOST_REQUIRE(PoolIsIdle());
-        const auto bin = SerializeExtended(EarlyStopSpend(failingIndex));
-        const auto probe = std::make_shared<EarlyStopProbe>(failingIndex, true);
-        const auto result = validator.ValidateTransaction(bin, heights, 20000, true, probe->GetToken());
-        BOOST_CHECK(!probe->timedOut);
-        BOOST_CHECK_GT(probe->entered.load(), 0u);
-        BOOST_CHECK_EQUAL(result.domain, static_cast<int32_t>(TX_ERR_DOMAIN_SCRIPT));
-        BOOST_CHECK_EQUAL(result.code, SCRIPT_ERR_EVAL_FALSE);
+    const CScript laterFailure = CScript() << OP_FALSE << OP_VERIFY;
+    {
+        const auto tx = EarlyStopSpend(0);
+        const auto later = validator.VerifySpend(PlainTxBin(tx.mtx), 31,
+            std::span<const uint8_t>(laterFailure.data(), laterFailure.size()), 100000, 19000, 20000, true);
+        BOOST_REQUIRE(SameTxError(later, bsv::TxErrorScript(SCRIPT_ERR_VERIFY)));
     }
-}
-
-BOOST_AUTO_TEST_CASE(early_stop_keeps_serial_verdict_for_mixed_failures, PARALLEL_TEST_CASE_DECORATORS)
-{
-    if (!PoolHasHelpers())
-        return;
-    const bsv::CTxValidator validator(CBaseChainParams::REGTEST);
-    const std::vector<int32_t> heights(32, 19000);
-    for (const size_t failingIndex : { 0, 1, 2, 8 }) {
-        auto tx = EarlyStopSpend(failingIndex);
-        // A distinct later verdict must neither win nor cancel lower indices.
-        tx.vutxo[31].scriptPubKey = CScript() << OP_FALSE << OP_VERIFY;
-        CDataStream plain(SER_NETWORK, PROTOCOL_VERSION);
-        plain << tx.mtx;
-        const std::vector<uint8_t> txBin(plain.begin(), plain.end());
-        const auto& laterScript = tx.vutxo[31].scriptPubKey;
-        const auto later = validator.VerifySpend(txBin, 31,
-            std::span<const uint8_t>(laterScript.data(), laterScript.size()),
-            100000, 19000, 20000, true);
-        BOOST_REQUIRE_EQUAL(later.domain, static_cast<int32_t>(TX_ERR_DOMAIN_SCRIPT));
-        BOOST_REQUIRE_EQUAL(later.code, SCRIPT_ERR_VERIFY);
-        const auto bin = SerializeExtended(tx);
-        TxError serial;
-        {
-            const InputThresholdGuard guard(FORCE_SERIAL);
-            serial = validator.ValidateTransaction(bin, heights, 20000, true);
+    enum class Mode : uint8_t { Plain, CancelOnFailure, LaterFailure };
+    for (const Mode mode : { Mode::Plain, Mode::CancelOnFailure, Mode::LaterFailure }) {
+        for (const size_t failingIndex : { 0, 1, 2, 8 }) {
+            BOOST_TEST_CONTEXT("mode " << static_cast<int>(mode) << ", failing input " << failingIndex)
+            {
+                auto tx = EarlyStopSpend(failingIndex);
+                if (mode == Mode::LaterFailure)
+                    tx.vutxo[31].scriptPubKey = laterFailure;
+                const auto bin = SerializeExtended(tx);
+                TxError serial;
+                {
+                    const InputThresholdGuard serialOnly(FORCE_SERIAL);
+                    serial = validator.ValidateTransaction(bin, heights, 20000, true);
+                }
+                BOOST_REQUIRE(SameTxError(serial, bsv::TxErrorScript(SCRIPT_ERR_EVAL_FALSE)));
+                const InputThresholdGuard parallel(FORCE_PARALLEL);
+                BOOST_REQUIRE(PoolIsIdle());
+                const auto probe = std::make_shared<EarlyStopProbe>(failingIndex, mode == Mode::CancelOnFailure);
+                const auto result = validator.ValidateTransaction(bin, heights, 20000, true, probe->GetToken());
+                BOOST_CHECK(SameTxError(result, serial));
+                BOOST_CHECK(!probe->timedOut);
+                BOOST_CHECK_GT(probe->entered.load(), 0u);
+                // Completing even one higher script takes over 6,000 polls.
+                BOOST_CHECK_LT(probe->higherPolls.load(), 1000u);
+            }
         }
-        BOOST_REQUIRE_EQUAL(serial.domain, static_cast<int32_t>(TX_ERR_DOMAIN_SCRIPT));
-        BOOST_REQUIRE_EQUAL(serial.code, SCRIPT_ERR_EVAL_FALSE);
-        const InputThresholdGuard parallel(FORCE_PARALLEL);
-        BOOST_REQUIRE(PoolIsIdle());
-        const auto probe = std::make_shared<EarlyStopProbe>(failingIndex);
-        const auto token = probe->GetToken();
-        const auto result = validator.ValidateTransaction(bin, heights, 20000, true, token);
-        BOOST_CHECK(!probe->timedOut);
-        BOOST_CHECK_GT(probe->entered.load(), 0u);
-        BOOST_CHECK(SameTxError(result, serial));
-        BOOST_CHECK_LT(probe->higherPolls.load(), 1000u);
     }
 }
 
@@ -2479,32 +2623,24 @@ BOOST_AUTO_TEST_CASE(early_stop_keeps_serial_verdict_for_mixed_failures, PARALLE
 // This catches dropping the caller token when constructing the input token.
 class CancelDuringInput final : public task::CCancellationSource {
 public:
-    CancelDuringInput() : owner{ std::this_thread::get_id() }, previous{ Install(this) } {}
-    ~CancelDuringInput() override { bsv::detail::SetInputHookForTesting(previous); }
+    CancelDuringInput() { inJob = false; }
     bool IsCanceled() override
     {
         if (inJob && ++polls >= 20) {
-            if (!WaitFor([&] { return helperPolls.load() >= 8; }))
-                timedOut = true;
+            Await(timedOut, [&] { return helperPolls.load() >= 8; });
             Cancel();
         }
         return CCancellationSource::IsCanceled();
     }
     std::atomic<uint64_t> polls{ 0 }, helperPolls{ 0 };
     std::atomic<bool> published{ false }, timedOut{ false };
-    const std::thread::id owner;
-    const bsv::detail::InputHook previous;
+    const std::thread::id owner{ std::this_thread::get_id() };
+    const ActiveProbe<CancelDuringInput> active{ this };
+    const ScopedInputHook hook{ &Hook };
 private:
-    // Publishes the probe before installing the hook that reads it.
-    static bsv::detail::InputHook Install(CancelDuringInput* self)
-    {
-        inJob = false;
-        active = self;
-        return bsv::detail::SetInputHookForTesting(&Hook);
-    }
     static void Hook(size_t, bsv::detail::InputEvent event)
     {
-        auto& self = *active;
+        auto& self = ActiveProbe<CancelDuringInput>::Get();
         if (event == bsv::detail::InputEvent::Claimed) {
             inJob = true;
             helperInputPolls = 0;
@@ -2513,11 +2649,10 @@ private:
             self.published = true;
         if (event == bsv::detail::InputEvent::Polled && std::this_thread::get_id() != self.owner) {
             ++self.helperPolls;
-            if (++helperInputPolls == 8 && !WaitFor([&] { return self.published.load(); }))
-                self.timedOut = true;
+            if (++helperInputPolls == 8)
+                Await(self.timedOut, [&] { return self.published.load(); });
         }
     }
-    static inline CancelDuringInput* active = nullptr;
     static inline thread_local bool inJob = false;
     static inline thread_local size_t helperInputPolls = 0;
 };
@@ -2547,40 +2682,28 @@ BOOST_AUTO_TEST_CASE(caller_cancel_during_parallel_input_returns_cancelled, PARA
 // valid input, or after a bad input and every lower input have finished.
 class CancelAfterVerdict final : public task::CCancellationSource {
 public:
-    explicit CancelAfterVerdict(size_t failingIndex) : failingIndex{ failingIndex }, previous{ Install(this) } {}
-    ~CancelAfterVerdict() override { bsv::detail::SetInputHookForTesting(previous); }
+    explicit CancelAfterVerdict(size_t failingIndex) : failingIndex{ failingIndex } {}
     std::atomic<bool> timedOut{ false };
     const size_t failingIndex;
     std::array<std::atomic<bool>, 32> finished{};
     std::atomic<size_t> count{ 0 };
-    const bsv::detail::InputHook previous;
+    const ActiveProbe<CancelAfterVerdict> active{ this };
+    const ScopedInputHook hook{ &Hook };
 private:
-    // Publishes the probe before installing the hook that reads it.
-    static bsv::detail::InputHook Install(CancelAfterVerdict* self)
-    {
-        active = self;
-        return bsv::detail::SetInputHookForTesting(&Hook);
-    }
     static void Hook(size_t index, bsv::detail::InputEvent event)
     {
         if (event != bsv::detail::InputEvent::Verified)
             return;
-        auto& self = *active;
+        auto& self = ActiveProbe<CancelAfterVerdict>::Get();
         self.finished[index] = true;
         const size_t count = ++self.count;
         if (index == self.failingIndex) {
-            if (!WaitFor([&] {
-                    for (size_t i = 0; i < index; ++i)
-                        if (!self.finished[i]) return false;
-                    return true;
-                }))
-                self.timedOut = true;
+            Await(self.timedOut, [&] { return FinishedBelow(self.finished, index); });
             self.Cancel();
         } else if (self.failingIndex == self.finished.size() && count == self.finished.size()) {
             self.Cancel();
         }
     }
-    static inline CancelAfterVerdict* active = nullptr;
 };
 
 BOOST_AUTO_TEST_CASE(completed_verdict_survives_cancellation_in_serial_and_parallel, PARALLEL_TEST_CASE_DECORATORS)
@@ -2619,31 +2742,23 @@ BOOST_AUTO_TEST_CASE(completed_verdict_survives_cancellation_in_serial_and_paral
 // stops without completing. The caller observes cancellation in its interpreter.
 class CancelBelowFailure final : public task::CCancellationSource {
 public:
-    CancelBelowFailure() : owner{ std::this_thread::get_id() }, previous{ Install(this) } {}
-    ~CancelBelowFailure() override { bsv::detail::SetInputHookForTesting(previous); }
+    CancelBelowFailure() { inJob = false; }
     bool IsCanceled() override
     {
         if (inJob) {
-            if (!WaitFor([&] { return failure.load(); }))
-                timedOut = true;
+            Await(timedOut, [&] { return failure.load(); });
             Cancel();
         }
         return CCancellationSource::IsCanceled();
     }
     std::atomic<bool> failure{ false }, published{ false }, timedOut{ false }, callerClaimed{ false };
-    const std::thread::id owner;
-    const bsv::detail::InputHook previous;
+    const std::thread::id owner{ std::this_thread::get_id() };
+    const ActiveProbe<CancelBelowFailure> active{ this };
+    const ScopedInputHook hook{ &Hook };
 private:
-    // Publishes the probe before installing the hook that reads it.
-    static bsv::detail::InputHook Install(CancelBelowFailure* self)
-    {
-        inJob = false;
-        active = self;
-        return bsv::detail::SetInputHookForTesting(&Hook);
-    }
     static void Hook(size_t index, bsv::detail::InputEvent event)
     {
-        auto& self = *active;
+        auto& self = ActiveProbe<CancelBelowFailure>::Get();
         const bool caller = std::this_thread::get_id() == self.owner;
         if (event == bsv::detail::InputEvent::Claimed && caller) {
             inJob = true;
@@ -2652,17 +2767,15 @@ private:
         if (event == bsv::detail::InputEvent::Failed && index > 0) {
             // Keep the real failure unpublished until the caller owns input
             // work on which it can observe cancellation.
-            if (!caller && !WaitFor([&] { return self.callerClaimed.load(); }))
-                self.timedOut = true;
+            if (!caller)
+                Await(self.timedOut, [&] { return self.callerClaimed.load(); });
             self.failure = true;
         }
         if (event == bsv::detail::InputEvent::CallerCancelled)
             self.published = true;
-        if (event == bsv::detail::InputEvent::Polled && index == 0 && !caller
-            && !WaitFor([&] { return self.published.load(); }))
-            self.timedOut = true;
+        if (event == bsv::detail::InputEvent::Polled && index == 0 && !caller)
+            Await(self.timedOut, [&] { return self.published.load(); });
     }
-    static inline CancelBelowFailure* active = nullptr;
     static inline thread_local bool inJob = false;
 };
 
@@ -2698,30 +2811,77 @@ BOOST_AUTO_TEST_CASE(cancelled_lower_input_prevents_a_higher_failure_verdict, PA
     BOOST_CHECK(SameTxError(result, serial));
 }
 
-// Every input claimed inside a parallel job sleeps for `delay` before it is
-// verified: jobs last long without using CPU, so on a small machine the test
-// thread still gets to run while the caller and helpers are on a job.
-class SlowInputs {
+// Holds the inputs a parallel job's participants claim, so a test steps the
+// job instead of sleeping through it. The caller, a thread that set
+// ClaimGate::isCaller, waits at its claims until Open(); a helper waits at
+// each claim until the next Step() or Open(). Parks() counts helpers'
+// Waiting events. A wait that runs 20 s is released and recorded as a
+// timeout.
+class ClaimGate {
 public:
-    explicit SlowInputs(std::chrono::milliseconds delay) : previous{ Install(delay) } {}
-    ~SlowInputs() { bsv::detail::SetInputHookForTesting(previous); }
-    SlowInputs(const SlowInputs&) = delete;
-    SlowInputs& operator=(const SlowInputs&) = delete;
+    ClaimGate() = default;
+    ~ClaimGate() { Open(); }
+    void Step()
+    {
+        const std::lock_guard lock{ mutex_ };
+        ++generation_;
+        turn_.notify_all();
+    }
+    void Open()
+    {
+        const std::lock_guard lock{ mutex_ };
+        open_ = true;
+        turn_.notify_all();
+    }
+    size_t Held()
+    {
+        const std::lock_guard lock{ mutex_ };
+        return held_;
+    }
+    uint64_t HelperClaims()
+    {
+        const std::lock_guard lock{ mutex_ };
+        return helperClaims_;
+    }
+    uint64_t Parks() const { return parks_.load(); }
+    bool TimedOut() const { return timedOut_.load(); }
+    static inline thread_local bool isCaller = false;
 
 private:
-    static void Hook(size_t, bsv::detail::InputEvent event)
+    static void Input(size_t, bsv::detail::InputEvent event)
     {
-        if (event == bsv::detail::InputEvent::Claimed)
-            std::this_thread::sleep_for(std::chrono::milliseconds(sleepMs.load()));
+        if (event != bsv::detail::InputEvent::Claimed)
+            return;
+        auto& self = ActiveProbe<ClaimGate>::Get();
+        std::unique_lock lock{ self.mutex_ };
+        const uint64_t arrived = self.generation_;
+        if (!isCaller) {
+            ++self.helperClaims_;
+            ++self.held_;
+        }
+        if (!self.turn_.wait_for(lock, std::chrono::seconds(20),
+                [&] { return self.open_ || (!isCaller && self.generation_ != arrived); }))
+            self.timedOut_ = true;
+        if (!isCaller)
+            --self.held_;
     }
-    // Sets the delay before installing the hook that reads it.
-    static bsv::detail::InputHook Install(std::chrono::milliseconds delay)
+    static void Pool(bsv::detail::InputPoolEvent event)
     {
-        sleepMs.store(delay.count());
-        return bsv::detail::SetInputHookForTesting(&SlowInputs::Hook);
+        if (event == bsv::detail::InputPoolEvent::Waiting)
+            ++ActiveProbe<ClaimGate>::Get().parks_;
     }
-    static inline std::atomic<long long> sleepMs{ 0 };
-    const bsv::detail::InputHook previous;
+    std::mutex mutex_;
+    std::condition_variable turn_;
+    uint64_t generation_ = 0;
+    uint64_t helperClaims_ = 0;
+    size_t held_ = 0;
+    bool open_ = false;
+    std::atomic<uint64_t> parks_{ 0 };
+    std::atomic<bool> timedOut_{ false };
+    const ActiveProbe<ClaimGate> active_{ this };
+    const WakeHelpersAfterHooks wake_;
+    const ScopedInputHook inputHook_{ &Input };
+    const ScopedPoolHook poolHook_{ &Pool };
 };
 
 // Inputs verified on helpers while validating `etxBin` up to `calls` times,
@@ -2850,95 +3010,62 @@ static bsv::CMutableTransactionExtended MakeSlowMultisigSpend(size_t nInputs, si
     return eTx;
 }
 
-// While a job runs, more threads than cores become busy: the helpers on it
-// leave before claiming another input, and the caller carries on alone. When
-// the cores free up, helpers rejoin the same job. Observed through the busy
-// count (the caller plus every helper on the job). Each input sleeps 25 ms
-// (SlowInputs) and the job gets at most 3 helpers whatever the pool size, so
-// it outlasts every step on a loaded many-core machine, and on a small one
-// the test thread still runs while the job does.
+// While a job runs, more threads than cores become busy: each helper on it
+// verifies the input it holds, then leaves before claiming another, and a
+// helper woken while every core is busy parks again. Freeing cores one at a
+// time, the release that leaves a core idle (the busy count going from the
+// core count to one below it) wakes a helper, which rejoins the same job. The
+// gate holds the caller on its first input and each helper on each claim, so
+// the job outlasts every step.
 BOOST_AUTO_TEST_CASE(helpers_leave_an_oversubscribed_machine_and_return, PARALLEL_TEST_CASE_DECORATORS)
 {
     if (!PoolHasHelpers())
         return;
-    const size_t cores = bsv::detail::InputPoolHelperCountForTesting() + 1;
+    const size_t helpers = bsv::detail::InputPoolHelperCountForTesting();
+    const size_t cores = helpers + 1;
     constexpr size_t nInputs = 32;
     const auto etxBin = SignedP2PKHBin(nInputs);
     const bsv::CTxValidator se("main");
     const InputThresholdGuard defaults(bsv::detail::DEFAULT_PARALLEL_INPUT_THRESHOLD);
     BOOST_REQUIRE(PoolIsIdle());
-    const SlowInputs slow(std::chrono::milliseconds(25));
-
     const auto busy = [] { return bsv::detail::BusyThreadCountForTesting(); };
-    std::atomic<bool> done{ false };
-    TxError status = bsv::TxErrorOk();
+    ClaimGate gate;
+    TxError status = bsv::TxErrorException();
     std::thread caller([&] {
+        ClaimGate::isCaller = true;
         status = ValidateP2PKHSpend(se, etxBin, nInputs, /*consensus=*/true);
-        done.store(true);
     });
+    const bool joined = WaitFor([&] { return gate.Held() > 0; });
 
-    // The caller and at least one helper are on the job.
-    const bool joined = WaitFor([&] { return busy() > 1 || done.load(); }) && !done.load();
+    // Every core counted busy on top of the caller and its helpers.
+    bsv::detail::AddBusyThreadsForTesting(cores);
+    const uint64_t claimsAtTrip = gate.HelperClaims();
+    gate.Step();
+    const bool left = WaitFor([&] { return busy() == 1 + cores; });
+    const uint64_t parks = gate.Parks();
+    bsv::detail::WakeInputHelpersForTesting();
+    const bool parkedAgain = WaitFor([&] { return gate.Parks() >= parks + helpers; });
+    const uint64_t claimsWhileOversubscribed = gate.HelperClaims() - claimsAtTrip;
+    const size_t busyWhileOversubscribed = busy();
 
-    // Count every core as busy on top. From then on no helper can take a
-    // core, so the helpers counted now are the only ones that may still
-    // verify an input: each finishes at most the one it is verifying or has
-    // just claimed, then sees the count over the cores before claiming again.
-    // The count settles at the caller plus the extra cores and stays there.
-    bsv::detail::ScopedBusyThreadsForTesting oversubscribed(cores);
-    const uint64_t helperInputsAtTrip = bsv::detail::HelperVerifiedInputCountForTesting();
-    const size_t helpersAtTrip = busy() - 1 - cores;
-    const size_t alone = 1 + cores;
-    const bool left = WaitFor([&] { return busy() == alone || done.load(); }) && !done.load();
-    const uint64_t helperInputsAfterTrip = bsv::detail::HelperVerifiedInputCountForTesting() - helperInputsAtTrip;
-    size_t mostWhileOversubscribed = 0;
-    for (int sample = 0; sample < 50 && !done.load(); ++sample) {
-        mostWhileOversubscribed = std::max(mostWhileOversubscribed, busy());
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
-    }
-    const bool stillRunning = !done.load();
-
-    // Cores free again: a helper is woken and rejoins the running job.
-    oversubscribed.Release();
-    const bool rejoined = WaitFor([&] { return busy() > 1 || done.load(); }) && !done.load();
+    bsv::detail::ReleaseBusyThreadsForTesting(1);
+    const size_t busyAtCores = busy();
+    bsv::detail::ReleaseBusyThreadsForTesting(1);
+    const bool rejoined = WaitFor([&] { return gate.HelperClaims() > claimsAtTrip; });
+    bsv::detail::ReleaseBusyThreadsForTesting(cores - 2);
+    gate.Open();
     caller.join();
 
     BOOST_CHECK(bsv::TxErrorIsOk(status));
-    BOOST_REQUIRE_MESSAGE(joined, "no helper joined the job before it finished");
+    BOOST_CHECK(!gate.TimedOut());
+    BOOST_REQUIRE_MESSAGE(joined, "no helper joined the job");
     BOOST_CHECK_MESSAGE(left, "helpers stayed on the job with more threads than cores busy");
-    BOOST_CHECK_MESSAGE(helperInputsAfterTrip <= helpersAtTrip,
-        helperInputsAfterTrip << " helper inputs after the budget tripped, with " << helpersAtTrip << " helpers on the job");
-    BOOST_REQUIRE_MESSAGE(stillRunning, "the job finished during the oversubscribed window");
-    BOOST_CHECK_MESSAGE(mostWhileOversubscribed == alone,
-        "a helper came back while oversubscribed: busy reached " << mostWhileOversubscribed << ", expected " << alone);
-    BOOST_CHECK_MESSAGE(rejoined, "no helper rejoined the job after the cores were released");
-}
-
-// Once the first input fails, participants stop claiming: almost none of the
-// other inputs are verified, counting the caller's and the helpers'. Input 0
-// fails fast (an empty signature needs no ECDSA), and the fewest over five
-// calls is what counts: a participant preempted while verifying input 0 lets
-// the others run on legitimately.
-BOOST_AUTO_TEST_CASE(participants_stop_above_the_lowest_failure, PARALLEL_TEST_CASE_DECORATORS)
-{
-    if (!PoolHasHelpers())
-        return;
-    constexpr size_t nInputs = 2000;
-    const bsv::CTxValidator se("main");
-    auto eTx = MakeSignedP2PKHSpend(std::vector<SigHashType>(nInputs, SigHashType().withForkId()),
-        /*nOutputs=*/1, /*precomputeForSigning=*/true);
-    EmptyP2PKHSignature(eTx, 0);
-    const auto etxBin = SerializeExtended(eTx);
-    const InputThresholdGuard parallel(FORCE_PARALLEL);
-    uint64_t fewest = std::numeric_limits<uint64_t>::max();
-    for (int call = 0; call < 5; ++call) {
-        const uint64_t before = bsv::detail::JobVerifiedInputCountForTesting();
-        const TxError status = ValidateP2PKHSpend(se, etxBin, nInputs, /*consensus=*/true);
-        BOOST_CHECK(SameTxError(status, bsv::TxErrorScript(SCRIPT_ERR_EVAL_FALSE)));
-        fewest = std::min(fewest, bsv::detail::JobVerifiedInputCountForTesting() - before);
-    }
-    BOOST_CHECK_MESSAGE(fewest < nInputs / 4, "at least " << fewest << " of " << nInputs
-        << " inputs were verified in every call after input 0 failed");
+    BOOST_CHECK_MESSAGE(parkedAgain, "woken helpers did not park again");
+    BOOST_CHECK_EQUAL(claimsWhileOversubscribed, 0u);
+    BOOST_CHECK_EQUAL(busyWhileOversubscribed, 1 + cores);
+    BOOST_CHECK_EQUAL(busyAtCores, cores);
+    BOOST_CHECK_MESSAGE(rejoined, "no helper rejoined the job when a core went idle");
+    BOOST_CHECK(PoolIsIdle());
 }
 
 // A finished job queued behind a job that still has inputs left is not left
@@ -2994,33 +3121,16 @@ BOOST_AUTO_TEST_CASE(finished_job_behind_a_live_one_leaves_the_queue, PARALLEL_T
 }
 
 // VerifySpend verifies its one input on the calling thread, but that thread
-// takes a core: the busy count is 1 while a slow spend runs and 0 after.
+// takes a core: the busy count is 1 while a spend is held inside its call and
+// 0 after it returns.
 BOOST_AUTO_TEST_CASE(verify_spend_counts_against_the_core_budget, PARALLEL_TEST_CASE_DECORATORS)
 {
     BOOST_REQUIRE(PoolIsIdle());
-    const auto eTx = MakeSlowMultisigSpend(1, 1000);
-    CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
-    ss << eTx.mtx;
-    const std::vector<uint8_t> txBin(ss.begin(), ss.end());
-    const CTxOut& source = eTx.vutxo[0];
     const bsv::CTxValidator se("main");
-
-    std::atomic<bool> done{ false };
-    TxError status = bsv::TxErrorOk();
-    std::thread spender([&] {
-        status = se.VerifySpend(std::span<const uint8_t>(txBin), 0,
-            std::span<const uint8_t>(source.scriptPubKey.data(), source.scriptPubKey.size()),
-            source.nValue.GetSatoshis(), P2PKH_UTXO_HEIGHT, P2PKH_BLOCK_HEIGHT, /*consensus=*/true);
-        done.store(true);
-    });
-    size_t most = 0;
-    while (!done.load()) {
-        most = std::max(most, bsv::detail::BusyThreadCountForTesting());
-        std::this_thread::sleep_for(std::chrono::microseconds(50));
-    }
-    spender.join();
-    BOOST_CHECK(bsv::TxErrorIsOk(status));
-    BOOST_CHECK_EQUAL(most, 1u);
+    HeldSpenders spender(se, 1);
+    BOOST_REQUIRE(spender.Entered());
+    BOOST_CHECK_EQUAL(bsv::detail::BusyThreadCountForTesting(), 1u);
+    BOOST_CHECK(spender.AllPassed());
     BOOST_CHECK_MESSAGE(PoolIsIdle(), "busy count " << bsv::detail::BusyThreadCountForTesting() << " after VerifySpend");
 }
 
@@ -3053,10 +3163,7 @@ BOOST_AUTO_TEST_CASE(tx_without_outputs_matches_serial, PARALLEL_TEST_CASE_DECOR
 // its own participant, so the job must have as many participants as indices.
 class FailureOrder {
 public:
-    explicit FailureOrder(std::vector<size_t> order) : previous{ Install(std::move(order)) } {}
-    ~FailureOrder() { bsv::detail::SetInputHookForTesting(previous); }
-    FailureOrder(const FailureOrder&) = delete;
-    FailureOrder& operator=(const FailureOrder&) = delete;
+    explicit FailureOrder(std::vector<size_t> order) : configured{ Configure(std::move(order)) } {}
 
     // Whether the last call released every index in order (no participant
     // was missing, so nothing timed out).
@@ -3101,17 +3208,20 @@ private:
     static inline size_t released = 0;
     static inline bool timedOut = false;
 
-    // Resets the order before installing the hook that follows it.
-    static bsv::detail::InputHook Install(std::vector<size_t> order)
+    // Sets the order before the hook that follows it is installed.
+    static bool Configure(std::vector<size_t> order)
     {
-        std::lock_guard lock{ mutex };
-        sequence = std::move(order);
-        arrived.clear();
-        released = 0;
-        timedOut = false;
-        return bsv::detail::SetInputHookForTesting(&FailureOrder::Hook);
+        {
+            std::lock_guard lock{ mutex };
+            sequence = std::move(order);
+        }
+        Reset();
+        return true;
     }
-    const bsv::detail::InputHook previous;
+
+public:
+    const bool configured;
+    const ScopedInputHook hook{ &Hook };
 };
 
 // Three failing inputs recorded in the order 2, 0, 1: the job keeps lowering
@@ -3260,26 +3370,28 @@ BOOST_AUTO_TEST_CASE(large_tx_started_with_every_core_busy_takes_a_helper_when_o
     constexpr size_t nInputs = 32;
     const auto etxBin = SignedP2PKHBin(nInputs);
     BOOST_REQUIRE(PoolIsIdle());
-    const SlowInputs slow(std::chrono::milliseconds(20));
+    ClaimGate gate;
     bsv::detail::ScopedBusyThreadsForTesting everyCore(helpers + 1);
-    const uint64_t helperInputs = bsv::detail::HelperVerifiedInputCountForTesting();
-    std::atomic<bool> done{ false };
-    TxError status = bsv::TxErrorOk();
+    TxError status = bsv::TxErrorException();
     std::thread caller([&] {
+        ClaimGate::isCaller = true;
         status = ValidateP2PKHSpend(se, etxBin, nInputs, /*consensus=*/true);
-        done.store(true);
     });
-    const bool queued = WaitFor([&] { return bsv::detail::QueuedJobCountForTesting() == 1 || done.load(); }) && !done.load();
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    const uint64_t whileBusy = bsv::detail::HelperVerifiedInputCountForTesting() - helperInputs;
+    const bool queued = WaitFor([&] { return bsv::detail::QueuedJobCountForTesting() == 1; });
+    // Every helper wakes, finds no free core and parks again.
+    const uint64_t parks = gate.Parks();
+    bsv::detail::WakeInputHelpersForTesting();
+    const bool parkedAgain = WaitFor([&] { return gate.Parks() >= parks + helpers; });
+    const uint64_t whileBusy = gate.HelperClaims();
     everyCore.Release();
-    const bool joined = WaitFor([&] {
-        return bsv::detail::HelperVerifiedInputCountForTesting() > helperInputs + whileBusy || done.load();
-    }) && !done.load();
+    const bool joined = WaitFor([&] { return gate.HelperClaims() > 0; });
+    gate.Open();
     caller.join();
 
     BOOST_CHECK(bsv::TxErrorIsOk(status));
+    BOOST_CHECK(!gate.TimedOut());
     BOOST_REQUIRE_MESSAGE(queued, "the tx queued no job with every core busy");
+    BOOST_CHECK(parkedAgain);
     BOOST_CHECK_EQUAL(whileBusy, 0u);
     BOOST_CHECK_MESSAGE(joined, "no helper joined the job after the cores were released");
     BOOST_CHECK(PoolIsIdle());
@@ -3291,75 +3403,36 @@ BOOST_AUTO_TEST_CASE(large_tx_started_with_every_core_busy_takes_a_helper_when_o
 // holding the pool mutex. Only BeforeOffer and claimed inputs may wait.
 class ReleaseBeforeOffer {
 public:
-    ReleaseBeforeOffer() : previous{ Install(this) } { bsv::detail::WakeInputHelpersForTesting(); }
-    ~ReleaseBeforeOffer()
-    {
-        bsv::detail::SetInputHookForTesting(previous.input);
-        bsv::detail::SetInputPoolHookForTesting(previous.pool);
-        // Synchronize with any old Waiting callback before destroying its state.
-        bsv::detail::WakeInputHelpersForTesting();
-        active.store(nullptr);
-    }
-    size_t ParkedCount()
-    {
-        std::lock_guard lock{ mutex };
-        return parked.size();
-    }
+    ReleaseBeforeOffer() { bsv::detail::WakeInputHelpersForTesting(); }
     static inline thread_local bool largeCaller = false;
     std::atomic<bool> beforeOffer{ false }, resumeOffer{ false };
     std::atomic<bool> helperClaimed{ false }, releaseInputs{ false }, timedOut{ false };
-    std::mutex mutex;
-    std::map<std::thread::id, bool> parked;
-    const PreviousPoolAndInputHooks previous;
+    ParkedHelpers parked;
+    const ActiveProbe<ReleaseBeforeOffer> active{ this };
+    const WakeHelpersAfterHooks wake;
+    const ScopedPoolHook poolHook{ &PoolHook };
+    const ScopedInputHook inputHook{ &InputHook };
 
 private:
-    // Publishes the probe before installing the hooks that read it.
-    static PreviousPoolAndInputHooks Install(ReleaseBeforeOffer* self)
-    {
-        active.store(self);
-        return { bsv::detail::SetInputPoolHookForTesting(&PoolHook), bsv::detail::SetInputHookForTesting(&InputHook) };
-    }
     static void PoolHook(bsv::detail::InputPoolEvent event)
     {
-        auto& self = *active.load();
+        auto& self = ActiveProbe<ReleaseBeforeOffer>::Get();
         if (event == bsv::detail::InputPoolEvent::Waiting) {
-            std::lock_guard lock{ self.mutex };
-            self.parked[std::this_thread::get_id()] = true;
+            self.parked.Record();
         } else if (event == bsv::detail::InputPoolEvent::BeforeOffer) {
             self.beforeOffer = true;
-            if (!WaitFor([&] { return self.resumeOffer.load(); }, std::chrono::milliseconds(20000)))
-                self.timedOut = true;
+            Await(self.timedOut, [&] { return self.resumeOffer.load(); }, std::chrono::milliseconds(20000));
         }
     }
     static void InputHook(size_t, bsv::detail::InputEvent event)
     {
         if (event != bsv::detail::InputEvent::Claimed)
             return;
-        auto& self = *active.load();
+        auto& self = ActiveProbe<ReleaseBeforeOffer>::Get();
         if (!largeCaller)
             self.helperClaimed = true;
-        if (!WaitFor([&] { return self.releaseInputs.load(); }, std::chrono::milliseconds(20000)))
-            self.timedOut = true;
+        Await(self.timedOut, [&] { return self.releaseInputs.load(); }, std::chrono::milliseconds(20000));
     }
-    static inline std::atomic<ReleaseBeforeOffer*> active{ nullptr };
-};
-
-// The second VerifySpend token poll is after BusyScope construction. Holding
-// there keeps a real ordinary caller on a core; releasing it exercises that
-// caller's actual BusyScope destruction and ReleasedCore notification path.
-class HeldSpendSource final : public task::CCancellationSource {
-public:
-    bool IsCanceled() override
-    {
-        if (++polls == 2) {
-            entered = true;
-            if (!WaitFor([&] { return release.load(); }, std::chrono::milliseconds(20000)))
-                timedOut = true;
-        }
-        return false;
-    }
-    std::atomic<bool> entered{ false }, release{ false }, timedOut{ false };
-    size_t polls = 0;  // read only by this source's one VerifySpend caller
 };
 
 BOOST_AUTO_TEST_CASE(release_before_job_publication_recruits_a_helper, PARALLEL_TEST_CASE_DECORATORS)
@@ -3368,34 +3441,14 @@ BOOST_AUTO_TEST_CASE(release_before_job_publication_recruits_a_helper, PARALLEL_
     if (helpers == 0)
         return;
     const bsv::CTxValidator validator("main");
-    const auto spend = MakeSignedP2PKHSpend({ SigHashType().withForkId() }, 1);
-    CDataStream plain(SER_NETWORK, PROTOCOL_VERSION);
-    plain << spend.mtx;
-    const std::vector<uint8_t> txBin(plain.begin(), plain.end());
-    const auto& locking = spend.vutxo[0].scriptPubKey;
     const auto bin = SignedP2PKHBin(200);
     const InputThresholdGuard defaults(bsv::detail::DEFAULT_PARALLEL_INPUT_THRESHOLD);
     BOOST_REQUIRE(PoolIsIdle());
     const uint64_t helperInputs = bsv::detail::HelperVerifiedInputCountForTesting();
     ReleaseBeforeOffer order;
-    BOOST_REQUIRE(WaitFor([&] { return order.ParkedCount() == helpers; }));
-
-    std::vector<std::shared_ptr<HeldSpendSource>> sources;
-    std::vector<TxError> results(helpers, bsv::TxErrorException());
-    std::vector<std::thread> busyCallers;
-    for (size_t i = 0; i < helpers; ++i) {
-        const auto source = std::make_shared<HeldSpendSource>();
-        sources.push_back(source);
-        busyCallers.emplace_back([&, i, source] {
-            results[i] = validator.VerifySpend(txBin, 0,
-                std::span<const uint8_t>(locking.data(), locking.size()),
-                spend.vutxo[0].nValue.GetSatoshis(), P2PKH_UTXO_HEIGHT,
-                P2PKH_BLOCK_HEIGHT, true, std::nullopt, source->GetToken());
-        });
-    }
-    const bool occupied = WaitFor([&] {
-        return std::all_of(sources.begin(), sources.end(), [](const auto& s) { return s->entered.load(); });
-    });
+    BOOST_REQUIRE(WaitFor([&] { return order.parked.Count() == helpers; }));
+    HeldSpenders spenders(validator, helpers);
+    const bool occupied = spenders.Entered();
     TxError result = bsv::TxErrorException();
     std::thread caller([&] {
         ReleaseBeforeOffer::largeCaller = true;
@@ -3404,10 +3457,7 @@ BOOST_AUTO_TEST_CASE(release_before_job_publication_recruits_a_helper, PARALLEL_
     const bool sampled = WaitFor([&] { return order.beforeOffer.load(); });
     const size_t busyAtSample = bsv::detail::BusyThreadCountForTesting();
     const size_t queuedBefore = bsv::detail::QueuedJobCountForTesting();
-    for (const auto& source : sources)
-        source->release = true;
-    for (auto& worker : busyCallers)
-        worker.join();
+    spenders.ReleaseAll();
     const size_t busyAfterRelease = bsv::detail::BusyThreadCountForTesting();
     const size_t queuedAfterRelease = bsv::detail::QueuedJobCountForTesting();
     order.resumeOffer = true;
@@ -3421,10 +3471,7 @@ BOOST_AUTO_TEST_CASE(release_before_job_publication_recruits_a_helper, PARALLEL_
     BOOST_CHECK_EQUAL(queuedBefore, 0u);
     BOOST_CHECK_EQUAL(busyAfterRelease, 1u);
     BOOST_CHECK_EQUAL(queuedAfterRelease, 0u);
-    for (size_t i = 0; i < helpers; ++i) {
-        BOOST_CHECK(!sources[i]->timedOut);
-        BOOST_CHECK(bsv::TxErrorIsOk(results[i]));
-    }
+    BOOST_CHECK(spenders.AllPassed());
     BOOST_CHECK(!order.timedOut);
     BOOST_CHECK(bsv::TxErrorIsOk(result));
     BOOST_CHECK_MESSAGE(recruited, "no helper joined after capacity was released before job publication");
@@ -3432,72 +3479,20 @@ BOOST_AUTO_TEST_CASE(release_before_job_publication_recruits_a_helper, PARALLEL_
     BOOST_CHECK(PoolIsIdle());
 }
 
-// Helpers parked over budget come back when exactly one core frees: the
-// decrement that takes the busy count from the core count to one below it
-// wakes a helper, which rejoins the running job.
-BOOST_AUTO_TEST_CASE(freeing_one_core_wakes_a_parked_helper, PARALLEL_TEST_CASE_DECORATORS)
-{
-    const size_t helpers = bsv::detail::InputPoolHelperCountForTesting();
-    if (helpers == 0) {
-        BOOST_TEST_MESSAGE("no helpers on this machine; nothing to check");
-        return;
-    }
-    const size_t cores = helpers + 1;
-    constexpr size_t nInputs = 32;
-    const auto etxBin = SignedP2PKHBin(nInputs);
-    const bsv::CTxValidator se("main");
-    const InputThresholdGuard defaults(bsv::detail::DEFAULT_PARALLEL_INPUT_THRESHOLD);
-    BOOST_REQUIRE(PoolIsIdle());
-    const SlowInputs slow(std::chrono::milliseconds(25));
-
-    const auto busy = [] { return bsv::detail::BusyThreadCountForTesting(); };
-    std::atomic<bool> done{ false };
-    TxError status = bsv::TxErrorOk();
-    std::thread caller([&] {
-        status = ValidateP2PKHSpend(se, etxBin, nInputs, /*consensus=*/true);
-        done.store(true);
-    });
-    const bool joined = WaitFor([&] { return busy() > 1 || done.load(); }) && !done.load();
-
-    // Every core counted busy on top: the helpers leave and park.
-    bsv::detail::AddBusyThreadsForTesting(cores);
-    const bool parked = WaitFor([&] { return busy() == 1 + cores || done.load(); }) && !done.load();
-    // Free one core: still every core busy, nothing may wake.
-    bsv::detail::ReleaseBusyThreadsForTesting(1);
-    std::this_thread::sleep_for(std::chrono::milliseconds(20));
-    const size_t atCores = busy();
-    // Free one more: one core is idle, so a helper must take it.
-    bsv::detail::ReleaseBusyThreadsForTesting(1);
-    const bool resumed = WaitFor([&] { return busy() == cores || done.load(); }, std::chrono::milliseconds(2000))
-        && !done.load();
-    bsv::detail::ReleaseBusyThreadsForTesting(cores - 2);
-    caller.join();
-
-    BOOST_CHECK(bsv::TxErrorIsOk(status));
-    BOOST_REQUIRE_MESSAGE(joined, "no helper joined the slow job");
-    BOOST_REQUIRE_MESSAGE(parked, "the helpers did not leave with every core busy");
-    BOOST_CHECK_EQUAL(atCores, cores);
-    BOOST_CHECK_MESSAGE(resumed, "no helper took the freed core within 2 s (busy " << busy() << ")");
-}
-
 // Holds both callers in their inputs and the first helper after it releases
 // its core. Only another helper can then claim the queued job's remaining input.
 class HelperReleaseOrder {
 public:
-    HelperReleaseOrder() : previous{ Install() } {}
-    ~HelperReleaseOrder()
-    {
-        releaseFirstHelper = releaseAll = true;
-        bsv::detail::SetInputHookForTesting(previous.input);
-        bsv::detail::SetHelperReleasedCoreHookForTesting(previous.release);
-    }
-    HelperReleaseOrder(const HelperReleaseOrder&) = delete;
-    HelperReleaseOrder& operator=(const HelperReleaseOrder&) = delete;
+    HelperReleaseOrder() = default;
+    ~HelperReleaseOrder() { releaseFirstHelper = releaseAll = true; }
 
     static inline thread_local unsigned caller = 0;
     static inline std::atomic<bool> firstCallerClaimed{ false }, secondCallerClaimed{ false };
     static inline std::atomic<bool> firstHelperClaimed{ false }, firstHelperReleased{ false };
     static inline std::atomic<bool> queuedHelperClaimed{ false }, releaseFirstHelper{ false }, releaseAll{ false };
+    const bool cleared{ Clear() };
+    const ScopedInputHook inputHook{ &OnInput };
+    const ScopedReleaseHook releaseHook{ &OnRelease };
 
 private:
     static void OnInput(size_t, bsv::detail::InputEvent event)
@@ -3526,16 +3521,15 @@ private:
         WaitFor([] { return releaseAll.load(); }, std::chrono::milliseconds(20000));
     }
 
-    // Clears the flags before installing the hooks that set them.
-    static PreviousInputAndReleaseHooks Install()
+    // Clears the flags before the hooks that set them are installed.
+    static bool Clear()
     {
         firstCallerClaimed = secondCallerClaimed = firstHelperClaimed = false;
         firstHelperReleased = queuedHelperClaimed = releaseFirstHelper = releaseAll = false;
-        return { bsv::detail::SetInputHookForTesting(&OnInput), bsv::detail::SetHelperReleasedCoreHookForTesting(&OnRelease) };
+        return true;
     }
 
     static inline thread_local bool firstHelper = false;
-    const PreviousInputAndReleaseHooks previous;
 };
 
 BOOST_AUTO_TEST_CASE(leaving_helper_wakes_another_for_a_queued_job, PARALLEL_TEST_CASE_DECORATORS)
@@ -3590,8 +3584,9 @@ BOOST_AUTO_TEST_CASE(leaving_helper_wakes_another_for_a_queued_job, PARALLEL_TES
 }
 
 // Records, from the claim hook, which thread claimed each input of a parallel
-// job and that thread's stack size; optionally holds the caller on input 0 so
-// helpers claim the rest.
+// job and that thread's stack size. The caller (the thread that made the
+// recorder) holds input 0 until the other `inputs` - 1 are claimed, so helpers
+// claim them; a pool too busy to do that releases it after 5 s.
 class ClaimRecorder {
 public:
     struct Claim {
@@ -3599,10 +3594,7 @@ public:
         size_t stackBytes;
     };
 
-    explicit ClaimRecorder(bool holdCallerOnFirstInput) : previous{ Install(holdCallerOnFirstInput) } {}
-    ~ClaimRecorder() { bsv::detail::SetInputHookForTesting(previous); }
-    ClaimRecorder(const ClaimRecorder&) = delete;
-    ClaimRecorder& operator=(const ClaimRecorder&) = delete;
+    explicit ClaimRecorder(size_t inputs) : configured{ Configure(inputs) } {}
 
     static std::map<size_t, Claim> Claims()
     {
@@ -3647,27 +3639,34 @@ private:
         {
             std::lock_guard lock{ mutex };
             claims[index] = Claim{ std::this_thread::get_id(), CurrentStackBytes() };
-            holdHere = hold && index == 0 && std::this_thread::get_id() == caller;
+            holdHere = index == 0 && std::this_thread::get_id() == caller;
         }
-        if (holdHere)
-            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        if (holdHere) {
+            WaitFor([] {
+                std::lock_guard lock{ mutex };
+                return claims.size() >= holdUntil;
+            });
+        }
     }
 
     static inline std::mutex mutex;
     static inline std::map<size_t, Claim> claims;
     static inline std::thread::id caller;
-    static inline bool hold = false;
+    static inline size_t holdUntil = 0;
 
-    // Clears the record before installing the hook that fills it.
-    static bsv::detail::InputHook Install(bool holdCallerOnFirstInput)
+    // Clears the record before the hook that fills it is installed.
+    static bool Configure(size_t inputs)
     {
         std::lock_guard lock{ mutex };
         claims.clear();
         caller = std::this_thread::get_id();
-        hold = holdCallerOnFirstInput;
-        return bsv::detail::SetInputHookForTesting(&ClaimRecorder::Hook);
+        holdUntil = inputs;
+        return true;
     }
-    const bsv::detail::InputHook previous;
+
+public:
+    const bool configured;
+    const ScopedInputHook hook{ &Hook };
 };
 
 // The test-only counters (inputs and participations)
@@ -3687,7 +3686,7 @@ BOOST_AUTO_TEST_CASE(input_counters_count_only_when_enabled, PARALLEL_TEST_CASE_
                                         bsv::detail::JobVerifiedInputCountForTesting(),
                                         bsv::detail::HelperJobParticipationCountForTesting() };
     };
-    const ClaimRecorder recorder(/*holdCallerOnFirstInput=*/true);
+    const ClaimRecorder recorder(nInputs);
     {
         const bsv::detail::ScopedInputCountersForTesting off(false);
         const auto before = counters();
@@ -3718,41 +3717,25 @@ BOOST_AUTO_TEST_CASE(input_counters_count_only_when_enabled, PARALLEL_TEST_CASE_
 // remains and requires serial fallback after draining that helper.
 class InputSourceAllocationFailure {
 public:
-    explicit InputSourceAllocationFailure(bool failHelpers)
-        : failHelpers{ failHelpers }, owner{ std::this_thread::get_id() },
-          previousHelpers{ bsv::GetParallelInputHelpers() }
-    {
-        if (!failHelpers) bsv::SetParallelInputHelpers(1);
-        active = this;
-        previousAllocation = bsv::detail::SetInputSourceAllocationHookForTesting(&Allocate);
-        previousInput = bsv::detail::SetInputHookForTesting(&Input);
-        previousPool = bsv::detail::SetInputPoolHookForTesting(&Pool);
-    }
-    ~InputSourceAllocationFailure()
-    {
-        bsv::detail::SetInputHookForTesting(previousInput);
-        bsv::detail::SetInputSourceAllocationHookForTesting(previousAllocation);
-        bsv::detail::SetInputPoolHookForTesting(previousPool);
-        bsv::detail::WakeInputHelpersForTesting();
-        bsv::SetParallelInputHelpers(previousHelpers);
-        active = nullptr;
-    }
+    explicit InputSourceAllocationFailure(bool failHelpers) : failHelpers{ failHelpers } {}
     std::atomic<size_t> helperFailures{ 0 }, callerFailures{ 0 }, helperClaims{ 0 }, callerClaims{ 0 };
     std::atomic<size_t> callerVerified{ 0 }, queuedAtClose{ std::numeric_limits<size_t>::max() };
     std::atomic<bool> callerAttempted{ false }, timedOut{ false }, helperHeld{ false }, closed{ false };
     std::atomic<bool> retriedHelper{ false }, failedHelperParked{ false };
     std::mutex mutex;
     std::map<std::thread::id, size_t> attempts;
-    bsv::detail::InputPoolHook previousPool;
     const bool failHelpers;
-    const std::thread::id owner;
-    const int64_t previousHelpers;
-    bsv::detail::InputSourceAllocationHook previousAllocation;
-    bsv::detail::InputHook previousInput;
+    const std::thread::id owner{ std::this_thread::get_id() };
+    const ActiveProbe<InputSourceAllocationFailure> active{ this };
+    const HelperLimitGuard limit{ failHelpers ? bsv::GetParallelInputHelpers() : 1 };
+    const WakeHelpersAfterHooks wake;
+    const ScopedAllocationHook allocationHook{ &Allocate };
+    const ScopedInputHook inputHook{ &Input };
+    const ScopedPoolHook poolHook{ &Pool };
 private:
     static void Allocate(bool helper)
     {
-        auto& self = *active.load();
+        auto& self = ActiveProbe<InputSourceAllocationFailure>::Get();
         if (helper) {
             if (self.failHelpers) {
                 {
@@ -3763,23 +3746,20 @@ private:
                 ++self.helperFailures;
                 throw std::bad_alloc{};
             }
-            if (!WaitFor([&] { return self.callerAttempted.load(); }))
-                self.timedOut = true;
+            Await(self.timedOut, [&] { return self.callerAttempted.load(); });
         } else {
             self.callerAttempted = true;
             if (!self.failHelpers) {
-                if (!WaitFor([&] { return self.helperHeld.load(); }))
-                    self.timedOut = true;
+                Await(self.timedOut, [&] { return self.helperHeld.load(); });
                 ++self.callerFailures;
                 throw std::bad_alloc{};
             }
-            if (!WaitFor([&] { return self.failedHelperParked.load() || self.retriedHelper.load(); }))
-                self.timedOut = true;
+            Await(self.timedOut, [&] { return self.failedHelperParked.load() || self.retriedHelper.load(); });
         }
     }
     static void Pool(bsv::detail::InputPoolEvent event)
     {
-        auto& self = *active.load();
+        auto& self = ActiveProbe<InputSourceAllocationFailure>::Get();
         if (event == bsv::detail::InputPoolEvent::JobClosed
             && std::this_thread::get_id() == self.owner) {
             if (!self.failHelpers) bsv::SetParallelInputHelpers(0);
@@ -3794,7 +3774,7 @@ private:
     }
     static void Input(size_t, bsv::detail::InputEvent event)
     {
-        auto& self = *active.load();
+        auto& self = ActiveProbe<InputSourceAllocationFailure>::Get();
         const bool caller = std::this_thread::get_id() == self.owner;
         if (event == bsv::detail::InputEvent::Verified && caller)
             ++self.callerVerified;
@@ -3805,14 +3785,12 @@ private:
             ++self.helperClaims;
             if (!self.failHelpers) {
                 self.helperHeld = true;
-                if (!WaitFor([&] { return self.closed.load(); }))
-                    self.timedOut = true;
+                Await(self.timedOut, [&] { return self.closed.load(); });
                 size_t none = std::numeric_limits<size_t>::max();
                 self.queuedAtClose.compare_exchange_strong(none, bsv::detail::QueuedJobCountForTesting());
             }
         }
     }
-    static inline std::atomic<InputSourceAllocationFailure*> active{ nullptr };
 };
 
 BOOST_AUTO_TEST_CASE(participant_source_allocation_failure_preserves_valid_result, PARALLEL_TEST_CASE_DECORATORS)
@@ -3851,45 +3829,34 @@ BOOST_AUTO_TEST_CASE(participant_source_allocation_failure_preserves_valid_resul
 class AllocationAfterCompletedHelpers {
 public:
     AllocationAfterCompletedHelpers(std::shared_ptr<task::CCancellationSource> source, bool fail)
-        : owner{ std::this_thread::get_id() }, source{ std::move(source) }, fail{ fail }, previous{ Install(this) } {}
-    ~AllocationAfterCompletedHelpers()
-    {
-        bsv::detail::SetInputSourceAllocationHookForTesting(previous.allocation);
-        bsv::detail::SetInputHookForTesting(previous.input);
-        active = nullptr;
-    }
+        : source{ std::move(source) }, fail{ fail } {}
     std::atomic<bool> callerEntered{ false }, timedOut{ false };
     std::atomic<size_t> helperVerified{ 0 }, callerVerified{ 0 };
-    const std::thread::id owner;
+    const std::thread::id owner{ std::this_thread::get_id() };
     const std::shared_ptr<task::CCancellationSource> source;
     const bool fail;
-    const PreviousAllocationAndInputHooks previous;
+    const ActiveProbe<AllocationAfterCompletedHelpers> active{ this };
+    const ScopedAllocationHook allocationHook{ &Allocate };
+    const ScopedInputHook inputHook{ &Input };
 private:
-    // Publishes the probe before installing the hooks that read it.
-    static PreviousAllocationAndInputHooks Install(AllocationAfterCompletedHelpers* self)
-    {
-        active = self;
-        return { bsv::detail::SetInputSourceAllocationHookForTesting(&Allocate), bsv::detail::SetInputHookForTesting(&Input) };
-    }
     static void Allocate(bool helper)
     {
-        auto& self = *active.load();
+        auto& self = ActiveProbe<AllocationAfterCompletedHelpers>::Get();
         if (helper) {
-            if (!WaitFor([&] { return self.callerEntered.load(); })) self.timedOut = true;
+            Await(self.timedOut, [&] { return self.callerEntered.load(); });
         } else {
             self.callerEntered = true;
-            if (!WaitFor([&] { return self.helperVerified.load() == 32; })) self.timedOut = true;
+            Await(self.timedOut, [&] { return self.helperVerified.load() == 32; });
             if (self.fail) throw std::bad_alloc{};
         }
     }
     static void Input(size_t, bsv::detail::InputEvent event)
     {
         if (event != bsv::detail::InputEvent::Verified) return;
-        auto& self = *active.load();
+        auto& self = ActiveProbe<AllocationAfterCompletedHelpers>::Get();
         if (std::this_thread::get_id() == self.owner) ++self.callerVerified;
         else if (++self.helperVerified == 32) self.source->Cancel();
     }
-    static inline std::atomic<AllocationAfterCompletedHelpers*> active{ nullptr };
 };
 
 BOOST_AUTO_TEST_CASE(completed_helpers_keep_verdict_after_caller_setup_failure, PARALLEL_TEST_CASE_DECORATORS)
@@ -3941,7 +3908,7 @@ BOOST_AUTO_TEST_CASE(helpers_run_on_an_8_mib_stack, PARALLEL_TEST_CASE_DECORATOR
     const auto etxBin = SignedP2PKHBin(nInputs);
     const InputThresholdGuard parallel(FORCE_PARALLEL);
     BOOST_REQUIRE(PoolIsIdle());
-    const ClaimRecorder recorder(/*holdCallerOnFirstInput=*/true);
+    const ClaimRecorder recorder(nInputs);
     size_t helperClaims = 0;
     size_t smallest = std::numeric_limits<size_t>::max();
     for (int call = 0; call < 5 && helperClaims == 0; ++call) {
@@ -4020,7 +3987,7 @@ BOOST_AUTO_TEST_CASE(deep_scripts_verify_on_a_helper, PARALLEL_TEST_CASE_DECORAT
     }
     const InputThresholdGuard parallel(FORCE_PARALLEL);
     BOOST_REQUIRE(PoolIsIdle());
-    const ClaimRecorder recorder(/*holdCallerOnFirstInput=*/true);
+    const ClaimRecorder recorder(eTx.vutxo.size());
     bool bothOnHelpers = false;
     for (int call = 0; call < 5 && !bothOnHelpers; ++call) {
         ClaimRecorder::Reset();
@@ -4031,453 +3998,243 @@ BOOST_AUTO_TEST_CASE(deep_scripts_verify_on_a_helper, PARALLEL_TEST_CASE_DECORAT
     BOOST_CHECK_MESSAGE(bothOnHelpers, "the deep inputs were not both verified on helpers in 5 calls");
 }
 
-// Sets the process-wide helper limit for a scope and restores the previous one.
-class HelperLimitGuard {
+// Drives the caller's token through one job. The caller owns input 0, its
+// one helper owns long input 1, and the other inputs are short. The action
+// starts once the caller has closed the job, or for ThrowBeforeClose*,
+// between the caller's claims. Reads on another thread, and reads after the
+// token has thrown, are counted and answered false.
+class CallerTokenProbe final : public task::CCancellationSource {
 public:
-    explicit HelperLimitGuard(int64_t helpers) : previous_{ bsv::GetParallelInputHelpers() }
-    {
-        bsv::SetParallelInputHelpers(helpers);
-    }
-    ~HelperLimitGuard() { bsv::SetParallelInputHelpers(previous_); }
-    HelperLimitGuard(const HelperLimitGuard&) = delete;
-    HelperLimitGuard& operator=(const HelperLimitGuard&) = delete;
-
-private:
-    const int64_t previous_;
-};
-
-// The caller owns input zero, a helper owns long input one, and all other
-// inputs are short. Cancellation starts only after the caller closes the job.
-class CancelWhileCallerWaits final : public task::CCancellationSource {
-public:
-    enum class Action { CancelRunning, CancelCompleted, Throw, ThrowAfterFailure, ThrowCompleted, Idle };
-    explicit CancelWhileCallerWaits(Action action = Action::CancelRunning)
-        : owner{ std::this_thread::get_id() }, action{ action }, previous{ Install(this) } {}
-    ~CancelWhileCallerWaits() override
-    {
-        bsv::detail::SetInputSourceAllocationHookForTesting(previous.allocation);
-        bsv::detail::SetInputHookForTesting(previous.input);
-        bsv::detail::SetInputPoolHookForTesting(previous.pool);
-        bsv::detail::WakeInputHelpersForTesting();
-        active = nullptr;
-    }
+    enum class Action {
+        CancelRunning,           // cancel while the helper is on input 1
+        CancelCompleted,         // cancel once the helper has finished input 1
+        Throw,                   // the wait poll throws while the helper is on input 1
+        ThrowAfterFailure,       // the wait poll throws after input 0 failed
+        ThrowCompleted,          // the wait poll throws once input 1 has finished
+        Idle,                    // never cancels; the helper pauses 100 ms
+        ThrowBeforeClose,        // throws before the next claim; the helper pauses 100 ms
+        ThrowBeforeClosePrompt,  // the same without the pause
+    };
+    explicit CallerTokenProbe(Action action) : action{ action } {}
     bool IsCanceled() override
     {
-        if (std::this_thread::get_id() != owner) ++wrongThreadReads;
-        else if (closed.load()) {
-            ++waitPolls;
-            if (action == Action::Throw || action == Action::ThrowAfterFailure
+        if (std::this_thread::get_id() != owner) {
+            ++wrongThreadReads;
+            return false;
+        }
+        if (threw.load()) {
+            ++cleanupPolls;
+            return false;
+        }
+        if (BeforeClose() ? callerVerifiedZero.load() : closed.load()) {
+            if (!BeforeClose())
+                ++waitPolls;
+            if (BeforeClose() || action == Action::Throw || action == Action::ThrowAfterFailure
                 || (action == Action::ThrowCompleted && completed.load())) {
                 threw = true;
-                throw std::runtime_error("wait token failure");
+                throw std::runtime_error("caller token failure");
             }
         }
         return CCancellationSource::IsCanceled();
     }
-    std::atomic<bool> callerClaimed{ false }, helperClaimed{ false }, closed{ false };
+    bool BeforeClose() const { return action == Action::ThrowBeforeClose || action == Action::ThrowBeforeClosePrompt; }
+    std::atomic<bool> callerClaimed{ false }, helperClaimed{ false }, callerVerifiedZero{ false }, closed{ false };
     std::atomic<bool> published{ false }, timedOut{ false }, threw{ false }, completed{ false };
-    std::atomic<size_t> helperPolls{ 0 }, waitPolls{ 0 }, wrongThreadReads{ 0 }, closeCalls{ 0 };
-    auto WaitWallMicros() const { return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - closeWall).count(); }
-#ifdef BOOST_CHRONO_HAS_THREAD_CLOCK
-    auto WaitCpuMicros() const { return std::chrono::duration_cast<std::chrono::microseconds>(task::thread_clock::now() - closeCpu).count(); }
-#endif
-    const std::thread::id owner;
+    std::atomic<size_t> helperPolls{ 0 }, helperClaims{ 0 }, waitPolls{ 0 }, cleanupPolls{ 0 };
+    std::atomic<size_t> wrongThreadReads{ 0 }, closeCalls{ 0 };
+    const std::thread::id owner{ std::this_thread::get_id() };
     const Action action;
-    std::chrono::steady_clock::time_point closeWall;
-#ifdef BOOST_CHRONO_HAS_THREAD_CLOCK
-    task::thread_clock::time_point closeCpu;
-#endif
-    const PreviousAllocationInputAndPoolHooks previous;
+    const ActiveProbe<CallerTokenProbe> active{ this };
+    const WakeHelpersAfterHooks wake;
+    const ScopedAllocationHook allocationHook{ &Allocate };
+    const ScopedInputHook inputHook{ &Input };
+    const ScopedPoolHook poolHook{ &Pool };
 private:
-    // Publishes the probe before installing the hooks that read it.
-    static PreviousAllocationInputAndPoolHooks Install(CancelWhileCallerWaits* self)
-    {
-        active = self;
-        return { bsv::detail::SetInputSourceAllocationHookForTesting(&Allocate), bsv::detail::SetInputHookForTesting(&Input),
-                 bsv::detail::SetInputPoolHookForTesting(&Pool) };
-    }
     static void Allocate(bool helper)
     {
-        auto& self = *active.load();
-        if (helper && !WaitFor([&] { return self.callerClaimed.load(); })) self.timedOut = true;
+        auto& self = ActiveProbe<CallerTokenProbe>::Get();
+        if (helper)
+            Await(self.timedOut, [&] { return self.callerClaimed.load(); });
     }
     static void Pool(bsv::detail::InputPoolEvent event)
     {
-        if (event != bsv::detail::InputPoolEvent::JobClosed) return;
-        auto& self = *active.load();
-        if (std::this_thread::get_id() == self.owner) {
+        auto& self = ActiveProbe<CallerTokenProbe>::Get();
+        if (event == bsv::detail::InputPoolEvent::JobClosed && std::this_thread::get_id() == self.owner) {
             ++self.closeCalls;
-            self.closeWall = std::chrono::steady_clock::now();
-#ifdef BOOST_CHRONO_HAS_THREAD_CLOCK
-            self.closeCpu = task::thread_clock::now();
-#endif
             self.closed = true;
         }
     }
     static void Input(size_t index, bsv::detail::InputEvent event)
     {
-        auto& self = *active.load();
+        using bsv::detail::InputEvent;
+        auto& self = ActiveProbe<CallerTokenProbe>::Get();
         const bool caller = std::this_thread::get_id() == self.owner;
-        if (event == bsv::detail::InputEvent::Claimed && caller && index == 0) {
+        if (event == InputEvent::Claimed && caller && index == 0) {
             self.callerClaimed = true;
-            if (!WaitFor([&] { return self.helperClaimed.load(); })) self.timedOut = true;
-        }
-        if (event == bsv::detail::InputEvent::Claimed && !caller && index == 1) self.helperClaimed = true;
-        if (event == bsv::detail::InputEvent::CallerCancelled && caller) self.published = true;
-        if (event == bsv::detail::InputEvent::Polled && !caller && index == 1) {
-            if (!WaitFor([&] { return self.closed.load(); })) self.timedOut = true;
-            const size_t count = ++self.helperPolls;
-            if (self.action == Action::ThrowAfterFailure && count == 1)
-                self.Trigger();
-            if (self.action == Action::Idle && count == 1)
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            if ((self.action == Action::CancelRunning || self.action == Action::Throw) && count == 8)
-                self.Trigger();
-        }
-        if (event == bsv::detail::InputEvent::Verified && !caller && index == 1
-            && (self.action == Action::CancelCompleted || self.action == Action::ThrowCompleted)) {
+            Await(self.timedOut, [&] { return self.helperClaimed.load(); });
+        } else if (event == InputEvent::Claimed && !caller) {
+            ++self.helperClaims;
+            if (index == 1)
+                self.helperClaimed = true;
+        } else if (event == InputEvent::Verified && caller && index == 0) {
+            self.callerVerifiedZero = true;
+        } else if (event == InputEvent::CallerCancelled && caller) {
+            self.published = true;
+        } else if (event == InputEvent::Polled && !caller && index == 1) {
+            self.HelperPoll();
+        } else if (event == InputEvent::Verified && !caller && index == 1
+                   && (self.action == Action::CancelCompleted || self.action == Action::ThrowCompleted)) {
             self.completed = true;
             self.Trigger();
         }
     }
+    void HelperPoll()
+    {
+        Await(timedOut, [&] { return closed.load(); });
+        const size_t count = ++helperPolls;
+        if (count == 1 && (action == Action::Idle || action == Action::ThrowBeforeClose))
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        if ((count == 1 && action == Action::ThrowAfterFailure)
+            || (count == 8 && (action == Action::CancelRunning || action == Action::Throw)))
+            Trigger();
+    }
     void Trigger()
     {
-        if (action == Action::CancelRunning || action == Action::CancelCompleted) Cancel();
+        if (action == Action::CancelRunning || action == Action::CancelCompleted)
+            Cancel();
         // A missing wait poll releases after a diagnostic timeout, so it fails
         // assertions rather than hanging the binary.
-        if (!WaitFor([&] { return published.load() || threw.load(); }, std::chrono::milliseconds(1000)))
-            timedOut = true;
+        Await(timedOut, [&] { return published.load() || threw.load(); }, std::chrono::milliseconds(1000));
     }
-    static inline std::atomic<CancelWhileCallerWaits*> active{ nullptr };
 };
 
-BOOST_AUTO_TEST_CASE(caller_wait_publishes_cancellation_to_helpers, PARALLEL_TEST_CASE_DECORATORS)
+// One row per outcome of the caller's token during a job with one helper.
+// Cancellation or a token exception while the caller waits for the helper
+// reaches the helper and returns CANCELLED or EXCEPTION; after a verdict is
+// complete it keeps that verdict. An uncancelled wait does not spin. A token
+// exception before the caller closes the job stops the helper at its next
+// poll, and unwind cleanup never reads the token again. Only the caller ever
+// reads it.
+BOOST_AUTO_TEST_CASE(caller_token_during_parallel_job_and_wait, PARALLEL_TEST_CASE_DECORATORS)
 {
-    if (!PoolHasHelpers()) return;
-    const bsv::CTxValidator validator(CBaseChainParams::REGTEST);
-    auto tx = EarlyStopSpend(0);
-    for (size_t i = 0; i < 32; ++i)
-        if (i != 1) tx.vutxo[i].scriptPubKey = CScript() << OP_TRUE;
-    const auto bin = SerializeExtended(tx);
-    const std::vector<int32_t> heights(32, 19000);
-    const InputThresholdGuard parallel(FORCE_PARALLEL);
-    const HelperLimitGuard oneHelper(1);
-    BOOST_REQUIRE(PoolIsIdle());
-    const auto source = std::make_shared<CancelWhileCallerWaits>();
-    const auto result = validator.ValidateTransaction(bin, heights, 20000, true, source->GetToken());
-    BOOST_CHECK(source->callerClaimed);
-    BOOST_CHECK(source->helperClaimed);
-    BOOST_CHECK_EQUAL(source->closeCalls.load(), 1u);
-    BOOST_CHECK(!source->timedOut);
-    BOOST_CHECK(source->published);
-    BOOST_CHECK_GT(source->waitPolls.load(), 0u);
-    BOOST_CHECK_EQUAL(source->wrongThreadReads.load(), 0u);
-    BOOST_CHECK_GE(source->helperPolls.load(), 8u);
-    BOOST_CHECK_LT(source->helperPolls.load(), 32u);
-    BOOST_TEST_MESSAGE("wait polls=" << source->waitPolls << " helper polls=" << source->helperPolls);
-    BOOST_CHECK_EQUAL(result.domain, TX_ERR_DOMAIN_CANCELLED);
-    BOOST_CHECK(PoolIsIdle());
-}
-
-// A cancellation observed during drain cannot replace already completed work.
-BOOST_AUTO_TEST_CASE(wait_poll_keeps_completed_success_and_lowest_failure, PARALLEL_TEST_CASE_DECORATORS)
-{
-    if (!PoolHasHelpers()) return;
+    if (!PoolHasHelpers())
+        return;
+    using Action = CallerTokenProbe::Action;
+    constexpr size_t NONE = 32;
+    struct Row {
+        const char* name;
+        Action action;
+        size_t failing;                // input that fails, NONE for a valid tx
+        std::optional<int32_t> domain; // expected result domain; none: the serial result
+    };
+    const std::array<Row, 10> rows{ {
+        { "wait_poll_publishes_cancellation_to_helpers", Action::CancelRunning, NONE, TX_ERR_DOMAIN_CANCELLED },
+        { "cancel_after_all_inputs_pass_keeps_success", Action::CancelCompleted, NONE, std::nullopt },
+        { "cancel_after_lowest_failure_keeps_it", Action::CancelCompleted, 1, std::nullopt },
+        { "throwing_wait_token_drains_helpers_before_return", Action::Throw, NONE, TX_ERR_DOMAIN_EXCEPTION },
+        { "throw_after_lower_failure_keeps_it", Action::ThrowAfterFailure, 0, std::nullopt },
+        { "throw_after_helper_failure_keeps_it", Action::ThrowCompleted, 1, std::nullopt },
+        { "throw_after_all_inputs_pass_keeps_success", Action::ThrowCompleted, NONE, std::nullopt },
+        { "uncancelled_tail_wait_does_not_busy_poll", Action::Idle, NONE, TX_ERR_DOMAIN_OK },
+        { "preclaim_token_throw_never_repolls_in_unwind", Action::ThrowBeforeClose, NONE, TX_ERR_DOMAIN_EXCEPTION },
+        { "preclaim_token_throw_stops_helpers_at_next_poll", Action::ThrowBeforeClosePrompt, NONE, TX_ERR_DOMAIN_EXCEPTION },
+    } };
     const bsv::CTxValidator validator(CBaseChainParams::REGTEST);
     const std::vector<int32_t> heights(32, 19000);
     const HelperLimitGuard oneHelper(1);
-    for (const bool invalid : { false, true }) {
-        auto tx = EarlyStopSpend(0);
-        for (size_t i = 0; i < 32; ++i)
-            if (i != 1) tx.vutxo[i].scriptPubKey = CScript() << OP_TRUE;
-        if (invalid) tx.vutxo[1].scriptPubKey << OP_FALSE;
-        const auto bin = SerializeExtended(tx);
-        TxError serial;
+    for (const Row& row : rows) {
+        BOOST_TEST_CONTEXT(row.name)
         {
-            const InputThresholdGuard serialOnly(FORCE_SERIAL);
-            serial = validator.ValidateTransaction(bin, heights, 20000, true);
-            BOOST_REQUIRE_EQUAL(serial.domain, invalid ? TX_ERR_DOMAIN_SCRIPT : TX_ERR_DOMAIN_OK);
-        }
-        const InputThresholdGuard parallel(FORCE_PARALLEL);
-        BOOST_REQUIRE(PoolIsIdle());
-        const auto source = std::make_shared<CancelWhileCallerWaits>(CancelWhileCallerWaits::Action::CancelCompleted);
-        const auto result = validator.ValidateTransaction(bin, heights, 20000, true, source->GetToken());
-        BOOST_CHECK(!source->timedOut);
-        BOOST_CHECK(source->published);
-        BOOST_CHECK_GT(source->waitPolls.load(), 0u);
-        BOOST_CHECK_EQUAL(source->wrongThreadReads.load(), 0u);
-        BOOST_CHECK_EQUAL(source->closeCalls.load(), 1u);
-        BOOST_CHECK(SameTxError(result, serial));
-        BOOST_CHECK(PoolIsIdle());
-    }
-}
-
-BOOST_AUTO_TEST_CASE(throwing_wait_token_drains_helpers_before_return, PARALLEL_TEST_CASE_DECORATORS)
-{
-    if (!PoolHasHelpers()) return;
-    const bsv::CTxValidator validator(CBaseChainParams::REGTEST);
-    auto tx = EarlyStopSpend(0);
-    for (size_t i = 0; i < 32; ++i)
-        if (i != 1) tx.vutxo[i].scriptPubKey = CScript() << OP_TRUE;
-    const InputThresholdGuard parallel(FORCE_PARALLEL);
-    const HelperLimitGuard oneHelper(1);
-    BOOST_REQUIRE(PoolIsIdle());
-    const auto source = std::make_shared<CancelWhileCallerWaits>(CancelWhileCallerWaits::Action::Throw);
-    const auto result = validator.ValidateTransaction(SerializeExtended(tx), std::vector<int32_t>(32, 19000), 20000, true, source->GetToken());
-    BOOST_CHECK(!source->timedOut);
-    BOOST_CHECK(source->threw);
-    BOOST_CHECK_GT(source->waitPolls.load(), 0u);
-    BOOST_CHECK_EQUAL(source->wrongThreadReads.load(), 0u);
-    BOOST_CHECK_EQUAL(source->closeCalls.load(), 1u);
-    BOOST_CHECK_EQUAL(result.domain, TX_ERR_DOMAIN_EXCEPTION);
-    BOOST_CHECK(PoolIsIdle());
-}
-
-BOOST_AUTO_TEST_CASE(throwing_wait_token_keeps_completed_verdict, PARALLEL_TEST_CASE_DECORATORS)
-{
-    if (!PoolHasHelpers()) return;
-    const bsv::CTxValidator validator(CBaseChainParams::REGTEST);
-    const std::vector<int32_t> heights(32, 19000);
-    const HelperLimitGuard oneHelper(1);
-    for (const size_t bad : { size_t{0}, size_t{1}, size_t{32} }) {
-        auto tx = EarlyStopSpend(0);
-        for (size_t i = 0; i < 32; ++i)
-            if (i != 1) tx.vutxo[i].scriptPubKey = i == bad ? CScript() << OP_FALSE : CScript() << OP_TRUE;
-        if (bad == 1) tx.vutxo[1].scriptPubKey << OP_FALSE;
-        const auto bin = SerializeExtended(tx);
-        TxError serial;
-        {
-            const InputThresholdGuard serialOnly(FORCE_SERIAL);
-            serial = validator.ValidateTransaction(bin, heights, 20000, true);
-            BOOST_REQUIRE_EQUAL(serial.domain, bad < 32 ? TX_ERR_DOMAIN_SCRIPT : TX_ERR_DOMAIN_OK);
-        }
-        const InputThresholdGuard parallel(FORCE_PARALLEL);
-        BOOST_REQUIRE(PoolIsIdle());
-        const auto action = bad == 0 ? CancelWhileCallerWaits::Action::ThrowAfterFailure
-                                     : CancelWhileCallerWaits::Action::ThrowCompleted;
-        const auto source = std::make_shared<CancelWhileCallerWaits>(action);
-        const auto result = validator.ValidateTransaction(bin, heights, 20000, true, source->GetToken());
-        BOOST_CHECK(source->callerClaimed);
-        BOOST_CHECK(source->helperClaimed);
-        BOOST_CHECK(source->threw);
-        if (bad != 0) BOOST_CHECK(source->completed);
-        BOOST_CHECK(!source->timedOut);
-        BOOST_CHECK_GT(source->waitPolls.load(), 0u);
-        BOOST_CHECK_EQUAL(source->wrongThreadReads.load(), 0u);
-        BOOST_CHECK_EQUAL(source->closeCalls.load(), 1u);
-        BOOST_CHECK_MESSAGE(SameTxError(result, serial), "bad=" << bad << " parallel="
-            << result.domain << "/" << result.code << " serial=" << serial.domain << "/" << serial.code);
-        BOOST_CHECK(PoolIsIdle());
-    }
-}
-
-BOOST_AUTO_TEST_CASE(uncancelled_tail_wait_does_not_busy_poll, PARALLEL_TEST_CASE_DECORATORS)
-{
-    if (!PoolHasHelpers()) return;
-    const bsv::CTxValidator validator(CBaseChainParams::REGTEST);
-    auto tx = EarlyStopSpend(0);
-    for (size_t i = 0; i < 32; ++i)
-        if (i != 1) tx.vutxo[i].scriptPubKey = CScript() << OP_TRUE;
-    const InputThresholdGuard parallel(FORCE_PARALLEL);
-    const HelperLimitGuard oneHelper(1);
-    BOOST_REQUIRE(PoolIsIdle());
-    const auto source = std::make_shared<CancelWhileCallerWaits>(CancelWhileCallerWaits::Action::Idle);
-    const auto result = validator.ValidateTransaction(SerializeExtended(tx), std::vector<int32_t>(32, 19000), 20000, true, source->GetToken());
-    BOOST_CHECK(!source->timedOut);
-    BOOST_CHECK_EQUAL(source->wrongThreadReads.load(), 0u);
-    BOOST_CHECK_EQUAL(source->closeCalls.load(), 1u);
-    BOOST_CHECK_LT(source->waitPolls.load(), 500u);
-    BOOST_CHECK(bsv::TxErrorIsOk(result));
-    BOOST_CHECK(PoolIsIdle());
-#ifdef BOOST_CHRONO_HAS_THREAD_CLOCK
-    BOOST_TEST_MESSAGE("tail wait wall_us=" << source->WaitWallMicros() << " caller_cpu_us=" << source->WaitCpuMicros() << " polls=" << source->waitPolls);
-#endif
-}
-
-// Throw between claims, before normal close/Finish. Later token reads count
-// instead of throwing again, so polling during unwind fails without terminating.
-class ThrowBeforeCallerCloses final : public task::CCancellationSource {
-public:
-    explicit ThrowBeforeCallerCloses(bool promptStop = false)
-        : owner{ std::this_thread::get_id() }, promptStop_{ promptStop }, previous{ Install(this) } {}
-    ~ThrowBeforeCallerCloses() override
-    {
-        bsv::detail::SetInputSourceAllocationHookForTesting(previous.allocation);
-        bsv::detail::SetInputHookForTesting(previous.input);
-        bsv::detail::SetInputPoolHookForTesting(previous.pool);
-        bsv::detail::WakeInputHelpersForTesting();
-        active = nullptr;
-    }
-    bool IsCanceled() override
-    {
-        if (std::this_thread::get_id() != owner) { ++wrongThreadReads; return false; }
-        if (threw.load()) { ++cleanupPolls; return false; }
-        if (callerVerifiedZero.load()) {
-            threw = true;
-            throw std::runtime_error("pre-claim token failure");
-        }
-        return false;
-    }
-    std::atomic<bool> callerClaimed{ false }, helperClaimed{ false }, callerVerifiedZero{ false };
-    std::atomic<bool> closed{ false }, threw{ false }, timedOut{ false }, helperHeld{ false };
-    std::atomic<size_t> cleanupPolls{ 0 }, wrongThreadReads{ 0 }, closeCalls{ 0 };
-    std::atomic<size_t> helperPolls{ 0 }, helperClaims{ 0 };
-    const std::thread::id owner;
-    const bool promptStop_;
-    const PreviousAllocationInputAndPoolHooks previous;
-private:
-    // Publishes the probe before installing the hooks that read it.
-    static PreviousAllocationInputAndPoolHooks Install(ThrowBeforeCallerCloses* self)
-    {
-        active = self;
-        return { bsv::detail::SetInputSourceAllocationHookForTesting(&Allocate), bsv::detail::SetInputHookForTesting(&Input),
-                 bsv::detail::SetInputPoolHookForTesting(&Pool) };
-    }
-    static void Allocate(bool helper)
-    {
-        auto& self = *active.load();
-        if (helper && !WaitFor([&] { return self.callerClaimed.load(); })) self.timedOut = true;
-    }
-    static void Pool(bsv::detail::InputPoolEvent event)
-    {
-        if (event != bsv::detail::InputPoolEvent::JobClosed) return;
-        auto& self = *active.load();
-        if (std::this_thread::get_id() == self.owner) {
-            ++self.closeCalls;
-            self.closed = true;
-        }
-    }
-    static void Input(size_t index, bsv::detail::InputEvent event)
-    {
-        auto& self = *active.load();
-        const bool caller = std::this_thread::get_id() == self.owner;
-        if (caller && index == 0 && event == bsv::detail::InputEvent::Claimed) {
-            self.callerClaimed = true;
-            if (!WaitFor([&] { return self.helperClaimed.load(); })) self.timedOut = true;
-        }
-        if (!caller && event == bsv::detail::InputEvent::Claimed) {
-            ++self.helperClaims;
-            if (index == 1) self.helperClaimed = true;
-        }
-        if (caller && index == 0 && event == bsv::detail::InputEvent::Verified) self.callerVerifiedZero = true;
-        if (!caller && index == 1 && event == bsv::detail::InputEvent::Polled) {
-            ++self.helperPolls;
-            if (!self.helperHeld.exchange(true)) {
-                if (!WaitFor([&] { return self.closed.load(); })) self.timedOut = true;
-                if (!self.promptStop_) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            auto tx = EarlyStopSpend(0);
+            for (size_t i = 0; i < 32; ++i)
+                if (i != 1) tx.vutxo[i].scriptPubKey = CScript() << (i == row.failing ? OP_FALSE : OP_TRUE);
+            if (row.failing == 1)
+                tx.vutxo[1].scriptPubKey << OP_FALSE;
+            const auto bin = SerializeExtended(tx);
+            TxError serial;
+            {
+                const InputThresholdGuard serialOnly(FORCE_SERIAL);
+                serial = validator.ValidateTransaction(bin, heights, 20000, true);
             }
+            BOOST_REQUIRE_EQUAL(serial.domain, row.failing == NONE ? TX_ERR_DOMAIN_OK : TX_ERR_DOMAIN_SCRIPT);
+            const InputThresholdGuard parallel(FORCE_PARALLEL);
+            BOOST_REQUIRE(PoolIsIdle());
+            const auto probe = std::make_shared<CallerTokenProbe>(row.action);
+            const auto result = validator.ValidateTransaction(bin, heights, 20000, true, probe->GetToken());
+            if (row.domain)
+                BOOST_CHECK_EQUAL(result.domain, *row.domain);
+            else
+                BOOST_CHECK_MESSAGE(SameTxError(result, serial), "result " << result.domain << "/" << result.code
+                    << " serial " << serial.domain << "/" << serial.code);
+            BOOST_CHECK(!probe->timedOut);
+            BOOST_CHECK(probe->callerClaimed);
+            BOOST_CHECK(probe->helperClaimed);
+            BOOST_CHECK_EQUAL(probe->closeCalls.load(), 1u);
+            BOOST_CHECK_EQUAL(probe->wrongThreadReads.load(), 0u);
+            BOOST_CHECK_EQUAL(probe->cleanupPolls.load(), 0u);
+            const bool cancels = row.action == Action::CancelRunning || row.action == Action::CancelCompleted;
+            BOOST_CHECK_EQUAL(probe->threw.load(), !cancels && row.action != Action::Idle);
+            if (cancels)
+                BOOST_CHECK(probe->published);
+            if (row.action == Action::CancelCompleted || row.action == Action::ThrowCompleted)
+                BOOST_CHECK(probe->completed);
+            if (row.action == Action::Idle)
+                BOOST_CHECK_LT(probe->waitPolls.load(), 500u);
+            else if (!probe->BeforeClose())
+                BOOST_CHECK_GT(probe->waitPolls.load(), 0u);
+            if (row.action == Action::CancelRunning) {
+                BOOST_CHECK_GE(probe->helperPolls.load(), 8u);
+                BOOST_CHECK_LT(probe->helperPolls.load(), 32u);
+            }
+            if (probe->BeforeClose()) {
+                BOOST_CHECK(probe->callerVerifiedZero);
+                BOOST_CHECK_GE(probe->helperPolls.load(), 1u);
+                BOOST_CHECK_LT(probe->helperPolls.load(), 32u);
+                BOOST_CHECK_EQUAL(probe->helperClaims.load(), 1u);
+            }
+            BOOST_CHECK(PoolIsIdle());
         }
     }
-    static inline std::atomic<ThrowBeforeCallerCloses*> active{ nullptr };
-};
-
-BOOST_AUTO_TEST_CASE(preclaim_token_throw_never_repolls_in_unwind, PARALLEL_TEST_CASE_DECORATORS)
-{
-    if (!PoolHasHelpers()) return;
-    const bsv::CTxValidator validator(CBaseChainParams::REGTEST);
-    auto tx = EarlyStopSpend(0);
-    for (size_t i = 0; i < 32; ++i)
-        if (i != 1) tx.vutxo[i].scriptPubKey = CScript() << OP_TRUE;
-    const InputThresholdGuard parallel(FORCE_PARALLEL);
-    const HelperLimitGuard oneHelper(1);
-    BOOST_REQUIRE(PoolIsIdle());
-    const auto source = std::make_shared<ThrowBeforeCallerCloses>();
-    const auto result = validator.ValidateTransaction(SerializeExtended(tx), std::vector<int32_t>(32, 19000), 20000, true, source->GetToken());
-    BOOST_CHECK(source->callerVerifiedZero);
-    BOOST_CHECK(source->helperClaimed);
-    BOOST_CHECK(source->helperHeld);
-    BOOST_CHECK(source->threw);
-    BOOST_CHECK(!source->timedOut);
-    BOOST_CHECK_EQUAL(source->closeCalls.load(), 1u);
-    BOOST_CHECK_EQUAL(source->cleanupPolls.load(), 0u);
-    BOOST_CHECK_EQUAL(source->wrongThreadReads.load(), 0u);
-    BOOST_CHECK_EQUAL(result.domain, TX_ERR_DOMAIN_EXCEPTION);
-    BOOST_CHECK(PoolIsIdle());
-    BOOST_TEST_MESSAGE("preclaim throw cleanup polls=" << source->cleanupPolls);
-}
-
-BOOST_AUTO_TEST_CASE(preclaim_token_throw_stops_helpers_at_next_poll, PARALLEL_TEST_CASE_DECORATORS)
-{
-    if (!PoolHasHelpers()) return;
-    const bsv::CTxValidator validator(CBaseChainParams::REGTEST);
-    auto tx = EarlyStopSpend(0);
-    for (size_t i = 0; i < 32; ++i)
-        if (i != 1) tx.vutxo[i].scriptPubKey = CScript() << OP_TRUE;
-    const InputThresholdGuard parallel(FORCE_PARALLEL);
-    const HelperLimitGuard oneHelper(1);
-    BOOST_REQUIRE(PoolIsIdle());
-    const auto source = std::make_shared<ThrowBeforeCallerCloses>(true);
-    const auto result = validator.ValidateTransaction(SerializeExtended(tx), std::vector<int32_t>(32, 19000), 20000, true, source->GetToken());
-    BOOST_CHECK(source->callerVerifiedZero);
-    BOOST_CHECK(source->helperClaimed);
-    BOOST_CHECK(source->helperHeld);
-    BOOST_CHECK(source->threw);
-    BOOST_CHECK(!source->timedOut);
-    BOOST_CHECK_EQUAL(source->closeCalls.load(), 1u);
-    BOOST_CHECK_EQUAL(source->cleanupPolls.load(), 0u);
-    BOOST_CHECK_EQUAL(source->wrongThreadReads.load(), 0u);
-    BOOST_CHECK_GE(source->helperPolls.load(), 1u);
-    BOOST_CHECK_LT(source->helperPolls.load(), 32u);
-    BOOST_CHECK_EQUAL(source->helperClaims.load(), 1u);
-    BOOST_CHECK_EQUAL(result.domain, TX_ERR_DOMAIN_EXCEPTION);
-    BOOST_CHECK(PoolIsIdle());
-    BOOST_TEST_MESSAGE("preclaim throw helper polls=" << source->helperPolls << " claims=" << source->helperClaims);
 }
 
 class ReservedPlaceRelease {
 public:
-    ReservedPlaceRelease() : previous{ Install(this) } { bsv::detail::WakeInputHelpersForTesting(); }
-    ~ReservedPlaceRelease()
-    {
-        bsv::detail::SetInputHookForTesting(previous.input);
-        bsv::detail::SetInputPoolHookForTesting(previous.pool);
-        bsv::detail::WakeInputHelpersForTesting();
-        active = nullptr;
-    }
-    size_t ParkedCount() { std::lock_guard lock{ mutex }; return parked.size(); }
+    ReservedPlaceRelease() { bsv::detail::WakeInputHelpersForTesting(); }
     std::atomic<bool> coreUnavailable{ false }, returnPlace{ false }, releaseInputs{ false }, timedOut{ false };
     std::atomic<bool> callerClaimed{ false }, helperClaimed{ false }, parkedAfterFailure{ false };
-    std::thread::id failedHelper, recruitedHelper;
-    std::mutex mutex;
-    std::map<std::thread::id, bool> parked;
-    const PreviousPoolAndInputHooks previous;
+    std::thread::id failedHelper, recruitedHelper;  // written under the pool mutex, read after the threads join
+    ParkedHelpers parked;
+    const ActiveProbe<ReservedPlaceRelease> active{ this };
+    const WakeHelpersAfterHooks wake;
+    const ScopedPoolHook poolHook{ &PoolHook };
+    const ScopedInputHook inputHook{ &InputHook };
     static inline thread_local bool isCaller = false;
 private:
-    // Publishes the probe before installing the hooks that read it.
-    static PreviousPoolAndInputHooks Install(ReservedPlaceRelease* self)
-    {
-        active = self;
-        return { bsv::detail::SetInputPoolHookForTesting(&PoolHook), bsv::detail::SetInputHookForTesting(&InputHook) };
-    }
     static void PoolHook(bsv::detail::InputPoolEvent event)
     {
-        auto& self = *active.load();
+        auto& self = ActiveProbe<ReservedPlaceRelease>::Get();
         if (event == bsv::detail::InputPoolEvent::Waiting) {
-            std::lock_guard lock{ self.mutex };
-            self.parked[std::this_thread::get_id()] = true;
+            self.parked.Record();
             if (self.coreUnavailable && !self.helperClaimed && std::this_thread::get_id() == self.failedHelper)
                 self.parkedAfterFailure = true;
         } else if (event == bsv::detail::InputPoolEvent::CoreUnavailable) {
             self.failedHelper = std::this_thread::get_id();
             self.coreUnavailable = true;
-            if (!WaitFor([&] { return self.returnPlace.load(); }, std::chrono::milliseconds(20000)))
-                self.timedOut = true;
+            Await(self.timedOut, [&] { return self.returnPlace.load(); }, std::chrono::milliseconds(20000));
         }
     }
     static void InputHook(size_t, bsv::detail::InputEvent event)
     {
         if (event != bsv::detail::InputEvent::Claimed)
             return;
-        auto& self = *active.load();
+        auto& self = ActiveProbe<ReservedPlaceRelease>::Get();
         if (isCaller) self.callerClaimed = true;
         else {
             self.recruitedHelper = std::this_thread::get_id();
             self.helperClaimed = true;
         }
-        if (!WaitFor([&] { return self.releaseInputs.load(); }, std::chrono::milliseconds(20000)))
-            self.timedOut = true;
+        Await(self.timedOut, [&] { return self.releaseInputs.load(); }, std::chrono::milliseconds(20000));
     }
-    static inline std::atomic<ReservedPlaceRelease*> active{ nullptr };
 };
 
 BOOST_AUTO_TEST_CASE(released_core_is_rechecked_after_a_failed_helper_reservation, PARALLEL_TEST_CASE_DECORATORS)
@@ -4487,31 +4244,13 @@ BOOST_AUTO_TEST_CASE(released_core_is_rechecked_after_a_failed_helper_reservatio
         return;
     const bsv::CTxValidator validator("main");
     const auto large = SignedP2PKHBin(32);
-    const auto spend = MakeSignedP2PKHSpend({ SigHashType().withForkId() }, 1);
-    CDataStream plain(SER_NETWORK, PROTOCOL_VERSION);
-    plain << spend.mtx;
-    const std::vector<uint8_t> txBin(plain.begin(), plain.end());
-    const auto& locking = spend.vutxo[0].scriptPubKey;
     const InputThresholdGuard parallel(FORCE_PARALLEL);
     const HelperLimitGuard limit(1);
     BOOST_REQUIRE(PoolIsIdle());
     ReservedPlaceRelease pause;
-    BOOST_REQUIRE(WaitFor([&] { return pause.ParkedCount() == helpers; }));
-    std::vector<std::shared_ptr<HeldSpendSource>> sources;
-    std::vector<std::thread> ordinary;
-    std::vector<TxError> results(helpers, bsv::TxErrorException());
-    for (size_t i = 0; i < helpers; ++i) {
-        auto source = std::make_shared<HeldSpendSource>();
-        sources.push_back(source);
-        ordinary.emplace_back([&, source, i] {
-            results[i] = validator.VerifySpend(txBin, 0,
-                std::span<const uint8_t>(locking.data(), locking.size()), spend.vutxo[0].nValue.GetSatoshis(),
-                P2PKH_UTXO_HEIGHT, P2PKH_BLOCK_HEIGHT, true, std::nullopt, source->GetToken());
-        });
-    }
-    const bool full = WaitFor([&] {
-        return std::all_of(sources.begin(), sources.end(), [](const auto& source) { return source->entered.load(); });
-    });
+    BOOST_REQUIRE(WaitFor([&] { return pause.parked.Count() == helpers; }));
+    HeldSpenders spenders(validator, helpers);
+    const bool full = spenders.Entered();
     TxError result = bsv::TxErrorException();
     std::thread caller([&] {
         ReservedPlaceRelease::isCaller = true;
@@ -4522,13 +4261,11 @@ BOOST_AUTO_TEST_CASE(released_core_is_rechecked_after_a_failed_helper_reservatio
     // other awakened helpers cannot mask a missing retry by the selected one.
     bsv::detail::WakeInputHelpersForTesting(false);
     const bool reserved = WaitFor([&] { return pause.coreUnavailable.load(); });
-    sources[0]->release = true;
-    ordinary[0].join();  // full-cap early return must not wait for the pool mutex
+    spenders.Release(0);  // full-cap early return must not wait for the pool mutex
     pause.returnPlace = true;
     const bool recruited = WaitFor([&] { return pause.helperClaimed.load(); }, std::chrono::milliseconds(1000));
     pause.releaseInputs = true;
-    for (const auto& source : sources) source->release = true;
-    for (size_t i = 1; i < ordinary.size(); ++i) ordinary[i].join();
+    const bool spendsPassed = spenders.AllPassed();
     caller.join();
     BOOST_REQUIRE(full);
     BOOST_REQUIRE(queued);
@@ -4537,10 +4274,7 @@ BOOST_AUTO_TEST_CASE(released_core_is_rechecked_after_a_failed_helper_reservatio
     BOOST_CHECK_MESSAGE(recruited, "released core was lost while the helper place was reserved");
     BOOST_CHECK(pause.failedHelper == pause.recruitedHelper);
     BOOST_CHECK(!pause.parkedAfterFailure);
-    for (size_t i = 0; i < helpers; ++i) {
-        BOOST_CHECK(!sources[i]->timedOut);
-        BOOST_CHECK(bsv::TxErrorIsOk(results[i]));
-    }
+    BOOST_CHECK(spendsPassed);
     BOOST_CHECK(bsv::TxErrorIsOk(result));
     BOOST_CHECK(PoolIsIdle());
 }
@@ -4549,87 +4283,57 @@ BOOST_AUTO_TEST_CASE(released_core_is_rechecked_after_a_failed_helper_reservatio
 // queue order is small then large; a real core release must recruit for large.
 class LargestQueuedJob {
 public:
-    LargestQueuedJob() : previous{ Install(this) } { bsv::detail::WakeInputHelpersForTesting(); }
-    ~LargestQueuedJob()
-    {
-        bsv::detail::SetInputHookForTesting(previous.input);
-        bsv::detail::SetInputPoolHookForTesting(previous.pool);
-        bsv::detail::WakeInputHelpersForTesting();
-        active = nullptr;
-    }
-    size_t ParkedCount() { std::lock_guard lock{ mutex }; return parked.size(); }
+    LargestQueuedJob() { bsv::detail::WakeInputHelpersForTesting(); }
     std::atomic<bool> smallHeld{ false }, largeHeld{ false }, releaseInputs{ false }, timedOut{ false };
     std::atomic<size_t> firstHelperIndex{ std::numeric_limits<size_t>::max() };
-    std::mutex mutex;
-    std::map<std::thread::id, bool> parked;
-    const PreviousPoolAndInputHooks previous;
+    ParkedHelpers parked;
+    const ActiveProbe<LargestQueuedJob> active{ this };
+    const WakeHelpersAfterHooks wake;
+    const ScopedPoolHook poolHook{ &Pool };
+    const ScopedInputHook inputHook{ &Input };
     static inline thread_local int caller = 0;  // 1 small, 2 large, 0 helper
 private:
-    // Publishes the probe before installing the hooks that read it.
-    static PreviousPoolAndInputHooks Install(LargestQueuedJob* self)
-    {
-        active = self;
-        return { bsv::detail::SetInputPoolHookForTesting(&Pool), bsv::detail::SetInputHookForTesting(&Input) };
-    }
     static void Pool(bsv::detail::InputPoolEvent event)
     {
-        if (event != bsv::detail::InputPoolEvent::Waiting)
-            return;
-        auto& self = *active.load();
-        std::lock_guard lock{ self.mutex };
-        self.parked[std::this_thread::get_id()] = true;
+        if (event == bsv::detail::InputPoolEvent::Waiting)
+            ActiveProbe<LargestQueuedJob>::Get().parked.Record();
     }
     static void Input(size_t index, bsv::detail::InputEvent event)
     {
         if (event != bsv::detail::InputEvent::Claimed)
             return;
-        auto& self = *active.load();
+        auto& self = ActiveProbe<LargestQueuedJob>::Get();
         if (caller == 1 && index == 0) self.smallHeld = true;
         else if (caller == 2 && index == 2) self.largeHeld = true;
         else if (caller == 0) {
             size_t none = std::numeric_limits<size_t>::max();
             self.firstHelperIndex.compare_exchange_strong(none, index);
         } else return;
-        if (!WaitFor([&] { return self.releaseInputs.load(); }, std::chrono::milliseconds(20000)))
-            self.timedOut = true;
+        Await(self.timedOut, [&] { return self.releaseInputs.load(); }, std::chrono::milliseconds(20000));
     }
-    static inline std::atomic<LargestQueuedJob*> active{ nullptr };
 };
 
-static void CheckReleasedCoreJobSelection(size_t secondInputs, size_t expectedHelperIndex)
+// Two callers queue jobs of 16 and 128 inputs, in that order, while held
+// ordinary callers fill every core; a real core release then recruits a helper
+// for the job with more unclaimed inputs. The tie and ordering permutations of
+// that choice are units on NextJob in test_txvalidator_internal.
+BOOST_AUTO_TEST_CASE(released_core_recruits_for_the_largest_queued_job, PARALLEL_TEST_CASE_DECORATORS)
 {
     const size_t helpers = bsv::detail::InputPoolHelperCountForTesting();
     if (helpers < 2) {
         BOOST_TEST_MESSAGE("needs two callers and a free helper core");
         return;
     }
+    constexpr size_t largeInputs = 128;
     const bsv::CTxValidator validator("main");
-    const auto small = SignedP2PKHBin(16), large = SignedP2PKHBin(secondInputs);
-    const auto spend = MakeSignedP2PKHSpend({ SigHashType().withForkId() }, 1);
-    CDataStream plain(SER_NETWORK, PROTOCOL_VERSION);
-    plain << spend.mtx;
-    const std::vector<uint8_t> txBin(plain.begin(), plain.end());
-    const auto& locking = spend.vutxo[0].scriptPubKey;
+    const auto small = SignedP2PKHBin(16), large = SignedP2PKHBin(largeInputs);
     const InputThresholdGuard parallel(FORCE_PARALLEL);
     const HelperLimitGuard limit(1);
     BOOST_REQUIRE(PoolIsIdle());
     LargestQueuedJob probe;
-    BOOST_REQUIRE(WaitFor([&] { return probe.ParkedCount() == helpers; }));
-    std::vector<std::shared_ptr<HeldSpendSource>> sources;
-    std::vector<std::thread> ordinary;
-    std::vector<TxError> results(helpers, bsv::TxErrorException());
-    for (size_t i = 0; i < helpers; ++i) {
-        auto source = std::make_shared<HeldSpendSource>();
-        sources.push_back(source);
-        ordinary.emplace_back([&, source, i] {
-            results[i] = validator.VerifySpend(txBin, 0,
-                std::span<const uint8_t>(locking.data(), locking.size()), spend.vutxo[0].nValue.GetSatoshis(),
-                P2PKH_UTXO_HEIGHT, P2PKH_BLOCK_HEIGHT, true, std::nullopt, source->GetToken());
-        });
-    }
-    const bool full = WaitFor([&] {
-        return std::all_of(sources.begin(), sources.end(), [](const auto& source) { return source->entered.load(); });
-    });
+    BOOST_REQUIRE(WaitFor([&] { return probe.parked.Count() == helpers; }));
+    HeldSpenders spenders(validator, helpers);
+    const bool full = spenders.Entered();
     TxError smallResult = bsv::TxErrorException(), largeResult = bsv::TxErrorException();
     std::thread smallCaller([&] {
         LargestQueuedJob::caller = 1;
@@ -4638,21 +4342,18 @@ static void CheckReleasedCoreJobSelection(size_t secondInputs, size_t expectedHe
     const bool smallQueued = WaitFor([&] { return probe.smallHeld.load(); });
     std::thread largeCaller([&] {
         LargestQueuedJob::caller = 2;
-        largeResult = ValidateP2PKHSpend(validator, large, secondInputs, true);
+        largeResult = ValidateP2PKHSpend(validator, large, largeInputs, true);
     });
     const bool largeQueued = WaitFor([&] { return probe.largeHeld.load(); });
     const bool bothQueued = WaitFor([] { return bsv::detail::QueuedJobCountForTesting() == 2; });
     const bool notRecruited = probe.firstHelperIndex == std::numeric_limits<size_t>::max();
     // Two callers have arrived on top of the held ordinary callers: the first
     // release leaves all cores busy; the second frees exactly one helper core.
-    sources[0]->release = true;
-    ordinary[0].join();
-    sources[1]->release = true;
-    ordinary[1].join();
+    spenders.Release(0);
+    spenders.Release(1);
     const bool recruited = WaitFor([&] { return probe.firstHelperIndex != std::numeric_limits<size_t>::max(); });
     probe.releaseInputs = true;
-    for (const auto& source : sources) source->release = true;
-    for (size_t i = 2; i < ordinary.size(); ++i) ordinary[i].join();
+    const bool spendsPassed = spenders.AllPassed();
     smallCaller.join();
     largeCaller.join();
     BOOST_REQUIRE(full);
@@ -4664,26 +4365,11 @@ static void CheckReleasedCoreJobSelection(size_t secondInputs, size_t expectedHe
     BOOST_REQUIRE(recruited);
     // Small's next index is 1; large's is 3. The first claim identifies which
     // public validation received the woken helper, without a selection hook.
-    BOOST_CHECK_EQUAL(probe.firstHelperIndex.load(), expectedHelperIndex);
+    BOOST_CHECK_EQUAL(probe.firstHelperIndex.load(), 3u);
     BOOST_CHECK(bsv::TxErrorIsOk(smallResult));
     BOOST_CHECK(bsv::TxErrorIsOk(largeResult));
-    for (size_t i = 0; i < helpers; ++i) {
-        BOOST_CHECK(!sources[i]->timedOut);
-        BOOST_CHECK(bsv::TxErrorIsOk(results[i]));
-    }
+    BOOST_CHECK(spendsPassed);
     BOOST_CHECK(PoolIsIdle());
-}
-
-BOOST_AUTO_TEST_CASE(released_core_recruits_for_the_largest_queued_job, PARALLEL_TEST_CASE_DECORATORS)
-{
-    CheckReleasedCoreJobSelection(128, 3);
-}
-
-BOOST_AUTO_TEST_CASE(equal_positive_remaining_keeps_queue_order, PARALLEL_TEST_CASE_DECORATORS)
-{
-    // First job: 16 inputs, next 1. Second job: 18 inputs, next 3.
-    // Both have 15 unclaimed inputs; the earlier job's helper must claim 1.
-    CheckReleasedCoreJobSelection(18, 1);
 }
 
 // Every input claimed inside a parallel job sleeps for `delay`; records the
@@ -4692,17 +4378,11 @@ BOOST_AUTO_TEST_CASE(equal_positive_remaining_keeps_queue_order, PARALLEL_TEST_C
 // `isCaller`.
 class HelperConcurrency {
 public:
-    explicit HelperConcurrency(std::chrono::milliseconds delay) : previous{ Install(delay) } {}
-    ~HelperConcurrency() { bsv::detail::SetInputHookForTesting(previous); }
-    HelperConcurrency(const HelperConcurrency&) = delete;
-    HelperConcurrency& operator=(const HelperConcurrency&) = delete;
-
+    explicit HelperConcurrency(std::chrono::milliseconds delay) : configured{ Configure(delay) } {}
     static size_t Most() { return most.load(); }
-    static size_t InFlight() { return inFlight.load(); }
-    static uint64_t HelperClaims() { return helperClaims.load(); }
-    static void Reset() { most.store(0); }
-    static void SetDelay(std::chrono::milliseconds delay) { sleepMs.store(delay.count()); }
     static inline thread_local bool isCaller = false;
+    const bool configured;
+    const ScopedInputHook hook{ &Hook };
 
 private:
     static void Hook(size_t, bsv::detail::InputEvent event)
@@ -4714,7 +4394,6 @@ private:
             std::this_thread::sleep_for(delay);
             return;
         }
-        helperClaims.fetch_add(1);
         const size_t now = inFlight.fetch_add(1) + 1;
         size_t seen = most.load();
         while (now > seen && !most.compare_exchange_weak(seen, now)) {
@@ -4722,19 +4401,16 @@ private:
         std::this_thread::sleep_for(delay);
         inFlight.fetch_sub(1);
     }
+    // Sets the delay and resets the peak before the hook is installed.
+    static bool Configure(std::chrono::milliseconds delay)
+    {
+        sleepMs.store(delay.count());
+        most.store(0);
+        return true;
+    }
     static inline std::atomic<long long> sleepMs{ 0 };
     static inline std::atomic<size_t> inFlight{ 0 };
     static inline std::atomic<size_t> most{ 0 };
-    static inline std::atomic<uint64_t> helperClaims{ 0 };
-
-    // Sets the delay and resets the peak before installing the hook.
-    static bsv::detail::InputHook Install(std::chrono::milliseconds delay)
-    {
-        sleepMs.store(delay.count());
-        Reset();
-        return bsv::detail::SetInputHookForTesting(&HelperConcurrency::Hook);
-    }
-    const bsv::detail::InputHook previous;
 };
 
 // Validates a 48-input tx of slow inputs on `callers` threads at once while
@@ -4833,9 +4509,11 @@ BOOST_AUTO_TEST_CASE(helper_limit_caps_concurrent_helpers, PARALLEL_TEST_CASE_DE
 }
 
 // Lowering the limit while a job runs sends the helpers over it away before
-// their next input: lowered to 1, exactly one helper keeps verifying once the
-// inputs in flight finish; lowered to 0, the helper still on the job
-// claims no input after the one it is verifying. Inputs sleep 10 ms on claim.
+// their next input. With at least two helpers holding inputs, the limit drops
+// to 1: once they verify those inputs exactly one claims again. At 0 that one
+// verifies its input and leaves without claiming another, and the caller
+// finishes the job alone. The gate holds the caller on its first input and
+// each helper on each claim.
 BOOST_AUTO_TEST_CASE(lowering_the_helper_limit_sends_helpers_away_mid_job, PARALLEL_TEST_CASE_DECORATORS)
 {
     const size_t helpers = bsv::detail::InputPoolHelperCountForTesting();
@@ -4849,37 +4527,34 @@ BOOST_AUTO_TEST_CASE(lowering_the_helper_limit_sends_helpers_away_mid_job, PARAL
     const InputThresholdGuard defaults(bsv::detail::DEFAULT_PARALLEL_INPUT_THRESHOLD);
     const HelperLimitGuard automatic(-1);
     BOOST_REQUIRE(PoolIsIdle());
-    const HelperConcurrency probe(std::chrono::milliseconds(10));
-    std::atomic<bool> done{ false };
-    TxError status = bsv::TxErrorOk();
+    const auto busy = [] { return bsv::detail::BusyThreadCountForTesting(); };
+    ClaimGate gate;
+    TxError status = bsv::TxErrorException();
     std::thread caller([&] {
-        HelperConcurrency::isCaller = true;
+        ClaimGate::isCaller = true;
         status = ValidateP2PKHSpend(se, etxBin, nInputs, /*consensus=*/true);
-        done.store(true);
     });
-    const bool spread = WaitFor([&] { return HelperConcurrency::InFlight() >= 2 || done.load(); }) && !done.load();
+    const bool spread = WaitFor([&] { return gate.Held() >= 2; });
 
     bsv::SetParallelInputHelpers(1);
-    std::this_thread::sleep_for(std::chrono::milliseconds(60));
-    HelperConcurrency::Reset();
-    std::this_thread::sleep_for(std::chrono::milliseconds(60));
-    const size_t mostAtOne = HelperConcurrency::Most();
+    gate.Step();
+    const bool one = WaitFor([&] { return gate.Held() == 1 && busy() == 2; });
 
     bsv::SetParallelInputHelpers(0);
-    const size_t onJobAtZero = bsv::detail::BusyThreadCountForTesting() - 1;
-    const uint64_t claimsAtZero = HelperConcurrency::HelperClaims();
-    std::this_thread::sleep_for(std::chrono::milliseconds(60));
-    const uint64_t claimsAfterZero = HelperConcurrency::HelperClaims() - claimsAtZero;
-    const bool stillRunning = !done.load();
-
-    HelperConcurrency::SetDelay(std::chrono::milliseconds(0));
+    const uint64_t claimsAtZero = gate.HelperClaims();
+    gate.Step();
+    const bool none = WaitFor([&] { return busy() == 1; });
+    const uint64_t claimsAfterZero = gate.HelperClaims() - claimsAtZero;
+    gate.Open();
     caller.join();
+
     BOOST_CHECK(bsv::TxErrorIsOk(status));
-    BOOST_REQUIRE_MESSAGE(spread, "no two helpers verified at once before the limit was lowered");
-    BOOST_REQUIRE_MESSAGE(stillRunning, "the job finished before the checks");
-    BOOST_CHECK_MESSAGE(mostAtOne == 1, mostAtOne << " helpers verified at once after the limit was lowered to 1");
-    BOOST_CHECK_MESSAGE(claimsAfterZero <= onJobAtZero, claimsAfterZero << " helper claims after the limit was lowered "
-        "to 0, with " << onJobAtZero << " helper(s) on the job");
+    BOOST_CHECK(!gate.TimedOut());
+    BOOST_REQUIRE_MESSAGE(spread, "no two helpers held inputs before the limit was lowered");
+    BOOST_CHECK_MESSAGE(one, "not exactly one helper kept claiming at a limit of 1 (held " << gate.Held()
+        << ", busy " << busy() << ")");
+    BOOST_CHECK_MESSAGE(none, "a helper stayed on the job at a limit of 0");
+    BOOST_CHECK_EQUAL(claimsAfterZero, 0u);
     BOOST_CHECK(PoolIsIdle());
 }
 

@@ -134,6 +134,32 @@ BOOST_AUTO_TEST_CASE(lowest_failure_wins_and_higher_cancellation_cannot_replace_
     BOOST_CHECK_EQUAL(result.code, SCRIPT_ERR_VERIFY);
 }
 
+// Once input f has failed no participant claims an index above it: Claim
+// returns none, the job has no work left, and a participant's Work stops at
+// its next claim. early_failure_abandons_inflight_higher_inputs in
+// test_txvalidator covers inputs already running when f fails.
+BOOST_AUTO_TEST_CASE(claims_stop_above_the_lowest_failure)
+{
+    const auto source = task::CCancellationSource::Make();
+    const auto token = source->GetToken();
+    auto job = ValidJob(8, token);
+    for (size_t i = 0; i < 3; ++i) BOOST_REQUIRE(job->Claim());
+    job->Fail(1, bsv::TxErrorScript(SCRIPT_ERR_VERIFY), nullptr);
+    BOOST_CHECK(!job->Claim());
+    BOOST_CHECK(!job->HasWork());
+    BOOST_CHECK_EQUAL(job->UnclaimedInputs(), 0u);
+
+    std::vector<size_t> verified;
+    InputJob failing(8, [&](size_t index, const auto&) {
+        verified.push_back(index);
+        return index == 2 ? bsv::TxErrorScript(SCRIPT_ERR_VERIFY) : bsv::TxErrorOk();
+    }, token);
+    BOOST_CHECK_EQUAL(Present(failing.Work()), 3u);
+    BOOST_CHECK(verified == std::vector<size_t>({ 0, 1, 2 }));
+    failing.CloseAndWait();
+    BOOST_CHECK_EQUAL(Present(failing.CompletedResult()).code, SCRIPT_ERR_VERIFY);
+}
+
 BOOST_AUTO_TEST_CASE(lower_cancelled_input_prevents_a_higher_failure_verdict)
 {
     const auto source = task::CCancellationSource::Make();
@@ -348,6 +374,48 @@ BOOST_AUTO_TEST_CASE(largest_job_wins_and_positive_ties_keep_queue_order)
     pool.Withdraw(first);
     BOOST_CHECK(pool.NextJob() == second);
     BOOST_CHECK_EQUAL(pool.QueuedJobs(), 2u);
+}
+
+// NextJob picks the queued job with the most unclaimed inputs, the earlier
+// one on a tie: not the largest transaction, and not inputs a failure made
+// unnecessary. released_core_recruits_for_the_largest_queued_job in
+// test_txvalidator drives the same choice through a real core release.
+BOOST_AUTO_TEST_CASE(next_job_takes_the_most_unclaimed_inputs)
+{
+    struct Queued {
+        size_t inputs;
+        size_t claimed;
+        std::optional<size_t> failed;
+    };
+    struct Row {
+        const char* name;
+        std::vector<Queued> jobs;
+        size_t expected;
+    };
+    const std::vector<Row> rows{
+        { "equal_remainders_keep_queue_order", { { 16, 1, std::nullopt }, { 18, 3, std::nullopt } }, 0 },
+        { "larger_remainder_behind_a_smaller_one", { { 16, 1, std::nullopt }, { 128, 3, std::nullopt } }, 1 },
+        { "remainder_not_transaction_size", { { 128, 120, std::nullopt }, { 16, 0, std::nullopt } }, 1 },
+        { "failure_ends_a_remainder", { { 4, 0, std::nullopt }, { 8, 3, 1 } }, 0 },
+    };
+    const auto source = task::CCancellationSource::Make();
+    const auto token = source->GetToken();
+    for (const Row& row : rows) {
+        BOOST_TEST_CONTEXT(row.name)
+        {
+            InputVerifyPool pool(2);
+            std::vector<std::shared_ptr<InputJob>> jobs;
+            for (const Queued& queued : row.jobs) {
+                auto job = ValidJob(queued.inputs, token);
+                for (size_t i = 0; i < queued.claimed; ++i) BOOST_REQUIRE(job->Claim());
+                if (queued.failed)
+                    job->Fail(queued.failed.value_or(0), bsv::TxErrorScript(SCRIPT_ERR_VERIFY), nullptr);
+                pool.Offer(job, 0);
+                jobs.push_back(job);
+            }
+            BOOST_CHECK(pool.NextJob() == jobs.at(row.expected));
+        }
+    }
 }
 
 BOOST_AUTO_TEST_CASE(finished_front_jobs_are_removed)
