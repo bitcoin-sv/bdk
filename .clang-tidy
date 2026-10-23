@@ -14,7 +14,6 @@ Checks: >
 
   bugprone-*,
   -bugprone-easily-swappable-parameters,
-  -bugprone-empty-catch,
   -bugprone-implicit-widening-of-multiplication-result,
   -bugprone-misplaced-widening-cast,
   -bugprone-narrowing-conversions,

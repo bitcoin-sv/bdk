@@ -26,9 +26,12 @@ bdkffi_TxError to_ffi_error(const TxError& error)
 
 void log_exception(const char* function_name, const char* message)
 {
-    try {
+    try
+    {
         std::cerr << "bdkffi exception in " << function_name << ": " << message << '\n';
-    } catch (...) {
+    }
+    catch(...) // NOLINT(bugprone-empty-catch)
+    {
     }
 }
 

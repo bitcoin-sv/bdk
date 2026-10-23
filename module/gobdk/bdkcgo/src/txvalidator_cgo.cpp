@@ -24,7 +24,8 @@ static void helper_log_cgo_exception(const char* where, const char* what) noexce
     try {
         std::cout << "CGO EXCEPTION : " << where << " " << what << '\n' << std::flush;
     }
-    catch (...) {
+    catch(...) // NOLINT(bugprone-empty-catch)
+    {
     }
 }
 

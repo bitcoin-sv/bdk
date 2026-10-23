@@ -16,7 +16,8 @@ static void helper_log_cgo_exception(const char* where, const char* what) noexce
     try {
         std::cout << "CGO EXCEPTION : " << where << " " << what << '\n' << std::flush;
     }
-    catch (...) {
+    catch(...) // NOLINT(bugprone-empty-catch)
+    {
     }
 }
 
@@ -109,6 +110,7 @@ void ValidateBatch_Reserve(ValidateBatchCGO cgoBatch, uint64_t capacity)
     try {
         static_cast<bsv::ValidateBatch*>(cgoBatch)->reserve(static_cast<size_t>(capacity));
     }
-    catch (...) {
+    catch(...) // NOLINT(bugprone-empty-catch)
+    {
     }
 }
