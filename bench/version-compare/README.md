@@ -31,3 +31,18 @@ benchstat results/v1.3.1.bench.txt results/v1.4.0.bench.txt
 | `p2pkh_lockscript100KB_in10` | P2PKH behind a 100 KB pushed-and-dropped prefix, so each signature digest covers 100 KB of script |
 | `outputs1000x1KB_in{1,10}` | 1,000 data outputs of 1 KB each |
 | `sighash_original_in{100,1000,3000}` | P2PKH spends signed with sighash type `0x61`, which selects the original (pre-BIP143) digest after Chronicle activation |
+
+## Parallel input verification
+
+`build.sh v1.4.0 pr67=<commit>` builds a binary against a gobdk commit that has
+`script.SetParallelInputHelpers`; `-helpers N` sets it before the first
+validation (`-1` automatic). `run67.sh` compares v1.4.0 with that build at
+helpers 0, 2 and automatic, unpinned at `GOMAXPROCS` = online CPUs, and runs:
+
+- the shapes above plus `p2pkh_in{15,16,17,32}`, `p2pkh_in8000_badsig_{first,last}`,
+  `p2pkh_lockscript100KB_in64_badsig_first`, `p2pkh_lockscript10KB_in1000` and
+  `sha256_preimage10KB_in1000`;
+- `-mode concurrency`: N goroutines validating the 10-input tx in a loop, plus one
+  validating the 8,000-input tx, all sharing one `TxValidator`, for a fixed window;
+  reports small-tx throughput and large-tx latency;
+- with `GOLOAD_DIR` set, the `GoLoad` benchmark from that checkout's `cgobench`.

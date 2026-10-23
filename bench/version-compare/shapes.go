@@ -86,6 +86,26 @@ func shapes() []shape {
 		n := n
 		add(fmt.Sprintf("sighash_original_in%d", n), "original_sighash", n, true, true, func() (*tx, error) { return originalSighashTx(n) })
 	}
+
+	// Input counts either side of the point where inputs may be verified on
+	// several threads (16).
+	for _, n := range []int{15, 16, 17, 32} {
+		n := n
+		add(fmt.Sprintf("p2pkh_in%d", n), "threshold", n, true, true, func() (*tx, error) { return p2pkhTx(n, nil, 1, 0, -1) })
+	}
+
+	// Invalid transactions: time to the verdict with the failing input first or last.
+	add("p2pkh_in8000_badsig_first", "invalid", 8000, true, false, func() (*tx, error) { return p2pkhTx(8000, nil, 1, 0, 0) })
+	add("p2pkh_in8000_badsig_last", "invalid", 8000, true, false, func() (*tx, error) { return p2pkhTx(8000, nil, 1, 0, 7999) })
+	add("p2pkh_lockscript100KB_in64_badsig_first", "invalid", 64, true, false, func() (*tx, error) {
+		return p2pkhTx(64, randomBytes(100*1024, 2), 1, 0, 0)
+	})
+
+	// Per-input hashing at 1,000 inputs.
+	add("p2pkh_lockscript10KB_in1000", "hash1000", 1000, true, true, func() (*tx, error) {
+		return p2pkhTx(1000, randomBytes(10*1024, 2), 1, 0, -1)
+	})
+	add("sha256_preimage10KB_in1000", "hash1000", 1000, true, true, func() (*tx, error) { return sha256PreimageInputsTx(1000, 10*1024) })
 	return s
 }
 
@@ -265,6 +285,12 @@ func originalSighashTx(nIn int) (*tx, error) {
 // sha256PreimageTx spends one OP_SHA256 <h> OP_EQUAL output by pushing an
 // n-byte preimage: no signature, so the cost is hashing.
 func sha256PreimageTx(n int) (*tx, error) {
+	return sha256PreimageInputsTx(1, n)
+}
+
+// sha256PreimageInputsTx spends nIn OP_SHA256 <h> OP_EQUAL outputs, each with
+// the same n-byte preimage.
+func sha256PreimageInputsTx(nIn, n int) (*tx, error) {
 	preimage := randomBytes(n, 1)
 	h := sha256.Sum256(preimage)
 	var lock bytes.Buffer
@@ -273,13 +299,12 @@ func sha256PreimageTx(n int) (*tx, error) {
 	lock.WriteByte(0x87) // OP_EQUAL
 	var scriptSig bytes.Buffer
 	writePush(&scriptSig, preimage)
-	return &tx{
-		version: txVersion,
-		ins: []txIn{{outpoint: outpoint(0), scriptSig: scriptSig.Bytes(), lockingCode: lock.Bytes(),
-			satoshis: inputSats, sequence: sequence, utxoHeight: utxoHeight}},
-		outs:     []txOut{{outputSats, p2pkhLockingScript(nil)}},
-		lockTime: txLockTime,
-	}, nil
+	t := &tx{version: txVersion, outs: []txOut{{outputSats, p2pkhLockingScript(nil)}}, lockTime: txLockTime}
+	for i := 0; i < nIn; i++ {
+		t.ins = append(t.ins, txIn{outpoint: outpoint(i), scriptSig: scriptSig.Bytes(), lockingCode: lock.Bytes(),
+			satoshis: inputSats, sequence: sequence, utxoHeight: utxoHeight})
+	}
+	return t, nil
 }
 
 func signedScriptSig(digest []byte, sigHashType byte) ([]byte, error) {

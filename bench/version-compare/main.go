@@ -55,6 +55,9 @@ type result struct {
 	GOMAXPROCS    int     `json:"gomaxprocs"`
 	CPUModel      string  `json:"cpu_model"`
 	Timestamp     string  `json:"timestamp"`
+	HelpersSet    string  `json:"helpers_set"`
+	HelpersGet    *int64  `json:"helpers_get,omitempty"`
+	NumCPU        int     `json:"num_cpu"`
 }
 
 func main() {
@@ -67,7 +70,24 @@ func main() {
 	jsonOut := flag.String("json", "", "append the JSON result line to this file (default stdout)")
 	benchOut := flag.String("bench", "", "append a Go benchmark line to this file")
 	list := flag.Bool("list", false, "print shape names and exit")
+	helpers := flag.Int64("helpers", math.MinInt64, "SetParallelInputHelpers before the first validation (gobdk with parallel input verification only); -1 automatic")
+	mode := flag.String("mode", "shape", "shape: time one shape; concurrency: small and large transactions validated from many goroutines at once")
+	small := flag.String("small", "p2pkh_in10", "concurrency: shape the small-tx goroutines validate")
+	large := flag.String("large", "p2pkh_in8000", "concurrency: shape the large-tx goroutine validates; empty for none")
+	smallG := flag.Int("small-goroutines", 0, "concurrency: small-tx goroutines (default GOMAXPROCS)")
+	window := flag.Duration("window", 10*time.Second, "concurrency: measured window")
 	flag.Parse()
+
+	helpersSet := "unset"
+	if *helpers != math.MinInt64 {
+		if !haveHelpers {
+			fmt.Fprintln(os.Stderr, "-helpers: this gobdk has no parallel input verification")
+			os.Exit(2)
+		}
+		// Process-wide, and before any validation starts the helper pool.
+		setHelpers(*helpers)
+		helpersSet = fmt.Sprint(*helpers)
+	}
 
 	all := shapes()
 	if *list {
@@ -76,12 +96,10 @@ func main() {
 		}
 		return
 	}
-	var sh *shape
-	for i := range all {
-		if all[i].name == *shapeName {
-			sh = &all[i]
-		}
+	if *mode == "concurrency" {
+		os.Exit(runConcurrency(all, *small, *large, *smallG, *window, *round, *cacheDir, helpersSet, *jsonOut, *benchOut))
 	}
+	sh := findShape(all, *shapeName)
 	if sh == nil {
 		fmt.Fprintf(os.Stderr, "unknown shape %q\n", *shapeName)
 		os.Exit(2)
@@ -89,7 +107,7 @@ func main() {
 
 	r := result{
 		Shape: sh.name, Group: sh.group, Round: *round, Inputs: sh.inputs, Consensus: sh.consensus,
-		BlockHeight: blockHeight, WantValid: sh.wantValid,
+		BlockHeight: blockHeight, WantValid: sh.wantValid, HelpersSet: helpersSet, NumCPU: runtime.NumCPU(),
 		GobdkModule: gobdkModuleVersion(), BDKVersion: gobdk.BDK_VERSION_STRING(),
 		BSVVersion: gobdk.BSV_VERSION_STRING(), BSVCommit: gobdk.BSV_GIT_COMMIT_HASH(),
 		SourceCommit: gobdk.SOURCE_GIT_COMMIT_HASH(), SHA256Backend: sha256Backend(),
@@ -115,18 +133,14 @@ func run(sh *shape, r *result, cacheDir string, minTime, maxTime time.Duration, 
 	sum := sha256.Sum256(etx)
 	r.TxBytes, r.TxSHA256 = len(etx), hex.EncodeToString(sum[:])
 
-	se := script.NewTxValidator("main")
-	if se == nil {
-		r.Status, r.Error = "error", "NewTxValidator returned nil"
-		return 1
-	}
-	if err := se.SetGenesisActivationHeight(genesisHeight); err != nil {
+	se, err := newValidator()
+	if err != nil {
 		r.Status, r.Error = "error", err.Error()
 		return 1
 	}
-	if err := se.SetChronicleActivationHeight(chronicleHeight); err != nil {
-		r.Status, r.Error = "error", err.Error()
-		return 1
+	if haveHelpers {
+		h := getHelpers()
+		r.HelpersGet = &h
 	}
 
 	validate := func() error { return se.ValidateTransaction(etx, heights, blockHeight, sh.consensus) }
@@ -184,6 +198,29 @@ func run(sh *shape, r *result, cacheDir string, minTime, maxTime time.Duration, 
 	r.CPUNsPerOp = float64(cpu.Nanoseconds()) / float64(iters)
 	r.Status = "ok"
 	return 0
+}
+
+func findShape(all []shape, name string) *shape {
+	for i := range all {
+		if all[i].name == name {
+			return &all[i]
+		}
+	}
+	return nil
+}
+
+func newValidator() (*script.TxValidator, error) {
+	se := script.NewTxValidator("main")
+	if se == nil {
+		return nil, fmt.Errorf("NewTxValidator returned nil")
+	}
+	if err := se.SetGenesisActivationHeight(genesisHeight); err != nil {
+		return nil, err
+	}
+	if err := se.SetChronicleActivationHeight(chronicleHeight); err != nil {
+		return nil, err
+	}
+	return se, nil
 }
 
 func verdict(err error) string {
