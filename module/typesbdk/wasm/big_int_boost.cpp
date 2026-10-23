@@ -331,6 +331,7 @@ size_t bsv::bint::serialized_size() const
     const int bytes = size_bytes();
     if(bytes == 0) return 0;
     const auto magnitude = MagnitudeBytes(value_->value);
+    //NOLINTNEXTLINE(bugprone-misplaced-widening-cast)
     return static_cast<size_t>(bytes + ((magnitude.front() & 0x80) != 0 ? 1 : 0));
 }
 

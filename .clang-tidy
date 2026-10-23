@@ -14,7 +14,6 @@ Checks: >
 
   bugprone-*,
   -bugprone-easily-swappable-parameters,
-  -bugprone-misplaced-widening-cast,
   -bugprone-narrowing-conversions,
   -bugprone-throwing-static-initialization,
 
