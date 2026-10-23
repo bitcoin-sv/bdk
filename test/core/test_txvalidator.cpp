@@ -123,7 +123,7 @@ struct HangWatchdog : boost::unit_test::test_observer {
             }
         });
     }
-    ~HangWatchdog()
+    ~HangWatchdog() override
     {
         {
             std::lock_guard lock{ mutex };
@@ -2284,7 +2284,7 @@ public:
         active = this;
         previous = bsv::detail::SetInputHookForTesting(&Hook);
     }
-    ~EarlyStopProbe()
+    ~EarlyStopProbe() override
     {
         bsv::detail::SetInputHookForTesting(previous);
         active = nullptr;
@@ -2452,7 +2452,7 @@ public:
         active = this;
         previous = bsv::detail::SetInputHookForTesting(&Hook);
     }
-    ~CancelDuringInput() { bsv::detail::SetInputHookForTesting(previous); }
+    ~CancelDuringInput() override { bsv::detail::SetInputHookForTesting(previous); }
     bool IsCanceled() override
     {
         if (inJob && ++polls >= 20) {
@@ -2517,7 +2517,7 @@ public:
         active = this;
         previous = bsv::detail::SetInputHookForTesting(&Hook);
     }
-    ~CancelAfterVerdict() { bsv::detail::SetInputHookForTesting(previous); }
+    ~CancelAfterVerdict() override { bsv::detail::SetInputHookForTesting(previous); }
     std::atomic<bool> timedOut{ false };
 private:
     static void Hook(size_t index, bsv::detail::InputEvent event)
@@ -2588,7 +2588,7 @@ public:
         active = this;
         previous = bsv::detail::SetInputHookForTesting(&Hook);
     }
-    ~CancelBelowFailure() { bsv::detail::SetInputHookForTesting(previous); }
+    ~CancelBelowFailure() override { bsv::detail::SetInputHookForTesting(previous); }
     bool IsCanceled() override
     {
         if (inJob) {
@@ -4012,7 +4012,7 @@ public:
         previousInput = bsv::detail::SetInputHookForTesting(&Input);
         previousPool = bsv::detail::SetInputPoolHookForTesting(&Pool);
     }
-    ~CancelWhileCallerWaits()
+    ~CancelWhileCallerWaits() override
     {
         bsv::detail::SetInputSourceAllocationHookForTesting(previousAllocation);
         bsv::detail::SetInputHookForTesting(previousInput);
@@ -4260,7 +4260,7 @@ public:
         previousInput = bsv::detail::SetInputHookForTesting(&Input);
         previousPool = bsv::detail::SetInputPoolHookForTesting(&Pool);
     }
-    ~ThrowBeforeCallerCloses()
+    ~ThrowBeforeCallerCloses() override
     {
         bsv::detail::SetInputSourceAllocationHookForTesting(previousAllocation);
         bsv::detail::SetInputHookForTesting(previousInput);
