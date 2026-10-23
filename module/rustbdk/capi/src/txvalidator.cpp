@@ -222,6 +222,16 @@ extern "C" void bdkffi_txvalidator_destroy(bdkffi_txvalidator_t validator)
     } BDKFFI_CATCH_VOID
 }
 
+extern "C" void bdkffi_set_parallel_input_helpers(int64_t helpers)
+{
+    bsv::SetParallelInputHelpers(helpers);
+}
+
+extern "C" int64_t bdkffi_get_parallel_input_helpers(void)
+{
+    return bsv::GetParallelInputHelpers();
+}
+
 BDKFFI_SETTER_1(bdkffi_txvalidator_set_max_ops_per_script_policy, SetMaxOpsPerScriptPolicy, int64_t)
 BDKFFI_SETTER_1(bdkffi_txvalidator_set_max_script_num_length_policy, SetMaxScriptNumLengthPolicy, int64_t)
 BDKFFI_SETTER_1(bdkffi_txvalidator_set_max_script_size_policy, SetMaxScriptSizePolicy, int64_t)

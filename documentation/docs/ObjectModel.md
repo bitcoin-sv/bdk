@@ -71,8 +71,9 @@ classDiagram
 
 Long-running validation can be cancelled. `ValidateTransaction`, `VerifyScript`, `VerifySpend`,
 `ValidateBatch` and `CheckStandardness` each have an overload that takes a
-`task::CCancellationToken`; once the token has fired the call returns `CANCELLED` with code 0, in
-consensus and policy mode alike. The token is polled only at fixed points:
+`task::CCancellationToken`. Cancellation that leaves necessary verification unfinished returns
+`CANCELLED` with code 0, in consensus and policy mode alike. A completed verdict is retained: all
+inputs passed, or a real failure and every lower input finished. The token is polled only at fixed points:
 
 | Call | Polls | Not polled (each linear in the transaction size) |
 |---|---|---|
@@ -82,24 +83,67 @@ consensus and policy mode alike. The token is polled only at fixed points:
 | `CheckStandardness` | entry; after deserialising; before each input's check when inputs are checked | deserialising and hashing; the output standardness check |
 | `ValidateBatch` | as `ValidateTransaction`, per entry | as `ValidateTransaction` |
 
-On top of these, the interpreter polls before every opcode it runs (SV Node's own check), before each
-signature of `OP_CHECKMULTISIG` and each chunk of `OP_LSHIFT` / `OP_RSHIFT`. A step that has
+The interpreter also checks cancellation at its main-loop, multisig signature-search-loop and
+shift-chunk poll points. A step that has
 started finishes before the next poll: one signature hash, one hash or big-number opcode, or any
 phase in the right-hand column. A token that fires after the last poll leaves the call to return its
 verdict, so callers must act on the result rather than on whether they cancelled. A cancelled
 `ValidateBatch` keeps the results of the entries it finished and returns `CANCELLED` for the rest.
 
-Use a token whose answer does not depend on the thread that polls it, such as SV Node's
-`task::CTimedCancellationSource` (steady clock). `task::CThreadTimedCancellationSource` measures the
-CPU clock of whichever thread polls it: today that is the calling thread, but a token may be read on
-other threads if inputs come to be verified in parallel, and a CPU-time budget would then be
-measured on the wrong thread.
+In parallel `ValidateTransaction` / `VerifyScript` jobs, the caller also polls before claiming
+another input while work remains and after each 10 ms condition-variable wait timeout while
+joined helpers remain. An already drained job returns without another poll. Cancellation of an input
+above an established lowest failure does not replace that verdict; cancellation leaving a lower
+input unfinished prevents reporting a higher failure. The serial loop keeps its existing poll sites.
+
+If caller participant setup runs out of memory, the queued job is withdrawn and
+joined helpers drain. A completed success or definitive lowest failure is retained,
+including when cancellation arrives after completion. If required work is still
+unfinished, the caller falls back to the full serial input loop with its token;
+this can recheck inputs already completed by helpers.
+
+`VerifyScript`, `ValidateTransaction` (including each `ValidateBatch` entry) and
+`VerifySpend` count the calling thread against the shared core budget from after the
+entry cancellation poll until return. Deserialization, transaction hashing,
+transaction-level checks and shared signature-hash precomputation are included;
+helpers are admitted only against the remaining budget.
+
+The caller's token is read only on the calling thread, including parallel verification. In a parallel job the caller
+polls between its own input claims and in its interpreter, and publishes observed cancellation to
+an atomic job flag. Helpers poll that flag rather than the caller's token. A
+`task::CThreadTimedCancellationSource` created on the calling thread therefore measures caller CPU, excluding helper CPU.
+Helpers stop at their next interpreter poll after the caller observes cancellation, including
+while the caller waits for them. The timed wait applies only to a caller with joined helpers;
+idle pool helpers stay parked, and completion notification wakes the caller immediately.
+Ten milliseconds is the nominal observation interval, not a wall-time bound: scheduling,
+token polling and work between interpreter polls can add delay. Polling runs outside the job
+mutex. If a token poll throws, helpers drain before that exception reaches the public entry point;
+cleanup during unwinding does not invoke the token again.
 
 The token belongs to the call, not to the `CTxValidator`, so concurrent calls on one validator
 cancel independently. The C bindings take a pointer to a caller-owned `int32_t` instead of a token
 (`bsv::MakeFlagCancellationToken`, `core/cancellation.hpp`): any thread cancels by storing a non-zero
 value atomically, and the call reads it only until it returns. The existing signatures are
 unchanged and never return `CANCELLED`.
+
+## Parallel input helpers (process-wide)
+
+`ValidateTransaction`, `VerifyScript` and `ValidateBatch` verify a transaction with 16 or more
+inputs on the calling thread plus idle helper threads from one process-wide pool; the result is
+always the serial one. Two free functions in `core/txvalidator.hpp`, not members of
+`CTxValidator`, limit how many helpers verify at once, for the whole process:
+
+- `bsv::SetParallelInputHelpers(int64_t helpers)`: `helpers < 0` automatic (the default: up to
+  one helper per CPU the process may use, minus one), `0` no helpers (every transaction verified
+  on its caller, no helper thread started), `> 0` at most that many, never more than automatic.
+  Safe to call at any time from any thread.
+- `bsv::GetParallelInputHelpers()`: the setting, `-1` for automatic.
+
+Helpers only take cores that BDK's own threads leave idle, but they do not see other threads in
+the process, such as goroutines. A lower limit leaves more CPU to them at the cost of slower large
+transactions. Go: `script.SetParallelInputHelpers` / `script.GetParallelInputHelpers`. Rust:
+`rust_bdk::set_parallel_input_helpers` / `rust_bdk::parallel_input_helpers`. The WASM build has no
+helpers and does not expose the setting.
 
 ## Go binding
 

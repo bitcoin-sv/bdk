@@ -120,6 +120,13 @@ unsafe extern "C" {
     pub fn bdkffi_txvalidator_destroy(validator: TxValidatorHandle);
 
     /*
+     * Process-wide helper limit for parallel input verification:
+     * < 0 automatic, 0 none, > 0 at most that many.
+     */
+    pub fn bdkffi_set_parallel_input_helpers(helpers: i64);
+    pub fn bdkffi_get_parallel_input_helpers() -> i64;
+
+    /*
      * Fallible setters return NULL on success, otherwise a malloc-owned
      * null-terminated error string. Free it with bdkffi_free.
      */

@@ -10,6 +10,49 @@ generated version values (declared in `core/BDKVersion.h` and exposed by
 For the detailed list of changes, see the project's commit history / changelog. This file is
 installed alongside the package (`CMakeLists.txt`).
 
+## Unreleased
+
+- **A transaction with 16 or more inputs is verified on several cores.** `ValidateTransaction`,
+  `VerifyScript` and `ValidateBatch` hand such a transaction's inputs to the calling thread plus
+  idle helper threads; smaller transactions, `VerifySpend` and the WASM build verify serially as
+  before. The result is always the serial one: the error of the lowest-index failing input.
+  In-flight inputs above that failure stop at their next interpreter cancellation poll; lower
+  inputs finish normally. Caller cancellation returns no verdict when necessary input verification
+  remains unfinished; a completed success or lowest-failure verdict is retained. At
+  1,000 to 40,000 P2PKH inputs, `ValidateTransaction` is 2.3x faster on a 4-vCPU x86-64 runner,
+  3.7x on a 4-core ARM64 runner and 7.4x on a 14-core Apple M3 Max; with callers already using
+  every core, aggregate throughput is unchanged. What embedders should know:
+  - The helpers belong to one process-wide pool, created on the first such transaction and never
+    torn down (they idle on a condition variable). It has one helper per available CPU minus one.
+  - Available CPUs are `std::thread::hardware_concurrency()`, lowered on Linux to the affinity
+    mask of the thread that creates the pool and to the cgroup CPU limit (v2 `cpu.max`, v1
+    `cpu.cfs_quota_us`/`cpu.cfs_period_us`); the cgroup limit is rounded up and never lowers the
+    count below 2, as Go's default GOMAXPROCS does. Both are read once, by the first such
+    transaction. On a single CPU (one hardware thread, or an affinity mask of one) there is no pool
+    and every transaction is verified on its caller alone. Only a failure to allocate the pool or
+    start any helper is retried, by the next such transaction.
+  - Helpers only use CPUs that callers leave free: a helper joins a job only while fewer threads
+    than CPUs are verifying, and leaves before its next input once more are. Callers are never held
+    back: when callers alone fill every CPU, a large transaction starts on its caller alone and a
+    helper joins it as soon as a CPU frees.
+  - `bdk_core` now links `Threads::Threads`; a consumer linking the static archive needs the
+    platform's thread library (cgo and Cargo add it already).
+  - Changing a `CTxValidator` setting (`Set...`) while any validation runs on it is a data race,
+    as before; helpers now read those settings too.
+  - Helpers do not see goroutines or other threads of the embedding process. While a large
+    transaction is verified they compete with them for CPUs: on a 14-core machine with every Go P
+    busy, a 10,000-input transaction verified 4.7x faster than serially while the goroutines'
+    throughput fell by about 40% for that shorter time; with at most 2 helpers, 2.8x faster at
+    about 20%. `SetParallelInputHelpers` (below) sets that trade-off.
+- **New, additive API: a process-wide limit on parallel input helpers.** C++
+  `bsv::SetParallelInputHelpers(int64_t)` / `bsv::GetParallelInputHelpers()`
+  (`core/txvalidator.hpp`), Go `script.SetParallelInputHelpers(int64)` /
+  `script.GetParallelInputHelpers()`, Rust `rust_bdk::set_parallel_input_helpers(i64)` /
+  `rust_bdk::parallel_input_helpers()`. A negative value is automatic (the default, unchanged
+  behaviour), `0` turns helpers off (no helper thread is started), `n > 0` caps the helpers
+  verifying at once at `n`. Results are the same at every setting; it can be changed at any time.
+  The WASM build has no helpers and does not expose it. The Go binding calls two new cgo symbols,
+  so it needs GoBDK archives built from this version.
 ## 1.4.0
 
 - **Hardware SHA-256** on x86-64 and ARM64, selected at load time with known-answer

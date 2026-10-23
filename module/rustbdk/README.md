@@ -138,9 +138,15 @@ fn validate(extended_tx: &[u8], utxo_heights: &[i32], block_height: i32) -> Resu
 `validate_transaction_cancellable`, `verify_script_cancellable`,
 `verify_script_with_custom_flags_cancellable` and `validate_batch_cancellable`
 take a `&CancelFlag`. Share the flag (for example in an `Arc`) with another
-thread and call `cancel()` to stop the call at its next check; it then returns
-`Err(TxError::Cancelled)`, which is not a verdict about the transaction. A step
-already started, such as one signature hash, finishes first.
+thread and call `cancel()`. Cancellation that leaves necessary verification unfinished
+returns `Err(TxError::Cancelled)`, which is not a verdict about the transaction.
+Checks occur at the API's transaction-phase boundaries and interpreter poll points
+(main loop, multisig signature search and shift chunks). For parallel validation,
+the caller also polls after each 10 ms wait timeout while helpers remain and
+publishes to their shared flag; helpers never read the caller's token directly.
+Scheduling and a step already started, such as one signature hash, can add delay.
+Completed success or a definitive lowest failure is retained even when cancellation
+is observed while draining helpers.
 
 ```rust
 use std::sync::Arc;

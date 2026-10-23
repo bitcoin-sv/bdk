@@ -13,6 +13,8 @@ pub mod version;
 pub use asm::{from_asm, to_asm};
 pub use cancel::CancelFlag;
 pub use error::{DosError, ScriptError, TxError};
-pub use txvalidator::{ProtocolEra, TxValidator};
+pub use txvalidator::{
+    ProtocolEra, TxValidator, parallel_input_helpers, set_parallel_input_helpers,
+};
 pub use validatebatch::ValidateBatch;
 pub use version::*;
