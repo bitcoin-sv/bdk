@@ -47,9 +47,8 @@ static std::atomic<int64_t> parallelInputHelpers{ -1 };  // SetParallelInputHelp
 
 
 #if BDK_PARALLEL_INPUTS
-// Each extra participant is worth at least this many inputs (fewer when the
-// threshold is lower, so a tx at the threshold is offered a helper).
-constexpr std::chrono::milliseconds CALLER_CANCELLATION_POLL_INTERVAL{ 10 };
+// How often a caller waiting for joined helpers polls its token.
+static constexpr std::chrono::milliseconds CALLER_CANCELLATION_POLL_INTERVAL{ 10 };
 
 std::atomic<size_t> busyThreads{ 0 };
 thread_local bool threadIsBusy{ false };

@@ -93,11 +93,11 @@ struct InternalState {
     InternalState() { bsv::SetParallelInputHelpers(-1); }
     ~InternalState() { busyThreads.store(busy); bsv::SetParallelInputHelpers(limit); }
 };
+} // namespace
 
-std::shared_ptr<InputJob> ValidJob(size_t count, const task::CCancellationToken& token)
+static std::shared_ptr<InputJob> ValidJob(size_t count, const task::CCancellationToken& token)
 {
     return std::make_shared<InputJob>(count, [](size_t, const auto&) { return bsv::TxErrorOk(); }, token);
-}
 }
 
 BOOST_FIXTURE_TEST_SUITE(input_jobs, InternalState)
