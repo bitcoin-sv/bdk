@@ -20,7 +20,6 @@ Checks: >
   -bugprone-throwing-static-initialization,
 
   clang-analyzer-*,
-  -clang-analyzer-security.insecureAPI.strcpy,
 
   cppcoreguidelines-*,
   -cppcoreguidelines-avoid-do-while,

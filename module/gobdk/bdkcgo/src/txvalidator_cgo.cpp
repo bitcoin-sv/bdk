@@ -38,7 +38,7 @@ const char* helper_string2char(const std::string& stdStr) {
     char* charPtr = nullptr;
     // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
     charPtr = new char[stdStr.size() + 1];
-    std::strcpy(charPtr, stdStr.c_str());
+    std::memcpy(charPtr, stdStr.c_str(), stdStr.size() + 1); // includes the terminating NUL
     return charPtr;
 }
 
