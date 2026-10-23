@@ -216,6 +216,12 @@ add_executable(test_sha256_select_race "${CMAKE_CURRENT_SOURCE_DIR}/test_sha256_
 target_link_libraries(test_sha256_select_race PRIVATE bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT})
 bdk_add_unit_test(test_sha256_select_race)
 
+## CPU count and cgroup limit, read from fixture trees under data/cgroup
+add_executable(test_cpu_limit "${CMAKE_CURRENT_SOURCE_DIR}/test_cpu_limit.cpp")
+target_link_libraries(test_cpu_limit PRIVATE bdk_core)
+target_compile_definitions(test_cpu_limit PRIVATE BDK_CGROUP_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data/cgroup")
+bdk_add_unit_test(test_cpu_limit)
+
 ## The same suites again with the scalar SHA-256 transforms forced, so the
 ## fallback is proven on every runner as well as the hardware backend
 foreach(_t test_sha256_backends test_sha256_select_race test_txvalidator test_bsv)
@@ -255,6 +261,7 @@ if(CMAKE_CONFIGURATION_TYPES)
   set_target_properties(test_cancellation PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d
   set_target_properties(test_sha256_backends PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")
   set_target_properties(test_sha256_select_race PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")
+  set_target_properties(test_cpu_limit PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")
 else()
   set_target_properties(test_bsv PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
   set_target_properties(test_assembler PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
@@ -268,6 +275,7 @@ else()
   set_target_properties(test_cancellation PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
   set_target_properties(test_sha256_backends PROPERTIES DEBUG_POSTFIX "")
   set_target_properties(test_sha256_select_race PROPERTIES DEBUG_POSTFIX "")
+  set_target_properties(test_cpu_limit PROPERTIES DEBUG_POSTFIX "")
 endif()
 
 ## Timing tests in test_txvalidator are disabled by default and labelled

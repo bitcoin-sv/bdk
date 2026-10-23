@@ -1,0 +1,3 @@
+22 1 259:1 / / rw,relatime shared:1 - ext4 /dev/nvme0n1p1 rw
+31 23 0:27 / /sys/fs/cgroup\09x rw,relatime shared:5 - cgroup2 cgroup2 rw
+30 23 0:26 / /sys/fs/cgroup rw,nosuid,nodev,noexec,relatime shared:4 - cgroup2 cgroup2 rw,nsdelegate,memory_recursiveprot
