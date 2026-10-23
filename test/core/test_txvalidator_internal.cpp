@@ -411,10 +411,10 @@ BOOST_AUTO_TEST_CASE(concurrent_first_callers_share_one_pool, *boost::unit_test:
             std::atomic<bool>& start;
             ~StartTogether() { start.store(true); }
         } together{ start };
-        for (size_t i = 0; i < pools.size(); ++i) {
-            callers.threads.emplace_back([&, i] {
+        for (auto& pool : pools) {
+            callers.threads.emplace_back([&start, slot = &pool] {
                 while (!start.load()) std::this_thread::yield();
-                pools[i] = InputVerifyPool::Get();
+                *slot = InputVerifyPool::Get();
             });
         }
     }

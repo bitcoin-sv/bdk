@@ -5159,8 +5159,8 @@ constexpr size_t STACK_PROBE_BYTES = size_t{ 2 } << 20;
 [[gnu::noinline]] static void PaintStack()
 {
     volatile unsigned char area[STACK_PROBE_BYTES];
-    for (size_t i = 0; i < STACK_PROBE_BYTES; ++i)
-        area[i] = 0xa5;
+    for (volatile unsigned char& byte : area)
+        byte = 0xa5;
 }
 
 [[gnu::noinline]] static size_t UnusedStackBytes()
