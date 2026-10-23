@@ -22,10 +22,13 @@ Checks: >
   -cppcoreguidelines-pro-bounds-*,
   -cppcoreguidelines-pro-type-*,
 
-  misc-definitions-in-headers,
-  misc-static-assert,
-  misc-unused-alias-decls,
-  misc-unused-using-decls,
+  misc-*,
+  -misc-include-cleaner,
+  -misc-non-private-member-variables-in-classes,
+
+  -misc-const-correctness,
+  -misc-use-internal-linkage,
+  -misc-use-anonymous-namespace,
 
   modernize-deprecated-headers,
   modernize-loop-convert,
