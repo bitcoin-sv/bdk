@@ -25,9 +25,7 @@
 #include <sched.h>
 #endif
 
-namespace {
-
-std::optional<std::string> ReadFile(const std::string& path)
+static std::optional<std::string> ReadFile(const std::string& path)
 {
     std::ifstream in(path, std::ios::binary);
     if (!in)
@@ -39,7 +37,7 @@ std::optional<std::string> ReadFile(const std::string& path)
     return content.str();
 }
 
-std::vector<std::string_view> Split(std::string_view text, char sep)
+static std::vector<std::string_view> Split(std::string_view text, char sep)
 {
     std::vector<std::string_view> parts;
     size_t start = 0;
@@ -52,8 +50,6 @@ std::vector<std::string_view> Split(std::string_view text, char sep)
     }
 }
 
-} // namespace
-
 std::optional<int64_t> bsv::detail::ParseCgroupInt(std::string_view text)
 {
     if (text.empty())
@@ -65,10 +61,8 @@ std::optional<int64_t> bsv::detail::ParseCgroupInt(std::string_view text)
     return value;
 }
 
-namespace {
-
 // The single line of a cgroup file, without its newline.
-std::optional<std::string_view> SingleLine(std::string_view content)
+static std::optional<std::string_view> SingleLine(std::string_view content)
 {
     const size_t newline = content.find('\n');
     if (newline == std::string_view::npos)
@@ -76,7 +70,7 @@ std::optional<std::string_view> SingleLine(std::string_view content)
     return content.substr(0, newline);
 }
 
-bool ContainsCpu(std::string_view commaSeparated)
+static bool ContainsCpu(std::string_view commaSeparated)
 {
     for (const std::string_view item : Split(commaSeparated, ','))
         if (item == "cpu")
@@ -85,7 +79,7 @@ bool ContainsCpu(std::string_view commaSeparated)
 }
 
 // cgroup path `path` is `root` or below it.
-bool HasPathPrefix(std::string_view path, std::string_view root)
+static bool HasPathPrefix(std::string_view path, std::string_view root)
 {
     if (root == "/")
         return true;
@@ -93,7 +87,7 @@ bool HasPathPrefix(std::string_view path, std::string_view root)
 }
 
 // mountinfo escapes space, tab, newline and backslash as \ooo.
-std::optional<std::string> UnescapeMountPath(std::string_view text)
+static std::optional<std::string> UnescapeMountPath(std::string_view text)
 {
     std::string out;
     for (size_t i = 0; i < text.size(); ++i) {
@@ -116,6 +110,8 @@ std::optional<std::string> UnescapeMountPath(std::string_view text)
     return out;
 }
 
+namespace {
+
 enum class CgroupVersion : uint8_t { V1, V2 };
 
 struct CpuCgroup {
@@ -123,9 +119,11 @@ struct CpuCgroup {
     std::string path;  // relative to its hierarchy's root, starts with '/'
 };
 
+} // namespace
+
 // From proc/self/cgroup: the v1 hierarchy with the cpu controller, else the
 // v2 hierarchy (ID 0).
-std::optional<CpuCgroup> FindCpuCgroup(std::string_view content)
+static std::optional<CpuCgroup> FindCpuCgroup(std::string_view content)
 {
     std::optional<CpuCgroup> v2;
     for (const std::string_view line : Split(content, '\n')) {
@@ -151,7 +149,7 @@ std::optional<CpuCgroup> FindCpuCgroup(std::string_view content)
 // From proc/self/mountinfo: the directory holding `cgroup`'s files, the first
 // matching cgroup2 mount, or cgroup mount with the cpu option, whose root
 // contains the cgroup.
-std::optional<std::string> FindCpuCgroupDir(std::string_view content, const CpuCgroup& cgroup)
+static std::optional<std::string> FindCpuCgroupDir(std::string_view content, const CpuCgroup& cgroup)
 {
     for (const std::string_view line : Split(content, '\n')) {
         if (line.empty())
@@ -187,7 +185,7 @@ std::optional<std::string> FindCpuCgroupDir(std::string_view content, const CpuC
 }
 
 // cpu.max: "<quota> <period>\n", quota "max" for no limit.
-std::optional<double> ParseV2Limit(std::string_view content)
+static std::optional<double> ParseV2Limit(std::string_view content)
 {
     const auto line = SingleLine(content);
     if (!line)
@@ -203,8 +201,6 @@ std::optional<double> ParseV2Limit(std::string_view content)
         return std::nullopt;
     return static_cast<double>(*quota) / static_cast<double>(*period);
 }
-
-} // namespace
 
 std::optional<double> bsv::detail::CgroupCpuLimit(const std::string& root)
 {
