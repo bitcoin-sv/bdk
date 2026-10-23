@@ -695,8 +695,8 @@ bool bsv::CTxValidator::GetPermitBareMultisig() const
 
 uint32_t bsv::CTxValidator::CalculateFlags(int32_t utxoHeight, int32_t blockHeight, bool consensus) const
 {
-    ProtocolEra era;
-    uint32_t protocolFlags;
+    ProtocolEra era{};
+    uint32_t protocolFlags{};
     if (consensus) {
         // For tx coming from a block.
         // blockHeight is the block the tx belong to
@@ -1520,7 +1520,7 @@ TxError bsv::CTxValidator::implIsFreeConsolidation(const CTransaction& tx,
         if (tx.vin[i].scriptSig.size() > consolidationMaxInputScriptSize)
             return notFree();
 
-        txnouttype dummyType;
+        txnouttype dummyType{};
         if (!consolidationAcceptNonStd && !IsStandardOutput(policySettings, prevUTXO[i].scriptPubKey, coinHeight, dummyType))
             return notFree();
 

@@ -19,7 +19,6 @@ Checks: >
   cppcoreguidelines-*,
   -cppcoreguidelines-avoid-do-while,
   -cppcoreguidelines-avoid-magic-numbers,
-  -cppcoreguidelines-init-variables,
   -cppcoreguidelines-pro-bounds-*,
   -cppcoreguidelines-pro-type-*,
   -cppcoreguidelines-special-member-functions,

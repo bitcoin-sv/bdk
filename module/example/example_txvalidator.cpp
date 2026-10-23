@@ -204,7 +204,7 @@ int main(int argc, char* argv[])
 {
     std::string csvFilePath;
     std::string network;
-    bool disableConsensus;
+    bool disableConsensus{};
 
     // Define and parse the command line options
     po::options_description desc("Allowed options");

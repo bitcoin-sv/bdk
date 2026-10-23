@@ -930,7 +930,7 @@ static TxError ValidateP2PKHSpend(const bsv::CTxValidator& se,
 static void CorruptP2PKHSignature(bsv::CMutableTransactionExtended& eTx, size_t index)
 {
     CScript::const_iterator pc = eTx.mtx.vin[index].scriptSig.begin();
-    opcodetype opcode;
+    opcodetype opcode{};
     std::vector<uint8_t> sig;
     std::vector<uint8_t> pubkey;
     BOOST_REQUIRE(eTx.mtx.vin[index].scriptSig.GetOp(pc, opcode, sig));
@@ -1066,7 +1066,7 @@ static void CorruptSecondMultisigSignature(MultisigSpend& spend)
 {
     const CScript& scriptSig = spend.eTx.mtx.vin[spend.index].scriptSig;
     CScript::const_iterator pc = scriptSig.begin();
-    opcodetype opcode;
+    opcodetype opcode{};
     std::vector<uint8_t> dummy, sig1, sig2;
     BOOST_REQUIRE(scriptSig.GetOp(pc, opcode, dummy));
     BOOST_REQUIRE(scriptSig.GetOp(pc, opcode, sig1));
