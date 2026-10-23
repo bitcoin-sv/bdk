@@ -49,6 +49,7 @@ BuildCreditingTransactionWithP2SHOutput(const CScript &redeemScript, const Amoun
 }
 
 // Improved version 1: Build P2SH scriptSig explicitly
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 static CScript BuildP2SHScriptSig(const CScript& dataScript, const CScript& redeemScript) {
     // dataScript should contain the signatures/data needed to satisfy redeemScript
     // This function appends the redeemScript at the end
@@ -63,6 +64,7 @@ static CScript BuildP2SHScriptSig(const CScript& dataScript, const CScript& rede
 static CMutableTransaction
 BuildSpendingTransactionMultipleOutputs(const CScript &scriptSig,
                                         const CMutableTransaction &txCredit,
+                                        // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
                                         size_t numOutputs,
                                         int32_t nVersion = 1)
 {

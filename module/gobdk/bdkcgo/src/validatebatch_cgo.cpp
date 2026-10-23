@@ -46,13 +46,14 @@ void ValidateBatch_Destroy(ValidateBatchCGO cgoBatch)
     delete ptr;
 }
 
-TxError ValidateBatch_Add(
-    ValidateBatchCGO cgoBatch,
-    const char* extendedTxPtr, uint64_t extendedTxLen,
-    const int32_t* hUTXOsPtr, uint64_t hUTXOsLen,
-    int32_t blockHeight,
-    bool consensus
-)
+TxError ValidateBatch_Add(ValidateBatchCGO cgoBatch,
+                          const char* extendedTxPtr,
+                          uint64_t extendedTxLen,
+                          const int32_t* hUTXOsPtr,
+                          // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+                          uint64_t hUTXOsLen,
+                          int32_t blockHeight,
+                          bool consensus)
 {
     try {
         // Convert C-style parameters to C++ spans

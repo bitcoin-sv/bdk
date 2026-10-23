@@ -40,8 +40,9 @@ static std::vector<uint8_t> SerializeETX(const bsv::CMutableTransactionExtended&
 // The UTXO script is empty (not P2SH), so P2SH sigops are never triggered.
 // inputScript  : placed in vin[0].scriptSig
 // outputScript : placed in vout[0].scriptPubKey
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 static std::vector<uint8_t> MakeETX(const CScript& inputScript,
-                                     const CScript& outputScript)
+                                    const CScript& outputScript)
 {
     bsv::CMutableTransactionExtended etx;
 
@@ -63,6 +64,7 @@ static std::vector<uint8_t> MakeETXWithOutputSigOps(int n)
 }
 
 // Convenience: split across scriptSig and output
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 static std::vector<uint8_t> MakeETXWithSplitSigOps(int nIn, int nOut)
 {
     CScript in, out;

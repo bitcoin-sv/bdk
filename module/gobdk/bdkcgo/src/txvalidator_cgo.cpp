@@ -291,8 +291,19 @@ bool TxValidator_GetPermitBareMultisig(TxValidatorCGO cgoEngine)
     return static_cast<bsv::CTxValidator*>(cgoEngine)->GetPermitBareMultisig();
 }
 
-uint64_t TxValidator_GetSigOpCount(TxValidatorCGO cgoEngine, const char* extendedTxPtr, uint64_t extendedTxLen, const int32_t* hUTXOsPtr, uint64_t hUTXOsLen, int32_t blockHeight, bool countP2SHSigOps, bool consensus, char** errStr) {
-    try {
+uint64_t TxValidator_GetSigOpCount(TxValidatorCGO cgoEngine,
+                                   const char* extendedTxPtr,
+                                   uint64_t extendedTxLen,
+                                   const int32_t* hUTXOsPtr,
+                                   // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+                                   uint64_t hUTXOsLen,
+                                   int32_t blockHeight,
+                                   bool countP2SHSigOps,
+                                   bool consensus,
+                                   char** errStr)
+{
+    try
+    {
         const std::span<const uint8_t> extendedTx = bdkcgo::byte_span(extendedTxPtr, extendedTxLen);
         const std::span<const int32_t> hUTXOs = bdkcgo::int32_span(hUTXOsPtr, hUTXOsLen);
 
@@ -320,8 +331,17 @@ uint32_t TxValidator_CalculateFlags(TxValidatorCGO cgoEngine, int32_t utxoHeight
     return static_cast<bsv::CTxValidator*>(cgoEngine)->CalculateFlags(utxoHeight, blockHeight, consensus);
 }
 
-TxError TxValidator_VerifyScript(TxValidatorCGO cgoEngine, const char* extendedTxPtr, uint64_t extendedTxLen, const int32_t* hUTXOsPtr, uint64_t hUTXOsLen, int32_t blockHeight, bool consensus){
-    try {
+TxError TxValidator_VerifyScript(TxValidatorCGO cgoEngine,
+                                 const char* extendedTxPtr,
+                                 uint64_t extendedTxLen,
+                                 const int32_t* hUTXOsPtr,
+                                 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+                                 uint64_t hUTXOsLen,
+                                 int32_t blockHeight,
+                                 bool consensus)
+{
+    try
+    {
         const std::span<const uint8_t> extendedTx = bdkcgo::byte_span(extendedTxPtr, extendedTxLen);
         const std::span<const int32_t> hUTXOs = bdkcgo::int32_span(hUTXOsPtr, hUTXOsLen);
         return static_cast<bsv::CTxValidator*>(cgoEngine)->VerifyScript(extendedTx, hUTXOs, blockHeight, consensus);
@@ -334,8 +354,19 @@ TxError TxValidator_VerifyScript(TxValidatorCGO cgoEngine, const char* extendedT
     }
 }
 
-TxError TxValidator_VerifyScriptWithCustomFlags(TxValidatorCGO cgoEngine, const char* extendedTxPtr, uint64_t extendedTxLen, const int32_t* hUTXOsPtr, uint64_t hUTXOsLen, int32_t blockHeight, bool consensus, const uint32_t* cFlagsPtr, uint64_t cFlagsLen){
-    try {
+TxError TxValidator_VerifyScriptWithCustomFlags(TxValidatorCGO cgoEngine,
+                                                const char* extendedTxPtr,
+                                                uint64_t extendedTxLen,
+                                                const int32_t* hUTXOsPtr,
+                                                // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+                                                uint64_t hUTXOsLen,
+                                                int32_t blockHeight,
+                                                bool consensus,
+                                                const uint32_t* cFlagsPtr,
+                                                uint64_t cFlagsLen)
+{
+    try
+    {
         const std::span<const uint8_t> extendedTx = bdkcgo::byte_span(extendedTxPtr, extendedTxLen);
         const std::span<const int32_t> hUTXOs = bdkcgo::int32_span(hUTXOsPtr, hUTXOsLen);
         const std::span<const uint32_t> cFlags = bdkcgo::uint32_span(cFlagsPtr, cFlagsLen);
@@ -349,8 +380,17 @@ TxError TxValidator_VerifyScriptWithCustomFlags(TxValidatorCGO cgoEngine, const 
     }
 }
 
-TxError TxValidator_ValidateTransaction(TxValidatorCGO cgoEngine, const char* extendedTxPtr, uint64_t extendedTxLen, const int32_t* hUTXOsPtr, uint64_t hUTXOsLen, int32_t blockHeight, bool consensus) {
-    try {
+TxError TxValidator_ValidateTransaction(TxValidatorCGO cgoEngine,
+                                        const char* extendedTxPtr,
+                                        uint64_t extendedTxLen,
+                                        const int32_t* hUTXOsPtr,
+                                        // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+                                        uint64_t hUTXOsLen,
+                                        int32_t blockHeight,
+                                        bool consensus)
+{
+    try
+    {
         const std::span<const uint8_t> extendedTx = bdkcgo::byte_span(extendedTxPtr, extendedTxLen);
         const std::span<const int32_t> hUTXOs = bdkcgo::int32_span(hUTXOsPtr, hUTXOsLen);
         return static_cast<bsv::CTxValidator*>(cgoEngine)->ValidateTransaction(extendedTx, hUTXOs, blockHeight, consensus);
@@ -363,8 +403,20 @@ TxError TxValidator_ValidateTransaction(TxValidatorCGO cgoEngine, const char* ex
     }
 }
 
-TxError TxValidator_VerifyScriptCancellable(TxValidatorCGO cgoEngine, const char* extendedTxPtr, uint64_t extendedTxLen, const int32_t* hUTXOsPtr, uint64_t hUTXOsLen, int32_t blockHeight, bool consensus, const uint32_t* cFlagsPtr, uint64_t cFlagsLen, const int32_t* cancelFlag){
-    try {
+TxError TxValidator_VerifyScriptCancellable(TxValidatorCGO cgoEngine,
+                                            const char* extendedTxPtr,
+                                            uint64_t extendedTxLen,
+                                            const int32_t* hUTXOsPtr,
+                                            // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+                                            uint64_t hUTXOsLen,
+                                            int32_t blockHeight,
+                                            bool consensus,
+                                            const uint32_t* cFlagsPtr,
+                                            uint64_t cFlagsLen,
+                                            const int32_t* cancelFlag)
+{
+    try
+    {
         const std::span<const uint8_t> extendedTx = bdkcgo::byte_span(extendedTxPtr, extendedTxLen);
         const std::span<const int32_t> hUTXOs = bdkcgo::int32_span(hUTXOsPtr, hUTXOsLen);
         const std::span<const uint32_t> cFlags = bdkcgo::uint32_span(cFlagsPtr, cFlagsLen);
@@ -378,8 +430,18 @@ TxError TxValidator_VerifyScriptCancellable(TxValidatorCGO cgoEngine, const char
     }
 }
 
-TxError TxValidator_ValidateTransactionCancellable(TxValidatorCGO cgoEngine, const char* extendedTxPtr, uint64_t extendedTxLen, const int32_t* hUTXOsPtr, uint64_t hUTXOsLen, int32_t blockHeight, bool consensus, const int32_t* cancelFlag) {
-    try {
+TxError TxValidator_ValidateTransactionCancellable(TxValidatorCGO cgoEngine,
+                                                   const char* extendedTxPtr,
+                                                   uint64_t extendedTxLen,
+                                                   const int32_t* hUTXOsPtr,
+                                                   // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+                                                   uint64_t hUTXOsLen,
+                                                   int32_t blockHeight,
+                                                   bool consensus,
+                                                   const int32_t* cancelFlag)
+{
+    try
+    {
         const std::span<const uint8_t> extendedTx = bdkcgo::byte_span(extendedTxPtr, extendedTxLen);
         const std::span<const int32_t> hUTXOs = bdkcgo::int32_span(hUTXOsPtr, hUTXOsLen);
         return static_cast<bsv::CTxValidator*>(cgoEngine)->ValidateTransaction(extendedTx, hUTXOs, blockHeight, consensus, bsv::MakeFlagCancellationToken(cancelFlag));
@@ -410,7 +472,13 @@ TxError* TxValidator_ValidateBatch(TxValidatorCGO cgoEngine, ValidateBatchCGO cg
     return TxValidator_ValidateBatchCancellable(cgoEngine, cgoBatch, resultSize, nullptr);
 }
 
-TxError* TxValidator_ValidateBatchCancellable(TxValidatorCGO cgoEngine, ValidateBatchCGO cgoBatch, uint64_t* resultSize, const int32_t* cancelFlag) {
+// NOLINTBEGIN(bugprone-easily-swappable-parameters)
+TxError* TxValidator_ValidateBatchCancellable(TxValidatorCGO cgoEngine,
+                                              ValidateBatchCGO cgoBatch,
+                                              uint64_t* resultSize,
+                                              const int32_t* cancelFlag)
+// NOLINTEND(bugprone-easily-swappable-parameters)
+{
     if (resultSize == nullptr) {
         return nullptr;
     }

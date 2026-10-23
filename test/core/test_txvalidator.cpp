@@ -831,6 +831,7 @@ constexpr int64_t P2PKH_OUTPUT_SATOSHIS = 1000;
 constexpr int32_t P2PKH_BLOCK_HEIGHT = 700000;  // post-Genesis, pre-Chronicle on mainnet
 constexpr int32_t P2PKH_UTXO_HEIGHT = 699999;
 
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 static CKey MakeDeterministicTestKey(uint8_t lastByte, uint8_t secondLastByte = 0)
 {
     std::array<uint8_t, 32> rawKey{};
@@ -1140,6 +1141,7 @@ constexpr int32_t PRE_UAHF_UTXO_HEIGHT = 469999;
 
 static TxError ValidateAtHeights(const bsv::CTxValidator& se,
                                  const bsv::CMutableTransactionExtended& eTx,
+                                 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
                                  int32_t utxoHeight,
                                  int32_t blockHeight,
                                  bool consensus)
@@ -1307,6 +1309,7 @@ struct ManyKeyMultisigSpend {
     uint32_t index;
 };
 
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 static ManyKeyMultisigSpend MakeManyKeyMultisigSpend(size_t nInputs, size_t nKeys)
 {
     const SigHashType allForkId = SigHashType().withForkId();

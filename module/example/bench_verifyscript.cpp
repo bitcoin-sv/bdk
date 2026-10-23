@@ -21,7 +21,9 @@ constexpr const char* VALID_EXTENDED_TX =
 constexpr int32_t UTXO_HEIGHT = 574441;
 constexpr int32_t BLOCK_HEIGHT = 620940;
 
-int positiveArgument(const char* value, const char* name) {
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+int positiveArgument(const char* value, const char* name)
+{
     const long parsed = std::strtol(value, nullptr, 10);
     if(parsed <= 0 || parsed > 100000000L) {
         throw std::invalid_argument(std::string{name} + " must be between 1 and 100000000");

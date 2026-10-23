@@ -868,6 +868,7 @@ TxError bsv::CTxValidator::VerifySpend(
     std::span<const uint8_t> transaction,
     uint32_t inputIndex,
     std::span<const uint8_t> lockingScript,
+    // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
     int64_t sourceSatoshis,
     int32_t utxoHeight,
     int32_t blockHeight,

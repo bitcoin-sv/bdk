@@ -1040,11 +1040,11 @@ static std::vector<uint8_t> Sign(const CScript& scriptPubKey,
     return sig;
 }
 
-static bsv::CMutableTransactionExtended MakeSignedExtendedTx(
-    const CScript& opcodeCheck,
-    const CScript& operandPushes,
-    const CKey&    key,
-    int32_t        txVersion)
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+static bsv::CMutableTransactionExtended MakeSignedExtendedTx(const CScript& opcodeCheck,
+                                                             const CScript& operandPushes,
+                                                             const CKey& key,
+                                                             int32_t txVersion)
 {
     const CPubKey pubkey = key.GetPubKey();
     const CKeyID  keyID  = pubkey.GetID();
@@ -1079,6 +1079,7 @@ static bsv::CMutableTransactionExtended MakeSignedExtendedTx(
 }
 
 static TxError Verify(const bsv::CMutableTransactionExtended& eTX,
+                      // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
                       int32_t utxoHeight,
                       int32_t blockHeight,
                       bool consensus,
@@ -1097,6 +1098,7 @@ static TxError Verify(const bsv::CMutableTransactionExtended& eTX,
 }
 
 static TxError VerifyWithFlags(const bsv::CMutableTransactionExtended& eTX,
+                               // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
                                int32_t blockHeight,
                                uint32_t flags,
                                bsv::CTxValidator& se)

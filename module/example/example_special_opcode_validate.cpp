@@ -190,10 +190,10 @@ static std::vector<uint8_t> SignSpendingTx(const CScript&              scriptPub
 ///                      the operands for the opcode, in bottom-to-top order.
 ///                      These are appended to the <sig> <pubkey> prefix in
 ///                      the final scriptSig.
-static bsv::CMutableTransactionExtended MakeSignedExtendedTx(
-    const CScript& opcodeCheck,
-    const CScript& operandPushes,
-    const CKey&    key)
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+static bsv::CMutableTransactionExtended MakeSignedExtendedTx(const CScript& opcodeCheck,
+                                                             const CScript& operandPushes,
+                                                             const CKey& key)
 {
     const CPubKey pubkey = key.GetPubKey();
     const CKeyID  keyID  = pubkey.GetID();
