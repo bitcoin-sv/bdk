@@ -18,6 +18,7 @@
 
 namespace po = boost::program_options;
 
+//NOLINTNEXTLINE(bugprone-exception-escape)
 int main(int argc, char* argv[])
 {
     // Hardcoded transaction data

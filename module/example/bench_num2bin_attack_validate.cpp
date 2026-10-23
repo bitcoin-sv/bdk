@@ -273,7 +273,7 @@ static void PrintResult(const std::string& label, const BenchResult& r)
 // ============================================================
 // main
 // ============================================================
-
+// NOLINTNEXTLINE(bugprone-exception-escape)
 int main(int argc, char* argv[])
 {
     // ---- Parse arguments ----

@@ -198,6 +198,7 @@ bool AppendScriptPubKey(CScript& script) {
     return true;
 }
 
+// NOLINTNEXTLINE(bugprone-exception-escape)
 int main(int argc, char* argv[])
 {
     const auto network = CBaseChainParams::MAIN;

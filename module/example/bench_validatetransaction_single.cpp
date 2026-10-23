@@ -29,6 +29,7 @@ const std::vector<int32_t> UTXO_HEIGHTS = {574441};
 
 ////////////////////////////////////////////////////////////////////////////////
 // Main benchmark program
+//NOLINTNEXTLINE(bugprone-exception-escape)
 int main(int argc, char* argv[])
 {
     int iterations = 10000;

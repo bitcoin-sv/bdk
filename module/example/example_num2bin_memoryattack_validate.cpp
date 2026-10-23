@@ -148,7 +148,7 @@ static bsv::CMutableTransactionExtended BuildMemoryAttackTransaction(
 // ============================================================
 // main
 // ============================================================
-
+// NOLINTNEXTLINE(bugprone-exception-escape)
 int main(int argc, char* argv[])
 {
     int numChains = 2;

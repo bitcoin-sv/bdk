@@ -199,6 +199,7 @@ std::vector<CsvDataRecord> parseCSV(const std::string& filename) {
 // This program read the csv file of format
 //     ChainNet, BlockHeight, TXID, TxHexExtended
 // And test to serialize and unserialize of the extended transaction
+// NOLINTNEXTLINE(bugprone-exception-escape)
 int main(int argc, char* argv[])
 {
     std::string csvFilePath;
