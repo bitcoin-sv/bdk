@@ -264,7 +264,7 @@ int main(int argc, char* argv[])
     std::cout << "Nb Txs " << nbTx << '\n';
     std::cout << "Processed Time " << elapsed.count() << '\n';
 
-    // NOLINTNEXTLINE(bugprone-narrowing-conversions)
+    // NOLINTNEXTLINE(*-narrowing-conversions)
     std::cout << "ValidateTransaction Time " << std::fixed << std::setprecision(4) << verifyScriptElapsed.count() / 1e9 << " seconds" << '\n';
     return 0;
 }

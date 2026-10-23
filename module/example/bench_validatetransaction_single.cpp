@@ -114,7 +114,7 @@ int main(int argc, char* argv[])
     }
 
     // Calculate statistics
-    // NOLINTBEGIN(bugprone-narrowing-conversions)
+    // NOLINTBEGIN(*-narrowing-conversions)
     double avgNanoseconds = static_cast<double>(totalDuration.count()) / iterations;
     double avgMicroseconds = avgNanoseconds / 1000.0;
     double totalSeconds = totalDuration.count() / 1e9;
@@ -131,7 +131,7 @@ int main(int argc, char* argv[])
     std::cout << "Max:               " << std::setprecision(2) << maxDuration.count() / 1000.0 << " µs ("
               << maxDuration.count() << " ns)" << '\n';
     std::cout << "Throughput:        " << std::setprecision(0) << (iterations / totalSeconds) << " calls/sec" << '\n';
-    // NOLINTEND(bugprone-narrowing-conversions)
+    // NOLINTEND(*-narrowing-conversions)
 
     return 0;
 }

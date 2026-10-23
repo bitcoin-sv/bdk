@@ -186,7 +186,7 @@ int main(int argc, char* argv[])
     // Calculate statistics
     double avgNanoseconds = static_cast<double>(totalDuration.count()) / iterations;
     double avgMicroseconds = avgNanoseconds / 1000.0;
-    //NOLINTBEGIN(bugprone-narrowing-conversions)
+    //NOLINTBEGIN(*-narrowing-conversions)
     double totalSeconds = totalDuration.count() / 1e9;
 
     std::cout << '\n';
@@ -208,7 +208,7 @@ int main(int argc, char* argv[])
               << minDuration.count() << " ns)" << '\n';
     std::cout << "Max:               " << std::setprecision(2) << maxDuration.count() / 1000.0 << " µs ("
               << maxDuration.count() << " ns)" << '\n';
-    //NOLINTEND(bugprone-narrowing-conversions)
+    //NOLINTEND(*-narrowing-conversions)
 
     if (benchBatch) {
         int totalTx = iterations * batchSize;

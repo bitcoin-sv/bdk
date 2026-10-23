@@ -222,14 +222,14 @@ struct BenchResult
     int64_t max_ns   = 0;
     int     iters    = 0;
 
-    // NOLINTBEGIN(bugprone-narrowing-conversions)
+    // NOLINTBEGIN(*-narrowing-conversions)
     double avg_us()     const { return total_ns / 1000.0 / iters; }
     double min_us()     const { return min_ns   / 1000.0; }
     double max_us()     const { return max_ns   / 1000.0; }
     double avg_ms()     const { return avg_us() / 1000.0; }
     double total_s()    const { return total_ns / 1.0e9; }
     double throughput() const { return iters    / total_s(); }
-    // NOLINTEND(bugprone-narrowing-conversions)
+    // NOLINTEND(*-narrowing-conversions)
 };
 
 static BenchResult RunBenchmark(const bsv::CTxValidator&   se,
@@ -416,7 +416,7 @@ int main(int argc, char* argv[])
     std::cout << "  Extra cost/iter : +" << std::setprecision(3) << extraMs
               << " ms per verification  (wasted on memory + hashing)\n";
     std::cout << "\n";
-    // NOLINTBEGIN(bugprone-narrowing-conversions)
+    // NOLINTBEGIN(*-narrowing-conversions)
     std::cout << "  Note: attack tx is " << attackBin.size() << " bytes vs "
               << standardBin.size() << " bytes standard — "
               << std::setprecision(1)
@@ -425,7 +425,7 @@ int main(int argc, char* argv[])
               << static_cast<double>(stdResult.avg_us()) / standardBin.size()
               << " µs/byte.\n";
     std::cout << sep << "\n";
-    // NOLINTEND(bugprone-narrowing-conversions)
+    // NOLINTEND(*-narrowing-conversions)
 
     return 0;
 }

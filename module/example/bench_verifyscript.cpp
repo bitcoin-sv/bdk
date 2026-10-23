@@ -31,7 +31,7 @@ int positiveArgument(const char* value, const char* name) {
 
 double percentile(const std::vector<double>& sorted, double fraction)
 {
-    // NOLINTNEXTLINE(bugprone-narrowing-conversions)
+    // NOLINTNEXTLINE(*-narrowing-conversions)
     const auto index = static_cast<size_t>((sorted.size() - 1) * fraction);
     return sorted[index];
 }
@@ -89,7 +89,7 @@ int main(int argc, char** argv) try {
     const double p95 = percentile(microsPerOperation, 0.95);
     const double mean = std::accumulate(
         microsPerOperation.begin(), microsPerOperation.end(), 0.0) /
-        microsPerOperation.size(); // NOLINT(bugprone-narrowing-conversions)
+        microsPerOperation.size(); // NOLINT(*-narrowing-conversions)
 
     std::cout << std::fixed << std::setprecision(3)
               << "{\n"
