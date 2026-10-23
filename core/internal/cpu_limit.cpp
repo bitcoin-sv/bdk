@@ -7,7 +7,7 @@
 // unset and Go 1.26 or later, BDK and the Go runtime in one process derive the
 // same CPU count, except that Go re-reads the limit and BDK reads it once.
 
-#include <internal/txvalidator_internal.hpp>
+#include <internal/cpu_limit.hpp>
 
 #include <algorithm>
 #include <charconv>
