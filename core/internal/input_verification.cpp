@@ -21,7 +21,7 @@
 
 namespace bsv::detail {
 // The default threshold, bsv::detail::DEFAULT_PARALLEL_INPUT_THRESHOLD, comes
-// from the threshold_sweep benchmark in test_txvalidator (SIGHASH_ALL|FORKID
+// from a serial-vs-parallel sweep over input counts (SIGHASH_ALL|FORKID
 // P2PKH, about 20-50 us per input): at 16 inputs parallel was 1.56x-1.84x
 // faster on ubuntu-22.04 (x86-64, 4 vCPU), ubuntu-22.04-arm (4 cores),
 // macos-15 CI (3 vCPU) and an Apple M3 Max; at 2-4 inputs the macos-15 runner
