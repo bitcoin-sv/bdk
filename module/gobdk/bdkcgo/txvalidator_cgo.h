@@ -1,5 +1,4 @@
-#ifndef __TXVALIDATOR_CGO_H__
-#define __TXVALIDATOR_CGO_H__
+#pragma once
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -213,5 +212,3 @@ TxError* TxValidator_ValidateBatchCancellable(TxValidatorCGO cgoEngine, Validate
 #ifdef __cplusplus
 }
 #endif
-
-#endif /* __TXVALIDATOR_CGO_H__ */

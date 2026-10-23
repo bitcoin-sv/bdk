@@ -1,5 +1,4 @@
-#ifndef __TXERROR_H__
-#define __TXERROR_H__
+#pragma once
 
 #include <stdint.h>
 
@@ -65,4 +64,3 @@ namespace bsv {
 }
 #endif
 
-#endif /* __TXERROR_H__ */

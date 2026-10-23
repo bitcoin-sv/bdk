@@ -71,6 +71,9 @@ if(BDK_BUILD_UNIVALUE)
     set(_BDKFFI_UNIVALUE_LIB univalue)
 endif()
 
+## first-party sources get the warning set (+ -Werror), bitcoin-sv sources keep upstream's
+bdkApplySourceWarningPolicy()
+
 add_library(static-bdkffi STATIC ${_BDKFFI_HEADER_FILES} ${_BDKFFI_SOURCE_FILES})
 target_link_libraries(static-bdkffi PUBLIC
     bdk_core secp256k1 ${_BDKFFI_UNIVALUE_LIB}

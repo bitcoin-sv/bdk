@@ -167,10 +167,13 @@ CScript sign_multisig_forkid(const CScript& scriptPubKey,
     return result;
 }
 
-CScript PushAll(const std::vector<valtype>& values) {
+CScript PushAll(const std::vector<valtype>& values)
+{
     CScript result;
-    for (const valtype& v : values) {
-        if (v.size() == 0) {
+    for(const valtype& v : values)
+    {
+        if(v.empty())
+        {
             result << OP_0;
         }
         else if (v.size() == 1 && v[0] >= 1 && v[0] <= 16) {
@@ -213,7 +216,7 @@ int main(int argc, char* argv[])
     const TxError ret = se.ValidateTransaction(etxBin, std::span<const int32_t>(utxoArray) , blockHeight, consensus);
 
     const std::string etxHex = bsv::Bin2Hex(etxBin);
-    std::cout << std::endl << std::endl << "ExtendedTX Hex" << std::endl << std::endl << etxHex << std::endl << std::endl;
+    std::cout << '\n' << '\n' << "ExtendedTX Hex" << '\n' << '\n' << etxHex << '\n' << '\n';
     if (!bsv::TxErrorIsOk(ret)) {
         throw std::runtime_error("ERROR verify script for tx " + etxHex);
     }
@@ -235,7 +238,7 @@ bsv::CMutableTransactionExtended BuildReguarTransaction(const std::string& netwo
     keystore.AddKey(key1);
 
     if(key1.VerifyPubKey(pubkey1))
-        std::cout << "PubKey verified" << std::endl;
+        std::cout << "PubKey verified" << '\n';
 
     // Construct a tx
     const Amount amount{1000000};
@@ -254,7 +257,7 @@ bsv::CMutableTransactionExtended BuildReguarTransaction(const std::string& netwo
 
     bsv::CMutableTransactionExtended eTX;
     eTX.vutxo = txFrom.vout;
-    eTX.mtx = txTo;
+    eTX.mtx = std::move(txTo);
     return eTX;
 }
 
@@ -317,10 +320,10 @@ bsv::CMutableTransactionExtended BuildP2SHTransaction(const std::string& network
 
     // Create final spending transaction with complete scriptSig
     // Update the scriptSig on the EXISTING transaction (don't create a new one!)
-    txSpend.vin[0].scriptSig = completeScriptSig;
+    txSpend.vin[0].scriptSig = std::move(completeScriptSig);
 
     bsv::CMutableTransactionExtended eTX;
     eTX.vutxo = txP2SH.vout;
-    eTX.mtx = txSpend;
-    return std::move(eTX);
+    eTX.mtx = std::move(txSpend);
+    return eTX;
 }

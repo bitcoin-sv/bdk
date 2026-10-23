@@ -21,7 +21,7 @@ void bsv::ValidateBatch::add(const ValidateArg& arg)
 
 void bsv::ValidateBatch::add(ValidateArg&& arg)
 {
-    batch_.push_back(std::move(arg));
+    batch_.push_back(arg);
 }
 
 void bsv::ValidateBatch::clear()

@@ -77,7 +77,7 @@ struct BasicTestingSetup {
         // The bindings select the SHA-256 backend when they construct a
         // CTxValidator; this suite must run on the same transforms
         static const bool logged = [] {
-            std::cout << "SHA-256 backend: " << bsv::SelectSha256Backend() << std::endl;
+            std::cout << "SHA-256 backend: " << bsv::SelectSha256Backend() << '\n';
             return true;
         }();
         (void)logged;

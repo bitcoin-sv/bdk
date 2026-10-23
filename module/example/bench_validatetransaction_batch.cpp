@@ -43,27 +43,27 @@ int main(int argc, char* argv[])
     try {
         po::store(po::parse_command_line(argc, argv, desc), vm);
         if (vm.count("help")) {
-            std::cout << desc << std::endl;
+            std::cout << desc << '\n';
             return 0;
         }
         po::notify(vm);
     }
     catch (po::error& e) {
-        std::cerr << "Error: " << e.what() << std::endl;
-        std::cerr << desc << std::endl;
+        std::cerr << "Error: " << e.what() << '\n';
+        std::cerr << desc << '\n';
         return 1;
     }
 
-    std::cout << "Benchmark Configuration:" << std::endl;
-    std::cout << "  Network: " << CHAIN_NET << std::endl;
-    std::cout << "  TXID: " << TX_ID << std::endl;
-    std::cout << "  Block Height: " << BLOCK_HEIGHT << std::endl;
-    std::cout << "  Transaction Size: " << TX_HEX_EXTENDED.length() / 2 << " bytes" << std::endl;
-    std::cout << "  Mode: Batch" << std::endl;
-    std::cout << "  Batch Size: " << batchSize << " transactions" << std::endl;
-    std::cout << "  Iterations: " << iterations << std::endl;
-    std::cout << "  Consensus: " << (disableConsensus ? "disabled" : "enabled") << std::endl;
-    std::cout << std::endl;
+    std::cout << "Benchmark Configuration:" << '\n';
+    std::cout << "  Network: " << CHAIN_NET << '\n';
+    std::cout << "  TXID: " << TX_ID << '\n';
+    std::cout << "  Block Height: " << BLOCK_HEIGHT << '\n';
+    std::cout << "  Transaction Size: " << TX_HEX_EXTENDED.length() / 2 << " bytes" << '\n';
+    std::cout << "  Mode: Batch" << '\n';
+    std::cout << "  Batch Size: " << batchSize << " transactions" << '\n';
+    std::cout << "  Iterations: " << iterations << '\n';
+    std::cout << "  Consensus: " << (disableConsensus ? "disabled" : "enabled") << '\n';
+    std::cout << '\n';
 
     // Preparse the transaction binary
     const std::vector<uint8_t> txBinExtended = ParseHex(TX_HEX_EXTENDED);
@@ -74,7 +74,7 @@ int main(int argc, char* argv[])
     const bsv::CTxValidator se(CHAIN_NET);
 
     // Pre-construct the batch ONCE (outside of timing)
-    std::cout << "Pre-constructing batch of " << batchSize << " transactions..." << std::endl;
+    std::cout << "Pre-constructing batch of " << batchSize << " transactions..." << '\n';
     bsv::ValidateBatch batch;
     batch.reserve(batchSize);
     for (int j = 0; j < batchSize; ++j) {
@@ -82,23 +82,23 @@ int main(int argc, char* argv[])
     }
 
     // Warmup run (not measured)
-    std::cout << "Running warmup..." << std::endl;
+    std::cout << "Running warmup..." << '\n';
     for (int i = 0; i < 10; ++i) {
         const auto results = se.ValidateBatch(batch);
         if (results.size() != static_cast<size_t>(batchSize)) {
-            std::cerr << "ERROR: ValidateBatch returned wrong number of results during warmup" << std::endl;
+            std::cerr << "ERROR: ValidateBatch returned wrong number of results during warmup" << '\n';
             return 1;
         }
         for (const auto& ret : results) {
             if (!bsv::TxErrorIsOk(ret)) {
-                std::cerr << "ERROR: ValidateBatch failed during warmup" << std::endl;
+                std::cerr << "ERROR: ValidateBatch failed during warmup" << '\n';
                 return 1;
             }
         }
     }
 
     // Actual benchmark - ONLY measure ValidateBatch call
-    std::cout << "Running benchmark (measuring ONLY ValidateBatch call)..." << std::endl;
+    std::cout << "Running benchmark (measuring ONLY ValidateBatch call)..." << '\n';
 
     std::chrono::nanoseconds totalDuration(0);
     std::chrono::nanoseconds minDuration = std::chrono::nanoseconds::max();
@@ -110,13 +110,13 @@ int main(int argc, char* argv[])
         auto end = std::chrono::high_resolution_clock::now();
 
         if (results.size() != static_cast<size_t>(batchSize)) {
-            std::cerr << "ERROR: ValidateBatch returned wrong number of results at iteration " << i << std::endl;
+            std::cerr << "ERROR: ValidateBatch returned wrong number of results at iteration " << i << '\n';
             return 1;
         }
 
         for (size_t j = 0; j < results.size(); ++j) {
             if (!bsv::TxErrorIsOk(results[j])) {
-                std::cerr << "ERROR: ValidateBatch failed at iteration " << i << ", item " << j << std::endl;
+                std::cerr << "ERROR: ValidateBatch failed at iteration " << i << ", item " << j << '\n';
                 return 1;
             }
         }
@@ -139,20 +139,20 @@ int main(int argc, char* argv[])
     double totalSeconds = totalDuration.count() / 1e9;
     int totalTx = iterations * batchSize;
 
-    std::cout << std::endl;
-    std::cout << "Benchmark Results:" << std::endl;
-    std::cout << "==================" << std::endl;
+    std::cout << '\n';
+    std::cout << "Benchmark Results:" << '\n';
+    std::cout << "==================" << '\n';
     std::cout << std::fixed << std::setprecision(2);
-    std::cout << "Total time:        " << std::setprecision(4) << totalSeconds << " seconds" << std::endl;
+    std::cout << "Total time:        " << std::setprecision(4) << totalSeconds << " seconds" << '\n';
     std::cout << "Average per batch: " << std::setprecision(2) << avgMicroseconds / 1000.0 << " ms ("
-              << std::setprecision(0) << avgNanoseconds << " ns)" << std::endl;
+              << std::setprecision(0) << avgNanoseconds << " ns)" << '\n';
     std::cout << "Average per tx:    " << std::setprecision(2) << avgPerTx / 1000.0 << " µs ("
-              << std::setprecision(0) << avgPerTx << " ns)" << std::endl;
+              << std::setprecision(0) << avgPerTx << " ns)" << '\n';
     std::cout << "Min:               " << std::setprecision(2) << minDuration.count() / 1000.0 << " µs ("
-              << minDuration.count() << " ns)" << std::endl;
+              << minDuration.count() << " ns)" << '\n';
     std::cout << "Max:               " << std::setprecision(2) << maxDuration.count() / 1000.0 << " µs ("
-              << maxDuration.count() << " ns)" << std::endl;
-    std::cout << "Throughput:        " << std::setprecision(0) << (totalTx / totalSeconds) << " tx/sec" << std::endl;
+              << maxDuration.count() << " ns)" << '\n';
+    std::cout << "Throughput:        " << std::setprecision(0) << (totalTx / totalSeconds) << " tx/sec" << '\n';
 
     return 0;
 }

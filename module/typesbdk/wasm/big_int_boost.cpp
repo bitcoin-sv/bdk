@@ -26,7 +26,7 @@ cpp_int Magnitude(const cpp_int& value)
     return value < 0 ? -value : value;
 }
 
-cpp_int SignedMagnitude(cpp_int magnitude, bool negative)
+cpp_int SignedMagnitude(const cpp_int& magnitude, bool negative)
 {
     return negative && magnitude != 0 ? -magnitude : magnitude;
 }
@@ -48,7 +48,7 @@ cpp_int ParseDecimal(const std::string& text)
         result += text[position] - '0';
         ++position;
     }
-    return SignedMagnitude(std::move(result), negative);
+    return SignedMagnitude(result, negative);
 }
 
 std::vector<uint8_t> MagnitudeBytes(const cpp_int& value)
@@ -96,7 +96,7 @@ std::string HexMagnitude(const cpp_int& value)
 
 void bsv::bint::empty_bn_deleter::operator()(bignum_st* value) const
 {
-    delete value;
+    delete value; // NOLINT(cppcoreguidelines-owning-memory)
 }
 
 bsv::bint::bint()

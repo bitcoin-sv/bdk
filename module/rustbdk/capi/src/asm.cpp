@@ -15,7 +15,7 @@ namespace {
 void log_exception(const char* function_name, const char* message)
 {
     try {
-        std::cerr << "bdkffi exception in " << function_name << ": " << message << std::endl;
+        std::cerr << "bdkffi exception in " << function_name << ": " << message << '\n';
     } catch (...) {
     }
 }
@@ -39,6 +39,7 @@ char* malloc_bytes(const uint8_t* data, size_t len)
     if (len == 0) {
         return nullptr;
     }
+    // NOLINTNEXTLINE(cppcoreguidelines-no-malloc, cppcoreguidelines-owning-memory)
     char* out = static_cast<char*>(std::malloc(len));
     if (out == nullptr) {
         return nullptr;
@@ -49,6 +50,7 @@ char* malloc_bytes(const uint8_t* data, size_t len)
 
 char* malloc_c_string(const std::string& value)
 {
+    // NOLINTNEXTLINE(cppcoreguidelines-no-malloc, cppcoreguidelines-owning-memory)
     char* out = static_cast<char*>(std::malloc(value.size() + 1));
     if (out == nullptr) {
         return nullptr;

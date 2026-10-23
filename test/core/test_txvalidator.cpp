@@ -46,8 +46,6 @@
 #include "extendedTx.hpp"
 #include "txerror.h"
 
-namespace ba = boost::algorithm;
-
 using namespace std;
 using namespace bsv;
 
@@ -58,9 +56,9 @@ class MyParams : public CChainParams {
 public:
     static const std::string CustomName;
 
-    MyParams() {
-    }
+    MyParams() = default;
 };
+
 const std::string MyParams::CustomName = "MyParams";
 
 // Registration custom chain params
@@ -77,7 +75,7 @@ BOOST_AUTO_TEST_CASE(validator_by_network_has_sha256_backend)
     const bsv::CTxValidator validator{bsv::TxValidationNetwork::Main};
     sha256_test::CheckInstalledBackend();
     BOOST_TEST(bsv::SelectSha256Backend() == sha256_test::ExpectedSelection());
-    std::cout << "SHA-256 backend: " << bsv::SelectSha256Backend() << std::endl;
+    std::cout << "SHA-256 backend: " << bsv::SelectSha256Backend() << '\n';
 }
 
 // The same through the chain-name constructor, which ctest also runs alone, in
@@ -479,7 +477,7 @@ BOOST_AUTO_TEST_CASE(test_repeated_checksig_cache)
     std::cerr << "[test_repeated_checksig_cache] N=" << TEST_N
               << " script_bytes=" << lockingScript.size()
               << " status_ok=" << (bsv::TxErrorIsOk(status) ? "true" : "false")
-              << " elapsed_ms=" << elapsed << std::endl;
+              << " elapsed_ms=" << elapsed << '\n';
 
     BOOST_CHECK_MESSAGE(bsv::TxErrorIsOk(status),
         "VerifyScript returned non-OK status");
@@ -1053,7 +1051,7 @@ static MultisigSpend MakeSpendWithMultisigInput(size_t nInputs, size_t index, si
         sig.push_back(static_cast<uint8_t>(allForkId.getRawSigHashType()));
         scriptSig << sig;
     }
-    spend.eTx.mtx.vin[index].scriptSig = scriptSig;
+    spend.eTx.mtx.vin[index].scriptSig = std::move(scriptSig);
     return spend;
 }
 
@@ -1348,7 +1346,7 @@ static ManyKeyMultisigSpend MakeManyKeyMultisigSpend(size_t nInputs, size_t nKey
         sig.push_back(static_cast<uint8_t>(allForkId.getRawSigHashType()));
         scriptSig << sig;
     }
-    mtx.vin[index].scriptSig = scriptSig;
+    mtx.vin[index].scriptSig = std::move(scriptSig);
 
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
     ss << mtx;
@@ -1424,7 +1422,7 @@ BOOST_AUTO_TEST_CASE(verify_spend_shares_sighash_precompute_across_checks,
         for (size_t k = 0; k < 2; ++k)
             std::cerr << " N=" << N_INPUTS[n] << ",K=" << N_KEYS[k] << " best_cpu_ms=" << bestMs[n][k];
     std::cerr << " marginal_ms N=" << N_INPUTS[0] << ":" << smallMarginalMs << " N=" << N_INPUTS[1] << ":"
-              << largeMarginalMs << " ratio=" << ratio << " max_ratio=" << MAX_RATIO << std::endl;
+              << largeMarginalMs << " ratio=" << ratio << " max_ratio=" << MAX_RATIO << '\n';
 
     BOOST_CHECK_MESSAGE(ratio < MAX_RATIO,
         "the CPU cost of one extra VerifySpend signature check grew " << ratio << "x from " << N_INPUTS[0]
@@ -1479,7 +1477,7 @@ BOOST_AUTO_TEST_CASE(validate_transaction_scales_linearly_with_input_count,
     std::cerr << "[validate_transaction_scales_linearly_with_input_count]"
               << " N=" << SMALL_N << " best_cpu_ms=" << smallMs
               << " N=" << LARGE_N << " best_cpu_ms=" << largeMs
-              << " ratio=" << ratio << " max_ratio=" << MAX_RATIO << std::endl;
+              << " ratio=" << ratio << " max_ratio=" << MAX_RATIO << '\n';
 
     BOOST_CHECK_MESSAGE(ratio < MAX_RATIO,
         "ValidateTransaction CPU time ratio " << ratio << " for " << LARGE_N / SMALL_N

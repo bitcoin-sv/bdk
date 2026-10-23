@@ -66,6 +66,11 @@ set(_GO_MODULE_SOURCE_FILES
      "${BSV_APPLICATION_SRC_FILES}"
 )
 
+## first-party sources get the warning set (+ -Werror), bitcoin-sv sources keep
+## upstream's. Before the FreeBSD guard: static-GoBDK below is built on every
+## platform and needs the same source properties as the shared library inside it.
+bdkApplySourceWarningPolicy()
+
 # The shared libraries is not to be used in a normal situation. But we keep building this target
 # just in case we might use it sometime later on non-FreeBSD systems.
 if(NOT "${CMAKE_SYSTEM_NAME}" STREQUAL "FreeBSD")

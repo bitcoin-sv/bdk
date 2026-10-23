@@ -42,6 +42,7 @@ a build. A newer version is not automatically a tested version.
 | Emscripten, WASM only | 4.0.23 | `build_wasm.yaml`, `Install Emscripten 4.0.23` |
 | Node.js, WASM tests | Must be on PATH when configuring; the workflow does not pin a version | `test/types/CMakeLists.txt`, `BDK_NODE_EXECUTABLE` |
 | Native CI hosts | ubuntu-22.04, ubuntu-22.04-arm, macos-15 | `build_bdk.yaml`, build matrix |
+| clang / clang-tidy, static-analysis gate only | LLVM 23 from apt.llvm.org on ubuntu-22.04 | `build_bdk.yaml`, `clang-tidy` job, `LLVM_VERSION` |
 
 The Rust gating workflow uses the pinned toolchain. The scheduled Rust toolchain
 canary deliberately tests floating `stable`; the archive-refresh workflow also
@@ -163,6 +164,8 @@ Defaults appear in the table's second column.
 | `BUILD_MODULE_RUST_INSTALL_INSOURCE` | `ON` | Copy the merged archive to `module/rustbdk/bdk-sys/lib`. |
 | `BDK_INSTALL_CORE_ARCHIVE` | `ON` | Install the canonical core archive. |
 | `BDK_INSTALL_BSV_HEADERS` | `ON` | Install BSV headers and bundled support files. |
+| `BDK_ENABLE_CLANG_TIDY` | `OFF` | Run clang-tidy on first-party C++ during the compile; any finding fails the build. Needs CMake 3.27+ and clang-tidy 19+ (see [Static analysis](#static-analysis-clang-tidy)). |
+| `BDK_WARNINGS_AS_ERRORS` | `OFF` | Add `-Werror` to the warning set that first-party C++ always gets (bitcoin-sv's own `-Wall -Wextra -Wcast-align -Wformat -Wformat-security -Wshadow -Wvla -Wsuggest-override`). bitcoin-sv sources keep upstream's policy (see [Static analysis](#static-analysis-clang-tidy)). |
 
 Disabling a parent option forces dependent options OFF. In particular, `BDK_BUILD_CORE=OFF` disables native modules, native tests and native install gates; `BDK_BUILD_CORE_ONLY=ON` also omits documentation. See the flag-hierarchy blocks in the root `CMakeLists.txt`.
 
@@ -184,6 +187,54 @@ Additional build-facing variables live in the `cmake/` helpers and the GoBDK mod
 - **`CUSTOM_SYSTEM_OS_NAME`** — used for packaging to embed a precise OS name in the installer file
   name (`CMakeLists.txt`), e.g. `-DCUSTOM_SYSTEM_OS_NAME=Ubuntu`.
 - **`BDK_DOC_PYTHON_EXECUTABLE`** — Python interpreter used by CMake to find MkDocs and all enabled Markdown extensions.
+
+## Static analysis (clang-tidy)
+
+CI job `clang-tidy` in `build_bdk.yaml` compiles every first-party C++ target
+(core, examples, C++ tests, and the Go/Rust shims) on ubuntu-22.04 with clang and
+clang-tidy from apt.llvm.org, pinned to **LLVM 23** (`LLVM_VERSION` in the job).
+It is C++ only: no ctest, so no `go test` or `cargo` runs, and Go is not installed. The check list lives in the root `.clang-tidy`; `WarningsAsErrors: '*'`
+It runs first: the build matrix and the SHA-256 sanitiser jobs in the same workflow
+wait for it, so a C++ finding fails one job rather than every leg.
+there turns every finding into a compile error, so the job goes red on any new
+finding in `core/`, `module/` or `test/`. bitcoin-sv, secp256k1, univalue, leveldb and
+generated sources are never linted, and neither are the first-party files that are
+copies or close derivatives of upstream code: the `BDK_UPSTREAM_DERIVED_SOURCES`
+list in `cmake/BDKBuildSetting.cmake` (the modified bitcoin-sv script tests, the vendored
+Bitcoin Core ARM SHA-2 transforms, the cloned `secp256k1.h`). Add a file there when
+it is upstream-derived; do not add one to dodge a finding in BDK's own code.
+The job builds with both `*_INSTALL_INSOURCE` options OFF: it lints, it never
+publishes archives.
+
+Reproduce locally with the same major version, in a fresh build directory:
+
+```bash
+cmake -S . -B ../build-tidy -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_C_COMPILER=clang-23 -DCMAKE_CXX_COMPILER=clang++-23 \
+  -DBDK_ENABLE_CLANG_TIDY=ON \
+  -DBUILD_MODULE_GOLANG_INSTALL_INSOURCE=OFF -DBUILD_MODULE_RUST_INSTALL_INSOURCE=OFF \
+  -DBSV_ROOT="$BSV_ROOT" -DBOOST_ROOT="$BOOST_ROOT" -DOPENSSL_ROOT_DIR="$OPENSSL_ROOT_DIR"
+cmake --build ../build-tidy --parallel 4
+```
+
+Pass `-DBDK_CLANG_TIDY_EXE=/path/to/clang-tidy-23` when the binary is not on `PATH`
+under that name. The option also exports `compile_commands.json`, so
+`run-clang-tidy -p ../build-tidy '<path regex>'` works for a quick single-file pass.
+
+Compiler warnings follow the same split. Every first-party `.cpp` under `core/`,
+`module/` and `test/` is compiled with bitcoin-sv's own warning set, and
+`BDK_WARNINGS_AS_ERRORS=ON` adds `-Werror`, as upstream's CI does; the `clang-tidy`
+job builds with it on. bitcoin-sv
+sources compiled directly into BDK targets, and the upstream-derived files above,
+keep upstream's policy: their include directories are `SYSTEM`, and
+`bdkApplySourceWarningPolicy()` in `cmake/BDKBuildSetting.cmake` sets both sides
+as directory-scoped source properties, so call it in any new directory that
+compiles either kind of source.
+
+Suppress a single unavoidable finding with `// NOLINT(check-name)` plus a short
+reason on the same line. Do not disable a check for a whole file or drop it from
+`.clang-tidy` to get a build green; widen or narrow the check set only in a
+dedicated change that also fixes what the new set reports.
 
 ## Building the Rust binding (experimental)
 
@@ -442,7 +493,7 @@ Cross-check these workflow roles when changing the build instructions:
 
 | Workflow | Role |
 |----------|------|
-| `build_bdk.yaml` | Native build/test matrix; coordinated Go/WASM artifact publication gate |
+| `build_bdk.yaml` | Native build/test matrix; clang-tidy static-analysis gate; coordinated Go/WASM artifact publication gate |
 | `build_wasm.yaml` | Emscripten build, complete WASM CTest suite, direct-configure smoke |
 | `prebuild_dependancies.yaml` | Boost/OpenSSL versions and dependency package contents |
 | `rust_bdk.yaml` | Pinned Rust gating toolchain, independent archive build and Cargo checks |

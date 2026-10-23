@@ -105,7 +105,11 @@ function(bdk_add_core_library target)
     ${BITCOIN_CONFIG_FILE} ${BDK_VERSION_CPP}
     ${_core_extra_hdr_files} ${_bsv_hdr_files}
     ${_core_extra_src_files} ${_bsv_src_files})
-  target_include_directories(${target} PUBLIC ${BSV_INCLUDE_DIRS} "${BDK_CORE_RECIPE_DIR}")
+  ## bitcoin-sv headers are third-party: SYSTEM keeps the compiler from reporting
+  ## warnings that originate inside them (e.g. clang's -Wreturn-type on
+  ## streams.h under NDEBUG, which upstream never builds with)
+  target_include_directories(${target} SYSTEM PUBLIC ${BSV_INCLUDE_DIRS})
+  target_include_directories(${target} PUBLIC "${BDK_CORE_RECIPE_DIR}")
   target_link_libraries(${target} PRIVATE
     secp256k1 ${UNIVALUE_LIB} Boost::boost ${ARG_LINK_LIBRARIES})
   target_compile_definitions(${target} PUBLIC HAVE_CONFIG_H)
@@ -119,6 +123,8 @@ function(bdk_add_core_library target)
     set_source_files_properties("${BDK_BSV_ROOT_DIR}/src/script/sign.cpp"
       PROPERTIES COMPILE_FLAGS "-Wno-stringop-overread")
   endif()
+  ## first-party sources get the warning set (+ -Werror), bitcoin-sv sources keep upstream's
+  bdkApplySourceWarningPolicy()
   if(WIN32)
     target_link_libraries(${target} PRIVATE Crypt32.lib Ws2_32)
   endif()

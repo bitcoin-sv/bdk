@@ -1,5 +1,4 @@
-#ifndef __DOSERROR_HPP__
-#define __DOSERROR_HPP__
+#pragma once
 
 #include <cstdint>
 #include <string_view>
@@ -49,4 +48,3 @@ inline TxError DoSErrorToTxError(DoSError_t e) {
 
 } // namespace bsv
 
-#endif /* __DOSERROR_HPP__ */

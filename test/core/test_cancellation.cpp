@@ -434,7 +434,7 @@ BOOST_AUTO_TEST_CASE(cancelled_mid_script_returns_cancelled_promptly)
             return validator.ValidateTransaction(etx, kLongUtxoHeights, kLongBlockHeight, consensus, token);
         });
         std::cerr << "[cancelled_mid_script] consensus=" << consensus << " domain=" << result.domain
-                  << " latency_ms=" << latency.count() << std::endl;
+                  << " latency_ms=" << latency.count() << '\n';
         BOOST_CHECK_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_CANCELLED), result.domain);
         BOOST_CHECK_LT(latency.count(), 1000);
     }
@@ -477,7 +477,7 @@ BOOST_AUTO_TEST_CASE(cancel_at_every_poll_gives_cancelled_or_the_uncancelled_res
             const TxError expected = validator.ValidateTransaction(etx, c.utxoHeights, c.blockHeight, consensus, counter->GetToken());
             const uint64_t polls = counter->polls();
             std::cerr << "[cancel_at_every_poll] " << c.name << " consensus=" << consensus << " polls=" << polls
-                      << " result=" << expected.domain << "/" << expected.code << std::endl;
+                      << " result=" << expected.domain << "/" << expected.code << '\n';
             BOOST_TEST_CONTEXT(c.name << " consensus=" << consensus << " polls=" << polls) {
                 BOOST_CHECK_NE(static_cast<int32_t>(TX_ERR_DOMAIN_EXCEPTION), expected.domain);
                 for (uint64_t k = 0; k <= polls; ++k) {
@@ -674,7 +674,8 @@ BOOST_AUTO_TEST_CASE(check_standardness_rejects_trailing_bytes)
     BOOST_REQUIRE(bsv::TxErrorIsOk(validator.CheckStandardness(tx, kValidTxUtxoHeights, kValidTxBlockHeight)));
     BOOST_REQUIRE(bsv::TxErrorIsOk(validator.CheckStandardness(tx, kValidTxUtxoHeights, kValidTxBlockHeight, token)));
 
-    for (const std::vector<uint8_t> suffix : { std::vector<uint8_t>{ 0 }, std::vector<uint8_t>{ 1, 2, 3 } }) {
+    for(const auto& suffix : { std::vector<uint8_t>{ 0 }, std::vector<uint8_t>{ 1, 2, 3 } })
+    {
         auto trailing = tx;
         trailing.insert(trailing.end(), suffix.begin(), suffix.end());
         BOOST_CHECK_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_EXCEPTION),
@@ -794,7 +795,7 @@ BOOST_AUTO_TEST_CASE(cancelled_during_a_signature_hash_stops_at_the_next_input)
     using std::chrono::microseconds;
     std::cerr << "[cancelled_during_a_signature_hash] checksig_us=" << duration_cast<microseconds>(checksig).count()
               << " latency_us=" << duration_cast<microseconds>(latency).count()
-              << " polls=" << source->polls() << " domain=" << result.domain << std::endl;
+              << " polls=" << source->polls() << " domain=" << result.domain << '\n';
     BOOST_CHECK_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_CANCELLED), result.domain);
     // Stopped at input 1's first poll: input 1's OP_CHECKSIG never ran. The latency
     // is printed, not asserted: it is one OP_CHECKSIG, and a loaded machine stretches

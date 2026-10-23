@@ -62,10 +62,10 @@ int main(int argc, char** argv) try {
         return 2;
     }
 
-    volatile int32_t resultGuard = 0;
+    volatile uint32_t resultGuard = 0;
     for(int i = 0; i < warmupIterations; ++i) {
         const TxError result = verifyOnce();
-        resultGuard = resultGuard ^ result.domain ^ result.code;
+        resultGuard = resultGuard ^ static_cast<uint32_t>(result.domain) ^ static_cast<uint32_t>(result.code);
     }
 
     std::vector<double> microsPerOperation;
@@ -74,7 +74,7 @@ int main(int argc, char** argv) try {
         const auto start = std::chrono::steady_clock::now();
         for(int i = 0; i < iterations; ++i) {
             const TxError result = verifyOnce();
-            resultGuard = resultGuard ^ result.domain ^ result.code;
+            resultGuard = resultGuard ^ static_cast<uint32_t>(result.domain) ^ static_cast<uint32_t>(result.code);
         }
         const auto end = std::chrono::steady_clock::now();
         const double elapsedMicros =

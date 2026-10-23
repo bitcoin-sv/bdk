@@ -21,7 +21,6 @@
 #include "txvalidator.hpp"
 
 namespace po = boost::program_options;
-namespace pt = boost::property_tree;
 
 // CsvDataRecord structure matching the Go version
 struct CsvDataRecord {
@@ -86,7 +85,6 @@ std::string trim(const std::string& str) {
 // Enhanced split function to handle quotes
 std::vector<std::string> split(const std::string& line, char delimiter = ',') {
     std::vector<std::string> result;
-    std::string token;
     bool inQuotes = false;
     std::stringstream ss;
 
@@ -130,7 +128,7 @@ std::vector<int32_t> parseUTXOStr(const std::string& utxoStr, char delimiter = '
             result.push_back(std::stoi(token));
         }
         catch (const std::exception& e) {
-            std::cerr << "Error parsing integer: " << e.what() << std::endl;
+            std::cerr << "Error parsing integer: " << e.what() << '\n';
         }
     }
     return result;
@@ -143,7 +141,7 @@ std::vector<CsvDataRecord> parseCSV(const std::string& filename) {
     std::string line;
 
     if (!file.is_open()) {
-        std::cerr << "Error opening file: " << filename << std::endl;
+        std::cerr << "Error opening file: " << filename << '\n';
         return data;
     }
 
@@ -219,14 +217,14 @@ int main(int argc, char* argv[])
     try {
         po::store(po::parse_command_line(argc, argv, desc), vm);
         if (vm.count("help")) {
-            std::cout << desc << std::endl;
+            std::cout << desc << '\n';
             return 0;
         }
         po::notify(vm); // throws error if required arguments are missing
     }
     catch (po::error& e) {
-        std::cerr << "Error: " << e.what() << std::endl;
-        std::cerr << desc << std::endl;
+        std::cerr << "Error: " << e.what() << '\n';
+        std::cerr << desc << '\n';
         return 1;
     }
 
@@ -257,13 +255,13 @@ int main(int argc, char* argv[])
             nbTx += 1;
         }
         catch (std::exception e) {
-            std::cout << "ERROR test line : " << i + 1 <<" TxID : " << record.txID << " " << e.what() << std::endl;
+            std::cout << "ERROR test line : " << i + 1 <<" TxID : " << record.txID << " " << e.what() << '\n';
         }
     }
 
-    std::cout << "End Of Program, total csv " << csvData.size() << " lines" << std::endl;
-    std::cout << "Nb Txs " << nbTx << std::endl;
-    std::cout << "Processed Time " << elapsed.count() << std::endl;
-    std::cout << "ValidateTransaction Time " << std::fixed << std::setprecision(4) << verifyScriptElapsed.count() / 1e9 << " seconds" << std::endl;
+    std::cout << "End Of Program, total csv " << csvData.size() << " lines" << '\n';
+    std::cout << "Nb Txs " << nbTx << '\n';
+    std::cout << "Processed Time " << elapsed.count() << '\n';
+    std::cout << "ValidateTransaction Time " << std::fixed << std::setprecision(4) << verifyScriptElapsed.count() / 1e9 << " seconds" << '\n';
     return 0;
 }

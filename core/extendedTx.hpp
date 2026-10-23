@@ -1,5 +1,4 @@
-#ifndef __EXTENDED_TX_HPP__
-#define __EXTENDED_TX_HPP__
+#pragma once
 
 #include <string>
 #include <cstdint>
@@ -126,4 +125,3 @@ public:
 
 } // namespace bsv
 
-#endif /* __EXTENDED_TX_HPP__ */
