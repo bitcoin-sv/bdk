@@ -2,6 +2,7 @@
 #include <array>
 #include <chrono>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <thread>
 #include <vector>
@@ -20,6 +21,16 @@
 #endif
 
 using namespace bsv::detail;
+
+// The value of an optional the test requires to be set. clang-tidy's
+// optional-access check does not see BOOST_REQUIRE as a guard; the fallback
+// is never returned because the failed REQUIRE ends the test case.
+template <typename T>
+static T Present(const std::optional<T>& value)
+{
+    BOOST_REQUIRE(value.has_value());
+    return value.value_or(T{});
+}
 
 BOOST_AUTO_TEST_SUITE(input_cancellation)
 
@@ -101,13 +112,11 @@ BOOST_AUTO_TEST_CASE(claims_form_a_prefix_and_success_requires_all_inputs)
     BOOST_CHECK(!job->CompletedResult());
     for (size_t i = 0; i < 3; ++i) {
         const auto claim = job->Claim();
-        BOOST_REQUIRE(claim);
-        BOOST_CHECK_EQUAL(*claim, i);
+        BOOST_CHECK_EQUAL(Present(claim), i);
     }
     BOOST_CHECK(!job->Claim());
     job->CloseAndWait();
-    BOOST_REQUIRE(job->CompletedResult());
-    BOOST_CHECK(bsv::TxErrorIsOk(*job->CompletedResult()));
+    BOOST_CHECK(bsv::TxErrorIsOk(Present(job->CompletedResult())));
 }
 
 BOOST_AUTO_TEST_CASE(lowest_failure_wins_and_higher_cancellation_cannot_replace_it)
@@ -120,10 +129,9 @@ BOOST_AUTO_TEST_CASE(lowest_failure_wins_and_higher_cancellation_cannot_replace_
     job->Fail(0, bsv::TxErrorScript(SCRIPT_ERR_VERIFY), nullptr);
     job->Fail(1, bsv::TxErrorCancelled(), nullptr);
     job->CloseAndWait();
-    const auto result = job->CompletedResult();
-    BOOST_REQUIRE(result);
-    BOOST_CHECK_EQUAL(result->domain, TX_ERR_DOMAIN_SCRIPT);
-    BOOST_CHECK_EQUAL(result->code, SCRIPT_ERR_VERIFY);
+    const TxError result = Present(job->CompletedResult());
+    BOOST_CHECK_EQUAL(result.domain, TX_ERR_DOMAIN_SCRIPT);
+    BOOST_CHECK_EQUAL(result.code, SCRIPT_ERR_VERIFY);
 }
 
 BOOST_AUTO_TEST_CASE(lower_cancelled_input_prevents_a_higher_failure_verdict)
@@ -147,7 +155,7 @@ BOOST_AUTO_TEST_CASE(stored_exception_keeps_input_order)
     job->Fail(1, bsv::TxErrorException(), std::make_exception_ptr(std::runtime_error("higher")));
     job->Fail(0, bsv::TxErrorScript(SCRIPT_ERR_VERIFY), nullptr);
     job->CloseAndWait();
-    BOOST_CHECK_EQUAL(job->CompletedResult()->code, SCRIPT_ERR_VERIFY);
+    BOOST_CHECK_EQUAL(Present(job->CompletedResult()).code, SCRIPT_ERR_VERIFY);
     auto exceptional = ValidJob(1, token);
     BOOST_REQUIRE(exceptional->Claim());
     exceptional->Fail(0, bsv::TxErrorException(), std::make_exception_ptr(std::runtime_error("first")));
@@ -208,12 +216,12 @@ BOOST_AUTO_TEST_CASE(helper_work_never_polls_caller_token)
     }, token);
     std::atomic<size_t> places{ 1 };
     InputJob::HelperTerms terms{ .cores = 2, .places = &places };
-    BOOST_CHECK_EQUAL(job.Work(&terms).value(), 3u);
+    BOOST_CHECK_EQUAL(Present(job.Work(&terms)), 3u);
     BOOST_CHECK_EQUAL(source->reads, 0u);
     InputJob caller(1, [](size_t, const auto& inputToken) {
         return inputToken.IsCanceled() ? bsv::TxErrorCancelled() : bsv::TxErrorOk();
     }, token);
-    BOOST_CHECK_EQUAL(caller.Work().value(), 1u);
+    BOOST_CHECK_EQUAL(Present(caller.Work()), 1u);
     BOOST_CHECK_GT(source->reads, 0u);
 }
 
@@ -241,17 +249,17 @@ BOOST_AUTO_TEST_CASE(participant_reuses_one_source_for_successive_inputs)
         return cancelled ? bsv::TxErrorCancelled() : bsv::TxErrorOk();
     };
     InputJob job(3, verify, token);
-    BOOST_CHECK_EQUAL(job.Work().value(), 3u);
+    BOOST_CHECK_EQUAL(Present(job.Work()), 3u);
     BOOST_CHECK_EQUAL(calls, 3u);
     BOOST_CHECK_EQUAL(observed[0], 0u);
     BOOST_CHECK_EQUAL(observed[1], 1u);
     BOOST_CHECK_EQUAL(observed[2], 2u);
-    BOOST_CHECK_EQUAL(job.Work().value(), 0u);
+    BOOST_CHECK_EQUAL(Present(job.Work()), 0u);
     retained.reset(); calls = 0; observed.fill(0);
     InputJob helper(3, verify, token);
     std::atomic<size_t> places{ 1 };
     InputJob::HelperTerms terms{ .cores = 2, .places = &places };
-    BOOST_CHECK_EQUAL(helper.Work(&terms).value(), 3u);
+    BOOST_CHECK_EQUAL(Present(helper.Work(&terms)), 3u);
     BOOST_CHECK_EQUAL(calls, 3u);
     BOOST_CHECK_EQUAL(observed[0], 0u);
     BOOST_CHECK_EQUAL(observed[1], 1u);
@@ -266,7 +274,7 @@ BOOST_AUTO_TEST_CASE(helper_keeps_working_at_the_core_budget)
     std::atomic<size_t> places{ 1 };
     InputJob::HelperTerms terms{ .cores = 2, .places = &places };
     busyThreads.store(2);
-    BOOST_CHECK_EQUAL(job->Work(&terms).value(), 3u);
+    BOOST_CHECK_EQUAL(Present(job->Work(&terms)), 3u);
     BOOST_CHECK_EQUAL(job->UnclaimedInputs(), 0u);
     BOOST_CHECK(!terms.placeReturned);
     BOOST_CHECK_EQUAL(places.load(), 1u);
@@ -280,11 +288,11 @@ BOOST_AUTO_TEST_CASE(excess_helper_leaves_before_claiming)
     std::atomic<size_t> places{ 2 };
     InputJob::HelperTerms terms{ .cores = 2, .places = &places };
     busyThreads.store(3);
-    BOOST_CHECK_EQUAL(job->Work(&terms).value(), 0u);
+    BOOST_CHECK_EQUAL(Present(job->Work(&terms)), 0u);
     BOOST_CHECK_EQUAL(job->UnclaimedInputs(), 3u);
     busyThreads.store(2);
     bsv::SetParallelInputHelpers(1);
-    BOOST_CHECK_EQUAL(job->Work(&terms).value(), 0u);
+    BOOST_CHECK_EQUAL(Present(job->Work(&terms)), 0u);
     BOOST_CHECK(terms.placeReturned);
     BOOST_CHECK_EQUAL(places.load(), 1u);
     BOOST_CHECK_EQUAL(job->UnclaimedInputs(), 3u);
@@ -439,16 +447,14 @@ static std::optional<double> FixtureCpuLimit(const std::string& name)
 BOOST_AUTO_TEST_CASE(cgroup_v2_quota_in_a_container)
 {
     const auto limit = FixtureCpuLimit("v2_quota");
-    BOOST_REQUIRE(limit.has_value());
-    BOOST_CHECK_CLOSE(*limit, 2.5, 1e-9);
+    BOOST_CHECK_CLOSE(Present(limit), 2.5, 1e-9);
 }
 
 BOOST_AUTO_TEST_CASE(cgroup_v2_quota_of_a_nested_cgroup)
 {
     // The process's own cgroup has the limit; the root's cpu.max says max.
     const auto limit = FixtureCpuLimit("v2_nested");
-    BOOST_REQUIRE(limit.has_value());
-    BOOST_CHECK_CLOSE(*limit, 1.5, 1e-9);
+    BOOST_CHECK_CLOSE(Present(limit), 1.5, 1e-9);
 }
 
 BOOST_AUTO_TEST_CASE(cgroup_v2_max_is_no_limit)
@@ -459,8 +465,7 @@ BOOST_AUTO_TEST_CASE(cgroup_v2_max_is_no_limit)
 BOOST_AUTO_TEST_CASE(cgroup_v1_quota_in_a_container)
 {
     const auto limit = FixtureCpuLimit("v1_quota");
-    BOOST_REQUIRE(limit.has_value());
-    BOOST_CHECK_CLOSE(*limit, 2.0, 1e-9);
+    BOOST_CHECK_CLOSE(Present(limit), 2.0, 1e-9);
 }
 
 BOOST_AUTO_TEST_CASE(cgroup_v1_quota_minus_one_is_no_limit)
@@ -474,16 +479,14 @@ BOOST_AUTO_TEST_CASE(cgroup_v1_quota_minus_one_is_no_limit)
 BOOST_AUTO_TEST_CASE(cgroup_v1_cpu_controller_is_matched_exactly)
 {
     const auto limit = FixtureCpuLimit("v1_cpuset_first");
-    BOOST_REQUIRE(limit.has_value());
-    BOOST_CHECK_CLOSE(*limit, 2.0, 1e-9);
+    BOOST_CHECK_CLOSE(Present(limit), 2.0, 1e-9);
 }
 
 // mountinfo escapes a space in the mount point as \040.
 BOOST_AUTO_TEST_CASE(cgroup_mount_point_is_unescaped)
 {
     const auto limit = FixtureCpuLimit("v2_escaped_mount");
-    BOOST_REQUIRE(limit.has_value());
-    BOOST_CHECK_CLOSE(*limit, 1.2, 1e-9);
+    BOOST_CHECK_CLOSE(Present(limit), 1.2, 1e-9);
 }
 
 // A cgroup shown as /../.. lies outside the mount this namespace sees; the
@@ -498,8 +501,7 @@ BOOST_AUTO_TEST_CASE(cgroup_outside_the_namespace_gives_no_limit)
 BOOST_AUTO_TEST_CASE(cgroup_mount_root_matches_whole_path_components)
 {
     const auto limit = FixtureCpuLimit("v2_prefix_not_boundary");
-    BOOST_REQUIRE(limit.has_value());
-    BOOST_CHECK_CLOSE(*limit, 3.0, 1e-9);
+    BOOST_CHECK_CLOSE(Present(limit), 3.0, 1e-9);
 }
 
 // A malformed mountinfo line (no " - " separator, or too few fields after
