@@ -62,7 +62,7 @@ public:
 
 // Registration custom chain params
 // NOLINTNEXTLINE(bugprone-throwing-static-initialization): registered before main() by design
-static bsv::RegisterCustomChainParams<MyParams> myParamsReg(MyParams::CustomName);
+const static bsv::RegisterCustomChainParams<MyParams> myParamsReg(MyParams::CustomName);
 
 // BDK installs the fastest SHA-256 transforms this CPU supports while it is
 // loaded, so every validator, and every test below, validates through them.

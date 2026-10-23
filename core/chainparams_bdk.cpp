@@ -107,6 +107,6 @@ class TeraScalingTestNetParams : public CChainParams {
 
 // Registration TeraTestNetParams and TeraScalingTestNetParams to the factory
 // NOLINTNEXTLINE(bugprone-throwing-static-initialization): registered before main() by design
-static bsv::RegisterCustomChainParams<TeraTestNetParams> teraTestNetReg(CustomChainParams::TERATESTNET);
+const static bsv::RegisterCustomChainParams<TeraTestNetParams> teraTestNetReg(CustomChainParams::TERATESTNET);
 // NOLINTNEXTLINE(bugprone-throwing-static-initialization): registered before main() by design
-static bsv::RegisterCustomChainParams<TeraScalingTestNetParams> teraScalingTestNetReg( CustomChainParams::TERASCALINGTESTNET);
+const static bsv::RegisterCustomChainParams<TeraScalingTestNetParams> teraScalingTestNetReg( CustomChainParams::TERASCALINGTESTNET);
