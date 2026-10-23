@@ -498,6 +498,11 @@ The native tests separate internal mechanics from transaction-level integration:
 | `test_txvalidator_pool_creation_retry` | A fresh process injects a creation failure: the first large transaction runs serially, then a later transaction creates the pool and uses helpers. |
 | `test_txvalidator_pool_below_two_cores` | A fresh process capped to one core: after one injected creation failure, a single attempt reads the CPU count, finds fewer than 2 and is not repeated by later large transactions. |
 
+The comment above the `parallel_input_verification` suite in
+`test/core/test_txvalidator.cpp` maps each behaviour fixed during review to
+the tests that hold it, and `core/internal/input_verification.hpp` states the
+invariants and the pool's process lifetime.
+
 The internal target also starts concurrent first callers and checks that they
 share one pool. Most internal tests instantiate a pool without workers or run a
 job with a small verification callback. They exercise the same claim, result and

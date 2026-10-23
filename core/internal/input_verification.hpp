@@ -1,6 +1,68 @@
 #pragma once
 
 // Non-installed units shared by txvalidator.cpp and the internal unit suite.
+//
+// Parallel input verification: how a job is admitted, published and drained.
+// txvalidator.cpp's adapter (implVerifyScript) owns one InputJob per large
+// transaction; InputVerifyPool is the process-wide set of helpers. The rules
+// below are what the code relies on; the tests that hold each one are listed
+// in test/core/test_txvalidator.cpp above the parallel_input_verification suite.
+//
+// 1. Claims. Every participant (the caller, helpers that join) takes the next
+//    index from the job's one atomic cursor, so claimed indices form a prefix
+//    [0, next). No index above the lowest recorded failure is claimed
+//    (InputJob::Claim, UnclaimedInputs), and an input already running above
+//    it is cancelled at its next interpreter poll (InputCancellationSource).
+// 2. Verdict. The caller decides only after every joined participant has
+//    left. A failure at index f is the result only if no input below f was
+//    abandoned (lowestFailure_ < lowestCancelled_); success needs all n inputs
+//    claimed and none abandoned. Otherwise the job has no verdict: the caller
+//    returns CANCELLED, rethrows its token's exception, or verifies serially
+//    if its own setup failed. A completed verdict is kept whatever
+//    cancellation or token exception arrives afterwards (CompletedResult).
+// 3. Drain. The caller never returns, normally or by exception, while a
+//    participant is still joined: JobCaller closes the job, waits for joined
+//    helpers, then withdraws it from the queue. TryJoin and close share the
+//    job mutex, so no helper joins a closed job. The verify callback borrows
+//    the transaction, its precomputed hashes, the settings and the caller's
+//    token from the caller's stack; this is what keeps them alive.
+// 4. Token. Only the calling thread reads the caller's token: before each of
+//    its claims, at interpreter polls of its own inputs, and every 10 ms while
+//    waiting for joined helpers. It publishes what it sees (cancellation or a
+//    token exception) to callerCancelled_, which is all a helper reads.
+//    Cleanup on unwind waits without reading the token.
+// 5. Admission. busyThreads counts each validating caller once (BusyScope)
+//    plus each helper on a job. A helper takes a place under the helper limit
+//    (helpersOnJobs_) and then a core (busyThreads below cores_) before it
+//    joins, and checks both again before every claim: it leaves when more
+//    threads than cores are busy or more places are held than the limit
+//    allows. Callers are never refused, so the count can briefly exceed the
+//    cores; it is a cooperative budget for BDK's own threads, not a cap on
+//    process CPU.
+// 6. Publication. Offer publishes the job (queue, then openJobs_, seq_cst)
+//    before it reads the free capacity. Every release of a core, by a caller
+//    or a helper, decrements busyThreads (seq_cst) and then calls
+//    ReleasedCore, which reads openJobs_ and the helper places (seq_cst) and
+//    wakes a helper after passing through the pool mutex. Either the offer
+//    sees the freed core or the release sees the job. A helper that took a
+//    place but found no core gives the place back and re-reads busyThreads
+//    before sleeping, so a release that saw the place as taken is not lost.
+//
+// Pool lifetime. InputVerifyPool::Get creates the pool on the first large
+// transaction while the helper limit is not 0, sized once from
+// EffectiveCpuCount(): cores - 1 detached helper threads, each with an
+// INPUT_HELPER_STACK_BYTES (8 MiB) stack on POSIX. The helper limit caps the
+// helpers working at once, not the threads created: any non-zero limit
+// creates the full pool. Only a limit of 0 set before the first large
+// transaction means no helper thread is ever started. Fewer than 2 CPUs is
+// recorded once and never retried; a failure to allocate the pool or start
+// any helper is retried by a later call. Once a helper has started, the pool
+// is published and lives for the rest of the process: helpers never exit and
+// nothing destroys it. Idle helpers sleep on a condition variable and use no
+// CPU. This avoids ordering pool teardown against static destructors and
+// against callers still inside BDK on other threads during exit. It also means
+// BDK cannot be unloaded (dlclose) once the pool exists.
+
 #include <internal/txvalidator_internal.hpp>
 #include <txerror.h>
 #include <atomic>

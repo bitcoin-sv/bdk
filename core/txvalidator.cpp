@@ -343,6 +343,9 @@ private:
  * Shared by all participants, read only: the CTransaction, its
  * PrecomputedTransactionData, the previous outputs, heights and flags, and the
  * CTxValidator's settings. Each input gets its own CachingScriptChecker.
+ *
+ * The invariants this relies on, and the pool's process lifetime, are set out
+ * in core/internal/input_verification.hpp.
  */
 
 } // anonymous namespace
