@@ -5,14 +5,16 @@
 #include <iostream>
 
 // Internal helper to emit a diagnostic from a catch handler.
-// Stream insertion and the flush in std::endl can allocate, so they can throw — and a
+// Stream insertion and the explicit flush can allocate, so they can throw — and a
 // catch handler that throws leaves an extern "C" function with an exception already in
 // flight, which is undefined behaviour. The emission is therefore best effort: if it
 // fails, the diagnostic is dropped and the caller still gets its documented result.
-static void _helper_log_cgo_exception(const char* where, const char* what) noexcept
+// The flush is deliberate: the Go side may abort right after this returns, and an
+// unflushed stdout buffer would lose the only record of the exception.
+static void helper_log_cgo_exception(const char* where, const char* what) noexcept
 {
     try {
-        std::cout << "CGO EXCEPTION : " << where << " " << what << std::endl;
+        std::cout << "CGO EXCEPTION : " << where << " " << what << '\n' << std::flush;
     }
     catch (...) {
     }
@@ -21,16 +23,17 @@ static void _helper_log_cgo_exception(const char* where, const char* what) noexc
 ValidateBatchCGO ValidateBatch_CreateV2()
 {
     try {
+        // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
         return new bsv::ValidateBatch();
     }
     catch (const std::exception& e) {
-        _helper_log_cgo_exception(__FILE__ " at ValidateBatch_CreateV2", e.what());
+        helper_log_cgo_exception(__FILE__ " at ValidateBatch_CreateV2", e.what());
         return nullptr;
     }
     catch (...) {
         // Nothing may cross the extern "C" boundary; a non-std exception takes the
         // same channel as any other construction failure.
-        _helper_log_cgo_exception(__FILE__ " at ValidateBatch_CreateV2", "unknown exception");
+        helper_log_cgo_exception(__FILE__ " at ValidateBatch_CreateV2", "unknown exception");
         return nullptr;
     }
 }
@@ -38,6 +41,7 @@ ValidateBatchCGO ValidateBatch_CreateV2()
 void ValidateBatch_Destroy(ValidateBatchCGO cgoBatch)
 {
     bsv::ValidateBatch* ptr = static_cast<bsv::ValidateBatch*>(cgoBatch);
+    // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
     delete ptr;
 }
 
@@ -56,7 +60,7 @@ TxError ValidateBatch_Add(
 
         // Create ValidateArg and add to batch
         bsv::ValidateArg arg(extendedTx, hUTXOs, blockHeight, consensus);
-        static_cast<bsv::ValidateBatch*>(cgoBatch)->add(std::move(arg));
+        static_cast<bsv::ValidateBatch*>(cgoBatch)->add(arg);
         return bsv::TxErrorOk();
     }
     catch (const bdkcgo::AbiArgumentError& e) {
@@ -65,7 +69,7 @@ TxError ValidateBatch_Add(
         return bsv::AbiErrorToTxError(e.code());
     }
     catch (const std::exception& e) {
-        _helper_log_cgo_exception(__FILE__ " at ValidateBatch_Add", e.what());
+        helper_log_cgo_exception(__FILE__ " at ValidateBatch_Add", e.what());
         return bsv::TxErrorException();
     }
     catch (...) {

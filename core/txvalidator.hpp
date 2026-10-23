@@ -1,5 +1,4 @@
-#ifndef __TXVALIDATOR_HPP__
-#define __TXVALIDATOR_HPP__
+#pragma once
 
 #include <string>
 #include <cstdint>
@@ -128,9 +127,10 @@ enum class TxValidationNetwork {
  *   For free-consolidation classification itself (the gate that bypasses the floor),
  *   BDK runs the same rules as bitcoin-sv IsFreeConsolidationTxn — see implIsFreeConsolidation.
  */
-class CTxValidator {
+class CTxValidator 
+{
     public:
-        CTxValidator(const std::string chainName);
+        CTxValidator(const std::string& chainName);
         CTxValidator(TxValidationNetwork network);
         CTxValidator(const Consensus::Params& consensusParams, bool requireStandard);
 
@@ -507,4 +507,3 @@ int64_t GetParallelInputHelpers();
 
 } // namespace bsv
 
-#endif /* __TXVALIDATOR_HPP__ */

@@ -1,5 +1,4 @@
-#ifndef __VALIDATEBATCH_CGO_H__
-#define __VALIDATEBATCH_CGO_H__
+#pragma once
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -90,5 +89,3 @@ void ValidateBatch_Reserve(ValidateBatchCGO cgoBatch, uint64_t capacity);
 #ifdef __cplusplus
 }
 #endif
-
-#endif /* __VALIDATEBATCH_CGO_H__ */

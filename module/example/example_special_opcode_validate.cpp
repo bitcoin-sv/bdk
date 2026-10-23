@@ -226,12 +226,12 @@ static bsv::CMutableTransactionExtended MakeSignedExtendedTx(
     scriptSig << sig << ToByteVector(pubkey);
     scriptSig.insert(scriptSig.end(), operandPushes.begin(), operandPushes.end());
 
-    txSpend.vin[0].scriptSig = scriptSig;
+    txSpend.vin[0].scriptSig = std::move(scriptSig);
 
     // ── 6. Wrap into extended transaction ─────────────────────────────────
     bsv::CMutableTransactionExtended eTX;
     eTX.vutxo = txCredit.vout;   // embed UTXO so VerifyScript can read it
-    eTX.mtx   = txSpend;
+    eTX.mtx   = std::move(txSpend);
     return eTX;
 }
 

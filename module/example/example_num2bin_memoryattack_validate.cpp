@@ -141,7 +141,7 @@ static bsv::CMutableTransactionExtended BuildMemoryAttackTransaction(
 
     bsv::CMutableTransactionExtended eTX;
     eTX.vutxo = txCredit.vout;
-    eTX.mtx   = txSpend;
+    eTX.mtx   = std::move(txSpend);
     return eTX;
 }
 

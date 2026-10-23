@@ -425,7 +425,7 @@ static Consensus::Params consensusParameters(bsv::TxValidationNetwork network)
     return params;
 }
 
-bsv::CTxValidator::CTxValidator(const std::string chainName)
+bsv::CTxValidator::CTxValidator(const std::string& chainName)
     : source{ task::CCancellationSource::Make() }
 {
     // Before the chain params below, which already hash the genesis block

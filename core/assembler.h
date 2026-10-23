@@ -1,5 +1,4 @@
-#ifndef __ASSEMBLER_HPP__
-#define __ASSEMBLER_HPP__
+#pragma once
 
 //
 // Created by m.fletcher on 10/07/2020.
@@ -24,4 +23,3 @@ namespace bsv
     std::string Bin2Hex(const std::vector<uint8_t>& data);
 }
 
-#endif /* __ASSEMBLER_HPP__ */

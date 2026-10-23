@@ -42,6 +42,9 @@ env:
 
 jobs:
   build-bdk:
+    ## The C++ gate runs first: a clang-tidy finding or a compiler warning in
+    ## first-party code fails one job instead of every leg below
+    needs: clang-tidy
     strategy:
       matrix:
         include:
@@ -241,6 +244,7 @@ jobs:
   ## so -fsanitize=thread goes in through a compiler launcher. The positive
   ## control hashes without selecting first and must be reported.
   tsan-sha256-selection:
+    needs: clang-tidy
     if: github.event_name == 'pull_request'
     strategy:
       matrix:
@@ -313,6 +317,7 @@ jobs:
   ## in its arm64 slice only and SHA-NI / SSE4 in its x86_64 slice only, both with
   ## the load-time selection. Builds bdk_core only (the dependency bundle is arm64).
   universal-sha256-slices:
+    needs: clang-tidy
     if: github.event_name == 'pull_request'
     runs-on: macos-15
     timeout-minutes: 45
@@ -370,6 +375,84 @@ jobs:
           done
           echo "arm64: ARMv8 SHA-2 only; x86_64: SHA-NI only; both select at load"
 
+  ## Static-analysis gate: C++ only. Compiles every first-party C++ target (core,
+  ## examples, C++ tests, and the Go/Rust cgo and C-ABI shims) with clang and
+  ## CMAKE_CXX_CLANG_TIDY (see cmake/BDKClangTidy.cmake and the root .clang-tidy),
+  ## so a clang-tidy finding in first-party C++ fails the compile itself, and
+  ## with BDK_WARNINGS_AS_ERRORS so does a compiler warning. Only core/, module/
+  ## and test/ are linted and held to -Werror; bitcoin-sv and generated sources
+  ## are skipped. No ctest, so `go test` and `cargo` never run; Go is not installed
+  ## (configure only warns and skips the Go test registration), and cargo is only
+  ## required to exist at configure time, which the runner satisfies. The
+  ## toolchain is pinned to one LLVM major from apt.llvm.org so local runs with
+  ## the same clang-tidy-N reproduce CI exactly.
+  clang-tidy:
+    runs-on: ubuntu-22.04
+
+    env:
+      LLVM_VERSION: 23
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Define dependant bitcoin-sv commit
+        id: define-bitcoin-sv-commit
+        shell: bash
+        run: |
+          # Use dispatch input if present, otherwise default from env
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            bsvcommit="${{ github.event.inputs.bitcoin-sv-commit }}"
+          else
+            bsvcommit="${{ env.DEFAULT_BITCOIN_SV_COMMIT }}"
+          fi
+          echo "Build using bsvcommit=$bsvcommit ..."
+          echo "bsvcommit=$bsvcommit" >> "$GITHUB_OUTPUT"
+
+      - name: Check out bitcoin-sv
+        shell: bash
+        run: |
+          echo "Checking out bitcoin-sv at commit ${{ steps.define-bitcoin-sv-commit.outputs.bsvcommit }} ..."
+          git clone https://github.com/bitcoin-sv/bitcoin-sv.git bitcoin-sv
+          cd bitcoin-sv && git checkout ${{ steps.define-bitcoin-sv-commit.outputs.bsvcommit }} && git log -3 && pwd && cd ..
+          echo "Successfully checked out bitcoin-sv commit ${{ steps.define-bitcoin-sv-commit.outputs.bsvcommit }} to bitcoin-sv"
+
+      - name: Install LLVM ${{ env.LLVM_VERSION }} (clang + clang-tidy)
+        run: |
+          wget -q https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh ${{ env.LLVM_VERSION }}
+          sudo apt-get install -y clang-${{ env.LLVM_VERSION }} clang-tidy-${{ env.LLVM_VERSION }}
+          clang++-${{ env.LLVM_VERSION }} --version
+          clang-tidy-${{ env.LLVM_VERSION }} --version
+
+      - name: Prepare Environment and Dependencies
+        run: |
+          echo "BSV_ROOT=${{ github.workspace }}/bitcoin-sv" >> $GITHUB_ENV
+          sudo apt-get install -y build-essential wget
+          wget https://github.com/bitcoin-sv/bdk/releases/download/depcy/dependancies_linux_x86_64.tar.gz
+          tar -xzf dependancies_linux_x86_64.tar.gz
+          echo "DEPENDENCIES_DIR=${{ github.workspace }}/dependancies_linux_x86_64" >> $GITHUB_ENV
+          echo "BOOST_ROOT=${{ github.workspace }}/dependancies_linux_x86_64/boost_1.85.0" >> $GITHUB_ENV
+          echo "OPENSSL_ROOT_DIR=${{ github.workspace }}/dependancies_linux_x86_64/openssl_3.4.0" >> $GITHUB_ENV
+
+      - name: Build BDK with clang-tidy
+        run: |
+          mkdir -p "build"
+          rm -fR ./build/* && rm -fR test/golang/vendor/*
+
+          cmake -B build -S "." \
+            -DCMAKE_C_COMPILER=clang-${{ env.LLVM_VERSION }} \
+            -DCMAKE_CXX_COMPILER=clang++-${{ env.LLVM_VERSION }} \
+            -DBDK_CLANG_TIDY_EXE=/usr/bin/clang-tidy-${{ env.LLVM_VERSION }} \
+            -DBDK_ENABLE_CLANG_TIDY=ON \
+            -DBDK_WARNINGS_AS_ERRORS=ON \
+            -DBUILD_MODULE_GOLANG_INSTALL_INSOURCE=OFF \
+            -DBUILD_MODULE_RUST_INSTALL_INSOURCE=OFF
+          cmake --build build --parallel 4
+
   ## The wasm leg runs on EVERY dispatch, regardless of either checkbox. That is what
   ## makes the all-or-nothing gate meaningful: a red wasm leg blocks the gobdk commit
   ## too. With commit-wasm-artifacts unticked it builds and tests but never publishes
@@ -383,9 +466,10 @@ jobs:
 
   commit-built-artifacts:
     runs-on: ubuntu-latest
-    needs: [build-bdk, build-wasm]
+    needs: [build-bdk, build-wasm, clang-tidy]
     # Default success() semantics: ANY red leg blocks ALL commits, including the
-    # un-ticked artifact. Dispatch-only, and at least one box must be ticked.
+    # un-ticked artifact and the clang-tidy gate. Dispatch-only, and at least one
+    # box must be ticked.
     # Whether anything actually CHANGED is decided per family by the staged diff
     # inside the job -- never by a matrix job's last-writer-wins output.
     if: ${{ github.event_name == 'workflow_dispatch' && success() && (

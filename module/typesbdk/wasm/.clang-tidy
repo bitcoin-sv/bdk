@@ -1,0 +1,15 @@
+# Directory-scoped exception to the root .clang-tidy (everything else is inherited).
+#
+# big_int_boost.cpp, the only file here the native build compiles, drives
+# boost::multiprecision::cpp_int. The static analyzer follows call paths from it
+# into Boost's unrolled limb loops and reports false positives *located in the
+# Boost headers* (cpp_int/add_unsigned.hpp via security.ArrayBound,
+# cpp_int/bitwise.hpp via core.BitwiseShift). clang-tidy keeps an analyzer path
+# diagnostic whenever the path starts in user code, so --header-filter,
+# --exclude-header-filter, -isystem and NOLINT cannot silence them, and a core.*
+# checker cannot be disabled on its own: it is re-enabled as a dependency of any
+# other analyzer checker. The narrowest working cut is the whole analyzer, for
+# this directory only. Every other check stays on, and the analyzer stays on for
+# every other source in the tree.
+InheritParentConfig: true
+Checks: '-clang-analyzer-*'

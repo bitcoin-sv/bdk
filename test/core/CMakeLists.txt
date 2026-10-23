@@ -87,6 +87,9 @@ endforeach()
 message(status "File ${BDK_BSV_ROOT_DIR}/src/logging.cpp initially included in core, but as it depend to Boost::filesytem")
 message(status "we remove it from core and put it where it is needed only")
 
+## first-party sources get the warning set (+ -Werror), bitcoin-sv sources keep upstream's
+bdkApplySourceWarningPolicy()
+
 add_executable(test_bsv
                "${BDK_BSV_TEST_ROOT}/jsonutil.h"
                "${BDK_BSV_TEST_ROOT}/scriptflags.h"
@@ -173,7 +176,7 @@ add_executable(
   "${CMAKE_CURRENT_SOURCE_DIR}/test_big_int.cpp"
   "${CMAKE_SOURCE_DIR}/module/typesbdk/wasm/big_int_boost.cpp"
 )
-target_include_directories(test_big_int_boost PRIVATE ${BSV_INCLUDE_DIRS})
+target_include_directories(test_big_int_boost SYSTEM PRIVATE ${BSV_INCLUDE_DIRS})
 target_link_libraries(test_big_int_boost PRIVATE Boost::boost)
 target_compile_features(test_big_int_boost PRIVATE cxx_std_20)
 bdk_add_unit_test(test_big_int_boost)

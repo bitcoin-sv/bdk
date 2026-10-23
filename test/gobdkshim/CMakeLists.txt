@@ -18,6 +18,9 @@ message("Building GoBDK cgo shim tests ...")
 # application objects bdk_core pulls in afterwards would no longer be reachable.
 # BSV_APPLICATION_*_FILES are cache variables set by HelpFindBSVSource() at the top
 # level, so they are in scope here.
+## first-party sources get the warning set (+ -Werror), bitcoin-sv sources keep upstream's
+bdkApplySourceWarningPolicy()
+
 add_executable(test_gobdk_shim
                "${CMAKE_CURRENT_SOURCE_DIR}/test_gobdk_shim.cpp"
                "${BSV_APPLICATION_HDR_FILES}"

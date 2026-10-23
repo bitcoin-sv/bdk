@@ -1,5 +1,4 @@
-#ifndef __DOSERROR_CGO_H__
-#define __DOSERROR_CGO_H__
+#pragma once
 
 #ifdef __cplusplus
 extern "C" {
@@ -41,5 +40,3 @@ const char* dos_error_string(int error);
 #ifdef __cplusplus
 }
 #endif
-
-#endif /* __DOSERROR_CGO_H__ */

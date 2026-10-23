@@ -1,5 +1,4 @@
-#ifndef __SCRIPT_ERROR_CGO_H__
-#define __SCRIPT_ERROR_CGO_H__
+#pragma once
 
 #ifdef __cplusplus
 extern "C" {
@@ -19,5 +18,3 @@ const char *cgo_script_error_string(const int error);
 #ifdef __cplusplus
 }
 #endif
-
-#endif /* __SCRIPT_ERROR_CGO_H__ */

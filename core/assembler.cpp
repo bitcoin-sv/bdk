@@ -29,7 +29,7 @@ namespace bsv {
         const size_t len = data.size();
         std::string hex; hex.reserve(2 * len);
         for (uint8_t byte : data) {
-            hex.push_back(hexmap[(byte >> 4) & 0x0F]); // Upper nibble (4 bits)
+            hex.push_back(hexmap[byte >> 4]);          // Upper nibble (4 bits): uint8_t >> 4 is already 0..15
             hex.push_back(hexmap[byte & 0x0F]);        // Lower nibble (4 bits)
         }
         return hex;

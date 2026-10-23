@@ -1,5 +1,4 @@
-#ifndef __CHAINPARAMS_BDK_HPP__
-#define __CHAINPARAMS_BDK_HPP__
+#pragma once
 
 #include <string>
 #include <functional>
@@ -35,11 +34,12 @@ namespace bsv
         // Create the chain param object based on its name
         std::unique_ptr<CChainParams> Create(const std::string& name) const;
 
+        ChainParamsRegistry(const ChainParamsRegistry&) = delete;
+        ChainParamsRegistry& operator=(const ChainParamsRegistry&) = delete;
+
     private:
         // Prevent construction from outside
         ChainParamsRegistry() = default;
-        ChainParamsRegistry(const ChainParamsRegistry&) = delete;
-        ChainParamsRegistry& operator=(const ChainParamsRegistry&) = delete;
 
         std::unordered_map<std::string, ChainParamsCreator> registry_;
     };
@@ -61,4 +61,3 @@ namespace bsv
     };
 }
 
-#endif /* __CHAINPARAMS_BDK_HPP__ */

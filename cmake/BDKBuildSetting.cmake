@@ -264,3 +264,62 @@ function(bdkSetThreadSafetyAnnotations)
   add_compile_options("$<$<COMPILE_LANGUAGE:CXX>:SHELL:-include \"${_override_hdr}\">")
   message(STATUS "Thread-safety annotations disabled: ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION} cannot expand parameter packs in them")
 endfunction()
+
+## First-party paths that are copies or close derivatives of upstream code. They
+## are held to upstream's style, not ours, and every edit widens the diff against
+## their origin, so both the warning policy below and clang-tidy treat them like
+## bitcoin-sv itself. Relative to the checkout root.
+set(BDK_UPSTREAM_DERIVED_SOURCES
+  "test/core/script_tests_modified.cpp"      ## modified copy of bitcoin-sv src/test/script_tests.cpp
+  "core/sha256_arm_shani.cpp"                ## vendored Bitcoin Core ARMv8 SHA-2 transforms
+  "module/gobdk/bdkcgo/secp256k1_cloned.h"   ## copy of secp256k1.h ("DO NOT MODIFY")
+  CACHE STRING "First-party files treated as upstream code by the warning policy and clang-tidy (paths relative to the checkout root)")
+
+#### Per-source warning policy. Source properties are directory-scoped, so call
+#### this in every directory that compiles first-party or bitcoin-sv sources,
+#### before its targets are defined.
+####   - first-party .cpp under core/, module/ and test/ (minus the upstream-derived
+####     list) get bitcoin-sv's own warning set, plus -Werror with BDK_WARNINGS_AS_ERRORS;
+####   - bitcoin-sv sources compiled directly into BDK targets keep upstream's
+####     warning policy. They include upstream headers relative to their own
+####     directory, so the SYSTEM include directories do not silence warnings
+####     inside them (e.g. clang's -Wreturn-type on streams.h under NDEBUG, a
+####     configuration upstream never builds).
+function(bdkApplySourceWarningPolicy)
+  if(MSVC)
+    return()
+  endif()
+  get_property(_fp_all GLOBAL PROPERTY BDK_FIRST_PARTY_SRC_FILES)
+  if(NOT _fp_all)
+    file(GLOB_RECURSE _fp_all
+         "${CMAKE_SOURCE_DIR}/core/*.cpp" "${CMAKE_SOURCE_DIR}/module/*.cpp" "${CMAKE_SOURCE_DIR}/test/*.cpp")
+    foreach(_rel IN LISTS BDK_UPSTREAM_DERIVED_SOURCES)
+      get_filename_component(_abs "${_rel}" ABSOLUTE BASE_DIR "${CMAKE_SOURCE_DIR}")
+      if(NOT EXISTS "${_abs}")
+        message(FATAL_ERROR "BDK_UPSTREAM_DERIVED_SOURCES entry does not exist: ${_rel}")
+      endif()
+      list(REMOVE_ITEM _fp_all "${_abs}")
+    endforeach()
+    set_property(GLOBAL PROPERTY BDK_FIRST_PARTY_SRC_FILES "${_fp_all}")
+  endif()
+  ## bitcoin-sv's C++ warning set (src/CMakeLists.txt upstream), -Werror as its CI adds it
+  set(_fp_opts -Wall -Wextra -Wcast-align -Wformat -Wformat-security -Wshadow -Wvla -Wsuggest-override)
+  ## Not yet clean; each is switched on in its own commit with the fixes it needs
+  list(APPEND _fp_opts
+    -Wno-unused-parameter
+    -Wno-shadow
+    -Wno-range-loop-construct
+    -Wno-pessimizing-move
+    "$<$<CXX_COMPILER_ID:GNU>:-Wno-catch-value>")
+  if(BDK_WARNINGS_AS_ERRORS)
+    list(APPEND _fp_opts -Werror)
+  endif()
+  set_source_files_properties(${_fp_all} PROPERTIES COMPILE_OPTIONS "${_fp_opts}")
+
+  get_property(_bsv_all GLOBAL PROPERTY BDK_BSV_ALL_SRC_FILES)
+  if(NOT _bsv_all)
+    file(GLOB_RECURSE _bsv_all "${BDK_BSV_ROOT_DIR}/src/*.cpp")
+    set_property(GLOBAL PROPERTY BDK_BSV_ALL_SRC_FILES "${_bsv_all}")
+  endif()
+  set_source_files_properties(${_bsv_all} PROPERTIES COMPILE_OPTIONS "-Wno-return-type")
+endfunction()

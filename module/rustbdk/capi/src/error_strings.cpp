@@ -17,6 +17,7 @@ char* copy_c_string(const char* s)
     }
 
     const auto len = std::strlen(s);
+    // NOLINTNEXTLINE(cppcoreguidelines-no-malloc, cppcoreguidelines-owning-memory)
     auto* out = static_cast<char*>(std::malloc(len + 1));
     if (out == nullptr) {
         return nullptr;
@@ -28,6 +29,7 @@ char* copy_c_string(const char* s)
 
 char* copy_string_view(std::string_view s)
 {
+    // NOLINTNEXTLINE(cppcoreguidelines-no-malloc, cppcoreguidelines-owning-memory)
     auto* out = static_cast<char*>(std::malloc(s.size() + 1));
     if (out == nullptr) {
         return nullptr;
