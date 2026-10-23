@@ -136,7 +136,7 @@ static bsv::CMutableTransactionExtended BuildMemoryAttackTransaction(
     scriptPubKey << OP_SIZE << OP_NIP;      // leaves INT32_MAX (truthy) — valid termination
 
     const Amount amount{1000000};
-    CMutableTransaction txCredit = BuildCreditingTransaction(scriptPubKey, amount);
+    const CMutableTransaction txCredit = BuildCreditingTransaction(scriptPubKey, amount);
     CMutableTransaction txSpend  = BuildSpendingTransaction(scriptSig, txCredit);
 
     bsv::CMutableTransactionExtended eTX;
@@ -148,7 +148,7 @@ static bsv::CMutableTransactionExtended BuildMemoryAttackTransaction(
 // ============================================================
 // main
 // ============================================================
-
+// NOLINTNEXTLINE(bugprone-exception-escape)
 int main(int argc, char* argv[])
 {
     int numChains = 2;

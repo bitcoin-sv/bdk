@@ -18,6 +18,7 @@
 
 namespace po = boost::program_options;
 
+//NOLINTNEXTLINE(bugprone-exception-escape)
 int main(int argc, char* argv[])
 {
     // Hardcoded transaction data
@@ -104,10 +105,11 @@ int main(int argc, char* argv[])
     std::chrono::nanoseconds minDuration = std::chrono::nanoseconds::max();
     std::chrono::nanoseconds maxDuration(0);
 
-    for (int i = 0; i < iterations; ++i) {
-        auto start = std::chrono::high_resolution_clock::now();
+    for(int i = 0; i < iterations; ++i)
+    {
+        const auto start = std::chrono::high_resolution_clock::now();
         const auto results = se.ValidateBatch(batch);
-        auto end = std::chrono::high_resolution_clock::now();
+        const auto end = std::chrono::high_resolution_clock::now();
 
         if (results.size() != static_cast<size_t>(batchSize)) {
             std::cerr << "ERROR: ValidateBatch returned wrong number of results at iteration " << i << '\n';
@@ -121,7 +123,7 @@ int main(int argc, char* argv[])
             }
         }
 
-        auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+        const auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
         totalDuration += duration;
 
         if (duration < minDuration) {
@@ -133,11 +135,12 @@ int main(int argc, char* argv[])
     }
 
     // Calculate statistics
-    double avgNanoseconds = static_cast<double>(totalDuration.count()) / iterations;
-    double avgMicroseconds = avgNanoseconds / 1000.0;
-    double avgPerTx = avgNanoseconds / batchSize;
-    double totalSeconds = totalDuration.count() / 1e9;
-    int totalTx = iterations * batchSize;
+    // NOLINTBEGIN(*-narrowing-conversions)
+    const double avgNanoseconds = static_cast<double>(totalDuration.count()) / iterations;
+    const double avgMicroseconds = avgNanoseconds / 1000.0;
+    const double avgPerTx = avgNanoseconds / batchSize;
+    const double totalSeconds = totalDuration.count() / 1e9;
+    const int totalTx = iterations * batchSize;
 
     std::cout << '\n';
     std::cout << "Benchmark Results:" << '\n';
@@ -153,6 +156,7 @@ int main(int argc, char* argv[])
     std::cout << "Max:               " << std::setprecision(2) << maxDuration.count() / 1000.0 << " µs ("
               << maxDuration.count() << " ns)" << '\n';
     std::cout << "Throughput:        " << std::setprecision(0) << (totalTx / totalSeconds) << " tx/sec" << '\n';
+    // NOLINTEND(*-narrowing-conversions)
 
     return 0;
 }

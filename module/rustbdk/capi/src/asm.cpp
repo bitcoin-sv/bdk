@@ -16,7 +16,9 @@ void log_exception(const char* function_name, const char* message)
 {
     try {
         std::cerr << "bdkffi exception in " << function_name << ": " << message << '\n';
-    } catch (...) {
+    }
+    catch(...) // NOLINT(bugprone-empty-catch)
+    {
     }
 }
 

@@ -74,6 +74,7 @@ BOOST_AUTO_TEST_CASE(selected_at_load_before_threads_hash, *boost::unit_test::ti
     sha256_test::CheckInstalledBackend();
 
     constexpr int per_role = 4;
+    //NOLINTNEXTLINE(cppcoreguidelines-use-enum-class)
     enum Role { NetworkValidator, ChainNameValidator, Getter, HashOnly, Asm, RoleCount };
     constexpr int hashers = per_role * RoleCount;
     const int threads = hashers + (race_on_purpose ? 1 : 0);
@@ -85,7 +86,7 @@ BOOST_AUTO_TEST_CASE(selected_at_load_before_threads_hash, *boost::unit_test::ti
     for(int i = 0; i < hashers; ++i)
     {
         pool.emplace_back([&, i] {
-            std::vector<uint8_t> msg(64 * 1024 + i, static_cast<uint8_t>(i));
+            const std::vector<uint8_t> msg(64 * 1024 + i, static_cast<uint8_t>(i));
             go.arrive_and_wait();
             switch(static_cast<Role>(i % RoleCount))
             {

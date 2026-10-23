@@ -6,8 +6,8 @@
 
 struct CustomChainParams
 {
-    static const std::string TERATESTNET;        // "teratestnet"
-    static const std::string TERASCALINGTESTNET; // "tstn"
+    static constexpr const char* TERATESTNET = "teratestnet";
+    static constexpr const char* TERASCALINGTESTNET = "tstn";
 };
 
 class CChainParams;
@@ -22,9 +22,10 @@ namespace bsv
     using ChainParamsCreator = std::function<std::unique_ptr<CChainParams>()>;
 
     // ChainParamsRegistry implemented as a singleton
-    class ChainParamsRegistry {
+    // NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
+    class ChainParamsRegistry
+    {
     public:
-
         // Get the singleton instance (declared, but not defined here!)
         static ChainParamsRegistry& Instance();
 
@@ -53,10 +54,11 @@ namespace bsv
     template <typename T>
     class RegisterCustomChainParams {
     public:
-        RegisterCustomChainParams(const std::string& name) {
-            ChainParamsRegistry::Instance().Register(name, []() {
-                return std::make_unique<T>();
-                });
+        explicit RegisterCustomChainParams(const std::string& name)
+        {
+            ChainParamsRegistry::Instance().Register(name,
+                                                     []()
+                                                     { return std::make_unique<T>(); });
         }
     };
 }

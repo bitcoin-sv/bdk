@@ -18,7 +18,7 @@
 // Neither for the wasm variant or MSVC-compatible compilers (including clang-cl).
 #if (defined(__GNUC__) || defined(__clang__)) && !defined(_MSC_VER) && !defined(__EMSCRIPTEN__)
 #if defined(__x86_64__) || defined(__amd64__)
-#define BDK_SHA256_X86_HW 1
+#define BDK_SHA256_X86_HW 1 // NOLINT(cppcoreguidelines-macro-usage)
 #elif defined(__aarch64__)
 #define BDK_SHA256_ARM_HW 1
 #endif
