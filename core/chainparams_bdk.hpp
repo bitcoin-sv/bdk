@@ -6,8 +6,8 @@
 
 struct CustomChainParams
 {
-    static const std::string TERATESTNET;        // "teratestnet"
-    static const std::string TERASCALINGTESTNET; // "tstn"
+    static constexpr const char* TERATESTNET = "teratestnet";
+    static constexpr const char* TERASCALINGTESTNET = "tstn";
 };
 
 class CChainParams;

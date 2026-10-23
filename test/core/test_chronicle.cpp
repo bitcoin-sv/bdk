@@ -69,7 +69,7 @@ static constexpr int32_t POST_CHRONICLE_BLOCK_HEIGHT = 950000;
 static const Amount UTXO_AMOUNT{1'000'000};   // 0.01 BSV
 
 /// WIF private key shared across all tests.
-static const std::string WIF_KEY = "5HxWvvfubhXpYYpS3tJkw6fq9jE9j18THftkZjHHfmFiWtmAbrj";
+static constexpr const char* WIF_KEY = "5HxWvvfubhXpYYpS3tJkw6fq9jE9j18THftkZjHHfmFiWtmAbrj";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Policy-path flags for PostGenesis / pre-Chronicle era

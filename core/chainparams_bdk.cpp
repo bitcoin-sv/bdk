@@ -48,8 +48,6 @@ namespace bsv
 //////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////
 
-const std::string CustomChainParams::TERATESTNET = "teratestnet";
-const std::string CustomChainParams::TERASCALINGTESTNET = "tstn";
 
 // p2shHeight is not defined in teranode chaincfg; values mirror svnode
 // P2SH_ACTIVATION_TESTNET / P2SH_ACTIVATION_STN for the analogous networks.
@@ -108,5 +106,7 @@ class TeraScalingTestNetParams : public CChainParams {
 };
 
 // Registration TeraTestNetParams and TeraScalingTestNetParams to the factory
+// NOLINTNEXTLINE(bugprone-throwing-static-initialization): registered before main() by design
 static bsv::RegisterCustomChainParams<TeraTestNetParams> teraTestNetReg(CustomChainParams::TERATESTNET);
+// NOLINTNEXTLINE(bugprone-throwing-static-initialization): registered before main() by design
 static bsv::RegisterCustomChainParams<TeraScalingTestNetParams> teraScalingTestNetReg( CustomChainParams::TERASCALINGTESTNET);

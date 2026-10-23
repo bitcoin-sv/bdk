@@ -110,7 +110,7 @@ static const Amount UTXO_AMOUNT{1'000'000};   // 0.01 BSV
 
 /// WIF private key used to sign and unlock all test transactions.
 /// (same key used across the BDK example suite)
-static const std::string WIF_KEY = "5HxWvvfubhXpYYpS3tJkw6fq9jE9j18THftkZjHHfmFiWtmAbrj";
+static constexpr const char* WIF_KEY = "5HxWvvfubhXpYYpS3tJkw6fq9jE9j18THftkZjHHfmFiWtmAbrj";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Key helpers
@@ -667,7 +667,9 @@ static std::pair<CScript, CScript> BuildOp2Div()
 // Test-case table
 // ═══════════════════════════════════════════════════════════════════════════
 
-static const std::vector<OpcodeCase> kCases = {
+static const std::vector<OpcodeCase>& Cases()
+{
+    static const std::vector<OpcodeCase> cases = {
     // ── String / byte-array opcodes ─────────────────────────────────────
     {"cat",    "OP_CAT",    0x7E, "Concatenate two byte arrays",
      "scriptSig: <sig> <pk> <\"BSV\"> <\"!\">  |  scriptPubKey: OP_CAT <\"BSV!\"> OP_EQUALVERIFY ... OP_CHECKSIG",
@@ -731,17 +733,23 @@ static const std::vector<OpcodeCase> kCases = {
     {"2div",   "OP_2DIV",   0x8E, "Integer divide by 2  [Chronicle, block 943,816]",
      "scriptSig: <sig> <pk> <10>  |  scriptPubKey: OP_2DIV <5> OP_EQUALVERIFY ... OP_CHECKSIG",
      BuildOp2Div},
-};
+    };
+    return cases;
+}
 
-// Index kCases by key for O(1) lookup when a single opcode is requested.
+// Index the cases by key for O(1) lookup when a single opcode is requested.
 static std::map<std::string, const OpcodeCase*> BuildCaseIndex()
 {
     std::map<std::string, const OpcodeCase*> idx;
-    for (const auto& tc : kCases)
+    for (const auto& tc : Cases())
         idx[tc.key] = &tc;
     return idx;
 }
-static const std::map<std::string, const OpcodeCase*> kCaseIndex = BuildCaseIndex();
+static const std::map<std::string, const OpcodeCase*>& CaseIndex()
+{
+    static const std::map<std::string, const OpcodeCase*> index = BuildCaseIndex();
+    return index;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // RunCase — executes exactly one opcode test case
@@ -806,7 +814,7 @@ int main(int argc, char* argv[])
     // ── CLI ──────────────────────────────────────────────────────────────
     // Build the list of valid keys for the help string.
     std::string keyList = "all";
-    for (const auto& tc : kCases)
+    for (const auto& tc : Cases())
         keyList += ", " + tc.key;
 
     std::string opcodeKey = "all";
@@ -832,7 +840,7 @@ int main(int argc, char* argv[])
     }
 
     // Validate the selector (unless it is "all")
-    if (opcodeKey != "all" && kCaseIndex.find(opcodeKey) == kCaseIndex.end())
+    if (opcodeKey != "all" && CaseIndex().find(opcodeKey) == CaseIndex().end())
     {
         std::cerr << "Unknown opcode key '" << opcodeKey << "'.\n" << desc << "\n";
         return 1;
@@ -848,7 +856,7 @@ int main(int argc, char* argv[])
 
     // ── Header ───────────────────────────────────────────────────────────
     const bool runAll = (opcodeKey == "all");
-    const size_t total = runAll ? kCases.size() : 1;
+    const size_t total = runAll ? Cases().size() : 1;
 
     std::cout << std::string(70, '=') << "\n"
               << "  Special Opcode Verification — real-world signed transactions\n"
@@ -872,9 +880,9 @@ int main(int argc, char* argv[])
     {
         // Loop through every case; each iteration calls RunCase identically
         // to how a single-opcode run would call it.
-        for (size_t i = 0; i < kCases.size(); ++i)
+        for (size_t i = 0; i < Cases().size(); ++i)
         {
-            if (RunCase(kCases[i], i + 1, total, key, se, utxoHeights))
+            if (RunCase(Cases()[i], i + 1, total, key, se, utxoHeights))
                 ++passed;
             else
                 ++failed;
@@ -883,7 +891,7 @@ int main(int argc, char* argv[])
     else
     {
         // Single-opcode run — same RunCase call, index shown as 1/1.
-        if (RunCase(*kCaseIndex.at(opcodeKey), 1, 1, key, se, utxoHeights))
+        if (RunCase(*CaseIndex().at(opcodeKey), 1, 1, key, se, utxoHeights))
             ++passed;
         else
             ++failed;

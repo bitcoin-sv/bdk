@@ -54,14 +54,14 @@ BOOST_AUTO_TEST_SUITE(test_txvalidator)
 // A custom chain params
 class MyParams : public CChainParams {
 public:
-    static const std::string CustomName;
+    static constexpr const char* CustomName = "MyParams";
 
     MyParams() = default;
 };
 
-const std::string MyParams::CustomName = "MyParams";
 
 // Registration custom chain params
+// NOLINTNEXTLINE(bugprone-throwing-static-initialization): registered before main() by design
 static bsv::RegisterCustomChainParams<MyParams> myParamsReg(MyParams::CustomName);
 
 // BDK installs the fastest SHA-256 transforms this CPU supports while it is
@@ -941,21 +941,25 @@ static void CorruptP2PKHSignature(bsv::CMutableTransactionExtended& eTx, size_t 
     eTx.mtx.vin[index].scriptSig = CScript() << sig << pubkey;
 }
 
-static const std::array<SigHashType, 6> FORKID_SIGHASH_TYPES{
+static const std::array<SigHashType, 6>& ForkIdSigHashTypes()
+{
+    static const std::array<SigHashType, 6> types{
     SigHashType().withBaseType(BaseSigHashType::ALL).withForkId(),
     SigHashType().withBaseType(BaseSigHashType::NONE).withForkId(),
     SigHashType().withBaseType(BaseSigHashType::SINGLE).withForkId(),
     SigHashType().withBaseType(BaseSigHashType::ALL).withForkId().withAnyoneCanPay(),
     SigHashType().withBaseType(BaseSigHashType::NONE).withForkId().withAnyoneCanPay(),
     SigHashType().withBaseType(BaseSigHashType::SINGLE).withForkId().withAnyoneCanPay(),
-};
+    };
+    return types;
+}
 
 // Each FORKID sighash type, with and without ANYONECANPAY, on every input of a
 // multi-input, multi-output tx. SINGLE has a matching output for every input.
 BOOST_AUTO_TEST_CASE(forkid_sighash_types_validate_on_multi_input_tx)
 {
     const bsv::CTxValidator se("main");
-    for (const SigHashType& type : FORKID_SIGHASH_TYPES) {
+    for (const SigHashType& type : ForkIdSigHashTypes()) {
         const std::vector<SigHashType> types(3, type);
         const auto etxBin = SerializeExtended(MakeSignedP2PKHSpend(types, /*nOutputs=*/3));
         for (const bool consensus : { true, false }) {
@@ -971,7 +975,7 @@ BOOST_AUTO_TEST_CASE(forkid_sighash_types_validate_on_multi_input_tx)
 BOOST_AUTO_TEST_CASE(mixed_forkid_sighash_types_validate_in_one_tx)
 {
     const bsv::CTxValidator se("main");
-    const std::vector<SigHashType> types(FORKID_SIGHASH_TYPES.begin(), FORKID_SIGHASH_TYPES.end());
+    const std::vector<SigHashType> types(ForkIdSigHashTypes().begin(), ForkIdSigHashTypes().end());
     const auto etxBin = SerializeExtended(MakeSignedP2PKHSpend(types, /*nOutputs=*/types.size()));
     for (const bool consensus : { true, false }) {
         const auto status = ValidateP2PKHSpend(se, etxBin, types.size(), consensus);

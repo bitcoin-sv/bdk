@@ -5,6 +5,8 @@
 #include <iomanip>
 #include <vector>
 #include <string>
+#include <array>
+#include <string_view>
 #include <stdexcept>
 #include <chrono>
 
@@ -21,11 +23,11 @@ namespace po = boost::program_options;
 // TXID: d43ad4d4b46632b311b844117a5a9e9598afd1ee13e95d98106bf2adeae0bad7
 // Block: 620940
 // Size: 192 bytes (1 input, 1 output, no OP_RETURN)
-const std::string CHAIN_NET = "main";
+constexpr const char* CHAIN_NET = "main";
 const int32_t BLOCK_HEIGHT = 620940;
-const std::string TX_ID = "d43ad4d4b46632b311b844117a5a9e9598afd1ee13e95d98106bf2adeae0bad7";
-const std::string TX_HEX_EXTENDED = "010000000000000000ef0120fa0d2c5974cfe6e3aec71f7f6539cfa1c1e474082d2cdb41fb830f6267b7d7000000006b4830450221008788b545ebd6ebcb15f938045b71c1fa7efafd55d1f4e64e96602a04f3214cda0220717ddadfa7d1dc6a22ccb077350aef7a2073ee58fe780d86b77a31c24c664a21412103ef28c47337b05ec3f14b63d904db7ae023e897389dbdbf531221e13fd5e5b105ffffffffdc3de103000000001976a91437fb14a40d021abbb1763497f963a130286d1ad188ac017239e103000000001976a914962eba38504bcfb140ff0246afa795658812b42788ac00000000";
-const std::vector<int32_t> UTXO_HEIGHTS = {574441};
+constexpr const char* TX_ID = "d43ad4d4b46632b311b844117a5a9e9598afd1ee13e95d98106bf2adeae0bad7";
+constexpr std::string_view TX_HEX_EXTENDED = "010000000000000000ef0120fa0d2c5974cfe6e3aec71f7f6539cfa1c1e474082d2cdb41fb830f6267b7d7000000006b4830450221008788b545ebd6ebcb15f938045b71c1fa7efafd55d1f4e64e96602a04f3214cda0220717ddadfa7d1dc6a22ccb077350aef7a2073ee58fe780d86b77a31c24c664a21412103ef28c47337b05ec3f14b63d904db7ae023e897389dbdbf531221e13fd5e5b105ffffffffdc3de103000000001976a91437fb14a40d021abbb1763497f963a130286d1ad188ac017239e103000000001976a914962eba38504bcfb140ff0246afa795658812b42788ac00000000";
+constexpr std::array<int32_t, 1> UTXO_HEIGHTS = {574441};
 
 ////////////////////////////////////////////////////////////////////////////////
 // Main benchmark program
@@ -68,7 +70,7 @@ int main(int argc, char* argv[])
     std::cout << '\n';
 
     // Preparse the transaction binary
-    const std::vector<uint8_t> txBinExtended = ParseHex(TX_HEX_EXTENDED);
+    const std::vector<uint8_t> txBinExtended = ParseHex(std::string{TX_HEX_EXTENDED});
     const std::span<const int32_t> utxoHeights(UTXO_HEIGHTS);
     const bool consensus = !disableConsensus;
 

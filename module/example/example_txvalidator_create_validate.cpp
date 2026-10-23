@@ -21,7 +21,6 @@
 #include "utilstrencodings.h"
 #include "txvalidator.hpp"
 
-const std::string strSecret1 = "5HxWvvfubhXpYYpS3tJkw6fq9jE9j18THftkZjHHfmFiWtmAbrj";
 
 // Build a crediting transaction with P2SH output
 // This creates a transaction with a Pay-to-Script-Hash output that locks coins

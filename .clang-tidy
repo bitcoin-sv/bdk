@@ -13,7 +13,6 @@ Checks: >
   -*,
 
   bugprone-*,
-  -bugprone-throwing-static-initialization,
 
   clang-analyzer-*,
 
