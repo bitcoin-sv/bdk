@@ -1893,7 +1893,7 @@ BOOST_AUTO_TEST_CASE(custom_flags_per_input_through_verify_script, PARALLEL_TEST
     for (const bool consensus : { true, false }) {
         const uint32_t standard = se.CalculateFlags(P2PKH_UTXO_HEIGHT, P2PKH_BLOCK_HEIGHT, consensus);
         std::vector<uint32_t> flags(PARITY_INPUTS, standard);
-        flags[70] = standard & ~SCRIPT_ENABLE_SIGHASH_FORKID;
+        flags[70] = standard & ~static_cast<uint32_t>(SCRIPT_ENABLE_SIGHASH_FORKID);
 
         for (const bool badSig : { false, true }) {
             auto eTx = MakeParitySpend();
