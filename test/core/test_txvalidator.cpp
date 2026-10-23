@@ -2146,14 +2146,41 @@ static std::vector<uint8_t> SignedP2PKHBin(size_t nInputs)
         /*nOutputs=*/1, /*precomputeForSigning=*/true));
 }
 
+// Hooks a probe replaced, in the order it installed them; the probe restores
+// them from its destructor.
+struct PreviousPoolAndInputHooks {
+    bsv::detail::InputPoolHook pool;
+    bsv::detail::InputHook input;
+};
+struct PreviousAllocationAndInputHooks {
+    bsv::detail::InputSourceAllocationHook allocation;
+    bsv::detail::InputHook input;
+};
+struct PreviousAllocationInputAndPoolHooks {
+    bsv::detail::InputSourceAllocationHook allocation;
+    bsv::detail::InputHook input;
+    bsv::detail::InputPoolHook pool;
+};
+struct PreviousInputAndReleaseHooks {
+    bsv::detail::InputHook input;
+    bsv::detail::HelperReleasedCoreHook release;
+};
+
 // These phases are reached through the public APIs before a job can exist.
 // Counting them prevents hashing and transaction checks escaping the budget.
 class ValidationBudgetProbe {
 public:
-    ValidationBudgetProbe() { active = this; previous = bsv::detail::SetValidationStageHookForTesting(&Hook); }
+    ValidationBudgetProbe() : previous{ Install(this) } {}
     ~ValidationBudgetProbe() { bsv::detail::SetValidationStageHookForTesting(previous); active = nullptr; }
     std::array<size_t, 3> calls{}, outsideBudget{};
+    const bsv::detail::ValidationStageHook previous;
 private:
+    // Publishes the probe before installing the hook that reads it.
+    static bsv::detail::ValidationStageHook Install(ValidationBudgetProbe* self)
+    {
+        active = self;
+        return bsv::detail::SetValidationStageHookForTesting(&Hook);
+    }
     static void Hook(bsv::detail::ValidationStage stage)
     {
         const auto i = static_cast<size_t>(stage);
@@ -2161,7 +2188,6 @@ private:
         if (bsv::detail::BusyThreadCountForTesting() != 1)
             ++active->outsideBudget[i];
     }
-    bsv::detail::ValidationStageHook previous;
     static inline ValidationBudgetProbe* active = nullptr;
 };
 
@@ -2198,23 +2224,26 @@ public:
         return timed.IsCanceled();
     }
     std::atomic<size_t> otherThreadReads{ 0 };
-private:
     const std::thread::id owner;
     const task::CCancellationToken timed;
 };
 
 class CpuBusyHelpers {
 public:
-    explicit CpuBusyHelpers(size_t helpers) : helpers{ helpers }
-    {
-        active = this;
-        previous = bsv::detail::SetInputHookForTesting(&Hook);
-    }
+    explicit CpuBusyHelpers(size_t helpers) : helpers{ helpers }, previous{ Install(this) } {}
     ~CpuBusyHelpers() { bsv::detail::SetInputHookForTesting(previous); }
     std::atomic<size_t> burned{ 0 }, arrived{ 0 };
     std::atomic<bool> timedOut{ false };
+    const size_t helpers;
+    const bsv::detail::InputHook previous;
     static inline thread_local bool isCaller = false;
 private:
+    // Publishes the probe before installing the hook that reads it.
+    static bsv::detail::InputHook Install(CpuBusyHelpers* self)
+    {
+        active = self;
+        return bsv::detail::SetInputHookForTesting(&Hook);
+    }
     static void Hook(size_t, bsv::detail::InputEvent event)
     {
         if (event != bsv::detail::InputEvent::Claimed)
@@ -2234,8 +2263,6 @@ private:
             ++self.burned;
         }
     }
-    const size_t helpers;
-    bsv::detail::InputHook previous;
     static inline CpuBusyHelpers* active = nullptr;
     static inline thread_local bool burnedOnThisJob = false;
 };
@@ -2282,11 +2309,7 @@ BOOST_AUTO_TEST_CASE(thread_cpu_budget_is_polled_only_by_the_caller, PARALLEL_TE
 class EarlyStopProbe final : public task::CCancellationSource {
 public:
     explicit EarlyStopProbe(size_t failingIndex, bool cancelOnFailure = false)
-        : failingIndex{ failingIndex }, cancelOnFailure{ cancelOnFailure }
-    {
-        active = this;
-        previous = bsv::detail::SetInputHookForTesting(&Hook);
-    }
+        : failingIndex{ failingIndex }, cancelOnFailure{ cancelOnFailure }, previous{ Install(this) } {}
     ~EarlyStopProbe() override
     {
         bsv::detail::SetInputHookForTesting(previous);
@@ -2298,8 +2321,20 @@ public:
     std::atomic<uint64_t> higherPolls{ 0 };
     std::atomic<size_t> entered{ 0 };
     std::atomic<bool> timedOut{ false };
+    const size_t failingIndex;
+    const bool cancelOnFailure;
+    std::atomic<bool> failed{ false };
+    std::array<std::atomic<bool>, 32> finished{};
+    const bsv::detail::InputHook previous;
 
 private:
+    // Publishes the probe before installing the hook that reads it.
+    static bsv::detail::InputHook Install(EarlyStopProbe* self)
+    {
+        active = self;
+        return bsv::detail::SetInputHookForTesting(&Hook);
+    }
+
     static void Hook(size_t index, bsv::detail::InputEvent event)
     {
         auto& self = *active;
@@ -2330,11 +2365,6 @@ private:
         }
     }
 
-    const size_t failingIndex;
-    const bool cancelOnFailure;
-    std::atomic<bool> failed{ false };
-    std::array<std::atomic<bool>, 32> finished{};
-    bsv::detail::InputHook previous;
     static inline EarlyStopProbe* active = nullptr;
     static inline thread_local uint64_t inputPolls = 0;
 };
@@ -2449,12 +2479,7 @@ BOOST_AUTO_TEST_CASE(early_stop_keeps_serial_verdict_for_mixed_failures, PARALLE
 // This catches dropping the caller token when constructing the input token.
 class CancelDuringInput final : public task::CCancellationSource {
 public:
-    CancelDuringInput() : owner{ std::this_thread::get_id() }
-    {
-        inJob = false;
-        active = this;
-        previous = bsv::detail::SetInputHookForTesting(&Hook);
-    }
+    CancelDuringInput() : owner{ std::this_thread::get_id() }, previous{ Install(this) } {}
     ~CancelDuringInput() override { bsv::detail::SetInputHookForTesting(previous); }
     bool IsCanceled() override
     {
@@ -2467,7 +2492,16 @@ public:
     }
     std::atomic<uint64_t> polls{ 0 }, helperPolls{ 0 };
     std::atomic<bool> published{ false }, timedOut{ false };
+    const std::thread::id owner;
+    const bsv::detail::InputHook previous;
 private:
+    // Publishes the probe before installing the hook that reads it.
+    static bsv::detail::InputHook Install(CancelDuringInput* self)
+    {
+        inJob = false;
+        active = self;
+        return bsv::detail::SetInputHookForTesting(&Hook);
+    }
     static void Hook(size_t, bsv::detail::InputEvent event)
     {
         auto& self = *active;
@@ -2483,11 +2517,9 @@ private:
                 self.timedOut = true;
         }
     }
-    const std::thread::id owner;
     static inline CancelDuringInput* active = nullptr;
     static inline thread_local bool inJob = false;
     static inline thread_local size_t helperInputPolls = 0;
-    bsv::detail::InputHook previous;
 };
 
 BOOST_AUTO_TEST_CASE(caller_cancel_during_parallel_input_returns_cancelled, PARALLEL_TEST_CASE_DECORATORS)
@@ -2515,14 +2547,20 @@ BOOST_AUTO_TEST_CASE(caller_cancel_during_parallel_input_returns_cancelled, PARA
 // valid input, or after a bad input and every lower input have finished.
 class CancelAfterVerdict final : public task::CCancellationSource {
 public:
-    explicit CancelAfterVerdict(size_t failingIndex) : failingIndex{ failingIndex }
-    {
-        active = this;
-        previous = bsv::detail::SetInputHookForTesting(&Hook);
-    }
+    explicit CancelAfterVerdict(size_t failingIndex) : failingIndex{ failingIndex }, previous{ Install(this) } {}
     ~CancelAfterVerdict() override { bsv::detail::SetInputHookForTesting(previous); }
     std::atomic<bool> timedOut{ false };
+    const size_t failingIndex;
+    std::array<std::atomic<bool>, 32> finished{};
+    std::atomic<size_t> count{ 0 };
+    const bsv::detail::InputHook previous;
 private:
+    // Publishes the probe before installing the hook that reads it.
+    static bsv::detail::InputHook Install(CancelAfterVerdict* self)
+    {
+        active = self;
+        return bsv::detail::SetInputHookForTesting(&Hook);
+    }
     static void Hook(size_t index, bsv::detail::InputEvent event)
     {
         if (event != bsv::detail::InputEvent::Verified)
@@ -2542,10 +2580,6 @@ private:
             self.Cancel();
         }
     }
-    const size_t failingIndex;
-    std::array<std::atomic<bool>, 32> finished{};
-    std::atomic<size_t> count{ 0 };
-    bsv::detail::InputHook previous;
     static inline CancelAfterVerdict* active = nullptr;
 };
 
@@ -2585,12 +2619,7 @@ BOOST_AUTO_TEST_CASE(completed_verdict_survives_cancellation_in_serial_and_paral
 // stops without completing. The caller observes cancellation in its interpreter.
 class CancelBelowFailure final : public task::CCancellationSource {
 public:
-    CancelBelowFailure() : owner{ std::this_thread::get_id() }
-    {
-        inJob = false;
-        active = this;
-        previous = bsv::detail::SetInputHookForTesting(&Hook);
-    }
+    CancelBelowFailure() : owner{ std::this_thread::get_id() }, previous{ Install(this) } {}
     ~CancelBelowFailure() override { bsv::detail::SetInputHookForTesting(previous); }
     bool IsCanceled() override
     {
@@ -2602,7 +2631,16 @@ public:
         return CCancellationSource::IsCanceled();
     }
     std::atomic<bool> failure{ false }, published{ false }, timedOut{ false }, callerClaimed{ false };
+    const std::thread::id owner;
+    const bsv::detail::InputHook previous;
 private:
+    // Publishes the probe before installing the hook that reads it.
+    static bsv::detail::InputHook Install(CancelBelowFailure* self)
+    {
+        inJob = false;
+        active = self;
+        return bsv::detail::SetInputHookForTesting(&Hook);
+    }
     static void Hook(size_t index, bsv::detail::InputEvent event)
     {
         auto& self = *active;
@@ -2624,8 +2662,6 @@ private:
             && !WaitFor([&] { return self.published.load(); }))
             self.timedOut = true;
     }
-    const std::thread::id owner;
-    bsv::detail::InputHook previous;
     static inline CancelBelowFailure* active = nullptr;
     static inline thread_local bool inJob = false;
 };
@@ -2667,11 +2703,7 @@ BOOST_AUTO_TEST_CASE(cancelled_lower_input_prevents_a_higher_failure_verdict, PA
 // thread still gets to run while the caller and helpers are on a job.
 class SlowInputs {
 public:
-    explicit SlowInputs(std::chrono::milliseconds delay)
-    {
-        sleepMs.store(delay.count());
-        previous = bsv::detail::SetInputHookForTesting(&SlowInputs::Hook);
-    }
+    explicit SlowInputs(std::chrono::milliseconds delay) : previous{ Install(delay) } {}
     ~SlowInputs() { bsv::detail::SetInputHookForTesting(previous); }
     SlowInputs(const SlowInputs&) = delete;
     SlowInputs& operator=(const SlowInputs&) = delete;
@@ -2682,8 +2714,14 @@ private:
         if (event == bsv::detail::InputEvent::Claimed)
             std::this_thread::sleep_for(std::chrono::milliseconds(sleepMs.load()));
     }
+    // Sets the delay before installing the hook that reads it.
+    static bsv::detail::InputHook Install(std::chrono::milliseconds delay)
+    {
+        sleepMs.store(delay.count());
+        return bsv::detail::SetInputHookForTesting(&SlowInputs::Hook);
+    }
     static inline std::atomic<long long> sleepMs{ 0 };
-    bsv::detail::InputHook previous = nullptr;
+    const bsv::detail::InputHook previous;
 };
 
 // Inputs verified on helpers while validating `etxBin` up to `calls` times,
@@ -3015,15 +3053,7 @@ BOOST_AUTO_TEST_CASE(tx_without_outputs_matches_serial, PARALLEL_TEST_CASE_DECOR
 // its own participant, so the job must have as many participants as indices.
 class FailureOrder {
 public:
-    explicit FailureOrder(std::vector<size_t> order)
-    {
-        std::lock_guard lock{ mutex };
-        sequence = std::move(order);
-        arrived.clear();
-        released = 0;
-        timedOut = false;
-        previous = bsv::detail::SetInputHookForTesting(&FailureOrder::Hook);
-    }
+    explicit FailureOrder(std::vector<size_t> order) : previous{ Install(std::move(order)) } {}
     ~FailureOrder() { bsv::detail::SetInputHookForTesting(previous); }
     FailureOrder(const FailureOrder&) = delete;
     FailureOrder& operator=(const FailureOrder&) = delete;
@@ -3070,7 +3100,18 @@ private:
     static inline std::vector<size_t> arrived;
     static inline size_t released = 0;
     static inline bool timedOut = false;
-    bsv::detail::InputHook previous = nullptr;
+
+    // Resets the order before installing the hook that follows it.
+    static bsv::detail::InputHook Install(std::vector<size_t> order)
+    {
+        std::lock_guard lock{ mutex };
+        sequence = std::move(order);
+        arrived.clear();
+        released = 0;
+        timedOut = false;
+        return bsv::detail::SetInputHookForTesting(&FailureOrder::Hook);
+    }
+    const bsv::detail::InputHook previous;
 };
 
 // Three failing inputs recorded in the order 2, 0, 1: the job keeps lowering
@@ -3250,17 +3291,11 @@ BOOST_AUTO_TEST_CASE(large_tx_started_with_every_core_busy_takes_a_helper_when_o
 // holding the pool mutex. Only BeforeOffer and claimed inputs may wait.
 class ReleaseBeforeOffer {
 public:
-    ReleaseBeforeOffer()
-    {
-        active.store(this);
-        previousPool = bsv::detail::SetInputPoolHookForTesting(&PoolHook);
-        previousInput = bsv::detail::SetInputHookForTesting(&InputHook);
-        bsv::detail::WakeInputHelpersForTesting();
-    }
+    ReleaseBeforeOffer() : previous{ Install(this) } { bsv::detail::WakeInputHelpersForTesting(); }
     ~ReleaseBeforeOffer()
     {
-        bsv::detail::SetInputHookForTesting(previousInput);
-        bsv::detail::SetInputPoolHookForTesting(previousPool);
+        bsv::detail::SetInputHookForTesting(previous.input);
+        bsv::detail::SetInputPoolHookForTesting(previous.pool);
         // Synchronize with any old Waiting callback before destroying its state.
         bsv::detail::WakeInputHelpersForTesting();
         active.store(nullptr);
@@ -3273,8 +3308,17 @@ public:
     static inline thread_local bool largeCaller = false;
     std::atomic<bool> beforeOffer{ false }, resumeOffer{ false };
     std::atomic<bool> helperClaimed{ false }, releaseInputs{ false }, timedOut{ false };
+    std::mutex mutex;
+    std::map<std::thread::id, bool> parked;
+    const PreviousPoolAndInputHooks previous;
 
 private:
+    // Publishes the probe before installing the hooks that read it.
+    static PreviousPoolAndInputHooks Install(ReleaseBeforeOffer* self)
+    {
+        active.store(self);
+        return { bsv::detail::SetInputPoolHookForTesting(&PoolHook), bsv::detail::SetInputHookForTesting(&InputHook) };
+    }
     static void PoolHook(bsv::detail::InputPoolEvent event)
     {
         auto& self = *active.load();
@@ -3297,10 +3341,6 @@ private:
         if (!WaitFor([&] { return self.releaseInputs.load(); }, std::chrono::milliseconds(20000)))
             self.timedOut = true;
     }
-    std::mutex mutex;
-    std::map<std::thread::id, bool> parked;
-    bsv::detail::InputPoolHook previousPool;
-    bsv::detail::InputHook previousInput;
     static inline std::atomic<ReleaseBeforeOffer*> active{ nullptr };
 };
 
@@ -3319,7 +3359,6 @@ public:
         return false;
     }
     std::atomic<bool> entered{ false }, release{ false }, timedOut{ false };
-private:
     size_t polls = 0;  // read only by this source's one VerifySpend caller
 };
 
@@ -3445,18 +3484,12 @@ BOOST_AUTO_TEST_CASE(freeing_one_core_wakes_a_parked_helper, PARALLEL_TEST_CASE_
 // its core. Only another helper can then claim the queued job's remaining input.
 class HelperReleaseOrder {
 public:
-    HelperReleaseOrder()
-    {
-        firstCallerClaimed = secondCallerClaimed = firstHelperClaimed = false;
-        firstHelperReleased = queuedHelperClaimed = releaseFirstHelper = releaseAll = false;
-        previousInput = bsv::detail::SetInputHookForTesting(&OnInput);
-        previousRelease = bsv::detail::SetHelperReleasedCoreHookForTesting(&OnRelease);
-    }
+    HelperReleaseOrder() : previous{ Install() } {}
     ~HelperReleaseOrder()
     {
         releaseFirstHelper = releaseAll = true;
-        bsv::detail::SetInputHookForTesting(previousInput);
-        bsv::detail::SetHelperReleasedCoreHookForTesting(previousRelease);
+        bsv::detail::SetInputHookForTesting(previous.input);
+        bsv::detail::SetHelperReleasedCoreHookForTesting(previous.release);
     }
     HelperReleaseOrder(const HelperReleaseOrder&) = delete;
     HelperReleaseOrder& operator=(const HelperReleaseOrder&) = delete;
@@ -3493,9 +3526,16 @@ private:
         WaitFor([] { return releaseAll.load(); }, std::chrono::milliseconds(20000));
     }
 
+    // Clears the flags before installing the hooks that set them.
+    static PreviousInputAndReleaseHooks Install()
+    {
+        firstCallerClaimed = secondCallerClaimed = firstHelperClaimed = false;
+        firstHelperReleased = queuedHelperClaimed = releaseFirstHelper = releaseAll = false;
+        return { bsv::detail::SetInputHookForTesting(&OnInput), bsv::detail::SetHelperReleasedCoreHookForTesting(&OnRelease) };
+    }
+
     static inline thread_local bool firstHelper = false;
-    bsv::detail::InputHook previousInput = nullptr;
-    bsv::detail::HelperReleasedCoreHook previousRelease = nullptr;
+    const PreviousInputAndReleaseHooks previous;
 };
 
 BOOST_AUTO_TEST_CASE(leaving_helper_wakes_another_for_a_queued_job, PARALLEL_TEST_CASE_DECORATORS)
@@ -3559,14 +3599,7 @@ public:
         size_t stackBytes;
     };
 
-    explicit ClaimRecorder(bool holdCallerOnFirstInput)
-    {
-        std::lock_guard lock{ mutex };
-        claims.clear();
-        caller = std::this_thread::get_id();
-        hold = holdCallerOnFirstInput;
-        previous = bsv::detail::SetInputHookForTesting(&ClaimRecorder::Hook);
-    }
+    explicit ClaimRecorder(bool holdCallerOnFirstInput) : previous{ Install(holdCallerOnFirstInput) } {}
     ~ClaimRecorder() { bsv::detail::SetInputHookForTesting(previous); }
     ClaimRecorder(const ClaimRecorder&) = delete;
     ClaimRecorder& operator=(const ClaimRecorder&) = delete;
@@ -3624,7 +3657,17 @@ private:
     static inline std::map<size_t, Claim> claims;
     static inline std::thread::id caller;
     static inline bool hold = false;
-    bsv::detail::InputHook previous = nullptr;
+
+    // Clears the record before installing the hook that fills it.
+    static bsv::detail::InputHook Install(bool holdCallerOnFirstInput)
+    {
+        std::lock_guard lock{ mutex };
+        claims.clear();
+        caller = std::this_thread::get_id();
+        hold = holdCallerOnFirstInput;
+        return bsv::detail::SetInputHookForTesting(&ClaimRecorder::Hook);
+    }
+    const bsv::detail::InputHook previous;
 };
 
 // The test-only counters (inputs and participations)
@@ -3698,6 +3741,14 @@ public:
     std::atomic<size_t> callerVerified{ 0 }, queuedAtClose{ std::numeric_limits<size_t>::max() };
     std::atomic<bool> callerAttempted{ false }, timedOut{ false }, helperHeld{ false }, closed{ false };
     std::atomic<bool> retriedHelper{ false }, failedHelperParked{ false };
+    std::mutex mutex;
+    std::map<std::thread::id, size_t> attempts;
+    bsv::detail::InputPoolHook previousPool;
+    const bool failHelpers;
+    const std::thread::id owner;
+    const int64_t previousHelpers;
+    bsv::detail::InputSourceAllocationHook previousAllocation;
+    bsv::detail::InputHook previousInput;
 private:
     static void Allocate(bool helper)
     {
@@ -3761,14 +3812,6 @@ private:
             }
         }
     }
-    std::mutex mutex;
-    std::map<std::thread::id, size_t> attempts;
-    bsv::detail::InputPoolHook previousPool;
-    const bool failHelpers;
-    const std::thread::id owner;
-    const int64_t previousHelpers;
-    bsv::detail::InputSourceAllocationHook previousAllocation;
-    bsv::detail::InputHook previousInput;
     static inline std::atomic<InputSourceAllocationFailure*> active{ nullptr };
 };
 
@@ -3808,21 +3851,26 @@ BOOST_AUTO_TEST_CASE(participant_source_allocation_failure_preserves_valid_resul
 class AllocationAfterCompletedHelpers {
 public:
     AllocationAfterCompletedHelpers(std::shared_ptr<task::CCancellationSource> source, bool fail)
-        : owner{ std::this_thread::get_id() }, source{ std::move(source) }, fail{ fail }
-    {
-        active = this;
-        previousAllocation = bsv::detail::SetInputSourceAllocationHookForTesting(&Allocate);
-        previousInput = bsv::detail::SetInputHookForTesting(&Input);
-    }
+        : owner{ std::this_thread::get_id() }, source{ std::move(source) }, fail{ fail }, previous{ Install(this) } {}
     ~AllocationAfterCompletedHelpers()
     {
-        bsv::detail::SetInputSourceAllocationHookForTesting(previousAllocation);
-        bsv::detail::SetInputHookForTesting(previousInput);
+        bsv::detail::SetInputSourceAllocationHookForTesting(previous.allocation);
+        bsv::detail::SetInputHookForTesting(previous.input);
         active = nullptr;
     }
     std::atomic<bool> callerEntered{ false }, timedOut{ false };
     std::atomic<size_t> helperVerified{ 0 }, callerVerified{ 0 };
+    const std::thread::id owner;
+    const std::shared_ptr<task::CCancellationSource> source;
+    const bool fail;
+    const PreviousAllocationAndInputHooks previous;
 private:
+    // Publishes the probe before installing the hooks that read it.
+    static PreviousAllocationAndInputHooks Install(AllocationAfterCompletedHelpers* self)
+    {
+        active = self;
+        return { bsv::detail::SetInputSourceAllocationHookForTesting(&Allocate), bsv::detail::SetInputHookForTesting(&Input) };
+    }
     static void Allocate(bool helper)
     {
         auto& self = *active.load();
@@ -3841,11 +3889,6 @@ private:
         if (std::this_thread::get_id() == self.owner) ++self.callerVerified;
         else if (++self.helperVerified == 32) self.source->Cancel();
     }
-    const std::thread::id owner;
-    const std::shared_ptr<task::CCancellationSource> source;
-    const bool fail;
-    bsv::detail::InputSourceAllocationHook previousAllocation;
-    bsv::detail::InputHook previousInput;
     static inline std::atomic<AllocationAfterCompletedHelpers*> active{ nullptr };
 };
 
@@ -4009,18 +4052,12 @@ class CancelWhileCallerWaits final : public task::CCancellationSource {
 public:
     enum class Action { CancelRunning, CancelCompleted, Throw, ThrowAfterFailure, ThrowCompleted, Idle };
     explicit CancelWhileCallerWaits(Action action = Action::CancelRunning)
-        : owner{ std::this_thread::get_id() }, action{ action }
-    {
-        active = this;
-        previousAllocation = bsv::detail::SetInputSourceAllocationHookForTesting(&Allocate);
-        previousInput = bsv::detail::SetInputHookForTesting(&Input);
-        previousPool = bsv::detail::SetInputPoolHookForTesting(&Pool);
-    }
+        : owner{ std::this_thread::get_id() }, action{ action }, previous{ Install(this) } {}
     ~CancelWhileCallerWaits() override
     {
-        bsv::detail::SetInputSourceAllocationHookForTesting(previousAllocation);
-        bsv::detail::SetInputHookForTesting(previousInput);
-        bsv::detail::SetInputPoolHookForTesting(previousPool);
+        bsv::detail::SetInputSourceAllocationHookForTesting(previous.allocation);
+        bsv::detail::SetInputHookForTesting(previous.input);
+        bsv::detail::SetInputPoolHookForTesting(previous.pool);
         bsv::detail::WakeInputHelpersForTesting();
         active = nullptr;
     }
@@ -4044,7 +4081,21 @@ public:
 #ifdef BOOST_CHRONO_HAS_THREAD_CLOCK
     auto WaitCpuMicros() const { return std::chrono::duration_cast<std::chrono::microseconds>(task::thread_clock::now() - closeCpu).count(); }
 #endif
+    const std::thread::id owner;
+    const Action action;
+    std::chrono::steady_clock::time_point closeWall;
+#ifdef BOOST_CHRONO_HAS_THREAD_CLOCK
+    task::thread_clock::time_point closeCpu;
+#endif
+    const PreviousAllocationInputAndPoolHooks previous;
 private:
+    // Publishes the probe before installing the hooks that read it.
+    static PreviousAllocationInputAndPoolHooks Install(CancelWhileCallerWaits* self)
+    {
+        active = self;
+        return { bsv::detail::SetInputSourceAllocationHookForTesting(&Allocate), bsv::detail::SetInputHookForTesting(&Input),
+                 bsv::detail::SetInputPoolHookForTesting(&Pool) };
+    }
     static void Allocate(bool helper)
     {
         auto& self = *active.load();
@@ -4097,15 +4148,6 @@ private:
         if (!WaitFor([&] { return published.load() || threw.load(); }, std::chrono::milliseconds(1000)))
             timedOut = true;
     }
-    const std::thread::id owner;
-    const Action action;
-    std::chrono::steady_clock::time_point closeWall;
-#ifdef BOOST_CHRONO_HAS_THREAD_CLOCK
-    task::thread_clock::time_point closeCpu;
-#endif
-    bsv::detail::InputSourceAllocationHook previousAllocation;
-    bsv::detail::InputHook previousInput;
-    bsv::detail::InputPoolHook previousPool;
     static inline std::atomic<CancelWhileCallerWaits*> active{ nullptr };
 };
 
@@ -4257,18 +4299,12 @@ BOOST_AUTO_TEST_CASE(uncancelled_tail_wait_does_not_busy_poll, PARALLEL_TEST_CAS
 class ThrowBeforeCallerCloses final : public task::CCancellationSource {
 public:
     explicit ThrowBeforeCallerCloses(bool promptStop = false)
-        : owner{ std::this_thread::get_id() }, promptStop_{ promptStop }
-    {
-        active = this;
-        previousAllocation = bsv::detail::SetInputSourceAllocationHookForTesting(&Allocate);
-        previousInput = bsv::detail::SetInputHookForTesting(&Input);
-        previousPool = bsv::detail::SetInputPoolHookForTesting(&Pool);
-    }
+        : owner{ std::this_thread::get_id() }, promptStop_{ promptStop }, previous{ Install(this) } {}
     ~ThrowBeforeCallerCloses() override
     {
-        bsv::detail::SetInputSourceAllocationHookForTesting(previousAllocation);
-        bsv::detail::SetInputHookForTesting(previousInput);
-        bsv::detail::SetInputPoolHookForTesting(previousPool);
+        bsv::detail::SetInputSourceAllocationHookForTesting(previous.allocation);
+        bsv::detail::SetInputHookForTesting(previous.input);
+        bsv::detail::SetInputPoolHookForTesting(previous.pool);
         bsv::detail::WakeInputHelpersForTesting();
         active = nullptr;
     }
@@ -4286,7 +4322,17 @@ public:
     std::atomic<bool> closed{ false }, threw{ false }, timedOut{ false }, helperHeld{ false };
     std::atomic<size_t> cleanupPolls{ 0 }, wrongThreadReads{ 0 }, closeCalls{ 0 };
     std::atomic<size_t> helperPolls{ 0 }, helperClaims{ 0 };
+    const std::thread::id owner;
+    const bool promptStop_;
+    const PreviousAllocationInputAndPoolHooks previous;
 private:
+    // Publishes the probe before installing the hooks that read it.
+    static PreviousAllocationInputAndPoolHooks Install(ThrowBeforeCallerCloses* self)
+    {
+        active = self;
+        return { bsv::detail::SetInputSourceAllocationHookForTesting(&Allocate), bsv::detail::SetInputHookForTesting(&Input),
+                 bsv::detail::SetInputPoolHookForTesting(&Pool) };
+    }
     static void Allocate(bool helper)
     {
         auto& self = *active.load();
@@ -4322,11 +4368,6 @@ private:
             }
         }
     }
-    const std::thread::id owner;
-    const bool promptStop_;
-    bsv::detail::InputSourceAllocationHook previousAllocation;
-    bsv::detail::InputHook previousInput;
-    bsv::detail::InputPoolHook previousPool;
     static inline std::atomic<ThrowBeforeCallerCloses*> active{ nullptr };
 };
 
@@ -4385,17 +4426,11 @@ BOOST_AUTO_TEST_CASE(preclaim_token_throw_stops_helpers_at_next_poll, PARALLEL_T
 
 class ReservedPlaceRelease {
 public:
-    ReservedPlaceRelease()
-    {
-        active = this;
-        previousPool = bsv::detail::SetInputPoolHookForTesting(&PoolHook);
-        previousInput = bsv::detail::SetInputHookForTesting(&InputHook);
-        bsv::detail::WakeInputHelpersForTesting();
-    }
+    ReservedPlaceRelease() : previous{ Install(this) } { bsv::detail::WakeInputHelpersForTesting(); }
     ~ReservedPlaceRelease()
     {
-        bsv::detail::SetInputHookForTesting(previousInput);
-        bsv::detail::SetInputPoolHookForTesting(previousPool);
+        bsv::detail::SetInputHookForTesting(previous.input);
+        bsv::detail::SetInputPoolHookForTesting(previous.pool);
         bsv::detail::WakeInputHelpersForTesting();
         active = nullptr;
     }
@@ -4403,8 +4438,17 @@ public:
     std::atomic<bool> coreUnavailable{ false }, returnPlace{ false }, releaseInputs{ false }, timedOut{ false };
     std::atomic<bool> callerClaimed{ false }, helperClaimed{ false }, parkedAfterFailure{ false };
     std::thread::id failedHelper, recruitedHelper;
+    std::mutex mutex;
+    std::map<std::thread::id, bool> parked;
+    const PreviousPoolAndInputHooks previous;
     static inline thread_local bool isCaller = false;
 private:
+    // Publishes the probe before installing the hooks that read it.
+    static PreviousPoolAndInputHooks Install(ReservedPlaceRelease* self)
+    {
+        active = self;
+        return { bsv::detail::SetInputPoolHookForTesting(&PoolHook), bsv::detail::SetInputHookForTesting(&InputHook) };
+    }
     static void PoolHook(bsv::detail::InputPoolEvent event)
     {
         auto& self = *active.load();
@@ -4433,10 +4477,6 @@ private:
         if (!WaitFor([&] { return self.releaseInputs.load(); }, std::chrono::milliseconds(20000)))
             self.timedOut = true;
     }
-    std::mutex mutex;
-    std::map<std::thread::id, bool> parked;
-    bsv::detail::InputPoolHook previousPool;
-    bsv::detail::InputHook previousInput;
     static inline std::atomic<ReservedPlaceRelease*> active{ nullptr };
 };
 
@@ -4509,25 +4549,28 @@ BOOST_AUTO_TEST_CASE(released_core_is_rechecked_after_a_failed_helper_reservatio
 // queue order is small then large; a real core release must recruit for large.
 class LargestQueuedJob {
 public:
-    LargestQueuedJob()
-    {
-        active = this;
-        previousPool = bsv::detail::SetInputPoolHookForTesting(&Pool);
-        previousInput = bsv::detail::SetInputHookForTesting(&Input);
-        bsv::detail::WakeInputHelpersForTesting();
-    }
+    LargestQueuedJob() : previous{ Install(this) } { bsv::detail::WakeInputHelpersForTesting(); }
     ~LargestQueuedJob()
     {
-        bsv::detail::SetInputHookForTesting(previousInput);
-        bsv::detail::SetInputPoolHookForTesting(previousPool);
+        bsv::detail::SetInputHookForTesting(previous.input);
+        bsv::detail::SetInputPoolHookForTesting(previous.pool);
         bsv::detail::WakeInputHelpersForTesting();
         active = nullptr;
     }
     size_t ParkedCount() { std::lock_guard lock{ mutex }; return parked.size(); }
     std::atomic<bool> smallHeld{ false }, largeHeld{ false }, releaseInputs{ false }, timedOut{ false };
     std::atomic<size_t> firstHelperIndex{ std::numeric_limits<size_t>::max() };
+    std::mutex mutex;
+    std::map<std::thread::id, bool> parked;
+    const PreviousPoolAndInputHooks previous;
     static inline thread_local int caller = 0;  // 1 small, 2 large, 0 helper
 private:
+    // Publishes the probe before installing the hooks that read it.
+    static PreviousPoolAndInputHooks Install(LargestQueuedJob* self)
+    {
+        active = self;
+        return { bsv::detail::SetInputPoolHookForTesting(&Pool), bsv::detail::SetInputHookForTesting(&Input) };
+    }
     static void Pool(bsv::detail::InputPoolEvent event)
     {
         if (event != bsv::detail::InputPoolEvent::Waiting)
@@ -4550,10 +4593,6 @@ private:
         if (!WaitFor([&] { return self.releaseInputs.load(); }, std::chrono::milliseconds(20000)))
             self.timedOut = true;
     }
-    std::mutex mutex;
-    std::map<std::thread::id, bool> parked;
-    bsv::detail::InputPoolHook previousPool;
-    bsv::detail::InputHook previousInput;
     static inline std::atomic<LargestQueuedJob*> active{ nullptr };
 };
 
@@ -4653,12 +4692,7 @@ BOOST_AUTO_TEST_CASE(equal_positive_remaining_keeps_queue_order, PARALLEL_TEST_C
 // `isCaller`.
 class HelperConcurrency {
 public:
-    explicit HelperConcurrency(std::chrono::milliseconds delay)
-    {
-        sleepMs.store(delay.count());
-        Reset();
-        previous = bsv::detail::SetInputHookForTesting(&HelperConcurrency::Hook);
-    }
+    explicit HelperConcurrency(std::chrono::milliseconds delay) : previous{ Install(delay) } {}
     ~HelperConcurrency() { bsv::detail::SetInputHookForTesting(previous); }
     HelperConcurrency(const HelperConcurrency&) = delete;
     HelperConcurrency& operator=(const HelperConcurrency&) = delete;
@@ -4692,7 +4726,15 @@ private:
     static inline std::atomic<size_t> inFlight{ 0 };
     static inline std::atomic<size_t> most{ 0 };
     static inline std::atomic<uint64_t> helperClaims{ 0 };
-    bsv::detail::InputHook previous = nullptr;
+
+    // Sets the delay and resets the peak before installing the hook.
+    static bsv::detail::InputHook Install(std::chrono::milliseconds delay)
+    {
+        sleepMs.store(delay.count());
+        Reset();
+        return bsv::detail::SetInputHookForTesting(&HelperConcurrency::Hook);
+    }
+    const bsv::detail::InputHook previous;
 };
 
 // Validates a 48-input tx of slow inputs on `callers` threads at once while
