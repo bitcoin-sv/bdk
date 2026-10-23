@@ -14,7 +14,6 @@ Checks: >
 
   bugprone-*,
   -bugprone-easily-swappable-parameters,
-  -bugprone-implicit-widening-of-multiplication-result,
   -bugprone-misplaced-widening-cast,
   -bugprone-narrowing-conversions,
   -bugprone-throwing-static-initialization,
@@ -63,4 +62,5 @@ Checks: >
 WarningsAsErrors: '*'
 FormatStyle: none
 CheckOptions:
+  bugprone-implicit-widening-of-multiplication-result.IgnoreConstantIntExpr: true
   bugprone-signed-bitwise.IgnorePositiveIntegerLiterals: true
