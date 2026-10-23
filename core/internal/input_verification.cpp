@@ -1,4 +1,5 @@
 #include <internal/input_verification.hpp>
+#include <internal/cpu_limit.hpp>
 #include <txvalidator.hpp>
 #if BDK_PARALLEL_INPUTS
 #include <algorithm>

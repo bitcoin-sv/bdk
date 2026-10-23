@@ -54,6 +54,7 @@
 #include "chainparamsbase.h"
 
 #include "txvalidator.hpp"
+#include "internal/cpu_limit.hpp"
 #include "internal/txvalidator_internal.hpp"
 #include "sha256_backend.hpp"
 #include "crypto/sha256_dispatch.h"

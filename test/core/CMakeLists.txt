@@ -186,7 +186,6 @@ target_link_libraries(test_txvalidator PRIVATE bdk_core secp256k1 univalue OpenS
 bdk_add_unit_test(test_txvalidator)
 add_executable(test_txvalidator_internal "${CMAKE_CURRENT_SOURCE_DIR}/test_txvalidator_internal.cpp" "${BSV_APPLICATION_HDR_FILES}" "${BSV_APPLICATION_SRC_FILES}")
 target_link_libraries(test_txvalidator_internal PRIVATE bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono ${CMAKE_DL_LIBS})
-target_compile_definitions(test_txvalidator_internal PRIVATE BDK_CGROUP_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data/cgroup")
 bdk_add_unit_test(test_txvalidator_internal)
 add_test(NAME test_txvalidator_pool_creation_retry
          COMMAND $<TARGET_FILE:test_txvalidator> --report_level=detailed

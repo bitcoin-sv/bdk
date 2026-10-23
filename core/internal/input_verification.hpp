@@ -67,6 +67,7 @@
 #include <txerror.h>
 #include <atomic>
 #include <memory>
+#include <optional>
 #if BDK_PARALLEL_INPUTS
 #include <condition_variable>
 #include <deque>
