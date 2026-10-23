@@ -15,10 +15,13 @@ namespace bsv
 
 // ConstGlueExtendedInput hold the list inputs and its utxo together
 // to the single class in order to make it serializable
-class ConstGlueExtendedInput {
+class ConstGlueExtendedInput
+{
 public:
+    // NOLINTBEGIN(cppcoreguidelines-avoid-const-or-ref-data-members)
     const std::vector<CTxIn>& vin;    // The list of standard inputs
     const std::vector<CTxOut>& vutxo; // Extended part, list of prevous outputs data
+    // NOLINTEND(cppcoreguidelines-avoid-const-or-ref-data-members)
 
     ConstGlueExtendedInput(const std::vector<CTxIn>& vi, const std::vector<CTxOut>& vu) : vin(vi), vutxo(vu) {
         if (vin.size() != vutxo.size()) {
@@ -44,10 +47,13 @@ public:
 
 // GlueExtendedInput hold the list inputs and its utxo together
 // to the single class in order to make it unserializable
-class GlueExtendedInput {
+class GlueExtendedInput
+{
 public:
+    // NOLINTBEGIN(cppcoreguidelines-avoid-const-or-ref-data-members)
     std::vector<CTxIn>& vin;    // The list of standard inputs
     std::vector<CTxOut>& vutxo; // Extended part, list of prevous outputs data
+    // NOLINTEND(cppcoreguidelines-avoid-const-or-ref-data-members)
 
     GlueExtendedInput(std::vector<CTxIn>& vi, std::vector<CTxOut>& vu) : vin(vi), vutxo(vu) {
         if (vin.size() != vutxo.size()) {
