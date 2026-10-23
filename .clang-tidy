@@ -22,7 +22,6 @@ Checks: >
   -cppcoreguidelines-init-variables,
   -cppcoreguidelines-pro-bounds-*,
   -cppcoreguidelines-pro-type-*,
-  -cppcoreguidelines-rvalue-reference-param-not-moved,
   -cppcoreguidelines-special-member-functions,
 
   misc-definitions-in-headers,

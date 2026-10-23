@@ -19,11 +19,6 @@ void bsv::ValidateBatch::add(const ValidateArg& arg)
     batch_.push_back(arg);
 }
 
-void bsv::ValidateBatch::add(ValidateArg&& arg)
-{
-    batch_.push_back(arg);
-}
-
 void bsv::ValidateBatch::clear()
 {
     batch_.clear();
