@@ -122,8 +122,8 @@ enum class TxValidationNetwork {
 class CTxValidator 
 {
     public:
-        CTxValidator(const std::string& chainName);
-        CTxValidator(TxValidationNetwork network);
+        explicit CTxValidator(const std::string& chainName);
+        explicit CTxValidator(TxValidationNetwork network);
         CTxValidator(const Consensus::Params& consensusParams, bool requireStandard);
 
         // Forward policy settings call to GlobalConfig

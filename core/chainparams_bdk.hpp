@@ -53,10 +53,11 @@ namespace bsv
     template <typename T>
     class RegisterCustomChainParams {
     public:
-        RegisterCustomChainParams(const std::string& name) {
-            ChainParamsRegistry::Instance().Register(name, []() {
-                return std::make_unique<T>();
-                });
+        explicit RegisterCustomChainParams(const std::string& name)
+        {
+            ChainParamsRegistry::Instance().Register(name,
+                                                     []()
+                                                     { return std::make_unique<T>(); });
         }
     };
 }
