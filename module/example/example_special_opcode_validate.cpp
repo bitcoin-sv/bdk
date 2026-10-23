@@ -239,22 +239,25 @@ static bsv::CMutableTransactionExtended MakeSignedExtendedTx(const CScript& opco
 // Opcode test-case descriptor
 // ═══════════════════════════════════════════════════════════════════════════
 
-struct OpcodeCase
+namespace
 {
-    std::string key;            // CLI selector, e.g. "cat"
-    std::string name;           // e.g. "OP_CAT"
-    uint8_t     opcode_byte;    // e.g. 0x7E
-    std::string description;    // one-liner of what the opcode does
-    std::string script_comment; // documents scriptPubKey / scriptSig layout
+    struct OpcodeCase
+    {
+        std::string key;            // CLI selector, e.g. "cat"
+        std::string name;           // e.g. "OP_CAT"
+        uint8_t     opcode_byte;    // e.g. 0x7E
+        std::string description;    // one-liner of what the opcode does
+        std::string script_comment; // documents scriptPubKey / scriptSig layout
 
-    // Returns {opcodeCheck, operandPushes}.
-    //
-    // opcodeCheck   — the opcode + expected-result + OP_EQUALVERIFY fragment
-    //                 that is prepended to the P2PKH check in scriptPubKey.
-    // operandPushes — push-only CScript supplying the opcode operands,
-    //                 appended after <sig> <pubkey> in scriptSig.
-    std::function<std::pair<CScript, CScript>()> build_parts;
-};
+        // Returns {opcodeCheck, operandPushes}.
+        //
+        // opcodeCheck   — the opcode + expected-result + OP_EQUALVERIFY fragment
+        //                 that is prepended to the P2PKH check in scriptPubKey.
+        // operandPushes — push-only CScript supplying the opcode operands,
+        //                 appended after <sig> <pubkey> in scriptSig.
+        std::function<std::pair<CScript, CScript>()> build_parts;
+    };
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Script builders — one per opcode

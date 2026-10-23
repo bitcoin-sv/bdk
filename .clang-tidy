@@ -27,7 +27,6 @@ Checks: >
   -misc-non-private-member-variables-in-classes,
 
   -misc-const-correctness,
-  -misc-use-internal-linkage,
   -misc-use-anonymous-namespace,
 
   modernize-deprecated-headers,

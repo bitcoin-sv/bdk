@@ -215,22 +215,25 @@ static bsv::CMutableTransactionExtended BuildAttackTransaction(const std::string
 // Benchmark infrastructure
 // ============================================================
 
-struct BenchResult
+namespace
 {
-    int64_t total_ns = 0;
-    int64_t min_ns   = std::numeric_limits<int64_t>::max();
-    int64_t max_ns   = 0;
-    int     iters    = 0;
+    struct BenchResult
+    {
+        int64_t total_ns = 0;
+        int64_t min_ns   = std::numeric_limits<int64_t>::max();
+        int64_t max_ns   = 0;
+        int     iters    = 0;
 
-    // NOLINTBEGIN(*-narrowing-conversions)
-    double avg_us()     const { return total_ns / 1000.0 / iters; }
-    double min_us()     const { return min_ns   / 1000.0; }
-    double max_us()     const { return max_ns   / 1000.0; }
-    double avg_ms()     const { return avg_us() / 1000.0; }
-    double total_s()    const { return total_ns / 1.0e9; }
-    double throughput() const { return iters    / total_s(); }
-    // NOLINTEND(*-narrowing-conversions)
-};
+        // NOLINTBEGIN(*-narrowing-conversions)
+        double avg_us()     const { return total_ns / 1000.0 / iters; }
+        double min_us()     const { return min_ns   / 1000.0; }
+        double max_us()     const { return max_ns   / 1000.0; }
+        double avg_ms()     const { return avg_us() / 1000.0; }
+        double total_s()    const { return total_ns / 1.0e9; }
+        double throughput() const { return iters    / total_s(); }
+        // NOLINTEND(*-narrowing-conversions)
+    };
+}
 
 static BenchResult RunBenchmark(const bsv::CTxValidator&   se,
                                  const std::vector<uint8_t>& txBin,

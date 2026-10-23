@@ -30,10 +30,10 @@ static void helper_log_cgo_exception(const char* where, const char* what) noexce
 }
 
 // Internal helper to convert std::string to const char*
-const char* helper_string2char(const std::string& stdStr) {
-    if (stdStr.empty()) {
+static const char* helper_string2char(const std::string& stdStr)
+{
+    if(stdStr.empty())
         return nullptr;
-    }
 
     char* charPtr = nullptr;
     // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)

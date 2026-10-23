@@ -23,18 +23,26 @@
 namespace po = boost::program_options;
 
 // CsvDataRecord structure matching the Go version
-struct CsvDataRecord {
-    std::string chainNet;
-    int32_t blockHeight;
-    std::string txID;
-    std::string txHexExtended;
-    std::string utxoHeights;
-    std::vector<int32_t> dataUTXOHeights;
-    std::vector<uint8_t> txBinExtended;
-};
+namespace
+{
+    struct CsvDataRecord
+    {
+        std::string chainNet;
+        int32_t blockHeight;
+        std::string txID;
+        std::string txHexExtended;
+        std::string utxoHeights;
+        std::vector<int32_t> dataUTXOHeights;
+        std::vector<uint8_t> txBinExtended;
+    };
+}
 
-std::chrono::nanoseconds doValidateTransaction(const bsv::CTxValidator& se, const CsvDataRecord& record, const bool consensus) {
-    const std::span<const uint8_t> etx(record.txBinExtended.data(), record.txBinExtended.size());
+static std::chrono::nanoseconds doValidateTransaction(const bsv::CTxValidator& se,
+                                                      const CsvDataRecord& record,
+                                                      const bool consensus)
+{
+    const std::span<const uint8_t> etx(record.txBinExtended.data(),
+                                       record.txBinExtended.size());
 
     const char* begin{ reinterpret_cast<const char*>(etx.data()) };
     const char* end{ reinterpret_cast<const char*>(etx.data() + etx.size()) };
@@ -68,7 +76,8 @@ std::chrono::nanoseconds doValidateTransaction(const bsv::CTxValidator& se, cons
 }
 
 // Function to trim leading and trailing whitespace
-std::string trim(const std::string& str) {
+static std::string trim(const std::string& str)
+{
     auto start = str.begin();
     while (start != str.end() && std::isspace(*start)) {
         start++;
@@ -83,7 +92,8 @@ std::string trim(const std::string& str) {
 }
 
 // Enhanced split function to handle quotes
-std::vector<std::string> split(const std::string& line, char delimiter = ',') {
+static std::vector<std::string> split(const std::string& line, char delimiter = ',')
+{
     std::vector<std::string> result;
     bool inQuotes = false;
     std::stringstream ss;
@@ -117,13 +127,14 @@ std::vector<std::string> split(const std::string& line, char delimiter = ',') {
     return result;
 }
 
-
-std::vector<int32_t> parseUTXOStr(const std::string& utxoStr, char delimiter = '|') {
+static std::vector<int32_t> parseUTXOStr(const std::string& utxoStr, char delimiter = '|')
+{
     std::vector<int32_t> result;
     std::stringstream ss(utxoStr);
     std::string token;
 
-    while (std::getline(ss, token, delimiter)) {
+    while(std::getline(ss, token, delimiter))
+    {
         try {
             result.push_back(std::stoi(token));
         }
@@ -135,7 +146,8 @@ std::vector<int32_t> parseUTXOStr(const std::string& utxoStr, char delimiter = '
 }
 
 // Function to read and parse CSV file into CsvDataRecord structures
-std::vector<CsvDataRecord> parseCSV(const std::string& filename) {
+static std::vector<CsvDataRecord> parseCSV(const std::string& filename)
+{
     std::ifstream file(filename);
     std::vector<CsvDataRecord> data;
     std::string line;
@@ -152,7 +164,8 @@ std::vector<CsvDataRecord> parseCSV(const std::string& filename) {
         try {
             row = split(line);
         }
-        catch (std::exception e) {
+        catch(const std::exception& e)
+        {
             std::cout << "ERROR bad csv line " << iLine + 1 << " error " << e.what();
             ++iLine;
             continue;
@@ -255,7 +268,8 @@ int main(int argc, char* argv[])
             verifyScriptElapsed += verifyDuration;
             nbTx += 1;
         }
-        catch (std::exception e) {
+        catch(const std::exception& e)
+        {
             std::cout << "ERROR test line : " << i + 1 <<" TxID : " << record.txID << " " << e.what() << '\n';
         }
     }
