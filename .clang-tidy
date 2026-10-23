@@ -21,7 +21,6 @@ Checks: >
   -cppcoreguidelines-avoid-magic-numbers,
   -cppcoreguidelines-pro-bounds-*,
   -cppcoreguidelines-pro-type-*,
-  -cppcoreguidelines-special-member-functions,
 
   misc-definitions-in-headers,
   misc-static-assert,

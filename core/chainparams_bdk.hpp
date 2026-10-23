@@ -22,9 +22,10 @@ namespace bsv
     using ChainParamsCreator = std::function<std::unique_ptr<CChainParams>()>;
 
     // ChainParamsRegistry implemented as a singleton
-    class ChainParamsRegistry {
+    // NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
+    class ChainParamsRegistry
+    {
     public:
-
         // Get the singleton instance (declared, but not defined here!)
         static ChainParamsRegistry& Instance();
 

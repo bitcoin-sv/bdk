@@ -37,14 +37,32 @@ bool IsAbiError(TxError result, AbiError_t code)
         && (result.code == static_cast<int32_t>(code));
 }
 
-struct ValidatorFixture {
-    TxValidatorCGO engine{ TxValidator_CreateV2(kNetwork.data(), kNetwork.size_bytes()) };
+struct ValidatorFixture
+{
+    TxValidatorCGO engine{TxValidator_CreateV2(kNetwork.data(), kNetwork.size_bytes())};
+
+    ValidatorFixture() = default;
+
+    ValidatorFixture(const ValidatorFixture&) = delete;
+    ValidatorFixture& operator=(const ValidatorFixture&) = delete;
+
+    ValidatorFixture(ValidatorFixture&&) = delete;
+    ValidatorFixture& operator=(ValidatorFixture&&) = delete;
 
     ~ValidatorFixture() { TxValidator_Destroy(engine); }
 };
 
-struct BatchFixture {
-    ValidateBatchCGO batch{ ValidateBatch_CreateV2() };
+struct BatchFixture
+{
+    ValidateBatchCGO batch{ValidateBatch_CreateV2()};
+
+    BatchFixture() = default;
+
+    BatchFixture(const BatchFixture&) = delete;
+    BatchFixture& operator=(const BatchFixture&) = delete;
+
+    BatchFixture(BatchFixture&&) = delete;
+    BatchFixture& operator=(BatchFixture&&) = delete;
 
     ~BatchFixture() { ValidateBatch_Destroy(batch); }
 };
