@@ -135,9 +135,9 @@ int main(int argc, char* argv[])
                 batch.add(bsv::ValidateArg(txBinExtended, utxoHeights, BLOCK_HEIGHT, consensus));
             }
 
-            auto start = std::chrono::high_resolution_clock::now();
+            const auto start = std::chrono::high_resolution_clock::now();
             const auto results = se.ValidateBatch(batch);
-            auto end = std::chrono::high_resolution_clock::now();
+            const auto end = std::chrono::high_resolution_clock::now();
 
             if (results.size() != static_cast<size_t>(batchSize)) {
                 std::cerr << "ERROR: ValidateBatch returned wrong number of results at iteration " << i << '\n';
@@ -151,7 +151,7 @@ int main(int argc, char* argv[])
                 }
             }
 
-            auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+            const auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
             totalDuration += duration;
 
             if (duration < minDuration) {
@@ -161,19 +161,22 @@ int main(int argc, char* argv[])
                 maxDuration = duration;
             }
         }
-    } else {
+    }
+    else
+    {
         // Benchmark single mode
-        for (int i = 0; i < iterations; ++i) {
-            auto start = std::chrono::high_resolution_clock::now();
+        for(int i = 0; i < iterations; ++i)
+        {
+            const auto start = std::chrono::high_resolution_clock::now();
             const TxError ret = se.ValidateTransaction(txBinExtended, utxoHeights, BLOCK_HEIGHT, consensus);
-            auto end = std::chrono::high_resolution_clock::now();
+            const auto end = std::chrono::high_resolution_clock::now();
 
             if (!bsv::TxErrorIsOk(ret)) {
                 std::cerr << "ERROR: ValidateTransaction failed at iteration " << i << '\n';
                 return 1;
             }
 
-            auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+            const auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
             totalDuration += duration;
 
             if (duration < minDuration) {
@@ -186,10 +189,10 @@ int main(int argc, char* argv[])
     }
 
     // Calculate statistics
-    double avgNanoseconds = static_cast<double>(totalDuration.count()) / iterations;
-    double avgMicroseconds = avgNanoseconds / 1000.0;
+    const double avgNanoseconds = static_cast<double>(totalDuration.count()) / iterations;
+    const double avgMicroseconds = avgNanoseconds / 1000.0;
     //NOLINTBEGIN(*-narrowing-conversions)
-    double totalSeconds = totalDuration.count() / 1e9;
+    const double totalSeconds = totalDuration.count() / 1e9;
 
     std::cout << '\n';
     std::cout << "Benchmark Results:" << '\n';
@@ -199,7 +202,7 @@ int main(int argc, char* argv[])
     if (benchBatch) {
         std::cout << "Average per batch: " << std::setprecision(2) << avgMicroseconds / 1000.0 << " ms ("
                   << std::setprecision(0) << avgNanoseconds << " ns)" << '\n';
-        double avgPerTx = avgNanoseconds / batchSize;
+        const double avgPerTx = avgNanoseconds / batchSize;
         std::cout << "Average per tx:    " << std::setprecision(2) << avgPerTx / 1000.0 << " µs ("
                   << std::setprecision(0) << avgPerTx << " ns)" << '\n';
     } else {
@@ -212,10 +215,13 @@ int main(int argc, char* argv[])
               << maxDuration.count() << " ns)" << '\n';
     //NOLINTEND(*-narrowing-conversions)
 
-    if (benchBatch) {
-        int totalTx = iterations * batchSize;
+    if(benchBatch)
+    {
+        const int totalTx = iterations * batchSize;
         std::cout << "Throughput:        " << std::setprecision(0) << (totalTx / totalSeconds) << " tx/sec" << '\n';
-    } else {
+    }
+    else
+    {
         std::cout << "Throughput:        " << std::setprecision(0) << (iterations / totalSeconds) << " calls/sec" << '\n';
     }
 

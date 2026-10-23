@@ -107,8 +107,8 @@ BOOST_FIXTURE_TEST_CASE(pre_genesis_allows_tx_under_sigops_limit, Fixture)
 {
     // 10 OP_CHECKSIG in output — well under 20,000 limit
     auto etxBin = MakeETXWithOutputSigOps(10);
-    std::span<const uint8_t> etx(etxBin);
-    auto r = v.CheckConsensusSigops(etx, kOneUtxoH0, 999);
+    const std::span<const uint8_t> etx(etxBin);
+    const auto r = v.CheckConsensusSigops(etx, kOneUtxoH0, 999);
     BOOST_CHECK(TxErrorIsOk(r));
 }
 
@@ -116,8 +116,8 @@ BOOST_FIXTURE_TEST_CASE(pre_genesis_rejects_tx_exceeding_sigops_limit, Fixture)
 {
     // 20,001 OP_CHECKSIG — exceeds 20,000 consensus limit
     auto etxBin = MakeETXWithOutputSigOps(20001);
-    std::span<const uint8_t> etx(etxBin);
-    auto r = v.CheckConsensusSigops(etx, kOneUtxoH0, 999);
+    const std::span<const uint8_t> etx(etxBin);
+    const auto r = v.CheckConsensusSigops(etx, kOneUtxoH0, 999);
     BOOST_CHECK(IsDosError(r, DoSError_t::SigopsConsensus));
 }
 
@@ -125,8 +125,8 @@ BOOST_FIXTURE_TEST_CASE(pre_genesis_allows_exactly_20000_sigops, Fixture)
 {
     // Exactly 20,000 OP_CHECKSIG — at the limit, should pass
     auto etxBin = MakeETXWithOutputSigOps(20000);
-    std::span<const uint8_t> etx(etxBin);
-    auto r = v.CheckConsensusSigops(etx, kOneUtxoH0, 999);
+    const std::span<const uint8_t> etx(etxBin);
+    const auto r = v.CheckConsensusSigops(etx, kOneUtxoH0, 999);
     BOOST_CHECK(TxErrorIsOk(r));
 }
 
@@ -134,17 +134,17 @@ BOOST_FIXTURE_TEST_CASE(post_genesis_allows_unlimited_sigops, Fixture)
 {
     // 100,000 OP_CHECKSIG — way over pre-Genesis limit, but post-Genesis is unlimited
     auto etxBin = MakeETXWithOutputSigOps(100000);
-    std::span<const uint8_t> etx(etxBin);
-    auto r = v.CheckConsensusSigops(etx, kOneUtxoH0, 1000); // blockHeight=1000 → post-Genesis
+    const std::span<const uint8_t> etx(etxBin);
+    const auto r = v.CheckConsensusSigops(etx, kOneUtxoH0, 1000); // blockHeight=1000 → post-Genesis
     BOOST_CHECK(TxErrorIsOk(r));
 }
 
 BOOST_FIXTURE_TEST_CASE(counts_sigops_in_both_inputs_and_outputs, Fixture)
 {
     // 5,000 in scriptSig + 15,001 in output = 20,001 total → should fail
-    auto etxBin = MakeETXWithSplitSigOps(5000, 15001);
-    std::span<const uint8_t> etx(etxBin);
-    auto r = v.CheckConsensusSigops(etx, kOneUtxoH0, 999);
+    const auto etxBin = MakeETXWithSplitSigOps(5000, 15001);
+    const std::span<const uint8_t> etx(etxBin);
+    const auto r = v.CheckConsensusSigops(etx, kOneUtxoH0, 999);
     BOOST_CHECK(IsDosError(r, DoSError_t::SigopsConsensus));
 }
 
@@ -212,8 +212,8 @@ BOOST_FIXTURE_TEST_CASE(policy_post_genesis_utxo_limit2_fails, PolicyFixture)
 {
     // 3 sigops > policy limit 2 → fail
     std::array<int32_t, 1> uh = {1000};
-    auto v = MakeValidator(2);
-    auto r = v.CheckSigOpsPolicy(etx, std::span<const int32_t>(uh), 998);
+    const auto v = MakeValidator(2);
+    const auto r = v.CheckSigOpsPolicy(etx, std::span<const int32_t>(uh), 998);
     BOOST_CHECK(IsDosError(r, DoSError_t::SigopsPolicy));
 }
 
@@ -221,8 +221,8 @@ BOOST_FIXTURE_TEST_CASE(policy_post_genesis_utxo_limit3_passes, PolicyFixture)
 {
     // 3 sigops == policy limit 3 → pass
     std::array<int32_t, 1> uh = {1000};
-    auto v = MakeValidator(3);
-    auto r = v.CheckSigOpsPolicy(etx, std::span<const int32_t>(uh), 998);
+    const auto v = MakeValidator(3);
+    const auto r = v.CheckSigOpsPolicy(etx, std::span<const int32_t>(uh), 998);
     BOOST_CHECK(TxErrorIsOk(r));
 }
 
@@ -232,8 +232,8 @@ BOOST_FIXTURE_TEST_CASE(p2sh_pre_genesis_utxo_limit5_fails, PolicyFixture)
 {
     // 6 sigops > policy limit 5 → fail
     std::array<int32_t, 1> uh = {999};
-    auto v = MakeValidator(5);
-    auto r = v.CheckSigOpsPolicy(etx, std::span<const int32_t>(uh), 998);
+    const auto v = MakeValidator(5);
+    const auto r = v.CheckSigOpsPolicy(etx, std::span<const int32_t>(uh), 998);
     BOOST_CHECK(IsDosError(r, DoSError_t::SigopsPolicy));
 }
 
@@ -241,8 +241,8 @@ BOOST_FIXTURE_TEST_CASE(p2sh_pre_genesis_utxo_limit6_passes, PolicyFixture)
 {
     // 6 sigops == policy limit 6 → pass
     std::array<int32_t, 1> uh = {999};
-    auto v = MakeValidator(6);
-    auto r = v.CheckSigOpsPolicy(etx, std::span<const int32_t>(uh), 998);
+    const auto v = MakeValidator(6);
+    const auto r = v.CheckSigOpsPolicy(etx, std::span<const int32_t>(uh), 998);
     BOOST_CHECK(TxErrorIsOk(r));
 }
 
@@ -250,8 +250,8 @@ BOOST_FIXTURE_TEST_CASE(p2sh_post_genesis_utxo_ignored_passes, PolicyFixture)
 {
     // Post-Genesis UTXO → P2SH redeem ignored → 3 sigops, limit=6 → pass
     std::array<int32_t, 1> uh = {1000};
-    auto v = MakeValidator(6);
-    auto r = v.CheckSigOpsPolicy(etx, std::span<const int32_t>(uh), 998);
+    const auto v = MakeValidator(6);
+    const auto r = v.CheckSigOpsPolicy(etx, std::span<const int32_t>(uh), 998);
     BOOST_CHECK(TxErrorIsOk(r));
 }
 

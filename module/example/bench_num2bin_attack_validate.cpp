@@ -85,11 +85,13 @@ static CMutableTransaction BuildSpendingTransaction(const CScript& scriptSig,
     return txSpend;
 }
 
-static std::vector<uint8_t> MakeSig(CScript& scriptPubKey, const CKey& key,
-                                     CMutableTransaction& spendTx, Amount amount)
+static std::vector<uint8_t> MakeSig(const CScript& scriptPubKey,
+                                    const CKey& key,
+                                    const CMutableTransaction& spendTx,
+                                    Amount amount)
 {
-    SigHashType sigHashType = SigHashType().withForkId();
-    uint256 hash = SignatureHash(scriptPubKey, CTransaction(spendTx), 0, sigHashType, amount);
+    const SigHashType sigHashType = SigHashType().withForkId();
+    const uint256 hash = SignatureHash(scriptPubKey, CTransaction(spendTx), 0, sigHashType, amount);
     std::vector<uint8_t> vchSig;
     if (!key.Sign(hash, vchSig))
         throw std::runtime_error("MakeSig: ECDSA signing failed");
@@ -134,8 +136,8 @@ static bsv::CMutableTransactionExtended BuildStandardTransaction(const std::stri
     const std::string wif = "5HxWvvfubhXpYYpS3tJkw6fq9jE9j18THftkZjHHfmFiWtmAbrj";
     CBitcoinSecret secret;
     secret.SetString(wif);
-    CKey    key    = secret.GetKey();
-    CPubKey pubkey = key.GetPubKey();
+    const CKey key = secret.GetKey();
+    const CPubKey pubkey = key.GetPubKey();
 
     const Amount amount{1000000};
     CMutableTransaction txCredit = BuildCreditingTransaction(
@@ -144,8 +146,8 @@ static bsv::CMutableTransactionExtended BuildStandardTransaction(const std::stri
     CMutableTransaction txSpend = BuildSpendingTransaction(CScript(), txCredit);
     txSpend.vout[0].scriptPubKey = GetScriptForDestination(pubkey.GetID());
 
-    CScript& scriptPubKey = txCredit.vout[0].scriptPubKey;
-    std::vector<uint8_t> sig = MakeSig(scriptPubKey, key, txSpend, amount);
+    const CScript& scriptPubKey = txCredit.vout[0].scriptPubKey;
+    const std::vector<uint8_t> sig = MakeSig(scriptPubKey, key, txSpend, amount);
 
     std::vector<valtype> sigResult;
     sigResult.push_back(sig);
@@ -197,9 +199,9 @@ static bsv::CMutableTransactionExtended BuildAttackTransaction(const std::string
                  << CScriptNum(4) << OP_SPLIT << OP_DROP << OP_0NOTEQUAL;
 
     const Amount nValue{1000000};
-    CMutableTransaction txCredit = BuildCreditingTransaction(scriptPubKey, nValue);
+    const CMutableTransaction txCredit = BuildCreditingTransaction(scriptPubKey, nValue);
 
-    std::vector<uint8_t> inputData(32, 0x42); // any 32-byte value
+    const std::vector<uint8_t> inputData(32, 0x42); // any 32-byte value
     CScript scriptSig;
     scriptSig << inputData << CScriptNum(num2binSize);
 

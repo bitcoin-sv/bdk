@@ -66,7 +66,7 @@ TxValidatorCGO TxValidator_CreateV2(const char* networkNamePtr, uint64_t network
 
 void TxValidator_Destroy(TxValidatorCGO cgoEngine)
 {
-    bsv::CTxValidator* ptr = static_cast<bsv::CTxValidator*>(cgoEngine);
+    const bsv::CTxValidator* ptr = static_cast<bsv::CTxValidator*>(cgoEngine);
     // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
     delete ptr;
 }
@@ -488,9 +488,10 @@ TxError* TxValidator_ValidateBatchCancellable(TxValidatorCGO cgoEngine,
     // can throw bad_alloc, and an exception leaving an extern "C" function is
     // undefined behaviour. Anything that escapes is reported through this function's
     // own single-result convention.
-    try {
-        bsv::CTxValidator* engine = static_cast<bsv::CTxValidator*>(cgoEngine);
-        bsv::ValidateBatch* batch = static_cast<bsv::ValidateBatch*>(cgoBatch);
+    try
+    {
+        const bsv::CTxValidator* engine = static_cast<bsv::CTxValidator*>(cgoEngine);
+        const bsv::ValidateBatch* batch = static_cast<bsv::ValidateBatch*>(cgoBatch);
 
         std::vector<TxError> results = engine->ValidateBatch(*batch, bsv::MakeFlagCancellationToken(cancelFlag));
 

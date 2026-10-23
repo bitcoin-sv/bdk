@@ -63,10 +63,10 @@ static std::chrono::nanoseconds doValidateTransaction(const bsv::CTxValidator& s
         throw std::runtime_error("ERROR recover txID for TxID " + record.txID);
     }
 
-    std::span<const int32_t> utxoHeights(record.dataUTXOHeights);
-    auto verifyStart = std::chrono::high_resolution_clock::now();
+    const std::span<const int32_t> utxoHeights(record.dataUTXOHeights);
+    const auto verifyStart = std::chrono::high_resolution_clock::now();
     const TxError ret = se.ValidateTransaction(record.txBinExtended, utxoHeights, record.blockHeight, consensus);
-    auto verifyEnd = std::chrono::high_resolution_clock::now();
+    const auto verifyEnd = std::chrono::high_resolution_clock::now();
 
     if (!bsv::TxErrorIsOk(ret)) {
         throw std::runtime_error("ERROR verify script for TxID " + record.txID);
@@ -98,8 +98,10 @@ static std::vector<std::string> split(const std::string& line, char delimiter = 
     bool inQuotes = false;
     std::stringstream ss;
 
-    for (char ch : line) {
-        if (ch == '"') {
+    for(const char ch : line)
+    {
+        if(ch == '"')
+        {
             // Toggle the inQuotes flag when encountering a double-quote
             inQuotes = !inQuotes;
             continue; // Skip the quote itself
@@ -260,10 +262,11 @@ int main(int argc, char* argv[])
     for (size_t i = 0; i < csvData.size(); ++i) {
         const auto& record = csvData[i];
 
-        try {
-            auto start = std::chrono::high_resolution_clock::now();
-            auto verifyDuration = doValidateTransaction(se, record, consensus);
-            auto end = std::chrono::high_resolution_clock::now();
+        try
+        {
+            const auto start = std::chrono::high_resolution_clock::now();
+            const auto verifyDuration = doValidateTransaction(se, record, consensus);
+            const auto end = std::chrono::high_resolution_clock::now();
             elapsed += (end - start);
             verifyScriptElapsed += verifyDuration;
             nbTx += 1;

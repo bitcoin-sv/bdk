@@ -317,8 +317,8 @@ BOOST_AUTO_TEST_CASE(test_verify_script)
 
     const std::vector<uint8_t> etxBin = ParseHex(TxHexExtended);
     const std::span<const uint8_t> etx(etxBin.data(), etxBin.size());
-    std::span<const int32_t> utxo(utxoArray);
-    bsv::CTxValidator se("main");
+    const std::span<const int32_t> utxo(utxoArray);
+    const bsv::CTxValidator se("main");
     const auto status = se.ValidateTransaction(etx, utxo, blockHeight, true);
     BOOST_CHECK(bsv::TxErrorIsOk(status));
 }
@@ -334,9 +334,9 @@ BOOST_AUTO_TEST_CASE(test_verify_script_custom_flags)
 
     const std::vector<uint8_t> etxBin = ParseHex(TxHexExtended);
     const std::span<const uint8_t> etx(etxBin.data(), etxBin.size());
-    std::span<const int32_t> utxo(utxoArray);
-    std::span<const uint32_t> customFlags(customFlagsArray);
-    bsv::CTxValidator se("main");
+    const std::span<const int32_t> utxo(utxoArray);
+    const std::span<const uint32_t> customFlags(customFlagsArray);
+    const bsv::CTxValidator se("main");
     const auto status = se.VerifyScript(etx, utxo, blockHeight, true, customFlags);  // VerifyScript with custom flags stays as-is
     BOOST_CHECK(bsv::TxErrorIsOk(status));
 }
@@ -347,7 +347,7 @@ BOOST_AUTO_TEST_CASE(test_verify_empty_utxos)
     // This is on mainnet TxID = "7be4fa421844154ec4105894def768a8bcd80da25792947d585274ce38c07105";
     // This tx was whitelisted prior to the beta-8
     const std::string TxHexExtended = "020000000000000000ef023f6c667203b47ce2fed8c8bcc78d764c39da9c0094f1a49074e05f66910e9c44000000006b4c69522102401d5481712745cf7ada12b7251c85ca5f1b8b6c859c7e81b8002a85b0f36d3c21039d8b1e461715ddd4d10806125be8592e6f48fb69e4c31699ce6750da1c9eaeb32103af3b35d4ad547fd1ce102bbd5cce36de2277723796f1b4001ec0ea6a1db6474053aeffffffffa73018250000000017a91413402e079464ec2a85e5a613732c78b0613fcc65873f6c667203b47ce2fed8c8bcc78d764c39da9c0094f1a49074e05f66910e9c44010000006b4c69522102401d5481712745cf7ada12b7251c85ca5f1b8b6c859c7e81b8002a85b0f36d3c21039d8b1e461715ddd4d10806125be8592e6f48fb69e4c31699ce6750da1c9eaeb32103af3b35d4ad547fd1ce102bbd5cce36de2277723796f1b4001ec0ea6a1db6474053aeffffffff34b82f000000000017a91413402e079464ec2a85e5a613732c78b0613fcc65870187e74725000000001976a9141be3d23725148a90807ee6df191bcdfcf083a3b288ac00000000";
-    std::span<const int32_t> utxo;
+    const std::span<const int32_t> utxo;
     const int32_t blockHeight = 632099;
 
     const std::vector<uint8_t> etxBin = ParseHex(TxHexExtended);
@@ -371,7 +371,7 @@ BOOST_AUTO_TEST_CASE(test_verify_empty_utxos)
     std::vector<uint8_t> emptyUtxoEtxBin(ss.begin(), ss.end());
     const std::span<const uint8_t> emptyUtxoEtx(emptyUtxoEtxBin.data(), emptyUtxoEtxBin.size());
 
-    bsv::CTxValidator se("main");
+    const bsv::CTxValidator se("main");
     const auto status = se.ValidateTransaction(emptyUtxoEtx, utxo, blockHeight, true);
     BOOST_CHECK(!bsv::TxErrorIsOk(status));
 }
@@ -613,7 +613,7 @@ BOOST_AUTO_TEST_CASE(check_fee_policy_path)
 
     // Policy mode, fee rate = 0 (no policy) — accept regardless of tx fees.
     {
-        bsv::CTxValidator se("main");
+        const bsv::CTxValidator se("main");
         const auto status = se.ValidateTransaction(etx, utxo, blockHeight, /*consensus=*/false);
         BOOST_CHECK(bsv::TxErrorIsOk(status));
     }
@@ -704,7 +704,7 @@ BOOST_AUTO_TEST_CASE(check_fee_free_consolidation_bypass)
     const std::span<const uint8_t> donationEtx(donationBin.data(), donationBin.size());
     const std::span<const int32_t> utxo(utxoArray);
 
-    auto runOnce = [&](uint64_t minConsolidationFactor) {
+    const auto runOnce = [&](uint64_t minConsolidationFactor) {
         bsv::CTxValidator se("main");
         std::string err;
         BOOST_REQUIRE(se.SetMinMiningTxFee(1'000'000'000'000LL, &err));
@@ -743,7 +743,7 @@ BOOST_AUTO_TEST_CASE(empty_extended_tx_stays_in_the_exception_domain)
     const std::span<const uint8_t> emptyEtx;
     const std::span<const int32_t> utxo;
 
-    bsv::CTxValidator se("main");
+    const bsv::CTxValidator se("main");
     const auto status = se.ValidateTransaction(emptyEtx, utxo, /*blockHeight=*/632099, /*consensus=*/true);
     BOOST_CHECK_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_EXCEPTION), status.domain);
 }
@@ -810,7 +810,7 @@ BOOST_AUTO_TEST_CASE(small_bare_large_aggregate_previous_scripts)
     const std::vector<int32_t> utxoHeights(scriptSizes.size(), utxoHeight);
     const std::span<const int32_t> utxo(utxoHeights);
 
-    bsv::CTxValidator se("main");
+    const bsv::CTxValidator se("main");
     for (const bool consensus : { true, false }) {
         const auto status = se.ValidateTransaction(etx, utxo, blockHeight, consensus);
         BOOST_CHECK_MESSAGE(status.domain != static_cast<int32_t>(TX_ERR_DOMAIN_EXCEPTION),

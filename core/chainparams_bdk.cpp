@@ -31,10 +31,9 @@ namespace bsv
         }
 
         // Else, custom chain, lookup the registry
-        auto it = registry_.find(chainName);
-        if (it != registry_.end()) {
+        const auto it = registry_.find(chainName);
+        if(it != registry_.end())
             return (it->second)();
-        }
 
         // If finally not found in registry, throw runtime error
         throw std::runtime_error("Unknown chain name: " + chainName);

@@ -43,6 +43,7 @@ private:
 task::CCancellationToken bsv::MakeFlagCancellationToken(const int32_t* flag)
 {
     // GetToken() calls shared_from_this(), so construct with shared ownership.
-    std::shared_ptr<task::CCancellationSource> source = std::make_shared<FlagCancellationSource>(flag);
+    const std::shared_ptr<task::CCancellationSource>
+        source = std::make_shared<FlagCancellationSource>(flag);
     return source->GetToken();
 }

@@ -40,7 +40,10 @@ double percentile(const std::vector<double>& sorted, double fraction)
 
 } // namespace
 
-int main(int argc, char** argv) try {
+// NOLINTNEXTLINE(misc-const-correctness)
+int main(int argc, char** argv)
+try
+{
     const int iterations = argc > 1 ? positiveArgument(argv[1], "iterations") : 1000;
     const int samples = argc > 2 ? positiveArgument(argv[2], "samples") : 9;
     const int warmupIterations = std::max(20, iterations / 10);
@@ -106,7 +109,9 @@ int main(int argc, char** argv) try {
               << "  \"resultGuard\": " << resultGuard << "\n"
               << "}\n";
     return 0;
-} catch(const std::exception& error) {
+}
+catch(const std::exception& error)
+{
     std::cerr << error.what() << '\n';
     return 1;
 }

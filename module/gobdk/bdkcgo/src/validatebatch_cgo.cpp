@@ -41,7 +41,7 @@ ValidateBatchCGO ValidateBatch_CreateV2()
 
 void ValidateBatch_Destroy(ValidateBatchCGO cgoBatch)
 {
-    bsv::ValidateBatch* ptr = static_cast<bsv::ValidateBatch*>(cgoBatch);
+    const bsv::ValidateBatch* ptr = static_cast<bsv::ValidateBatch*>(cgoBatch);
     // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
     delete ptr;
 }
@@ -61,7 +61,7 @@ TxError ValidateBatch_Add(ValidateBatchCGO cgoBatch,
         const std::span<const int32_t> hUTXOs = bdkcgo::int32_span(hUTXOsPtr, hUTXOsLen);
 
         // Create ValidateArg and add to batch
-        bsv::ValidateArg arg(extendedTx, hUTXOs, blockHeight, consensus);
+        const bsv::ValidateArg arg(extendedTx, hUTXOs, blockHeight, consensus);
         static_cast<bsv::ValidateBatch*>(cgoBatch)->add(arg);
         return bsv::TxErrorOk();
     }

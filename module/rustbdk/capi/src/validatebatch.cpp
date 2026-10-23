@@ -93,16 +93,20 @@ extern "C" void bdkffi_validatebatch_add(
     int32_t block_height,
     bool consensus)
 {
-    try {
-        bsv::ValidateArg arg(
-            byte_span(extended_tx, extended_tx_len),
-            int32_span(utxo_heights, utxo_heights_len),
-            block_height,
-            consensus);
+    try
+    {
+        const bsv::ValidateArg arg(byte_span(extended_tx, extended_tx_len),
+                                   int32_span(utxo_heights, utxo_heights_len),
+                                   block_height,
+                                   consensus);
         checked_batch(batch)->add(arg);
-    } catch (const std::exception& e) {
+    }
+    catch(const std::exception& e)
+    {
         log_exception(__func__, e.what());
-    } catch (...) {
+    }
+    catch(...)
+    {
         log_exception(__func__, "unknown C++ exception");
     }
 }

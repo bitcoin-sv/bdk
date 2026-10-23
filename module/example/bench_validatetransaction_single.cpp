@@ -94,17 +94,18 @@ int main(int argc, char* argv[])
     std::chrono::nanoseconds minDuration = std::chrono::nanoseconds::max();
     std::chrono::nanoseconds maxDuration(0);
 
-    for (int i = 0; i < iterations; ++i) {
-        auto start = std::chrono::high_resolution_clock::now();
+    for(int i = 0; i < iterations; ++i)
+    {
+        const auto start = std::chrono::high_resolution_clock::now();
         const TxError ret = se.ValidateTransaction(txBinExtended, utxoHeights, BLOCK_HEIGHT, consensus);
-        auto end = std::chrono::high_resolution_clock::now();
+        const auto end = std::chrono::high_resolution_clock::now();
 
         if (!bsv::TxErrorIsOk(ret)) {
             std::cerr << "ERROR: ValidateTransaction failed at iteration " << i << '\n';
             return 1;
         }
 
-        auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+        const auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
         totalDuration += duration;
 
         if (duration < minDuration) {
@@ -117,9 +118,9 @@ int main(int argc, char* argv[])
 
     // Calculate statistics
     // NOLINTBEGIN(*-narrowing-conversions)
-    double avgNanoseconds = static_cast<double>(totalDuration.count()) / iterations;
-    double avgMicroseconds = avgNanoseconds / 1000.0;
-    double totalSeconds = totalDuration.count() / 1e9;
+    const double avgNanoseconds = static_cast<double>(totalDuration.count()) / iterations;
+    const double avgMicroseconds = avgNanoseconds / 1000.0;
+    const double totalSeconds = totalDuration.count() / 1e9;
 
     std::cout << '\n';
     std::cout << "Benchmark Results:" << '\n';

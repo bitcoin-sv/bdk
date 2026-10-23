@@ -164,9 +164,9 @@ static CMutableTransaction BuildSpendingTransaction(const CMutableTransaction& t
 
 /// Sign the spending transaction and return the DER-encoded signature with
 /// the sighash-type byte appended  (SIGHASH_ALL | SIGHASH_FORKID = 0x41).
-static std::vector<uint8_t> SignSpendingTx(const CScript&              scriptPubKey,
-                                            CMutableTransaction&         txSpend,
-                                            const CKey&                  key)
+static std::vector<uint8_t> SignSpendingTx(const CScript& scriptPubKey,
+                                           const CMutableTransaction& txSpend,
+                                           const CKey& key)
 {
     const SigHashType sigHashType = SigHashType().withForkId();
     const uint256 hash = SignatureHash(
@@ -208,7 +208,7 @@ static bsv::CMutableTransactionExtended MakeSignedExtendedTx(const CScript& opco
                  << OP_CHECKSIG;
 
     // ── 2. Crediting transaction (the UTXO) ───────────────────────────────
-    CMutableTransaction txCredit = BuildCreditingTransaction(scriptPubKey);
+    const CMutableTransaction txCredit = BuildCreditingTransaction(scriptPubKey);
 
     // ── 3. Spending transaction skeleton (empty scriptSig) ────────────────
     CMutableTransaction txSpend = BuildSpendingTransaction(txCredit);

@@ -67,7 +67,7 @@ public:
     template <typename Stream> inline void Unserialize(Stream& is) {
         this->vin.clear();
         this->vutxo.clear();
-        size_t nSize = ReadCompactSize(is);
+        const size_t nSize = ReadCompactSize(is);
         size_t i = 0;
         size_t nMid = 0;
         size_t chunkSize = STARTING_CHUNK_SIZE;

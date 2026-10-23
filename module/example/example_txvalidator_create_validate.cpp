@@ -55,13 +55,17 @@ static CMutableTransaction BuildSpendingTransaction(const CScript& scriptSig,
     return txSpend;
 }
 
-static std::vector<uint8_t> MakeSig(CScript& scriptPubkey,
+static std::vector<uint8_t> MakeSig(const CScript& scriptPubkey,
                                     const CKey& key,
-                                    CMutableTransaction& spendTx,
+                                    const CMutableTransaction& spendTx,
                                     Amount amount,
                                     SigHashType sigHashType = SigHashType().withForkId())
 {
-    uint256 hash = SignatureHash(scriptPubkey, CTransaction(spendTx), 0, sigHashType, amount);
+    const uint256 hash = SignatureHash(scriptPubkey,
+                                       CTransaction(spendTx),
+                                       0,
+                                       sigHashType,
+                                       amount);
     std::vector<uint8_t> vchSig;
     if (!key.Sign(hash, vchSig)) {
         throw std::runtime_error("ERROR signing");
@@ -106,7 +110,7 @@ static bool AppendScriptPubKey(CScript& /*script*/)
 int main(int /*argc*/, char* /*argv*/[])
 {
     const auto network = CBaseChainParams::MAIN;
-    bsv::CTxValidator se(network);
+    const bsv::CTxValidator se(network);
 
     const bsv::CMutableTransactionExtended eTX = BuildReguarTransaction(network);
     //const bsv::CMutableTransactionExtended eTX = BuildP2SHTransaction(network);
@@ -136,8 +140,8 @@ bsv::CMutableTransactionExtended BuildReguarTransaction(const std::string& netwo
     CBitcoinSecret bsecret1;
     bsecret1.SetString(strSecret1);
 
-    CKey key1 = bsecret1.GetKey();
-    CPubKey pubkey1 = key1.GetPubKey();
+    const CKey key1 = bsecret1.GetKey();
+    const CPubKey pubkey1 = key1.GetPubKey();
 
     CBasicKeyStore keystore;// Might not need the keystore as we use the private key we created
     keystore.AddKey(key1);
@@ -154,7 +158,7 @@ bsv::CMutableTransactionExtended BuildReguarTransaction(const std::string& netwo
     CScript& scriptPubKey = txFrom.vout[0].scriptPubKey;
     AppendScriptPubKey(scriptPubKey);
 
-    std::vector<uint8_t> vchSig = MakeSig(scriptPubKey, key1, txTo, amount);
+    const std::vector<uint8_t> vchSig = MakeSig(scriptPubKey, key1, txTo, amount);
     std::vector<valtype> sigResult;
     sigResult.push_back(vchSig);
     sigResult.push_back(ToByteVector(pubkey1));

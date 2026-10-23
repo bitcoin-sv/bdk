@@ -54,13 +54,14 @@ constexpr std::array<int32_t, 2> kValidTxUtxoHeights{ 631924, 631924 };
 
 task::CCancellationToken CancelledToken()
 {
-    auto source = task::CCancellationSource::Make();
+    const auto source = task::CCancellationSource::Make();
     source->Cancel();
     return source->GetToken();
 }
 
 // Sets a cancel flag the way a binding does: an atomic store from another thread.
-void StoreFlagRelaxed(int32_t* flag, int32_t value)
+// NOLINTNEXTLINE(misc-const-correctness)
+void StoreFlagRelaxed(int32_t* flag, const int32_t value)
 {
 #if defined(_MSC_VER) && !defined(__clang__)
     __iso_volatile_store32(reinterpret_cast<volatile __int32*>(flag), value);
@@ -428,8 +429,9 @@ BOOST_AUTO_TEST_CASE(cancelled_mid_script_returns_cancelled_promptly)
     const std::span<const uint8_t> etx(tx.data(), tx.size());
     const bsv::CTxValidator validator = LongRunningValidator();
 
-    for (const bool consensus : { true, false }) {
-        auto source = task::CCancellationSource::Make();
+    for(const bool consensus : {true, false})
+    {
+        const auto source = task::CCancellationSource::Make();
         const auto token = source->GetToken();
         const auto [result, latency] = RunAndCancelAfter(source, std::chrono::milliseconds(50), [&] {
             return validator.ValidateTransaction(etx, kLongUtxoHeights, kLongBlockHeight, consensus, token);
@@ -750,8 +752,9 @@ BOOST_AUTO_TEST_CASE(verify_spend_cancelled_mid_script_returns_cancelled_promptl
     const std::vector<uint8_t> lockBytes(lock.begin(), lock.end());
     const bsv::CTxValidator validator = LongRunningValidator();
 
-    for (const bool consensus : { true, false }) {
-        auto source = task::CCancellationSource::Make();
+    for(const bool consensus : {true, false})
+    {
+        const auto source = task::CCancellationSource::Make();
         const auto token = source->GetToken();
         const auto [result, latency] = RunAndCancelAfter(source, std::chrono::milliseconds(50), [&] {
             return validator.VerifySpend(tx, 0, lockBytes, 100000, kLongUtxoHeights[0], kLongBlockHeight, consensus, std::nullopt, token);
@@ -813,11 +816,11 @@ BOOST_AUTO_TEST_CASE(flag_token_cancels_when_the_flag_is_set_from_another_thread
     const std::span<const uint8_t> validTx(valid.data(), valid.size());
     const bsv::CTxValidator mainValidator("main");
 
-    alignas(4) int32_t zero = 0;
+    alignas(4) const int32_t zero = 0;
     BOOST_CHECK(bsv::TxErrorIsOk(mainValidator.ValidateTransaction(validTx, kValidTxUtxoHeights, kValidTxBlockHeight, true, bsv::MakeFlagCancellationToken(&zero))));
     BOOST_CHECK(bsv::TxErrorIsOk(mainValidator.ValidateTransaction(validTx, kValidTxUtxoHeights, kValidTxBlockHeight, true, bsv::MakeFlagCancellationToken(nullptr))));
 
-    alignas(4) int32_t set = 1;
+    alignas(4) const int32_t set = 1;
     BOOST_CHECK(IsCancelled(mainValidator.ValidateTransaction(validTx, kValidTxUtxoHeights, kValidTxBlockHeight, true, bsv::MakeFlagCancellationToken(&set))));
 
     const std::vector<uint8_t> tx = LongRunningTx(2000);
