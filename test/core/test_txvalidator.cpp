@@ -1935,6 +1935,7 @@ BOOST_AUTO_TEST_CASE(mixed_sighash_types_and_multisig_input, PARALLEL_TEST_CASE_
 {
     const bsv::CTxValidator se("main");
     std::vector<SigHashType> types;
+    types.reserve(PARITY_INPUTS);
     for (size_t i = 0; i < PARITY_INPUTS; ++i)
         types.push_back(FORKID_SIGHASH_TYPES[i % FORKID_SIGHASH_TYPES.size()]);
     const auto mixed = MakeSignedP2PKHSpend(types, /*nOutputs=*/PARITY_INPUTS, /*precomputeForSigning=*/true);
@@ -2058,6 +2059,7 @@ BOOST_AUTO_TEST_CASE(concurrent_callers_share_the_pool, PARALLEL_TEST_CASE_DECOR
         heights.emplace_back(tx.vutxo.size(), P2PKH_UTXO_HEIGHT);
     }
     heights.back()[5] = MEMPOOL_HEIGHT;
+    expected.reserve(txs.size());
     for (size_t i = 0; i < txs.size(); ++i)
         expected.push_back({ FirstFailingSpend(se, txs[i], heights[i], false),
                              FirstFailingSpend(se, txs[i], heights[i], true) });
@@ -2080,6 +2082,7 @@ BOOST_AUTO_TEST_CASE(concurrent_callers_share_the_pool, PARALLEL_TEST_CASE_DECOR
     // its own failure and its return, a window of about one input; enough
     // rounds make that overlap happen at CI core counts.
     const auto stop = std::chrono::steady_clock::now() + std::chrono::milliseconds(1500);
+    callers.reserve(callerCount);
     for (size_t t = 0; t < callerCount; ++t) {
         callers.emplace_back([&, t] {
             for (size_t r = 0; r < ROUNDS || std::chrono::steady_clock::now() < stop; ++r) {
@@ -2727,6 +2730,7 @@ BOOST_AUTO_TEST_CASE(budget_and_queue_return_to_idle_after_concurrent_calls, PAR
     std::atomic<size_t> queuedAfterReturn{ 0 };
     std::atomic<size_t> failures{ 0 };
     std::vector<std::thread> callers;
+    callers.reserve(6);
     for (size_t t = 0; t < 6; ++t) {
         callers.emplace_back([&] {
             for (int r = 0; r < 10; ++r) {
@@ -4706,6 +4710,7 @@ static size_t MostConcurrentHelpers(size_t callers)
     std::atomic<size_t> failures{ 0 };
     std::atomic<size_t> finished{ 0 };
     std::vector<std::thread> threads;
+    threads.reserve(callers);
     for (size_t t = 0; t < callers; ++t) {
         threads.emplace_back([&] {
             HelperConcurrency::isCaller = true;
@@ -4914,6 +4919,7 @@ BOOST_AUTO_TEST_CASE(results_hold_at_every_helper_limit_and_while_it_changes, PA
     });
     std::vector<std::thread> callers;
     const auto until = std::chrono::steady_clock::now() + std::chrono::milliseconds(1000);
+    callers.reserve(callerCount);
     for (size_t t = 0; t < callerCount; ++t) {
         callers.emplace_back([&, t] {
             for (size_t r = t; std::chrono::steady_clock::now() < until; ++r) {
@@ -5043,6 +5049,7 @@ static double AggregateInputsPerSecond(const bsv::CTxValidator& se, const std::v
     std::atomic<size_t> failures{ 0 };
     std::atomic<bool> start{ false };
     std::vector<std::thread> callers;
+    callers.reserve(perCaller.size());
     for (const BenchTx* tx : perCaller) {
         callers.emplace_back([&, tx] {
             while (!start.load())
@@ -5123,6 +5130,7 @@ BOOST_AUTO_TEST_CASE(core_budget_under_concurrent_callers)
         std::atomic<bool> stop{ false };
         std::atomic<size_t> failures{ 0 };
         std::vector<std::thread> callers;
+        callers.reserve(callerCount);
         for (size_t t = 0; t < callerCount; ++t) {
             callers.emplace_back([&] {
                 while (!stop.load())
