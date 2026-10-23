@@ -210,6 +210,11 @@ add_test(NAME test_txvalidator_release_before_offer
          COMMAND $<TARGET_FILE:test_txvalidator> --report_level=detailed
                  --run_test=test_txvalidator/parallel_input_verification/release_before_job_publication_recruits_a_helper
                  -- --input-pool-cores=4)
+## Serial vs parallel input verification numbers: a benchmark, not a CTest
+## entry, built only on request (cmake --build <build> --target bench_txvalidator_inputs).
+add_executable(bench_txvalidator_inputs EXCLUDE_FROM_ALL "${CMAKE_CURRENT_SOURCE_DIR}/bench_txvalidator_inputs.cpp" "${BSV_APPLICATION_HDR_FILES}" "${BSV_APPLICATION_SRC_FILES}")
+target_link_libraries(bench_txvalidator_inputs PRIVATE bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono ${CMAKE_DL_LIBS})
+bdkLinkTargetToBoost(bench_txvalidator_inputs Boost::unit_test_framework)
 ## A hang in the input pool fails the run instead of waiting for the CI job timeout
 get_directory_property(_bdk_core_tests TESTS)
 foreach(_t IN LISTS _bdk_core_tests)

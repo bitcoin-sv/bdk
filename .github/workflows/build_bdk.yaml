@@ -31,6 +31,11 @@ on:
         required: true
         default: 'true'
         type: boolean
+      run-benchmarks:
+        description: 'Also run the input verification benchmark (about 50 s per native leg)'
+        required: false
+        default: false
+        type: boolean
 
 env:
   DEFAULT_BITCOIN_SV_COMMIT: 6504a3aff65ba97c0f6c80962b033e35ecbfed4b
@@ -138,6 +143,14 @@ jobs:
           cmake -B build -S "." -DBUILD_MODULE_GOLANG_INSTALL_INSOURCE=ON
           cmake --build build --parallel 4
           ctest --output-on-failure --test-dir build
+
+      ## Opt-in: serial vs parallel input verification numbers for this runner
+      - name: Benchmark input verification Unix
+        if: runner.os != 'Windows' && github.event.inputs.run-benchmarks == 'true'
+        run: |
+          echo "nproc=$(getconf _NPROCESSORS_ONLN)"
+          cmake --build build --target bench_txvalidator_inputs --parallel 4
+          "$(find build -type f -name bench_txvalidator_inputs -perm -u+x | head -n 1)"
 
       - name: Report SHA-256 backend and throughput
         if: runner.os != 'Windows'
