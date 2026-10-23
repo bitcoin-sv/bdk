@@ -5002,13 +5002,13 @@ BOOST_AUTO_TEST_CASE(threshold_sweep)
 {
     const bsv::detail::ScopedInputCountersForTesting productionCounters(false);
     const bsv::CTxValidator se("main");
-    std::cerr << "[threshold_sweep] hardware_concurrency=" << std::thread::hardware_concurrency() << std::endl;
-    std::cerr << "[threshold_sweep] inputs serial_us parallel_us speedup" << std::endl;
+    std::cerr << "[threshold_sweep] hardware_concurrency=" << std::thread::hardware_concurrency() << '\n';
+    std::cerr << "[threshold_sweep] inputs serial_us parallel_us speedup" << '\n';
     for (const size_t n : { 2, 4, 8, 12, 16, 24, 32, 48, 64, 96, 128, 256, 512, 1024 }) {
         const BenchTx tx = MakeBenchTx(n);
         const double parallel = BestUsPerTx(se, tx, n, 7);
         const double serial = BestUsPerTx(se, tx, FORCE_SERIAL, 7);
-        std::cerr << "[threshold_sweep] " << n << " " << serial << " " << parallel << " " << serial / parallel << std::endl;
+        std::cerr << "[threshold_sweep] " << n << " " << serial << " " << parallel << " " << serial / parallel << '\n';
     }
 }
 
@@ -5020,14 +5020,14 @@ BOOST_AUTO_TEST_CASE(large_tx_serial_vs_parallel)
     const size_t defaultThreshold = bsv::detail::SetParallelInputThresholdForTesting(FORCE_SERIAL);
     bsv::detail::SetParallelInputThresholdForTesting(defaultThreshold);
     std::cerr << "[large_tx_serial_vs_parallel] hardware_concurrency=" << std::thread::hardware_concurrency()
-              << " default_threshold=" << defaultThreshold << std::endl;
-    std::cerr << "[large_tx_serial_vs_parallel] inputs serial_ms parallel_ms speedup" << std::endl;
+              << " default_threshold=" << defaultThreshold << '\n';
+    std::cerr << "[large_tx_serial_vs_parallel] inputs serial_ms parallel_ms speedup" << '\n';
     for (const size_t n : { 1000, 10000, 40000 }) {
         const BenchTx tx = MakeBenchTx(n);
         const double serial = BestUsPerTx(se, tx, FORCE_SERIAL, 3) / 1000.0;
         const double parallel = BestUsPerTx(se, tx, defaultThreshold, 3) / 1000.0;
         std::cerr << "[large_tx_serial_vs_parallel] " << n << " " << serial << " " << parallel << " "
-                  << serial / parallel << std::endl;
+                  << serial / parallel << '\n';
     }
 }
 
@@ -5087,8 +5087,8 @@ BOOST_AUTO_TEST_CASE(concurrent_callers_throughput)
     scenarios.push_back({ "1 x 10000-input", std::vector<const BenchTx*>(1, &large) });
 
     std::cerr << "[concurrent_callers_throughput] hardware_concurrency=" << cores
-              << " default_threshold=" << defaultThreshold << std::endl;
-    std::cerr << "[concurrent_callers_throughput] scenario | serial_inputs_per_s | parallel_inputs_per_s | ratio" << std::endl;
+              << " default_threshold=" << defaultThreshold << '\n';
+    std::cerr << "[concurrent_callers_throughput] scenario | serial_inputs_per_s | parallel_inputs_per_s | ratio" << '\n';
     for (const Scenario& s : scenarios) {
         // Alternating order, best of 3 each, so clock and thermal drift don't favour either.
         double serial = 0;
@@ -5102,7 +5102,7 @@ BOOST_AUTO_TEST_CASE(concurrent_callers_throughput)
                 serial = std::max(serial, AggregateInputsPerSecond(se, s.perCaller, FORCE_SERIAL));
         }
         std::cerr << "[concurrent_callers_throughput] " << s.name << " | " << serial << " | " << parallel
-                  << " | " << parallel / serial << std::endl;
+                  << " | " << parallel / serial << '\n';
     }
 }
 
@@ -5117,8 +5117,8 @@ BOOST_AUTO_TEST_CASE(core_budget_under_concurrent_callers)
     const bsv::CTxValidator se("main");
     const BenchTx large = MakeBenchTx(10000);
     const InputThresholdGuard defaults(bsv::detail::DEFAULT_PARALLEL_INPUT_THRESHOLD);
-    std::cerr << "[core_budget_under_concurrent_callers] pool_cores=" << cores << std::endl;
-    std::cerr << "[core_budget_under_concurrent_callers] callers | peak_busy | samples_over_max(cores,callers) | samples_over_cores" << std::endl;
+    std::cerr << "[core_budget_under_concurrent_callers] pool_cores=" << cores << '\n';
+    std::cerr << "[core_budget_under_concurrent_callers] callers | peak_busy | samples_over_max(cores,callers) | samples_over_cores" << '\n';
     for (const size_t callerCount : { size_t{ 1 }, size_t{ 2 }, size_t{ 3 }, cores, 2 * cores }) {
         std::atomic<bool> stop{ false };
         std::atomic<size_t> failures{ 0 };
@@ -5146,7 +5146,7 @@ BOOST_AUTO_TEST_CASE(core_budget_under_concurrent_callers)
             caller.join();
         BOOST_REQUIRE_EQUAL(failures.load(), 0u);
         std::cerr << "[core_budget_under_concurrent_callers] " << callerCount << " | " << peak << " | "
-                  << overCallers << "/" << samples << " | " << overCores << "/" << samples << std::endl;
+                  << overCallers << "/" << samples << " | " << overCores << "/" << samples << '\n';
     }
 }
 
@@ -5190,11 +5190,11 @@ BOOST_AUTO_TEST_CASE(stack_use_of_the_deepest_scripts)
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
     ss << eTx.mtx;
     const std::vector<uint8_t> txBin(ss.begin(), ss.end());
-    std::cerr << "[stack_use_of_the_deepest_scripts] input | peak_stack_bytes (probe " << STACK_PROBE_BYTES << ")" << std::endl;
+    std::cerr << "[stack_use_of_the_deepest_scripts] input | peak_stack_bytes (probe " << STACK_PROBE_BYTES << ")" << '\n';
     PaintStack();
     UseStack<65536>();
     std::cerr << "[stack_use_of_the_deepest_scripts] calibration, a 65536-byte frame | "
-              << STACK_PROBE_BYTES - UnusedStackBytes() << std::endl;
+              << STACK_PROBE_BYTES - UnusedStackBytes() << '\n';
     for (const auto& [index, name] : { std::pair{ size_t{ 0 }, "P2PKH" }, std::pair{ size_t{ 1 }, "OP_IF nested 100000 deep" },
                                        std::pair{ size_t{ 2 }, "1-of-1000 multisig, 1000 checks" } }) {
         const CTxOut& source = eTx.vutxo[index];
@@ -5204,7 +5204,7 @@ BOOST_AUTO_TEST_CASE(stack_use_of_the_deepest_scripts)
             source.nValue.GetSatoshis(), P2PKH_UTXO_HEIGHT, P2PKH_BLOCK_HEIGHT, /*consensus=*/true);
         const size_t used = STACK_PROBE_BYTES - UnusedStackBytes();
         BOOST_REQUIRE(bsv::TxErrorIsOk(status));
-        std::cerr << "[stack_use_of_the_deepest_scripts] " << name << " | " << used << std::endl;
+        std::cerr << "[stack_use_of_the_deepest_scripts] " << name << " | " << used << '\n';
     }
 }
 
