@@ -1,3 +1,5 @@
+#include <array>
+#include <span>
 #include <cstdint>
 #include <cstdlib>
 
@@ -24,10 +26,10 @@ BOOST_AUTO_TEST_SUITE(test_gobdk_shim_suite)
 
 namespace {
 
-const char kNetwork[] = "main";
-const char kDummyTx[] = { 0x00 };
-const int32_t kHeights[] = { 0 };
-const uint32_t kFlags[] = { 0 };
+constexpr std::span<const char> kNetwork = std::span{"main"}.first<4>(); // without the NUL
+constexpr std::array<char, 1> kDummyTx{ 0x00 };
+constexpr std::array<int32_t, 1> kHeights{ 0 };
+constexpr std::array<uint32_t, 1> kFlags{ 0 };
 
 bool IsAbiError(TxError result, AbiError_t code)
 {
@@ -36,7 +38,7 @@ bool IsAbiError(TxError result, AbiError_t code)
 }
 
 struct ValidatorFixture {
-    TxValidatorCGO engine{ TxValidator_CreateV2(kNetwork, sizeof(kNetwork) - 1) };
+    TxValidatorCGO engine{ TxValidator_CreateV2(kNetwork.data(), kNetwork.size_bytes()) };
 
     ~ValidatorFixture() { TxValidator_Destroy(engine); }
 };
@@ -58,29 +60,29 @@ BOOST_FIXTURE_TEST_CASE(null_buffer_is_a_typed_abi_result, ValidatorFixture)
 
     // Extended transaction pointer
     BOOST_CHECK(IsAbiError(
-        TxValidator_ValidateTransaction(engine, nullptr, 16, kHeights, 1, 0, true),
+        TxValidator_ValidateTransaction(engine, nullptr, 16, kHeights.data(), 1, 0, true),
         ABI_ERR_NULL_BUFFER));
     BOOST_CHECK(IsAbiError(
-        TxValidator_VerifyScript(engine, nullptr, 16, kHeights, 1, 0, true),
+        TxValidator_VerifyScript(engine, nullptr, 16, kHeights.data(), 1, 0, true),
         ABI_ERR_NULL_BUFFER));
     BOOST_CHECK(IsAbiError(
-        TxValidator_VerifyScriptWithCustomFlags(engine, nullptr, 16, kHeights, 1, 0, true, kFlags, 1),
+        TxValidator_VerifyScriptWithCustomFlags(engine, nullptr, 16, kHeights.data(), 1, 0, true, kFlags.data(), 1),
         ABI_ERR_NULL_BUFFER));
 
     // UTXO heights pointer
     BOOST_CHECK(IsAbiError(
-        TxValidator_ValidateTransaction(engine, kDummyTx, 1, nullptr, 1, 0, true),
+        TxValidator_ValidateTransaction(engine, kDummyTx.data(), 1, nullptr, 1, 0, true),
         ABI_ERR_NULL_BUFFER));
     BOOST_CHECK(IsAbiError(
-        TxValidator_VerifyScript(engine, kDummyTx, 1, nullptr, 1, 0, true),
+        TxValidator_VerifyScript(engine, kDummyTx.data(), 1, nullptr, 1, 0, true),
         ABI_ERR_NULL_BUFFER));
     BOOST_CHECK(IsAbiError(
-        TxValidator_VerifyScriptWithCustomFlags(engine, kDummyTx, 1, nullptr, 1, 0, true, kFlags, 1),
+        TxValidator_VerifyScriptWithCustomFlags(engine, kDummyTx.data(), 1, nullptr, 1, 0, true, kFlags.data(), 1),
         ABI_ERR_NULL_BUFFER));
 
     // Custom flags pointer
     BOOST_CHECK(IsAbiError(
-        TxValidator_VerifyScriptWithCustomFlags(engine, kDummyTx, 1, kHeights, 1, 0, true, nullptr, 1),
+        TxValidator_VerifyScriptWithCustomFlags(engine, kDummyTx.data(), 1, kHeights.data(), 1, 0, true, nullptr, 1),
         ABI_ERR_NULL_BUFFER));
 }
 
@@ -92,7 +94,7 @@ BOOST_FIXTURE_TEST_CASE(sigopcount_reports_abi_failure_through_errstr, Validator
     BOOST_REQUIRE(engine != nullptr);
 
     char* errStr = nullptr;
-    const uint64_t count = TxValidator_GetSigOpCount(engine, nullptr, 16, kHeights, 1, 0, true, true, &errStr);
+    const uint64_t count = TxValidator_GetSigOpCount(engine, nullptr, 16, kHeights.data(), 1, 0, true, true, &errStr);
 
     BOOST_CHECK_EQUAL(count, uint64_t{ 0 });
     BOOST_REQUIRE(errStr != nullptr);
@@ -108,11 +110,11 @@ BOOST_FIXTURE_TEST_CASE(batch_add_and_reserve_contract, BatchFixture)
     BOOST_REQUIRE(batch != nullptr);
     BOOST_CHECK_EQUAL(ValidateBatch_Size(batch), uint64_t{ 0 });
 
-    const TxError added = ValidateBatch_Add(batch, kDummyTx, 1, kHeights, 1, 0, true);
+    const TxError added = ValidateBatch_Add(batch, kDummyTx.data(), 1, kHeights.data(), 1, 0, true);
     BOOST_CHECK_EQUAL(added.domain, static_cast<int32_t>(TX_ERR_DOMAIN_OK));
     BOOST_CHECK_EQUAL(ValidateBatch_Size(batch), uint64_t{ 1 });
 
-    const TxError rejected = ValidateBatch_Add(batch, nullptr, 16, kHeights, 1, 0, true);
+    const TxError rejected = ValidateBatch_Add(batch, nullptr, 16, kHeights.data(), 1, 0, true);
     BOOST_CHECK(IsAbiError(rejected, ABI_ERR_NULL_BUFFER));
     BOOST_CHECK_EQUAL(ValidateBatch_Size(batch), uint64_t{ 1 });
 
