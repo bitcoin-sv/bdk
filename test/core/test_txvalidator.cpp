@@ -82,7 +82,7 @@ BOOST_AUTO_TEST_CASE(validator_by_network_has_sha256_backend)
 // its own process (test_txvalidator_chain_name_has_backend).
 BOOST_AUTO_TEST_CASE(validator_by_chain_name_has_sha256_backend)
 {
-    const bsv::CTxValidator validator{std::string{"main"}};
+    const bsv::CTxValidator validator{"main"};
     sha256_test::CheckInstalledBackend();
     BOOST_TEST(bsv::SelectSha256Backend() == sha256_test::ExpectedSelection());
 }
@@ -105,10 +105,18 @@ BOOST_AUTO_TEST_CASE(custom_chainparams)
     // which would let a pointer comparison pass by accident.
     const std::string runtimeName{std::string{"tera"} + "testnet"};
     const char* const runtimeCString{runtimeName.c_str()};
-    BOOST_TEST(runtimeName == CustomChainParams::TERATESTNET);
-    BOOST_TEST(runtimeCString == CustomChainParams::TERATESTNET);
+    // Double parentheses: BOOST_TEST would otherwise decompose the expression and
+    // compare C strings by content itself, hiding a pointer comparison
+    BOOST_TEST((runtimeName == CustomChainParams::TERATESTNET));
+    BOOST_TEST((runtimeCString == CustomChainParams::TERATESTNET));
     BOOST_TEST(bsv::CreateCustomChainParams(runtimeName) != nullptr);
     BOOST_TEST(bsv::CreateCustomChainParams(runtimeCString) != nullptr);
+
+    // The constants, a std::string and a literal all construct a validator
+    BOOST_CHECK_NO_THROW(bsv::CTxValidator{CustomChainParams::TERATESTNET});
+    BOOST_CHECK_NO_THROW(bsv::CTxValidator{CustomChainParams::TERASCALINGTESTNET});
+    BOOST_CHECK_NO_THROW(bsv::CTxValidator{runtimeName});
+    BOOST_CHECK_NO_THROW(bsv::CTxValidator{"main"});
 
     // Unknown network should throw a exception
     BOOST_CHECK_THROW(bsv::CreateCustomChainParams("unknownchain"), std::runtime_error);
@@ -140,7 +148,7 @@ BOOST_AUTO_TEST_CASE(built_in_network_parameters_match_chainparams)
 
     for(const auto& network : networks) {
         const bsv::CTxValidator compact{network.network};
-        const bsv::CTxValidator full{std::string{network.chainName}};
+        const bsv::CTxValidator full{network.chainName};
         BOOST_CHECK_EQUAL(compact.GetRequireStandard(), full.GetRequireStandard());
         BOOST_CHECK_EQUAL(compact.GetGenesisActivationHeight(), full.GetGenesisActivationHeight());
         BOOST_CHECK_EQUAL(compact.GetChronicleActivationHeight(), full.GetChronicleActivationHeight());
@@ -163,7 +171,7 @@ BOOST_AUTO_TEST_CASE(stn_string_constructor_has_deterministic_activation_flags)
     // Repeated string construction must use BDK's explicit STN table instead
     // of inheriting platform- and stack-dependent values from those fields.
     for(int iteration = 0; iteration < 32; ++iteration) {
-        const bsv::CTxValidator stringNamed{std::string{"stn"}};
+        const bsv::CTxValidator stringNamed{"stn"};
         for(const int32_t height : {1, 14, 15, 99, 100, 249, 250, 2199, 2200}) {
             BOOST_CHECK_EQUAL(
                 stringNamed.CalculateFlags(height, height, false),

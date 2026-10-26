@@ -98,7 +98,7 @@ BOOST_AUTO_TEST_CASE(selected_at_load_before_threads_hash, *boost::unit_test::ti
             }
             case ChainNameValidator:
             {
-                const bsv::CTxValidator validator{std::string{"main"}};
+                const bsv::CTxValidator validator{"main"};
                 ok[i] = HashMatchesOpenSsl(msg);
                 break;
             }

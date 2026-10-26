@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <string_view>
 #include <cstdint>
 #include <span>
 #include <memory>
@@ -122,7 +123,7 @@ enum class TxValidationNetwork {
 class CTxValidator 
 {
     public:
-        explicit CTxValidator(const std::string& chainName);
+        explicit CTxValidator(std::string_view chainName);
         explicit CTxValidator(TxValidationNetwork network);
         CTxValidator(const Consensus::Params& consensusParams, bool requireStandard);
 
