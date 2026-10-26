@@ -18,10 +18,12 @@ installed alongside the package (`CMakeLists.txt`).
   before. The result is always the serial one: the error of the lowest-index failing input.
   In-flight inputs above that failure stop at their next interpreter cancellation poll; lower
   inputs finish normally. Caller cancellation returns no verdict when necessary input verification
-  remains unfinished; a completed success or lowest-failure verdict is retained. At
-  1,000 to 40,000 P2PKH inputs, `ValidateTransaction` is 2.3x faster on a 4-vCPU x86-64 runner,
-  3.7x on a 4-core ARM64 runner and 7.4x on a 14-core Apple M3 Max; with callers already using
-  every core, aggregate throughput is unchanged. What embedders should know:
+  remains unfinished; a completed success or lowest-failure verdict is retained. Measured through
+  gobdk against 1.4.0 on 8-vCPU m8g (Graviton4), m6a (Zen 3) and c7i (Sapphire Rapids) instances,
+  an 86,584-input P2PKH transaction validates 2.7-2.9x faster with 2 helpers and 3.8-7.0x faster
+  at the automatic default (7.0x on Graviton4; 3.8-4.4x on the x86 instances, where automatic
+  runs helpers on SMT siblings and costs 1.7-1.9x the CPU per large validation). Results are
+  identical at every setting. What embedders should know:
   - The helpers belong to one process-wide pool, created on the first such transaction and never
     torn down (they idle on a condition variable). It has one helper per available CPU minus one.
   - Available CPUs are `std::thread::hardware_concurrency()`, lowered on Linux to the affinity
@@ -39,11 +41,22 @@ installed alongside the package (`CMakeLists.txt`).
     platform's thread library (cgo and Cargo add it already).
   - Changing a `CTxValidator` setting (`Set...`) while any validation runs on it is a data race,
     as before; helpers now read those settings too.
-  - Helpers do not see goroutines or other threads of the embedding process. While a large
-    transaction is verified they compete with them for CPUs: on a 14-core machine with every Go P
-    busy, a 10,000-input transaction verified 4.7x faster than serially while the goroutines'
-    throughput fell by about 40% for that shorter time; with at most 2 helpers, 2.8x faster at
-    about 20%. `SetParallelInputHelpers` (below) sets that trade-off.
+  - Transactions below 16 inputs are unchanged on the x86 instances (within 0.7%). On Graviton4
+    they measured 0.4-1.6% slower than 1.4.0 at every setting, including 0 helpers; the cause is
+    under investigation. There is no step at 16 inputs: 16 inputs is already faster than 15.
+  - An invalid transaction whose first input fails returns its verdict within 2.6% of 1.4.0.
+    With expensive inputs behind the failing one, helpers start some of them before the failure
+    stops them: up to 7.5% slower on the x86 instances at automatic.
+  - Helpers do not see goroutines or other threads of the embedding process. When validation
+    already fills every CPU they barely engage, and throughput and latency stay within a few
+    percent of 1.4.0. With half the CPUs validating small transactions, a large one is 44-73%
+    faster and small-transaction throughput falls by 2% (2 helpers) or 8% (automatic) on
+    Graviton4, and by 19-21% or 33-35% on the x86 instances. With every Go P running CPU-bound
+    goroutines, those keep 84-89% of their rate with no helpers, about 76% with 2 and about 58% at
+    automatic, while a 10,000-input transaction validates 1.9-2.6x or 3.5-5.1x faster; the cost
+    lasts only while it validates. `SetParallelInputHelpers` (below) sets that trade-off.
+    Automatic stays the default; an embedder sharing the machine with other work can set a cap,
+    for example 2 on x86 with SMT.
 - **New, additive API: a process-wide limit on parallel input helpers.** C++
   `bsv::SetParallelInputHelpers(int64_t)` / `bsv::GetParallelInputHelpers()`
   (`core/txvalidator.hpp`), Go `script.SetParallelInputHelpers(int64)` /

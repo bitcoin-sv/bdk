@@ -23,10 +23,9 @@
 namespace bsv::detail {
 // The default threshold, bsv::detail::DEFAULT_PARALLEL_INPUT_THRESHOLD, comes
 // from a serial-vs-parallel sweep over input counts (SIGHASH_ALL|FORKID
-// P2PKH, about 20-50 us per input): at 16 inputs parallel was 1.56x-1.84x
-// faster on ubuntu-22.04 (x86-64, 4 vCPU), ubuntu-22.04-arm (4 cores),
-// macos-15 CI (3 vCPU) and an Apple M3 Max; at 2-4 inputs the macos-15 runner
-// was slower.
+// P2PKH): at 2-4 inputs a 3-vCPU CI runner was slower in parallel. Measured
+// against 1.4.0 on 8-vCPU m8g, m6a and c7i instances, 16 inputs with helpers
+// is 30-47% faster than 1.4.0 and already faster than 15 inputs serially.
 static_assert(bsv::detail::DEFAULT_PARALLEL_INPUT_THRESHOLD == 16);
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables): process-wide pool state and test hooks, atomic by design
 std::atomic<size_t> parallelInputThreshold{ bsv::detail::DEFAULT_PARALLEL_INPUT_THRESHOLD };
