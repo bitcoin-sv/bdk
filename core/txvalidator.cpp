@@ -1488,7 +1488,7 @@ TxError bsv::CTxValidator::implIsFreeConsolidation(const CTransaction& tx,
                                                      std::span<const int32_t> utxoHeights,
                                                      int32_t blockHeight) const
 {
-    constexpr auto notFree = []() {
+    constexpr auto notFree = []{
         return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::NotFreeConsolidation));
     };
 
