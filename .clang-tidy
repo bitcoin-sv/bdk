@@ -50,7 +50,6 @@ Checks: >
   -readability-isolate-declaration,
   -readability-math-missing-parentheses,
   -readability-redundant-casting,
-  -readability-redundant-inline-specifier,
   -readability-redundant-lambda-parameter-list,
   -readability-redundant-parentheses,
   -readability-uppercase-literal-suffix,
