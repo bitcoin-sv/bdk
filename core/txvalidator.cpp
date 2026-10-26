@@ -1597,7 +1597,7 @@ TxError bsv::CTxValidator::implCheckFee(const CTransaction& tx,
         nValueIn += utxo.nValue;
     const Amount nFees = nValueIn - tx.GetValueOut();
 
-    const int64_t txSize = static_cast<int64_t>(tx.GetTotalSize());  // delta (d)
+    const auto txSize = static_cast<int64_t>(tx.GetTotalSize());  // delta (d)
     int64_t minFeeSats = (txSize * minMiningTxFeeSatPerKB) / 1000;   // delta (f)
     if (minFeeSats == 0 && txSize > 0 && minMiningTxFeeSatPerKB > 0)
         minFeeSats = 1;

@@ -123,7 +123,7 @@ bdkffi_TxError* malloc_error_array(const std::vector<TxError>& results, int* res
     }
 
     // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
-    bdkffi_TxError* out = static_cast<bdkffi_TxError*>(
+    auto* out = static_cast<bdkffi_TxError*>(
         // NOLINTNEXTLINE(cppcoreguidelines-no-malloc)
         std::malloc(results.size() * sizeof(bdkffi_TxError)));
     if (out == nullptr) {
@@ -146,7 +146,7 @@ bdkffi_TxError* malloc_single_exception(int* result_size)
     }
 
     // NOLINTNEXTLINE(cppcoreguidelines-no-malloc, cppcoreguidelines-owning-memory)
-    bdkffi_TxError* out = static_cast<bdkffi_TxError*>(std::malloc(sizeof(bdkffi_TxError)));
+    auto* out = static_cast<bdkffi_TxError*>(std::malloc(sizeof(bdkffi_TxError)));
     if (out == nullptr) {
         *result_size = 0;
         return nullptr;

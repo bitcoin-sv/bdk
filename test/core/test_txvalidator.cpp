@@ -1336,7 +1336,7 @@ struct ManyKeyMultisigSpend {
 static ManyKeyMultisigSpend MakeManyKeyMultisigSpend(size_t nInputs, size_t nKeys)
 {
     const SigHashType allForkId = SigHashType().withForkId();
-    const uint32_t index = static_cast<uint32_t>(nInputs / 2);
+    const auto index = static_cast<uint32_t>(nInputs / 2);
 
     std::vector<CKey> keys;
     CScript multisig = CScript() << static_cast<int64_t>(nKeys);
@@ -1432,7 +1432,7 @@ BOOST_AUTO_TEST_CASE(verify_spend_shares_sighash_precompute_across_checks,
         }
     }
 
-    const double extraChecks = static_cast<double>(N_KEYS[1] - N_KEYS[0]);
+    const auto extraChecks = static_cast<double>(N_KEYS[1] - N_KEYS[0]);
     const double smallMarginalMs = (bestMs[0][1] - bestMs[0][0]) / extraChecks;
     const double largeMarginalMs = (bestMs[1][1] - bestMs[1][0]) / extraChecks;
     BOOST_REQUIRE_MESSAGE(smallMarginalMs > 0.0,

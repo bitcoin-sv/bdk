@@ -249,7 +249,7 @@ BOOST_AUTO_TEST_CASE(every_backend_matches_scalar_on_random_messages, *boost::un
     {
         // Each message starts at offset 0..15 into its buffer, so the transforms
         // also see unaligned multi-block input, as they do in production
-        const size_t offset = static_cast<size_t>(i % 16);
+        const auto offset = static_cast<size_t>(i % 16);
         std::vector<uint8_t> storage(offset + length(rng));
         std::ranges::generate(storage, [&] { return static_cast<uint8_t>(rng()); });
         const std::span<const uint8_t> msg = std::span<const uint8_t>{storage}.subspan(offset);
