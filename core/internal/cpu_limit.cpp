@@ -27,7 +27,7 @@
 
 static std::optional<std::string> ReadFile(const std::string& path)
 {
-    std::ifstream in(path, std::ios::binary);
+    const std::ifstream in(path, std::ios::binary);
     if (!in)
         return std::nullopt;
     std::ostringstream content;
@@ -252,7 +252,7 @@ static std::optional<size_t> AffinityCpuCount()
     constexpr int MAX_AFFINITY_CPUS = 1 << 20;
     const auto freeMask = [](cpu_set_t* mask) { CPU_FREE(mask); };
     for (int ncpus = INITIAL_AFFINITY_CPUS; ncpus <= MAX_AFFINITY_CPUS; ncpus *= 2) {
-        std::unique_ptr<cpu_set_t, decltype(freeMask)> mask{ CPU_ALLOC(ncpus), freeMask };
+        const std::unique_ptr<cpu_set_t, decltype(freeMask)> mask{ CPU_ALLOC(ncpus), freeMask };
         if (mask == nullptr)
             return std::nullopt;
         const size_t size = CPU_ALLOC_SIZE(ncpus);
@@ -271,13 +271,13 @@ static std::optional<size_t> AffinityCpuCount()
 
 size_t bsv::detail::EffectiveCpuCount(const std::string& cgroupRoot)
 {
-    size_t cpus = std::thread::hardware_concurrency();
+    const size_t hardware = std::thread::hardware_concurrency();
 #if defined(__linux__) && !defined(__EMSCRIPTEN__)
-    if (const auto allowed = AffinityCpuCount())
-        cpus = cpus == 0 ? *allowed : std::min(cpus, *allowed);
-    cpus = LimitCpuCount(cpus, CgroupCpuLimit(cgroupRoot));
+    const size_t allowed = AffinityCpuCount().value_or(hardware);
+    const size_t cpus = hardware == 0 ? allowed : std::min(hardware, allowed);
+    return LimitCpuCount(cpus, CgroupCpuLimit(cgroupRoot));
 #else
     (void)cgroupRoot;
+    return hardware;
 #endif
-    return cpus;
 }
