@@ -88,7 +88,7 @@ static std::string trim(const std::string& str)
         end--;
     } while (std::distance(start, end) > 0 && std::isspace(*end));
 
-    return std::string(start, end + 1);
+    return {start, end + 1};
 }
 
 // Enhanced split function to handle quotes

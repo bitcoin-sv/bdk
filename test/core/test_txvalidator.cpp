@@ -788,7 +788,7 @@ static CScript MakeConditionalDataScript(size_t totalSize)
     raw.push_back(OP_ENDIF);
     raw.push_back(OP_TRUE);
 
-    return CScript(raw.begin(), raw.end());
+    return {raw.begin(), raw.end()};
 }
 
 // A transaction whose bare size is a couple of hundred bytes but whose aggregate
@@ -930,7 +930,7 @@ static std::vector<uint8_t> SerializeExtended(const bsv::CMutableTransactionExte
 {
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
     ss << eTx;
-    return std::vector<uint8_t>(ss.begin(), ss.end());
+    return {ss.begin(), ss.end()};
 }
 
 static TxError ValidateP2PKHSpend(const bsv::CTxValidator& se,

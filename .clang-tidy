@@ -33,7 +33,6 @@ Checks: >
 
   -modernize-avoid-c-style-cast,
   -modernize-raw-string-literal,
-  -modernize-return-braced-init-list,
   -modernize-use-auto,
   -modernize-use-integer-sign-comparison,
   -modernize-use-string-view,

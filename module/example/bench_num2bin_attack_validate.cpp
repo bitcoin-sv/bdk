@@ -118,7 +118,7 @@ static std::vector<uint8_t> Serialise(const bsv::CMutableTransactionExtended& eT
 {
     CDataStream out(SER_NETWORK, PROTOCOL_VERSION);
     out << eTX;
-    return std::vector<uint8_t>(out.begin(), out.end());
+    return {out.begin(), out.end()};
 }
 
 // ============================================================
