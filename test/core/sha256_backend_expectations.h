@@ -10,6 +10,7 @@
 #include <iterator>
 #include <sstream>
 #include <string>
+#include <string_view>
 
 #include "crypto/sha256_dispatch.h"
 #include "sha256_backend.hpp"
@@ -24,7 +25,7 @@ namespace sha256_test
     // code: CPUID on x86-64, /proc/cpuinfo on Linux ARM. On Apple silicon it is
     // a fixed expectation rather than a probe: every Apple silicon core
     // implements FEAT_SHA256.
-    inline std::string ExpectedBestBackend()
+    inline std::string_view ExpectedBestBackend()
     {
 #if (defined(__GNUC__) || defined(__clang__)) && !defined(_MSC_VER) && !defined(__EMSCRIPTEN__)
 #if defined(__x86_64__) || defined(__amd64__)
@@ -67,7 +68,7 @@ namespace sha256_test
         return v != nullptr && *v != '\0' && std::string{v} != "0";
     }
 
-    inline bool HasTwoWay(const std::string& backend)
+    inline bool HasTwoWay(const std::string_view backend)
     {
         return backend == "shani" || backend == "arm_shani";
     }
@@ -78,7 +79,7 @@ namespace sha256_test
     {
         if(forced)
             return "standard(forced)";
-        const std::string best = ExpectedBestBackend();
+        const std::string best{ExpectedBestBackend()};
         return HasTwoWay(best) ? best + "," + best + "(2way)" : best;
     }
 
@@ -94,7 +95,7 @@ namespace sha256_test
             return;
         }
 
-        const std::string best = ExpectedBestBackend();
+        const auto best = ExpectedBestBackend();
         const auto& supported = bsv::Sha256SupportedBackends();
         const auto it = std::ranges::find_if(supported,
                                              [&](const bsv::Sha256Backend& b)

@@ -32,7 +32,6 @@ Checks: >
   -modernize-use-trailing-return-type,
 
   -modernize-use-auto,
-  -modernize-use-string-view,
   -modernize-use-transparent-functors,
 
   performance-*,
