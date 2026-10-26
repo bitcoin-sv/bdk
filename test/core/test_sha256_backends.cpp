@@ -133,7 +133,7 @@ namespace
     uint64_t TestSeed()
     {
         const char* v = std::getenv("BDK_SHA256_TEST_SEED");
-        return v != nullptr && *v != '\0' ? std::strtoull(v, nullptr, 0) : 20261016ull;
+        return v != nullptr && *v != '\0' ? std::strtoull(v, nullptr, 0) : 20261016ULL;
     }
 
     std::array<uint8_t, 32> OpenSslSha256d(std::span<const uint8_t> msg)
@@ -280,8 +280,8 @@ BOOST_AUTO_TEST_CASE(direct_transforms_at_unaligned_offsets, *boost::unit_test::
     std::mt19937_64 rng{TestSeed()};
     std::vector<uint8_t> buffer(16 + (8 * 64));
     std::ranges::generate(buffer, [&] { return static_cast<uint8_t>(rng()); });
-    const std::array<uint32_t, 8> init = {0x6a09e667ul, 0xbb67ae85ul, 0x3c6ef372ul, 0xa54ff53aul,
-                                          0x510e527ful, 0x9b05688cul, 0x1f83d9abul, 0x5be0cd19ul};
+    const std::array<uint32_t, 8> init = {0x6a09e667UL, 0xbb67ae85UL, 0x3c6ef372UL, 0xa54ff53aUL,
+                                          0x510e527fUL, 0x9b05688cUL, 0x1f83d9abUL, 0x5be0cd19UL};
     const auto& backends = bsv::Sha256SupportedBackends();
 
     for(size_t offset = 1; offset < 16; ++offset)

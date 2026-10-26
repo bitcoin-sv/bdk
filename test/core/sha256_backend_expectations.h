@@ -30,8 +30,8 @@ namespace sha256_test
 #if (defined(__GNUC__) || defined(__clang__)) && !defined(_MSC_VER) && !defined(__EMSCRIPTEN__)
 #if defined(__x86_64__) || defined(__amd64__)
         uint32_t eax{}, ebx{}, ecx{}, edx{};
-        const bool sse41 = __get_cpuid(1, &eax, &ebx, &ecx, &edx) != 0 && ((ecx >> 19) & 1u) != 0;
-        const bool shani = __get_cpuid_count(7, 0, &eax, &ebx, &ecx, &edx) != 0 && ((ebx >> 29) & 1u) != 0;
+        const bool sse41 = __get_cpuid(1, &eax, &ebx, &ecx, &edx) != 0 && ((ecx >> 19) & 1U) != 0;
+        const bool shani = __get_cpuid_count(7, 0, &eax, &ebx, &ecx, &edx) != 0 && ((ebx >> 29) & 1U) != 0;
         if(sse41 && shani)
             return "shani";
         if(sse41)
