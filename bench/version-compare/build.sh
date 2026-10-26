@@ -3,7 +3,8 @@
 # Usage: build.sh [v1.3.0 v1.3.1 v1.4.0 label=<version or commit> ...]
 # A label=version argument names the binary bdk-bench-<label>; anything other than a
 # v1.3.x or v1.4.0 release is built with parallel input verification (bdk67) unless
-# TAGS says otherwise.
+# TAGS says otherwise. A version starting with / is a local gobdk directory (replace).
+# CGO_CFLAGS passes through, e.g. CGO_CFLAGS="-O2 -g -DBDK_BENCH_PAD=16" (pad_amd64.go).
 set -euo pipefail
 SRC=$(cd "$(dirname "$0")" && pwd)
 OUT=${OUT:-$SRC/bin}
@@ -26,7 +27,10 @@ for arg in "${VERSIONS[@]}"; do
 	# TAGS overrides, e.g. TAGS=bdk14 for a later commit without parallel input verification.
 	tags=${TAGS-$tags}
 	(cd "$d" &&
-		GOFLAGS=-mod=mod go get "github.com/bitcoin-sv/bdk/module/gobdk@$v" &&
+		case "$v" in
+		/*) go mod edit -replace "github.com/bitcoin-sv/bdk/module/gobdk=$v" ;; # a local gobdk checkout
+		*) GOFLAGS=-mod=mod go get "github.com/bitcoin-sv/bdk/module/gobdk@$v" ;;
+		esac &&
 		GOFLAGS=-mod=mod go mod tidy &&
 		go build -tags "$tags" -trimpath -o "$OUT/bdk-bench-$label" .)
 	echo "built $OUT/bdk-bench-$label ($(grep 'bitcoin-sv/bdk/module/gobdk ' "$d/go.mod" | tr -s ' \t' ' '))"

@@ -58,6 +58,9 @@ type result struct {
 	HelpersSet    string  `json:"helpers_set"`
 	HelpersGet    *int64  `json:"helpers_get,omitempty"`
 	NumCPU        int     `json:"num_cpu"`
+	Pad           int     `json:"pad"`
+	TransformAddr string  `json:"transform_addr,omitempty"`
+	TransformMod  *int    `json:"transform_mod64,omitempty"`
 }
 
 func main() {
@@ -114,7 +117,11 @@ func main() {
 		ForceScalar: os.Getenv("BDK_SHA256_FORCE_SCALAR"),
 		GoVersion:   runtime.Version(), GOOS: runtime.GOOS, GOARCH: runtime.GOARCH,
 		GOMAXPROCS: runtime.GOMAXPROCS(0), CPUModel: cpuModel(),
-		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Timestamp: time.Now().UTC().Format(time.RFC3339), Pad: benchPad(),
+	}
+	if a := transformAddr(); a != 0 {
+		m := int(a % 64)
+		r.TransformAddr, r.TransformMod = fmt.Sprintf("%#x", a), &m
 	}
 
 	code := run(sh, &r, *cacheDir, *minTime, *maxTime, *minIters)
@@ -283,6 +290,9 @@ func gobdkModuleVersion() string {
 		for _, d := range bi.Deps {
 			if d.Path == "github.com/bitcoin-sv/bdk/module/gobdk" {
 				if d.Replace != nil {
+					if d.Replace.Version == "" {
+						return d.Version + " => " + d.Replace.Path
+					}
 					return d.Version + " => " + d.Replace.Version
 				}
 				return d.Version
