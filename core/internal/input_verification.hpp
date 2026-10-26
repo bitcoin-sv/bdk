@@ -18,7 +18,10 @@
 //    abandoned (lowestFailure_ < lowestCancelled_); success needs all n inputs
 //    claimed and none abandoned. Otherwise the job has no verdict: the caller
 //    returns CANCELLED, rethrows its token's exception, or verifies serially
-//    if its own setup failed. A completed verdict is kept whatever
+//    if its own setup failed. A helper whose allocation fails abandons its
+//    input rather than recording bad_alloc as the result; the caller, unless
+//    cancelled, then verifies serially from the lowest input not known to
+//    pass (SerialResumeIndex). A completed verdict is kept whatever
 //    cancellation or token exception arrives afterwards (CompletedResult).
 // 3. Drain. The caller never returns, normally or by exception, while a
 //    participant is still joined: JobCaller closes the job, waits for joined
@@ -54,12 +57,13 @@
 // INPUT_HELPER_STACK_BYTES (8 MiB) stack on POSIX. The helper limit caps the
 // helpers working at once, not the threads created: any non-zero limit
 // creates the full pool. Only a limit of 0 set before the first large
-// transaction means no helper thread is ever started. Fewer than 2 CPUs is
-// recorded once and never retried; a failure to allocate the pool or start
-// any helper is retried by a later call. Once a helper has started, the pool
-// is published and lives for the rest of the process: helpers never exit and
-// nothing destroys it. Idle helpers sleep on a condition variable and use no
-// CPU. This avoids ordering pool teardown against static destructors and
+// transaction means no helper thread is ever started. Fewer than 2 CPUs, or
+// no helper thread starting at all (a thread or process limit), is recorded
+// once and never retried: the process verifies serially. Only a failure to
+// allocate the pool is retried by a later call. Once a helper has started,
+// the pool is published and lives for the rest of the process: helpers never
+// exit and nothing destroys it. Idle helpers sleep on a condition variable
+// and use no CPU. This avoids ordering pool teardown against static destructors and
 // against callers still inside BDK on other threads during exit. It also means
 // BDK cannot be unloaded (dlclose) once the pool exists.
 
@@ -117,6 +121,9 @@ public:
     void Leave();
     void CloseAndWait(bool pollCancellation = true);
     std::optional<TxError> CompletedResult();
+    // After CompletedResult gave no verdict: the input to continue serially
+    // from, or nullopt if the caller's token cancelled the job.
+    std::optional<size_t> SerialResumeIndex();
     void Fail(size_t index, const TxError& result, std::exception_ptr exception);
 private:
     static bool HelperShouldLeave(HelperTerms& helper);
@@ -124,7 +131,7 @@ private:
     const VerifyInput verify_;
     const task::CCancellationToken& callerToken_;
     std::atomic<bool> callerCancelled_{ false };  // only the caller polls its token
-    std::atomic<bool> helpersUnavailable_{ false };  // setup allocation failed
+    std::atomic<bool> helpersUnavailable_{ false };  // a helper's allocation failed
     std::atomic<size_t> next_{ 0 };
     std::atomic<size_t> lowestFailure_;  // n_ while nothing failed; written under mutex_
     size_t lowestCancelled_;  // abandoned claims, under mutex_; never a real failure
@@ -173,7 +180,7 @@ private:
     std::atomic<size_t> helpersOnJobs_{ 0 };  // helpers holding a place under HelperLimit()
 
     static std::atomic<InputVerifyPool*> created_;
-    static std::atomic<bool> tooFewCores_;  // set once Create finds fewer than 2 CPUs
+    static std::atomic<bool> noPool_;  // set once Create finds fewer than 2 CPUs or starts no helper
 };
 
 class BusyScope {

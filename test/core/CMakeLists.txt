@@ -195,6 +195,10 @@ add_test(NAME test_txvalidator_pool_below_two_cores
          COMMAND $<TARGET_FILE:test_txvalidator> --report_level=detailed
                  --run_test=test_txvalidator/pool_below_two_cores_is_not_retried
                  -- --input-pool-cores=1)
+add_test(NAME test_txvalidator_pool_without_helper_threads
+         COMMAND $<TARGET_FILE:test_txvalidator> --report_level=detailed
+                 --run_test=test_txvalidator/pool_without_helper_threads_is_not_retried
+                 -- --input-pool-cores=4)
 ## The same suite with every multi-input transaction verified on several threads,
 ## on a pool of at most 4 cores (CI-sized, on any machine)
 add_test(NAME test_txvalidator_parallel_inputs

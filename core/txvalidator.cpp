@@ -1120,6 +1120,7 @@ TxError bsv::CTxValidator::implVerifyScript(
     };
 
     const size_t nInputs = prevUTXO.size();
+    size_t firstSerialInput = 0;
 #if BDK_PARALLEL_INPUTS
     const size_t threshold = parallelInputThreshold.load(std::memory_order_relaxed);
     // A limit of 0 never creates the pool, so no helper thread is started.
@@ -1161,13 +1162,19 @@ TxError bsv::CTxValidator::implVerifyScript(
                 // by helpers. Replay serially only if that job is unfinished.
                 if (const auto result = job->CompletedResult())
                     return *result;
-                if (verified)
-                    return bsv::TxErrorCancelled();
+                if (verified) {
+                    // Inputs a helper abandoned for lack of memory are verified
+                    // here, from the lowest; a cancelled caller stops.
+                    const auto resume = job->SerialResumeIndex();
+                    if (!resume)
+                        return bsv::TxErrorCancelled();
+                    firstSerialInput = *resume;
+                }
             }
         }
     }
 #endif
-    for (size_t index = 0; index < nInputs; ++index) {
+    for (size_t index = firstSerialInput; index < nInputs; ++index) {
         const TxError verifyResult = verifyInput(index, token);
         if (const auto hook = inputHook.load(std::memory_order_relaxed))
             hook(index, bsv::detail::InputEvent::Verified);

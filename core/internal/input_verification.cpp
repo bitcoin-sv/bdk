@@ -44,6 +44,7 @@ std::atomic<bsv::detail::InputPoolHook> inputPoolHook{ nullptr };  // tests only
 static std::atomic<size_t> inputPoolCoresCap{ 0 };  // 0: no cap (tests only)
 static std::atomic<bsv::detail::InputPoolCreationHook> inputPoolCreationHook{ nullptr };
 static std::atomic<int64_t> parallelInputHelpers{ -1 };  // SetParallelInputHelpers; < 0: automatic
+static std::atomic<bool> helperStartsFail{ false };  // tests only
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 
@@ -129,6 +130,17 @@ std::optional<size_t> InputJob::Work(HelperTerms* helper)
                 pollHook(index, bsv::detail::InputEvent::Verified);
             if (!bsv::TxErrorIsOk(result))
                 Fail(index, result, nullptr);
+        } catch (const std::bad_alloc&) {
+            if (helper == nullptr) {
+                Fail(index, bsv::TxErrorException(), std::current_exception());
+            } else {
+                // Inputs in parallel raise peak memory, so a helper's failed
+                // allocation is not the input's result: abandon it for the
+                // caller to verify serially once the job drains.
+                Fail(index, bsv::TxErrorCancelled(), nullptr);
+                helpersUnavailable_.store(true, std::memory_order_relaxed);
+                return verified;
+            }
         } catch (...) {
             Fail(index, bsv::TxErrorException(), std::current_exception());
         }
@@ -225,6 +237,17 @@ std::optional<TxError> InputJob::CompletedResult()
     return bsv::TxErrorOk();
 }
 
+std::optional<size_t> InputJob::SerialResumeIndex()
+{
+    const std::scoped_lock lock{ mutex_ };
+    // With no verdict, every claimed input below the lowest abandoned one
+    // passed. Without the caller's cancellation, only a helper's failed
+    // allocation abandons an input that serial verification would reach.
+    if (callerCancelled_.load(std::memory_order_relaxed))
+        return std::nullopt;
+    return std::min(lowestCancelled_, next_.load(std::memory_order_relaxed));
+}
+
 bool InputJob::HelperShouldLeave(HelperTerms& helper)
 {
     if (busyThreads.load(std::memory_order_relaxed) > helper.cores)
@@ -260,13 +283,13 @@ InputVerifyPool* InputVerifyPool::Get()
 {
     if (auto* pool = Existing())
         return pool;
-    if (tooFewCores_.load(std::memory_order_acquire))
+    if (noPool_.load(std::memory_order_acquire))
         return nullptr;
     static std::mutex creationMutex;
     const std::scoped_lock lock{ creationMutex };
     if (auto* pool = Existing())
         return pool;
-    if (tooFewCores_.load(std::memory_order_relaxed))
+    if (noPool_.load(std::memory_order_relaxed))
         return nullptr;
     try {
         return Create();
@@ -343,19 +366,25 @@ InputVerifyPool* InputVerifyPool::Create()
     if (const auto hook = inputPoolCreationHook.load(std::memory_order_relaxed))
         hook();
     // Read once: a pool keeps this count, and fewer than 2 CPUs means no pool
-    // for the process lifetime. Only allocation or thread-start failure retries.
+    // for the process lifetime. Only a failure to allocate the pool retries.
     size_t cores = bsv::detail::EffectiveCpuCount();
     if (const size_t cap = inputPoolCoresCap.load(); cap != 0)
         cores = std::min(cores, cap);
     if (cores < 2) {
-        tooFewCores_.store(true, std::memory_order_release);
+        noPool_.store(true, std::memory_order_release);
         return nullptr;
     }
     auto pool = std::make_unique<InputVerifyPool>(cores);
     for (size_t i = 0; i + 1 < cores && StartHelper(pool.get()); ++i)
         ++pool->helpers_;
-    if (pool->helpers_ == 0)
+    // No helper thread started: a thread or process limit (pids.max,
+    // RLIMIT_NPROC) or no memory for a stack. Retrying would repeat the CPU
+    // discovery and every thread start, under creationMutex, on each large
+    // transaction; the process verifies serially instead.
+    if (pool->helpers_ == 0) {
+        noPool_.store(true, std::memory_order_release);
         return nullptr;
+    }
     // Detached helpers retain this address for process lifetime. No
     // throwing operation may follow their first successful start.
     auto* published = pool.release();
@@ -365,6 +394,8 @@ InputVerifyPool* InputVerifyPool::Create()
 
 bool InputVerifyPool::StartHelper(InputVerifyPool* pool)
 {
+    if (helperStartsFail.load(std::memory_order_relaxed))
+        return false;
 #if defined(_WIN32)
     try {
         std::thread([pool] { pool->Run(); }).detach();
@@ -528,7 +559,7 @@ void JobCaller::Finish()
 }
 
 std::atomic<InputVerifyPool*> InputVerifyPool::created_{ nullptr };
-std::atomic<bool> InputVerifyPool::tooFewCores_{ false };
+std::atomic<bool> InputVerifyPool::noPool_{ false };
 #endif
 } // namespace bsv::detail
 
@@ -550,6 +581,11 @@ size_t bsv::detail::SetParallelInputThresholdForTesting(size_t minInputs)
 bsv::detail::InputPoolCreationHook bsv::detail::SetInputPoolCreationHookForTesting(InputPoolCreationHook hook)
 {
     return inputPoolCreationHook.exchange(hook);
+}
+
+bool bsv::detail::SetHelperStartsFailForTesting(bool fail)
+{
+    return helperStartsFail.exchange(fail);
 }
 
 uint64_t bsv::detail::HelperVerifiedInputCountForTesting()

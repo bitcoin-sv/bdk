@@ -56,9 +56,11 @@ enum class TxValidationNetwork {
  * job flag. While waiting for joined helpers, the caller also polls after each
  * 10 ms condition-variable wait timeout. Helpers poll the flag, never the caller's
  * token. A CThreadTimedCancellationSource created on the caller accounts only
- * for that caller thread's CPU. Helpers never poll the source and their CPU is
- * excluded, so the same thread-time budget is a weaker CPU bound with helpers
- * than in serial verification; it is not a total CPU budget for the call.
+ * for that caller thread's CPU; helpers never poll the source and their CPU is
+ * excluded. It is not a total CPU budget for the call. Until the caller's last
+ * claim it bounds only the caller's share of the inputs; after that the caller
+ * waits for helpers without using CPU, so the token gives no bound at all on
+ * the helpers' remaining work.
  * A drained job needs no further poll; a completed verdict
  * survives cancellation observed as helpers finish. Scheduling and work between
  * interpreter polls can delay cancellation beyond the nominal wait interval.

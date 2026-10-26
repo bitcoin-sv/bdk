@@ -158,6 +158,10 @@ size_t InputPoolHelperCountForTesting();
 using InputPoolCreationHook = void (*)();
 InputPoolCreationHook SetInputPoolCreationHookForTesting(InputPoolCreationHook hook);
 
+// While set, every helper thread start fails, as at a thread or process
+// limit. Returns the previous setting. Tests only.
+bool SetHelperStartsFailForTesting(bool fail);
+
 // Threads currently counted against the core budget: callers inside
 // VerifyScript, ValidateTransaction or VerifySpend plus helpers on a job. Tests only.
 size_t BusyThreadCountForTesting();

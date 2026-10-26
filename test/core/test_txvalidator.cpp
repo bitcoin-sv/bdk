@@ -1811,6 +1811,38 @@ BOOST_FIXTURE_TEST_CASE(pool_below_two_cores_is_not_retried, FirstPoolCreationFa
     BOOST_CHECK_EQUAL(bsv::detail::HelperVerifiedInputCountForTesting(), helpersBefore);
 }
 
+// Every helper thread start fails, as at a thread or process limit.
+struct HelperStartsFail {
+    const bool previous = bsv::detail::SetHelperStartsFailForTesting(true);
+    HelperStartsFail() = default;
+    ~HelperStartsFail() { bsv::detail::SetHelperStartsFailForTesting(previous); }
+    HelperStartsFail(const HelperStartsFail&) = delete;
+    HelperStartsFail& operator=(const HelperStartsFail&) = delete;
+    HelperStartsFail(HelperStartsFail&&) = delete;
+    HelperStartsFail& operator=(HelperStartsFail&&) = delete;
+};
+
+// Run with 4 pool cores and no helper thread able to start. An attempt that
+// starts no helper is final, like finding fewer than 2 CPUs: later large txs
+// neither lock nor read the CPU count again.
+BOOST_FIXTURE_TEST_CASE(pool_without_helper_threads_is_not_retried, FirstPoolCreationFails, *boost::unit_test::disabled()
+    *boost::unit_test::timeout(60)
+    *boost::unit_test::precondition(TwoEffectiveCpus))
+{
+    const HelperStartsFail startsFail;
+    const auto helpersBefore = bsv::detail::HelperVerifiedInputCountForTesting();
+    // The first attempt fails to allocate, which is transient.
+    BOOST_REQUIRE(Validate());
+    BOOST_CHECK_EQUAL(attempts.load(), 1u);
+    // The second starts no helper and records that no pool can exist.
+    for (int tx = 0; tx < 5; ++tx)
+        BOOST_REQUIRE(Validate());
+    BOOST_CHECK_EQUAL(attempts.load(), 2u);
+    BOOST_CHECK_EQUAL(bsv::detail::InputPoolHelperCountForTesting(), 0u);
+    BOOST_CHECK_EQUAL(attempts.load(), 2u);
+    BOOST_CHECK_EQUAL(bsv::detail::HelperVerifiedInputCountForTesting(), helpersBefore);
+}
+
 // Script verification of a tx with many inputs runs on several threads. These
 // tests pin that the parallel path returns exactly what the serial path does.
 // A lost wakeup would hang a test. Each case has a timeout that turns a hang
@@ -1881,8 +1913,12 @@ BOOST_FIXTURE_TEST_CASE(pool_below_two_cores_is_not_retried, FirstPoolCreationFa
 //   A finished job behind a live one leaves the queue:
 //     finished_job_behind_a_live_one_leaves_the_queue; unit
 //     finished_front_jobs_are_removed
-//   Pool creation failure is retried, fewer than 2 CPUs is not:
-//     pool_creation_failure_is_retried, pool_below_two_cores_is_not_retried
+//   A helper's failed allocation is not a result; the input is verified
+//   serially: helper_allocation_failure_is_verified_serially
+//   Pool creation failure is retried; fewer than 2 CPUs, or no helper thread
+//   starting, is not: pool_creation_failure_is_retried,
+//     pool_below_two_cores_is_not_retried,
+//     pool_without_helper_threads_is_not_retried
 //   Helpers run on an 8 MiB stack: helpers_run_on_an_8_mib_stack,
 //     deep_scripts_verify_on_a_helper
 //   Test-only counters are off by default:
@@ -3942,6 +3978,66 @@ BOOST_AUTO_TEST_CASE(completed_helpers_keep_verdict_after_caller_setup_failure, 
                 << " completed=" << serial.domain << "/" << serial.code << " result=" << result.domain << "/" << result.code);
             BOOST_CHECK(PoolIsIdle());
         }
+    }
+}
+
+// The caller holds input 0 until a helper's allocation fails while it
+// verifies an input below `below`; the caller records its own verifications.
+class HelperAllocationFailure {
+public:
+    explicit HelperAllocationFailure(size_t below) : below{ below } {}
+    std::atomic<bool> helperFailed{ false }, abandonedReverified{ false }, timedOut{ false };
+    std::atomic<size_t> abandoned{ SIZE_MAX };
+    const std::thread::id owner{ std::this_thread::get_id() };
+    const size_t below;
+    const ActiveProbe<HelperAllocationFailure> active{ this };
+    const ScopedInputHook inputHook{ &Input };
+private:
+    static void Input(size_t index, bsv::detail::InputEvent event)
+    {
+        using bsv::detail::InputEvent;
+        auto& self = ActiveProbe<HelperAllocationFailure>::Get();
+        const bool caller = std::this_thread::get_id() == self.owner;
+        if (caller && event == InputEvent::Claimed && index == 0) {
+            Await(self.timedOut, [&] { return self.helperFailed.load(); });
+        } else if (caller && event == InputEvent::Verified && index == self.abandoned.load()) {
+            self.abandonedReverified = true;
+        } else if (!caller && event == InputEvent::Verified && index < self.below && !self.helperFailed.exchange(true)) {
+            // Verified fires inside the helper's input, after the script.
+            self.abandoned = index;
+            throw std::bad_alloc{};
+        }
+    }
+};
+
+// Running inputs in parallel raises peak memory, so a helper's bad_alloc is
+// not the tx's result: the input is verified again on the caller, which
+// returns what serial verification does, for a valid and an invalid tx.
+BOOST_AUTO_TEST_CASE(helper_allocation_failure_is_verified_serially, PARALLEL_TEST_CASE_DECORATORS)
+{
+    if (!PoolHasHelpers())
+        return;
+    const bsv::CTxValidator validator("main");
+    for (const bool invalid : { false, true }) {
+        auto tx = MakeSignedP2PKHSpend(std::vector<SigHashType>(32, SigHashType().withForkId()), 1);
+        if (invalid) CorruptP2PKHSignature(tx, 31);
+        const auto bin = SerializeExtended(tx);
+        TxError serial = bsv::TxErrorException();
+        {
+            const InputThresholdGuard serialOnly(FORCE_SERIAL);
+            serial = ValidateP2PKHSpend(validator, bin, 32, true);
+            BOOST_REQUIRE_EQUAL(serial.domain, invalid ? TX_ERR_DOMAIN_SCRIPT : TX_ERR_DOMAIN_OK);
+        }
+        const InputThresholdGuard parallel(FORCE_PARALLEL);
+        BOOST_REQUIRE(PoolIsIdle());
+        const HelperAllocationFailure probe(31);
+        const auto result = ValidateP2PKHSpend(validator, bin, 32, true);
+        BOOST_CHECK(!probe.timedOut);
+        BOOST_REQUIRE(probe.helperFailed);
+        BOOST_CHECK_MESSAGE(probe.abandonedReverified, "input " << probe.abandoned.load() << " was not verified again on the caller");
+        BOOST_CHECK_MESSAGE(SameTxError(result, serial), "invalid=" << invalid
+            << " serial=" << serial.domain << "/" << serial.code << " result=" << result.domain << "/" << result.code);
+        BOOST_CHECK(PoolIsIdle());
     }
 }
 
