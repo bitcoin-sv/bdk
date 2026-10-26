@@ -96,8 +96,9 @@ namespace sha256_test
 
         const std::string best = ExpectedBestBackend();
         const auto& supported = bsv::Sha256SupportedBackends();
-        const auto it = std::find_if(supported.begin(), supported.end(),
-                                     [&](const bsv::Sha256Backend& b) { return best == b.name; });
+        const auto it = std::ranges::find_if(supported,
+                                             [&](const bsv::Sha256Backend& b)
+                                             { return best == b.name; });
         BOOST_REQUIRE_MESSAGE(it != supported.end(),
                               "the CPU supports " << best << " but BDK does not offer it");
         BOOST_TEST((it == std::prev(supported.end())), best << " is not BDK's fastest backend");

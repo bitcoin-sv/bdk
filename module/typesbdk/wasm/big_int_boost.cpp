@@ -323,7 +323,7 @@ std::vector<uint8_t> bsv::bint::serialize() const
     else if(value_->value < 0) {
         result.front() |= 0x80;
     }
-    std::reverse(result.begin(), result.end());
+    std::ranges::reverse(result);
     return result;
 }
 

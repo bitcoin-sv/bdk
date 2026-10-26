@@ -201,7 +201,7 @@ BOOST_AUTO_TEST_CASE(double_sha256_of_64_byte_pairs)
     std::mt19937_64 rng{TestSeed()};
     std::vector<std::array<uint8_t, 128>> random_pairs(64);
     for(auto& p : random_pairs)
-        std::generate(p.begin(), p.end(), [&] { return static_cast<uint8_t>(rng()); });
+        std::ranges::generate(p, [&] { return static_cast<uint8_t>(rng()); });
 
     const auto check_1way = [&](sha256_dispatch::DBlock1wayType d1, const std::string& name) {
         std::array<uint8_t, 64> out{};
@@ -251,7 +251,7 @@ BOOST_AUTO_TEST_CASE(every_backend_matches_scalar_on_random_messages, *boost::un
         // also see unaligned multi-block input, as they do in production
         const size_t offset = static_cast<size_t>(i % 16);
         std::vector<uint8_t> storage(offset + length(rng));
-        std::generate(storage.begin(), storage.end(), [&] { return static_cast<uint8_t>(rng()); });
+        std::ranges::generate(storage, [&] { return static_cast<uint8_t>(rng()); });
         const std::span<const uint8_t> msg = std::span<const uint8_t>{storage}.subspan(offset);
         const size_t chunk = i % 3 == 0 ? msg.size() + 1 // one Write: the whole message goes to the transform at once
                                         : std::uniform_int_distribution<size_t>{1, msg.size() + 1}(rng);
@@ -279,7 +279,7 @@ BOOST_AUTO_TEST_CASE(direct_transforms_at_unaligned_offsets, *boost::unit_test::
 {
     std::mt19937_64 rng{TestSeed()};
     std::vector<uint8_t> buffer(16 + 8 * 64);
-    std::generate(buffer.begin(), buffer.end(), [&] { return static_cast<uint8_t>(rng()); });
+    std::ranges::generate(buffer, [&] { return static_cast<uint8_t>(rng()); });
     const std::array<uint32_t, 8> init = {0x6a09e667ul, 0xbb67ae85ul, 0x3c6ef372ul, 0xa54ff53aul,
                                           0x510e527ful, 0x9b05688cul, 0x1f83d9abul, 0x5be0cd19ul};
     const auto& backends = bsv::Sha256SupportedBackends();

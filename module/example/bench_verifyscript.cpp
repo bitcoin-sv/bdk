@@ -89,7 +89,7 @@ try
         microsPerOperation.push_back(elapsedMicros / iterations);
     }
 
-    std::sort(microsPerOperation.begin(), microsPerOperation.end());
+    std::ranges::sort(microsPerOperation);
     const double median = percentile(microsPerOperation, 0.5);
     const double p95 = percentile(microsPerOperation, 0.95);
     const double mean = std::accumulate(

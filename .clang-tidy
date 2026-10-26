@@ -36,7 +36,6 @@ Checks: >
   -modernize-return-braced-init-list,
   -modernize-use-auto,
   -modernize-use-integer-sign-comparison,
-  -modernize-use-ranges,
   -modernize-use-string-view,
   -modernize-use-transparent-functors,
 
