@@ -29,7 +29,7 @@ BOOST_AUTO_TEST_CASE(to_asm_from_asm_fail)
     const std::string input("4 5 OP_ADD 9 EQUAL");
     const CScript intermediate{bsv::from_asm(input)};
     const std::string output{bsv::to_asm(intermediate)};
-    BOOST_CHECK_PREDICATE(std::not_equal_to<std::string>(), (input)(output));
+    BOOST_CHECK_NE(input, output);
 }
 
 BOOST_AUTO_TEST_CASE(from_asm_check_exception)
