@@ -39,8 +39,8 @@ namespace bsv
         throw std::runtime_error("Unknown chain name: " + chainName);
     }
 
-    std::unique_ptr<CChainParams> CreateCustomChainParams(const std::string& name) {
-        return ChainParamsRegistry::Instance().Create(name);
+    std::unique_ptr<CChainParams> CreateCustomChainParams(std::string_view name) {
+        return ChainParamsRegistry::Instance().Create(std::string{name});
     }
 }
 

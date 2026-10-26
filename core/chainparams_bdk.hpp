@@ -1,13 +1,14 @@
 #pragma once
 
 #include <string>
+#include <string_view>
 #include <functional>
 #include <memory>
 
 struct CustomChainParams
 {
-    static constexpr const char* TERATESTNET = "teratestnet";
-    static constexpr const char* TERASCALINGTESTNET = "tstn";
+    static constexpr std::string_view TERATESTNET{"teratestnet"};
+    static constexpr std::string_view TERASCALINGTESTNET{"tstn"};
 };
 
 class CChainParams;
@@ -46,7 +47,7 @@ namespace bsv
     };
 
     // Create ChainParams global helper using its name
-    std::unique_ptr<CChainParams> CreateCustomChainParams(const std::string& name);
+    std::unique_ptr<CChainParams> CreateCustomChainParams(std::string_view name);
 
     // Registration helper template. To register your custom MyChainParams, in your cpp file
     //
@@ -54,9 +55,9 @@ namespace bsv
     template <typename T>
     class RegisterCustomChainParams {
     public:
-        explicit RegisterCustomChainParams(const std::string& name)
+        explicit RegisterCustomChainParams(std::string_view name)
         {
-            ChainParamsRegistry::Instance().Register(name,
+            ChainParamsRegistry::Instance().Register(std::string{name},
                                                      []()
                                                      { return std::make_unique<T>(); });
         }

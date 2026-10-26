@@ -99,8 +99,19 @@ BOOST_AUTO_TEST_CASE(custom_chainparams)
 
     BOOST_TEST(bsv::CreateCustomChainParams(MyParams::CustomName) != nullptr);
 
+    // The public name constants compare by value, not by pointer: a name built at
+    // runtime, in storage that is not the literal's, must still match and resolve.
+    // Concatenated so the compiler cannot merge it with the constant's literal,
+    // which would let a pointer comparison pass by accident.
+    const std::string runtimeName{std::string{"tera"} + "testnet"};
+    const char* const runtimeCString{runtimeName.c_str()};
+    BOOST_TEST(runtimeName == CustomChainParams::TERATESTNET);
+    BOOST_TEST(runtimeCString == CustomChainParams::TERATESTNET);
+    BOOST_TEST(bsv::CreateCustomChainParams(runtimeName) != nullptr);
+    BOOST_TEST(bsv::CreateCustomChainParams(runtimeCString) != nullptr);
+
     // Unknown network should throw a exception
-    BOOST_CHECK_THROW(bsv::CreateCustomChainParams(std::string{ "unknownchain" }), std::runtime_error);
+    BOOST_CHECK_THROW(bsv::CreateCustomChainParams("unknownchain"), std::runtime_error);
 }
 
 BOOST_AUTO_TEST_CASE(built_in_network_parameters_match_chainparams)
