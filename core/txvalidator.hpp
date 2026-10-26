@@ -163,42 +163,42 @@ class CTxValidator
         // bitcoin-sv CFeeRate::GetFee bitwise. 0 means "no fee policy" (every tx
         // passes the fee floor); negative is rejected via the error channel.
         bool SetMinMiningTxFee(int64_t satoshisPerKB, std::string* err = nullptr);
-        int64_t GetMinMiningTxFee() const;
+        [[nodiscard]] int64_t GetMinMiningTxFee() const;
 
         // SigOps policy limits. Pre-Genesis default: 4000 (MAX_TX_SIGOPS_COUNT_POLICY_BEFORE_GENESIS).
         // Post-Genesis default: UINT32_MAX (MAX_TX_SIGOPS_COUNT_POLICY_AFTER_GENESIS); operators can lower it.
         // SetMaxSigOpsPostGenesisPolicy mirrors bitcoin-sv SetMaxTxSigOpsCountPolicy semantics:
         //   0 → reset to default (UINT32_MAX); negative or > UINT32_MAX → rejected with error.
         void SetMaxSigOpsPolicy(uint64_t value);
-        uint64_t GetMaxSigOpsPolicy() const;
+        [[nodiscard]] uint64_t GetMaxSigOpsPolicy() const;
         bool SetMaxSigOpsPostGenesisPolicy(int64_t value, std::string* err = nullptr);
-        uint64_t GetMaxSigOpsPostGenesisPolicy() const;
+        [[nodiscard]] uint64_t GetMaxSigOpsPostGenesisPolicy() const;
 
         // Reset all policy settings to defaults
         void ResetDefault();
 
         // Forward getter to GlobalConfig call
-        uint64_t GetMaxOpsPerScript(bool isGenesisEnabled, bool isConsensus) const;
-        uint64_t GetMaxScriptNumLength(bool isGenesisEnabled, bool isChronicleEnabled, bool isConsensus) const;// Genesis and Chronicle should not both true
-        uint64_t GetMaxScriptSize(bool isGenesisEnabled, bool isConsensus) const;
-        uint64_t GetMaxPubKeysPerMultiSig(bool isGenesisEnabled, bool isConsensus) const;
-        uint64_t GetMaxStackMemoryUsage(bool isGenesisEnabled, bool isConsensus) const;
-        uint64_t GetMaxTxSize(bool isGenesisEnabled, bool isChronicleEnabled, bool isConsensus) const; // Genesis and Chronicle should not both true
-        uint64_t GetDataCarrierSize() const;
-        bool GetDataCarrier() const;
-        bool GetAcceptNonStandardOutput(bool isGenesisEnabled, bool isChronicleEnabled) const; // Genesis and Chronicle should not both true
-        bool GetRequireStandard() const;
-        bool GetPermitBareMultisig() const;
-        int32_t GetGenesisActivationHeight() const;
-        int32_t GetChronicleActivationHeight() const;
-        uint64_t GetGenesisGracefulPeriod() const;
-        uint64_t GetChronicleGracefulPeriod() const;
+        [[nodiscard]] uint64_t GetMaxOpsPerScript(bool isGenesisEnabled, bool isConsensus) const;
+        [[nodiscard]] uint64_t GetMaxScriptNumLength(bool isGenesisEnabled, bool isChronicleEnabled, bool isConsensus) const;// Genesis and Chronicle should not both true
+        [[nodiscard]] uint64_t GetMaxScriptSize(bool isGenesisEnabled, bool isConsensus) const;
+        [[nodiscard]] uint64_t GetMaxPubKeysPerMultiSig(bool isGenesisEnabled, bool isConsensus) const;
+        [[nodiscard]] uint64_t GetMaxStackMemoryUsage(bool isGenesisEnabled, bool isConsensus) const;
+        [[nodiscard]] uint64_t GetMaxTxSize(bool isGenesisEnabled, bool isChronicleEnabled, bool isConsensus) const; // Genesis and Chronicle should not both true
+        [[nodiscard]] uint64_t GetDataCarrierSize() const;
+        [[nodiscard]] bool GetDataCarrier() const;
+        [[nodiscard]] bool GetAcceptNonStandardOutput(bool isGenesisEnabled, bool isChronicleEnabled) const; // Genesis and Chronicle should not both true
+        [[nodiscard]] bool GetRequireStandard() const;
+        [[nodiscard]] bool GetPermitBareMultisig() const;
+        [[nodiscard]] int32_t GetGenesisActivationHeight() const;
+        [[nodiscard]] int32_t GetChronicleActivationHeight() const;
+        [[nodiscard]] uint64_t GetGenesisGracefulPeriod() const;
+        [[nodiscard]] uint64_t GetChronicleGracefulPeriod() const;
 
         // Consolidation policy getters
-        uint64_t GetMinConsolidationFactor() const;
-        uint64_t GetMaxConsolidationInputScriptSize() const;
-        uint64_t GetMinConfConsolidationInput() const;
-        bool GetAcceptNonStdConsolidationInput() const;
+        [[nodiscard]] uint64_t GetMinConsolidationFactor() const;
+        [[nodiscard]] uint64_t GetMaxConsolidationInputScriptSize() const;
+        [[nodiscard]] uint64_t GetMinConfConsolidationInput() const;
+        [[nodiscard]] bool GetAcceptNonStdConsolidationInput() const;
 
         // GetSigOpCount returns the number of sig ops in an extended transaction.
         // countP2SHSigOps mirrors the fP2SH parameter in bitcoin-sv's GetTransactionSigOpCount:
@@ -212,7 +212,11 @@ class CTxValidator
         // UnconfirmedInputInBlock before reaching sigop counting, so that path is safe; direct
         // callers are responsible for filtering out unconfirmed UTXOs beforehand.
         // It might throw an exception if any issue to calculate the number of sigops.
-        uint64_t GetSigOpCount(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool countP2SHSigOps, bool consensus = false) const;
+        [[nodiscard]] uint64_t GetSigOpCount(std::span<const uint8_t> extendedTX,
+                                             std::span<const int32_t> utxoHeights,
+                                             int32_t blockHeight,
+                                             bool countP2SHSigOps,
+                                             bool consensus = false) const;
 
         // CalculateFlags computes the script verify flags for a single input.
         // consensus controls which protocol era and flag set are used (block vs policy).
@@ -224,13 +228,20 @@ class CTxValidator
         // guarding against this invalid combination beforehand.
         //   - consensus=false --> flags to check a tx coming from a peer  (policy path:    enforce policy checks)
         //   - consensus=true  --> flags to check a tx coming from a block (consensus path: skip   policy checks)
-        uint32_t CalculateFlags(int32_t utxoHeight, int32_t blockHeight, bool consensus) const;
+        [[nodiscard]] uint32_t CalculateFlags(int32_t utxoHeight,
+                                              int32_t blockHeight,
+                                              bool consensus) const;
 
         // VerifyScript extract the extended transaction, then forward to bsv call
         //
         // If client uses a custom flags different than zero, then this will be used
         // instead of the implicitly calculated flags
-        TxError VerifyScript(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool consensus, std::span<const uint32_t> customFlags = std::span<const uint32_t>()) const;
+        [[nodiscard]] TxError VerifyScript(
+            std::span<const uint8_t> extendedTX,
+            std::span<const int32_t> utxoHeights,
+            int32_t blockHeight,
+            bool consensus,
+            std::span<const uint32_t> customFlags = std::span<const uint32_t>()) const;
 
         // Cancellable form of VerifyScript; an empty customFlags span means the
         // calculated flags. Polls (see Cancellation above): at entry; after
@@ -238,13 +249,18 @@ class CTxValidator
         // interpreter's polls. Not polled: deserialising and hashing; the argument
         // checks and building the shared signature-hash data; setting up each input's
         // script check.
-        TxError VerifyScript(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool consensus, std::span<const uint32_t> customFlags, const task::CCancellationToken& token) const;
+        [[nodiscard]] TxError VerifyScript(std::span<const uint8_t> extendedTX,
+                                           std::span<const int32_t> utxoHeights,
+                                           int32_t blockHeight,
+                                           bool consensus,
+                                           std::span<const uint32_t> customFlags,
+                                           const task::CCancellationToken& token) const;
 
         // VerifySpend executes one input against an explicitly supplied source
         // output. This avoids constructing an extended transaction when a caller
         // already has the ordinary transaction bytes and is validating a single
         // Spend-shaped object.
-        TxError VerifySpend(
+        [[nodiscard]] TxError VerifySpend(
             std::span<const uint8_t> transaction,
             uint32_t inputIndex,
             std::span<const uint8_t> lockingScript,
@@ -252,25 +268,22 @@ class CTxValidator
             int32_t utxoHeight,
             int32_t blockHeight,
             bool consensus,
-            std::optional<uint32_t> customFlags = std::nullopt
-        ) const;
+            std::optional<uint32_t> customFlags = std::nullopt) const;
 
         // Cancellable form of VerifySpend. Polls (see Cancellation above): at entry;
         // after deserialising; after building the shared signature-hash data; then the
         // interpreter's polls. Not polled: deserialising and hashing; the input-index
         // and unconfirmed-input checks, copying the locking script and building the
         // shared signature-hash data.
-        TxError VerifySpend(
-            std::span<const uint8_t> transaction,
-            uint32_t inputIndex,
-            std::span<const uint8_t> lockingScript,
-            int64_t sourceSatoshis,
-            int32_t utxoHeight,
-            int32_t blockHeight,
-            bool consensus,
-            std::optional<uint32_t> customFlags,
-            const task::CCancellationToken& token
-        ) const;
+        [[nodiscard]] TxError VerifySpend(std::span<const uint8_t> transaction,
+                                          uint32_t inputIndex,
+                                          std::span<const uint8_t> lockingScript,
+                                          int64_t sourceSatoshis,
+                                          int32_t utxoHeight,
+                                          int32_t blockHeight,
+                                          bool consensus,
+                                          std::optional<uint32_t> customFlags,
+                                          const task::CCancellationToken& token) const;
 
         // ValidateBatch processes multiple transaction validations in a batch.
         // Returns a vector of TxError results, one for each ValidateArg in the input.
@@ -278,13 +291,15 @@ class CTxValidator
         // NOT THREAD-SAFE: The caller must build the batch and call ValidateBatch on
         // the same thread. ValidateArg entries hold non-owning spans into caller memory;
         // concurrent access from another thread is a data race.
-        std::vector<TxError> ValidateBatch(const ValidateBatch& batch) const;
+        [[nodiscard]] std::vector<TxError> ValidateBatch(const ValidateBatch&) const;
 
         // Cancellable form of ValidateBatch: one token for the whole batch, polled as
         // ValidateTransaction polls it for each entry. Entries finished before the
         // token fired keep their results; every later entry returns
         // TxErrorCancelled(). Same threading rule as above.
-        std::vector<TxError> ValidateBatch(const bsv::ValidateBatch& batch, const task::CCancellationToken& token) const;
+        [[nodiscard]] std::vector<TxError> ValidateBatch(
+            const bsv::ValidateBatch&,
+            const task::CCancellationToken&) const;
 
         // ValidateTransaction runs all tx-level checks then script verification.
         // consensus=false → peer/mempool context (all checks including policy)
@@ -295,10 +310,10 @@ class CTxValidator
         // the node must validate the coinbase transaction separately (bitcoin-sv uses
         // CheckCoinbase); ValidateTransaction should be called only for the remaining
         // non-coinbase transactions in the block.
-        TxError ValidateTransaction(std::span<const uint8_t> extendedTX,
-                                 std::span<const int32_t> utxoHeights,
-                                 int32_t blockHeight,
-                                 bool consensus) const;
+        [[nodiscard]] TxError ValidateTransaction(std::span<const uint8_t> extendedTX,
+                                                  std::span<const int32_t> utxoHeights,
+                                                  int32_t blockHeight,
+                                                  bool consensus) const;
 
         // Cancellable form of ValidateTransaction. Polls (see Cancellation above):
         //   - at entry;
@@ -311,54 +326,57 @@ class CTxValidator
         // the transaction-level, prevout and output checks; the output standardness,
         // sigop, input-value and fee checks and building the shared signature-hash
         // data; setting up each input's script check.
-        TxError ValidateTransaction(std::span<const uint8_t> extendedTX,
-                                 std::span<const int32_t> utxoHeights,
-                                 int32_t blockHeight,
-                                 bool consensus,
-                                 const task::CCancellationToken& token) const;
+        [[nodiscard]] TxError ValidateTransaction(
+            std::span<const uint8_t> extendedTX,
+            std::span<const int32_t> utxoHeights,
+            int32_t blockHeight,
+            bool consensus,
+            const task::CCancellationToken& token) const;
 
         // CheckStandardness verifies IsStandardTx + AreInputsStandard.
         // Policy-path check only (not applicable in block/consensus context).
-        TxError CheckStandardness(std::span<const uint8_t> extendedTX,
-                                  std::span<const int32_t> utxoHeights,
-                                  int32_t blockHeight) const;
+        [[nodiscard]] TxError CheckStandardness(std::span<const uint8_t> extendedTX,
+                                                std::span<const int32_t> utxoHeights,
+                                                int32_t blockHeight) const;
 
         // Cancellable form of CheckStandardness. Polls (see Cancellation above): at
         // entry, after deserialising, before each input when inputs are checked (that
         // is, when non-standard outputs are not accepted), then the interpreter's polls
         // while it evaluates a P2SH input's unlocking script. Not polled: deserialising
         // and hashing, and the output standardness check.
-        TxError CheckStandardness(std::span<const uint8_t> extendedTX,
-                                  std::span<const int32_t> utxoHeights,
-                                  int32_t blockHeight,
-                                  const task::CCancellationToken& token) const;
+        [[nodiscard]] TxError CheckStandardness(
+            std::span<const uint8_t> extendedTX,
+            std::span<const int32_t> utxoHeights,
+            int32_t blockHeight,
+            const task::CCancellationToken& token) const;
 
         // CheckPrevOutputs rejects any input with a null prevout (all-zero txid + 0xFFFFFFFF index).
         // Both peer and block context.
-        TxError CheckPrevOutputs(std::span<const uint8_t> extendedTX) const;
+        [[nodiscard]] TxError CheckPrevOutputs(std::span<const uint8_t> extendedTX) const;
 
         // CheckOutputs rejects P2SH locking scripts in outputs after Genesis activation height.
         // Both peer and block context.
-        TxError CheckOutputs(std::span<const uint8_t> extendedTX, int32_t blockHeight) const;
+        [[nodiscard]] TxError CheckOutputs(std::span<const uint8_t> extendedTX,
+                                           int32_t blockHeight) const;
 
         // CheckConsensusSigops enforces the pre-Genesis 20,000 sigop limit (inputs + outputs + P2SH redeem scripts).
         // Block context. Mirrors BlockValidateTxns in bitcoin-sv validation.cpp.
-        TxError CheckConsensusSigops(std::span<const uint8_t> extendedTX,
-                                     std::span<const int32_t> utxoHeights,
-                                     int32_t blockHeight) const;
+        [[nodiscard]] TxError CheckConsensusSigops(std::span<const uint8_t> extendedTX,
+                                                   std::span<const int32_t> utxoHeights,
+                                                   int32_t blockHeight) const;
 
         // CheckSigOpsPolicy enforces the configurable sigop policy limit (with P2SH redeem scripts).
         // Peer/mempool context only.
-        TxError CheckSigOpsPolicy(std::span<const uint8_t> extendedTX,
-                                  std::span<const int32_t> utxoHeights,
-                                  int32_t blockHeight) const;
+        [[nodiscard]] TxError CheckSigOpsPolicy(std::span<const uint8_t> extendedTX,
+                                                std::span<const int32_t> utxoHeights,
+                                                int32_t blockHeight) const;
 
         // IsFreeConsolidation returns OK if the transaction qualifies as a fee-exempt consolidation.
         // Returns NotFreeConsolidation if it does not qualify.
         // Peer/mempool context only.
-        TxError IsFreeConsolidation(std::span<const uint8_t> extendedTX,
-                                    std::span<const int32_t> utxoHeights,
-                                    int32_t blockHeight) const;
+        [[nodiscard]] TxError IsFreeConsolidation(std::span<const uint8_t> extendedTX,
+                                                  std::span<const int32_t> utxoHeights,
+                                                  int32_t blockHeight) const;
 
     private :
         ConfigScriptPolicy policySettings;
@@ -394,80 +412,63 @@ class CTxValidator
             const task::CCancellationToken& token
         ) const;
 
-        TxError implCheckInputValues(
+        [[nodiscard]] TxError implCheckInputValues(
             const CTransaction& tx,
-            const std::vector<CTxOut>& prevUTXO
-        ) const;
+            const std::vector<CTxOut>& prevUTXO) const;
 
         // Whole-tx script verification loop (no deserialization; can throw).
-        TxError implVerifyScript(
+        [[nodiscard]] TxError implVerifyScript(
             const CTransaction& ctx,
             const std::vector<CTxOut>& prevUTXO,
             std::span<const int32_t> utxoHeights,
             int32_t blockHeight,
             bool consensus,
             std::span<const uint32_t> customFlags,
-            const task::CCancellationToken& token
-        ) const;
+            const task::CCancellationToken& token) const;
 
-        TxError implCheckStandardness(
+        [[nodiscard]] TxError implCheckStandardness(
             const CTransaction& tx,
             const std::vector<CTxOut>& prevUTXO,
             std::span<const int32_t> utxoHeights,
             int32_t blockHeight,
-            const task::CCancellationToken& token
-        ) const;
+            const task::CCancellationToken& token) const;
 
-        TxError implCheckTransactionCommon(
-            const CTransaction& tx,
-            int32_t blockHeight
-        ) const;
+        [[nodiscard]] TxError implCheckTransactionCommon(const CTransaction& tx,
+                                                         int32_t blockHeight) const;
 
-        TxError implCheckPrevOutputs(
-            const CTransaction& tx
-        ) const;
+        [[nodiscard]] TxError implCheckPrevOutputs(const CTransaction& tx) const;
 
-        TxError implCheckOutputs(
-            const CTransaction& tx,
-            int32_t blockHeight
-        ) const;
+        [[nodiscard]] TxError implCheckOutputs(const CTransaction& tx,
+                                               int32_t blockHeight) const;
 
-        TxError implCheckConsensusSigops(
+        [[nodiscard]] TxError implCheckConsensusSigops(
             const CTransaction& tx,
             const std::vector<CTxOut>& prevUTXO,
             std::span<const int32_t> utxoHeights,
-            int32_t blockHeight
-        ) const;
+            int32_t blockHeight) const;
 
-        TxError implCheckSigOpsPolicy(
+        [[nodiscard]] TxError implCheckSigOpsPolicy(const CTransaction& tx,
+                                                    const std::vector<CTxOut>& prevUTXO,
+                                                    std::span<const int32_t> utxoHeights,
+                                                    int32_t blockHeight) const;
+
+        [[nodiscard]] TxError implIsFreeConsolidation(
             const CTransaction& tx,
             const std::vector<CTxOut>& prevUTXO,
             std::span<const int32_t> utxoHeights,
-            int32_t blockHeight
-        ) const;
+            int32_t blockHeight) const;
 
-        TxError implIsFreeConsolidation(
-            const CTransaction& tx,
-            const std::vector<CTxOut>& prevUTXO,
-            std::span<const int32_t> utxoHeights,
-            int32_t blockHeight
-        ) const;
+        [[nodiscard]] TxError implCheckFee(const CTransaction& tx,
+                                           const std::vector<CTxOut>& prevUTXO,
+                                           std::span<const int32_t> utxoHeights,
+                                           int32_t blockHeight) const;
 
-        TxError implCheckFee(
-            const CTransaction& tx,
-            const std::vector<CTxOut>& prevUTXO,
-            std::span<const int32_t> utxoHeights,
-            int32_t blockHeight
-        ) const;
-
-        uint64_t implGetSigOpCount(
-            const CTransaction& ctx,
-            const std::vector<CTxOut>& prevUTXO,
-            std::span<const int32_t> utxoHeights,
-            ProtocolEra era,
-            int32_t nextBlockHeight,
-            bool countP2SHSigOps
-        ) const;
+        [[nodiscard]] uint64_t implGetSigOpCount(const CTransaction& ctx,
+                                                 const std::vector<CTxOut>& prevUTXO,
+                                                 std::span<const int32_t> utxoHeights,
+                                                 ProtocolEra era,
+                                                 int32_t nextBlockHeight,
+                                                 bool countP2SHSigOps) const;
 };
 
 // export the value of SCRIPT_ERR_ERROR_COUNT

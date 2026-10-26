@@ -68,17 +68,17 @@ public:
     void clear();
 
     // Get the number of elements in the batch
-    size_t size() const;
+    [[nodiscard]] size_t size() const;
 
     // Check if the batch is empty
-    bool empty() const;
+    [[nodiscard]] bool empty() const;
 
     // Reserve capacity for elements
     void reserve(size_t capacity);
 
     // Iterator support for range-based for loops
-    const_iterator begin() const;
-    const_iterator end() const;
+    [[nodiscard]] const_iterator begin() const;
+    [[nodiscard]] const_iterator end() const;
     iterator begin();
     iterator end();
 

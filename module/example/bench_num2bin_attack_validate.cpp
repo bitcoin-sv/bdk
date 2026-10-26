@@ -17,6 +17,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <tuple>
 
 #include <boost/program_options.hpp>
 
@@ -227,12 +228,12 @@ namespace
         int     iters    = 0;
 
         // NOLINTBEGIN(*-narrowing-conversions)
-        double avg_us()     const { return total_ns / 1000.0 / iters; }
-        double min_us()     const { return min_ns   / 1000.0; }
-        double max_us()     const { return max_ns   / 1000.0; }
-        double avg_ms()     const { return avg_us() / 1000.0; }
-        double total_s()    const { return total_ns / 1.0e9; }
-        double throughput() const { return iters    / total_s(); }
+        [[nodiscard]] double avg_us()     const { return total_ns / 1000.0 / iters; }
+        [[nodiscard]] double min_us()     const { return min_ns   / 1000.0; }
+        [[nodiscard]] double max_us()     const { return max_ns   / 1000.0; }
+        [[nodiscard]] double avg_ms()     const { return avg_us() / 1000.0; }
+        [[nodiscard]] double total_s()    const { return total_ns / 1.0e9; }
+        [[nodiscard]] double throughput() const { return iters    / total_s(); }
         // NOLINTEND(*-narrowing-conversions)
     };
 }
@@ -372,14 +373,14 @@ int main(int argc, char* argv[])
         constexpr int WARMUP_STD = 50;
         std::cout << "  Standard tx (" << WARMUP_STD << " iterations)... " << std::flush;
         for (int i = 0; i < WARMUP_STD; ++i)
-            se.ValidateTransaction(standardBin, utxoSpan, BLOCK_HEIGHT, CONSENSUS);
+            std::ignore = se.ValidateTransaction(standardBin, utxoSpan, BLOCK_HEIGHT, CONSENSUS);
         std::cout << "done.\n";
     }
     {
         constexpr int WARMUP_ATK = 3;
         std::cout << "  Attack  tx  (" << WARMUP_ATK << " iterations)... " << std::flush;
         for (int i = 0; i < WARMUP_ATK; ++i)
-            se.ValidateTransaction(attackBin, utxoSpan, BLOCK_HEIGHT, CONSENSUS);
+            std::ignore = se.ValidateTransaction(attackBin, utxoSpan, BLOCK_HEIGHT, CONSENSUS);
         std::cout << "done.\n";
     }
     std::cout << "\n";

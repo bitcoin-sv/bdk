@@ -8,6 +8,7 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <tuple>
 
 /// Define test module name with debug postfix
 #ifdef NDEBUG
@@ -408,8 +409,8 @@ BOOST_AUTO_TEST_CASE(batch_cancelled_part_way_keeps_finished_verdicts)
 
     // Polls taken by the first two entries, so the token fires at the third.
     const auto counter = CountdownSource::Make(UINT64_MAX);
-    validator.ValidateTransaction(validTx, kValidTxUtxoHeights, kValidTxBlockHeight, true, counter->GetToken());
-    validator.ValidateTransaction(invalidTx, kValidTxUtxoHeights, kValidTxBlockHeight, true, counter->GetToken());
+    std::ignore = validator.ValidateTransaction(validTx, kValidTxUtxoHeights, kValidTxBlockHeight, true, counter->GetToken());
+    std::ignore = validator.ValidateTransaction(invalidTx, kValidTxUtxoHeights, kValidTxBlockHeight, true, counter->GetToken());
 
     const auto source = CountdownSource::Make(counter->polls());
     const auto results = validator.ValidateBatch(batch, source->GetToken());
