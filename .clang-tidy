@@ -50,7 +50,6 @@ Checks: >
   -readability-isolate-declaration,
   -readability-math-missing-parentheses,
   -readability-redundant-casting,
-  -readability-redundant-parentheses,
   -readability-uppercase-literal-suffix,
   -readability-use-concise-preprocessor-directives,
   -readability-use-std-min-max,
