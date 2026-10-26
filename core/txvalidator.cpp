@@ -19,6 +19,7 @@
 #include <cstdint>
 #include <cstring>
 #include <vector>
+#include <utility>
 
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -577,7 +578,8 @@ bool bsv::CTxValidator::SetMaxSigOpsPostGenesisPolicy(int64_t value, std::string
         if (err) *err = "Post-Genesis sigops policy limit cannot be negative";
         return false;
     }
-    if (static_cast<uint64_t>(value) > MAX_TX_SIGOPS_COUNT_POLICY_AFTER_GENESIS) {
+    if(std::cmp_greater(value, MAX_TX_SIGOPS_COUNT_POLICY_AFTER_GENESIS))
+    {
         if (err) *err = "Post-Genesis sigops policy limit exceeds maximum (" + std::to_string(MAX_TX_SIGOPS_COUNT_POLICY_AFTER_GENESIS) + ")";
         return false;
     }

@@ -32,7 +32,6 @@ Checks: >
   -modernize-use-trailing-return-type,
 
   -modernize-use-auto,
-  -modernize-use-integer-sign-comparison,
   -modernize-use-string-view,
   -modernize-use-transparent-functors,
 
