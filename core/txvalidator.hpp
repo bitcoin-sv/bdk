@@ -406,8 +406,8 @@ class CTxValidator
         TxError bsvVerifyScript(
             const CScript& unlocking_script,
             const CScript& locking_script,
-            const bool consensus,
-            const unsigned int flags,
+            bool consensus,
+            unsigned int flags,
             BaseSignatureChecker& sig_checker,
             const task::CCancellationToken& token
         ) const;

@@ -45,7 +45,6 @@ Checks: >
   -readability-redundant-nested-if,
   -readability-trailing-comma,
 
-  -readability-avoid-const-params-in-decls,
   -readability-container-contains,
   -readability-convert-member-functions-to-static,
   -readability-isolate-declaration,
