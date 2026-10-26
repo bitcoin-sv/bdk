@@ -352,7 +352,7 @@ class CTxValidator
 
         // CheckPrevOutputs rejects any input with a null prevout (all-zero txid + 0xFFFFFFFF index).
         // Both peer and block context.
-        [[nodiscard]] TxError CheckPrevOutputs(std::span<const uint8_t> extendedTX) const;
+        [[nodiscard]] static TxError CheckPrevOutputs(std::span<const uint8_t> extendedTX);
 
         // CheckOutputs rejects P2SH locking scripts in outputs after Genesis activation height.
         // Both peer and block context.
@@ -412,10 +412,6 @@ class CTxValidator
             const task::CCancellationToken& token
         ) const;
 
-        [[nodiscard]] TxError implCheckInputValues(
-            const CTransaction& tx,
-            const std::vector<CTxOut>& prevUTXO) const;
-
         // Whole-tx script verification loop (no deserialization; can throw).
         [[nodiscard]] TxError implVerifyScript(
             const CTransaction& ctx,
@@ -435,8 +431,6 @@ class CTxValidator
 
         [[nodiscard]] TxError implCheckTransactionCommon(const CTransaction& tx,
                                                          int32_t blockHeight) const;
-
-        [[nodiscard]] TxError implCheckPrevOutputs(const CTransaction& tx) const;
 
         [[nodiscard]] TxError implCheckOutputs(const CTransaction& tx,
                                                int32_t blockHeight) const;

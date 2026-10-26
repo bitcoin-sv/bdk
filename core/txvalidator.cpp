@@ -354,6 +354,46 @@ static Consensus::Params consensusParameters(bsv::TxValidationNetwork network)
     return params;
 }
 
+// Pure functions of the transaction: no validator state is involved.
+// Replicates Consensus::CheckTxInputs (validation.cpp:2590-2655):
+//   - per-input MoneyRange check (bad-txns-inputvalues-outofrange, DoS 100)
+//   - accumulated nValueIn MoneyRange check
+//   - nValueIn >= tx.GetValueOut() (bad-txns-in-belowout, DoS 100)
+// Output values are already validated by implCheckTransactionCommon, so
+// GetValueOut() is safe to call here.
+[[nodiscard]] static TxError checkInputValues(const CTransaction& tx,
+                                              const std::vector<CTxOut>& prevUTXO)
+{
+    if (prevUTXO.size() != tx.vin.size())
+        throw std::runtime_error("CheckInputValues: inconsistent inputs size");
+
+    Amount nValueIn(0);
+    for (const auto& utxo : prevUTXO) {
+        if (!MoneyRange(utxo.nValue) || !MoneyRange(nValueIn + utxo.nValue))
+            return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::InputValuesOutOfRange));
+        nValueIn += utxo.nValue;
+    }
+
+    if (nValueIn < tx.GetValueOut())
+        return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::InputsBelowOutputs));
+
+    return bsv::TxErrorOk();
+}
+
+// Replicates CheckRegularTransaction (validation.cpp): null-prevout check and
+// duplicate-prevout detection (bad-txns-inputs-duplicate, DoS 100).
+[[nodiscard]] static TxError checkPrevOutputs(const CTransaction& tx)
+{
+    std::set<COutPoint> seen;
+    for (const auto& txin : tx.vin) {
+        if (txin.prevout.IsNull())
+            return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::NullPrevout));
+        if (!seen.insert(txin.prevout).second)
+            return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::DuplicateInputs));
+    }
+    return bsv::TxErrorOk();
+}
+
 bsv::CTxValidator::CTxValidator(std::string_view chainName)
     : source{ task::CCancellationSource::Make() }
 {
@@ -1153,33 +1193,6 @@ TxError bsv::CTxValidator::implCheckStandardness(
     return bsv::TxErrorOk();
 }
 
-// Replicates Consensus::CheckTxInputs (validation.cpp:2590-2655):
-//   - per-input MoneyRange check (bad-txns-inputvalues-outofrange, DoS 100)
-//   - accumulated nValueIn MoneyRange check
-//   - nValueIn >= tx.GetValueOut() (bad-txns-in-belowout, DoS 100)
-// Output values are already validated by implCheckTransactionCommon, so
-// GetValueOut() is safe to call here.
-TxError bsv::CTxValidator::implCheckInputValues(
-    const CTransaction& tx,
-    const std::vector<CTxOut>& prevUTXO
-) const
-{
-    if (prevUTXO.size() != tx.vin.size())
-        throw std::runtime_error("implCheckInputValues: inconsistent inputs size");
-
-    Amount nValueIn(0);
-    for (const auto& utxo : prevUTXO) {
-        if (!MoneyRange(utxo.nValue) || !MoneyRange(nValueIn + utxo.nValue))
-            return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::InputValuesOutOfRange));
-        nValueIn += utxo.nValue;
-    }
-
-    if (nValueIn < tx.GetValueOut())
-        return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::InputsBelowOutputs));
-
-    return bsv::TxErrorOk();
-}
-
 int bsv::CPP_SCRIPT_ERR_ERROR_COUNT(){
     return SCRIPT_ERR_ERROR_COUNT;
 }
@@ -1237,7 +1250,7 @@ TxError bsv::CTxValidator::ValidateTransaction(std::span<const uint8_t> extended
         const int32_t checkHeight = consensus ? blockHeight : blockHeight + 1;
 
         if (auto r = implCheckTransactionCommon(ctx, checkHeight);                              !bsv::TxErrorIsOk(r)) return r;
-        if (auto r = implCheckPrevOutputs(ctx);                                                 !bsv::TxErrorIsOk(r)) return r;
+        if (auto r = checkPrevOutputs(ctx);                                                 !bsv::TxErrorIsOk(r)) return r;
         if (auto r = implCheckOutputs(ctx, checkHeight);                                        !bsv::TxErrorIsOk(r)) return r;
         if (token.IsCanceled())
             return bsv::TxErrorCancelled();
@@ -1247,7 +1260,7 @@ TxError bsv::CTxValidator::ValidateTransaction(std::span<const uint8_t> extended
         } else {
             if (auto r = implCheckConsensusSigops(ctx, eTX.vutxo, utxoHeights, blockHeight);   !bsv::TxErrorIsOk(r)) return r;
         }
-        if (auto r = implCheckInputValues(ctx, eTX.vutxo);                                     !bsv::TxErrorIsOk(r)) return r;
+        if (auto r = checkInputValues(ctx, eTX.vutxo);                                     !bsv::TxErrorIsOk(r)) return r;
         // Fee check runs only in policy mode and only after implCheckInputValues, so MoneyRange
         // holds and the inputs - outputs subtraction inside implCheckFee is well-defined.
         if (!consensus) {
@@ -1261,7 +1274,7 @@ TxError bsv::CTxValidator::ValidateTransaction(std::span<const uint8_t> extended
     }
 }
 
-TxError bsv::CTxValidator::CheckPrevOutputs(std::span<const uint8_t> extendedTX) const
+TxError bsv::CTxValidator::CheckPrevOutputs(std::span<const uint8_t> extendedTX)
 {
     try {
         const char* begin{ reinterpret_cast<const char*>(extendedTX.data()) };
@@ -1270,7 +1283,7 @@ TxError bsv::CTxValidator::CheckPrevOutputs(std::span<const uint8_t> extendedTX)
         bsv::CMutableTransactionExtended eTX;
         tx_stream >> eTX;
         const CTransaction ctx(eTX.mtx);
-        return implCheckPrevOutputs(ctx);
+        return checkPrevOutputs(ctx);
     }
     catch (const std::exception&) {
         return bsv::TxErrorException();
@@ -1371,20 +1384,6 @@ TxError bsv::CTxValidator::implCheckTransactionCommon(
             return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::SigopsConsensus));
     }
 
-    return bsv::TxErrorOk();
-}
-
-// Replicates CheckRegularTransaction (validation.cpp): null-prevout check and
-// duplicate-prevout detection (bad-txns-inputs-duplicate, DoS 100).
-TxError bsv::CTxValidator::implCheckPrevOutputs(const CTransaction& tx) const
-{
-    std::set<COutPoint> seen;
-    for (const auto& txin : tx.vin) {
-        if (txin.prevout.IsNull())
-            return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::NullPrevout));
-        if (!seen.insert(txin.prevout).second)
-            return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::DuplicateInputs));
-    }
     return bsv::TxErrorOk();
 }
 

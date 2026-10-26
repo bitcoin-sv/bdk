@@ -189,7 +189,7 @@ struct PolicyFixture {
     std::vector<uint8_t> etxBin;
     std::span<const uint8_t> etx;
 
-    [[nodiscard]] bsv::CTxValidator MakeValidator(uint64_t sigOpsLimit) const
+    [[nodiscard]] static bsv::CTxValidator MakeValidator(uint64_t sigOpsLimit)
     {
         bsv::CTxValidator v("main");
         std::string err;
