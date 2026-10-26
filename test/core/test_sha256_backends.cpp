@@ -44,13 +44,18 @@ namespace
             sha256_dispatch::stream = backend.stream;
             sha256_dispatch::d_block_2way = backend.d_block_2way;
         }
+
         ~UseBackend()
         {
             sha256_dispatch::stream = saved_stream;
             sha256_dispatch::d_block_2way = saved_2way;
         }
+
         UseBackend(const UseBackend&) = delete;
         UseBackend& operator=(const UseBackend&) = delete;
+
+        UseBackend(UseBackend&&) = delete;
+        UseBackend& operator=(UseBackend&&) = delete;
     };
 
     std::string Hex(std::span<const uint8_t> bytes)

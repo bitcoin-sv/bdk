@@ -1,13 +1,14 @@
 #pragma once
 
 #include <string>
+#include <string_view>
 #include <functional>
 #include <memory>
 
 struct CustomChainParams
 {
-    static const std::string TERATESTNET;        // "teratestnet"
-    static const std::string TERASCALINGTESTNET; // "tstn"
+    static constexpr std::string_view TERATESTNET{"teratestnet"};
+    static constexpr std::string_view TERASCALINGTESTNET{"tstn"};
 };
 
 class CChainParams;
@@ -22,9 +23,10 @@ namespace bsv
     using ChainParamsCreator = std::function<std::unique_ptr<CChainParams>()>;
 
     // ChainParamsRegistry implemented as a singleton
-    class ChainParamsRegistry {
+    // NOLINTNEXTLINE(cppcoreguidelines-special-member-functions)
+    class ChainParamsRegistry
+    {
     public:
-
         // Get the singleton instance (declared, but not defined here!)
         static ChainParamsRegistry& Instance();
 
@@ -45,7 +47,7 @@ namespace bsv
     };
 
     // Create ChainParams global helper using its name
-    std::unique_ptr<CChainParams> CreateCustomChainParams(const std::string& name);
+    std::unique_ptr<CChainParams> CreateCustomChainParams(std::string_view name);
 
     // Registration helper template. To register your custom MyChainParams, in your cpp file
     //
@@ -53,10 +55,11 @@ namespace bsv
     template <typename T>
     class RegisterCustomChainParams {
     public:
-        RegisterCustomChainParams(const std::string& name) {
-            ChainParamsRegistry::Instance().Register(name, []() {
-                return std::make_unique<T>();
-                });
+        explicit RegisterCustomChainParams(std::string_view name)
+        {
+            ChainParamsRegistry::Instance().Register(std::string{name},
+                                                     []()
+                                                     { return std::make_unique<T>(); });
         }
     };
 }

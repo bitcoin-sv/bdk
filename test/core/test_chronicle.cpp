@@ -69,7 +69,7 @@ static constexpr int32_t POST_CHRONICLE_BLOCK_HEIGHT = 950000;
 static const Amount UTXO_AMOUNT{1'000'000};   // 0.01 BSV
 
 /// WIF private key shared across all tests.
-static const std::string WIF_KEY = "5HxWvvfubhXpYYpS3tJkw6fq9jE9j18THftkZjHHfmFiWtmAbrj";
+static constexpr const char* WIF_KEY = "5HxWvvfubhXpYYpS3tJkw6fq9jE9j18THftkZjHHfmFiWtmAbrj";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Policy-path flags for PostGenesis / pre-Chronicle era
@@ -128,7 +128,7 @@ static CMutableTransaction BuildSpendingTx(const CMutableTransaction& txCredit,
 
 // Compute DER sig + sighash byte for input 0 of txSpend.
 static std::vector<uint8_t> Sign(const CScript& scriptPubKey,
-                                  CMutableTransaction& txSpend,
+                                  const CMutableTransaction& txSpend,
                                   const CKey& key,
                                   SigHashType sigHashType = SigHashType().withForkId());
 
@@ -152,14 +152,14 @@ static TxError Verify(const bsv::CMutableTransactionExtended& eTX,
                       int32_t utxoHeight,
                       int32_t blockHeight,
                       bool consensus,
-                      bsv::CTxValidator& se);
+                      const bsv::CTxValidator& se);
 
 // Verify eTX with an explicit script flags word, bypassing both the automatic
 // flag-computation logic and the standardness pre-check.
 static TxError VerifyWithFlags(const bsv::CMutableTransactionExtended& eTX,
                                int32_t blockHeight,
                                uint32_t flags,
-                               bsv::CTxValidator& se);
+                               const bsv::CTxValidator& se);
 
 // Returns true if r carries the given ScriptError_t (OK maps to domain OK).
 static bool txErrorIsScript(TxError r, ScriptError_t e);
@@ -202,7 +202,7 @@ BOOST_FIXTURE_TEST_SUITE(test_chronicle, ChainParamsFixture)
 // Reference: src/script/interpreter.cpp:2306-2319
 BOOST_AUTO_TEST_CASE(test_push_only_scriptsig)
 {
-    bsv::CTxValidator se("main");
+    const bsv::CTxValidator se("main");
     const CKey key = LoadKey();
 
     // Lock the UTXO: top of stack must equal 5.
@@ -213,7 +213,7 @@ BOOST_AUTO_TEST_CASE(test_push_only_scriptsig)
     CScript scriptSig;
     scriptSig << CScriptNum(2) << CScriptNum(3) << OP_ADD;
 
-    CMutableTransaction txCredit = BuildCreditingTx(scriptPubKey);
+    const CMutableTransaction txCredit = BuildCreditingTx(scriptPubKey);
     // version = 1 (non-malleable) for pre-Chronicle and the first post-Chronicle sub-case
     CMutableTransaction txSpendV1 = BuildSpendingTx(txCredit, 1);
     txSpendV1.vin[0].scriptSig = scriptSig;
@@ -264,7 +264,7 @@ BOOST_AUTO_TEST_CASE(test_push_only_scriptsig)
 // Reference: src/script/interpreter.cpp:293-300, src/script/sighashtype.h:58-61
 BOOST_AUTO_TEST_CASE(test_sighash_chronicle)
 {
-    bsv::CTxValidator se("main");
+    const bsv::CTxValidator se("main");
     const CKey key    = LoadKey();
     const CPubKey pub = key.GetPubKey();
 
@@ -274,7 +274,7 @@ BOOST_AUTO_TEST_CASE(test_sighash_chronicle)
                  << ToByteVector(pub.GetID())
                  << OP_EQUALVERIFY << OP_CHECKSIG;
 
-    CMutableTransaction txCredit = BuildCreditingTx(scriptPubKey);
+    const CMutableTransaction txCredit = BuildCreditingTx(scriptPubKey);
     CMutableTransaction txSpend  = BuildSpendingTx(txCredit);
 
     // Sign with SIGHASH_ALL | SIGHASH_FORKID | SIGHASH_CHRONICLE (= 0x61).
@@ -333,7 +333,7 @@ BOOST_AUTO_TEST_CASE(test_sighash_chronicle)
 // Reference: src/configscriptpolicy.cpp:77-108, src/consensus/consensus.h:62-66
 BOOST_AUTO_TEST_CASE(test_script_num_length)
 {
-    bsv::CTxValidator se("main");
+    const bsv::CTxValidator se("main");
 
     // 5-byte minimal positive CScriptNum encoding.
     // Little-endian sign-magnitude: {0x00×4, 0x01} = value 2^32.
@@ -350,7 +350,7 @@ BOOST_AUTO_TEST_CASE(test_script_num_length)
     CScript scriptSig;
     scriptSig << fiveByteNum;
 
-    CMutableTransaction txCredit = BuildCreditingTx(scriptPubKey);
+    const CMutableTransaction txCredit = BuildCreditingTx(scriptPubKey);
     CMutableTransaction txSpend  = BuildSpendingTx(txCredit);
     txSpend.vin[0].scriptSig     = scriptSig;
 
@@ -393,7 +393,7 @@ BOOST_AUTO_TEST_CASE(test_script_num_length)
 // Reference: src/script/interpreter.cpp:596-606
 BOOST_AUTO_TEST_CASE(test_op_ver)
 {
-    bsv::CTxValidator se("main");
+    const bsv::CTxValidator se("main");
     const CKey key = LoadKey();
 
     // Expected 4-byte little-endian encoding of tx version 1.
@@ -457,7 +457,7 @@ BOOST_AUTO_TEST_CASE(test_op_ver)
 // Reference: src/script/interpreter.cpp:771-779
 BOOST_AUTO_TEST_CASE(test_op_verif)
 {
-    bsv::CTxValidator se("main");
+    const bsv::CTxValidator se("main");
     const CKey key = LoadKey();
 
     // ── Part A: functional conditional ────────────────────────────────────
@@ -478,7 +478,7 @@ BOOST_AUTO_TEST_CASE(test_op_verif)
         CScript scriptPubKey;
         scriptPubKey << version1LE << OP_VERIF << OP_ENDIF << OP_1;
 
-        CMutableTransaction txCredit = BuildCreditingTx(scriptPubKey);
+        const CMutableTransaction txCredit = BuildCreditingTx(scriptPubKey);
         CMutableTransaction txSpend  = BuildSpendingTx(txCredit, /*txVersion=*/1);
         txSpend.vin[0].scriptSig = CScript();
 
@@ -521,7 +521,7 @@ BOOST_AUTO_TEST_CASE(test_op_verif)
         CScript scriptPubKey;
         scriptPubKey << OP_0 << OP_IF << OP_VERIF << OP_ENDIF << OP_1;
 
-        CMutableTransaction txCredit = BuildCreditingTx(scriptPubKey);
+        const CMutableTransaction txCredit = BuildCreditingTx(scriptPubKey);
         CMutableTransaction txSpend  = BuildSpendingTx(txCredit);
         // Empty scriptSig — the script is self-contained and requires no inputs.
         txSpend.vin[0].scriptSig = CScript();
@@ -575,7 +575,7 @@ BOOST_AUTO_TEST_CASE(test_op_verif)
 // Reference: src/script/interpreter.cpp:607-639
 BOOST_AUTO_TEST_CASE(test_op_substr)
 {
-    bsv::CTxValidator se("main");
+    const bsv::CTxValidator se("main");
     const CKey key = LoadKey();
 
     // ── Policy path: DISCOURAGE fires immediately, no stack changes needed ──
@@ -586,7 +586,7 @@ BOOST_AUTO_TEST_CASE(test_op_substr)
         CScript scriptPubKey;
         scriptPubKey << OP_SUBSTR << OP_1;
 
-        CMutableTransaction txCredit = BuildCreditingTx(scriptPubKey);
+        const CMutableTransaction txCredit = BuildCreditingTx(scriptPubKey);
         CMutableTransaction txSpend  = BuildSpendingTx(txCredit);
         txSpend.vin[0].scriptSig = CScript();   // empty — DISCOURAGE fires before operands matter
 
@@ -649,7 +649,7 @@ BOOST_AUTO_TEST_CASE(test_op_substr)
 // Reference: src/script/interpreter.cpp:640-664
 BOOST_AUTO_TEST_CASE(test_op_left)
 {
-    bsv::CTxValidator se("main");
+    const bsv::CTxValidator se("main");
     const CKey key = LoadKey();
 
     // ── Policy path: DISCOURAGE fires immediately ──
@@ -657,7 +657,7 @@ BOOST_AUTO_TEST_CASE(test_op_left)
         CScript scriptPubKey;
         scriptPubKey << OP_LEFT << OP_1;
 
-        CMutableTransaction txCredit = BuildCreditingTx(scriptPubKey);
+        const CMutableTransaction txCredit = BuildCreditingTx(scriptPubKey);
         CMutableTransaction txSpend  = BuildSpendingTx(txCredit);
         txSpend.vin[0].scriptSig = CScript();
 
@@ -717,7 +717,7 @@ BOOST_AUTO_TEST_CASE(test_op_left)
 // Reference: src/script/interpreter.cpp:665-689
 BOOST_AUTO_TEST_CASE(test_op_right)
 {
-    bsv::CTxValidator se("main");
+    const bsv::CTxValidator se("main");
     const CKey key = LoadKey();
 
     // ── Policy path: DISCOURAGE fires immediately ──
@@ -725,7 +725,7 @@ BOOST_AUTO_TEST_CASE(test_op_right)
         CScript scriptPubKey;
         scriptPubKey << OP_RIGHT << OP_1;
 
-        CMutableTransaction txCredit = BuildCreditingTx(scriptPubKey);
+        const CMutableTransaction txCredit = BuildCreditingTx(scriptPubKey);
         CMutableTransaction txSpend  = BuildSpendingTx(txCredit);
         txSpend.vin[0].scriptSig = CScript();
 
@@ -784,7 +784,7 @@ BOOST_AUTO_TEST_CASE(test_op_right)
 // Reference: src/script/interpreter.cpp:690-725
 BOOST_AUTO_TEST_CASE(test_op_lshiftnum)
 {
-    bsv::CTxValidator se("main");
+    const bsv::CTxValidator se("main");
     const CKey key = LoadKey();
 
     // ── Policy path: DISCOURAGE fires immediately ──
@@ -792,7 +792,7 @@ BOOST_AUTO_TEST_CASE(test_op_lshiftnum)
         CScript scriptPubKey;
         scriptPubKey << OP_LSHIFTNUM << OP_1;
 
-        CMutableTransaction txCredit = BuildCreditingTx(scriptPubKey);
+        const CMutableTransaction txCredit = BuildCreditingTx(scriptPubKey);
         CMutableTransaction txSpend  = BuildSpendingTx(txCredit);
         txSpend.vin[0].scriptSig = CScript();
 
@@ -848,7 +848,7 @@ BOOST_AUTO_TEST_CASE(test_op_lshiftnum)
 // Reference: src/script/interpreter.cpp:726-761
 BOOST_AUTO_TEST_CASE(test_op_rshiftnum)
 {
-    bsv::CTxValidator se("main");
+    const bsv::CTxValidator se("main");
     const CKey key = LoadKey();
 
     // ── Policy path: DISCOURAGE fires immediately ──
@@ -856,7 +856,7 @@ BOOST_AUTO_TEST_CASE(test_op_rshiftnum)
         CScript scriptPubKey;
         scriptPubKey << OP_RSHIFTNUM << OP_1;
 
-        CMutableTransaction txCredit = BuildCreditingTx(scriptPubKey);
+        const CMutableTransaction txCredit = BuildCreditingTx(scriptPubKey);
         CMutableTransaction txSpend  = BuildSpendingTx(txCredit);
         txSpend.vin[0].scriptSig = CScript();
 
@@ -914,7 +914,7 @@ BOOST_AUTO_TEST_CASE(test_op_rshiftnum)
 // Reference: src/script/interpreter.cpp:362-365
 BOOST_AUTO_TEST_CASE(test_op_2mul)
 {
-    bsv::CTxValidator se("main");
+    const bsv::CTxValidator se("main");
     const CKey key = LoadKey();
 
     CScript opcodeCheck;
@@ -956,7 +956,7 @@ BOOST_AUTO_TEST_CASE(test_op_2mul)
 // Reference: src/script/interpreter.cpp:362-365
 BOOST_AUTO_TEST_CASE(test_op_2div)
 {
-    bsv::CTxValidator se("main");
+    const bsv::CTxValidator se("main");
     const CKey key = LoadKey();
 
     CScript opcodeCheck;
@@ -1025,7 +1025,7 @@ static CMutableTransaction BuildSpendingTx(const CMutableTransaction& txCredit,
 }
 
 static std::vector<uint8_t> Sign(const CScript& scriptPubKey,
-                                  CMutableTransaction& txSpend,
+                                  const CMutableTransaction& txSpend,
                                   const CKey& key,
                                   SigHashType sigHashType)
 {
@@ -1040,11 +1040,11 @@ static std::vector<uint8_t> Sign(const CScript& scriptPubKey,
     return sig;
 }
 
-static bsv::CMutableTransactionExtended MakeSignedExtendedTx(
-    const CScript& opcodeCheck,
-    const CScript& operandPushes,
-    const CKey&    key,
-    int32_t        txVersion)
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+static bsv::CMutableTransactionExtended MakeSignedExtendedTx(const CScript& opcodeCheck,
+                                                             const CScript& operandPushes,
+                                                             const CKey& key,
+                                                             int32_t txVersion)
 {
     const CPubKey pubkey = key.GetPubKey();
     const CKeyID  keyID  = pubkey.GetID();
@@ -1057,7 +1057,7 @@ static bsv::CMutableTransactionExtended MakeSignedExtendedTx(
                  << OP_EQUALVERIFY
                  << OP_CHECKSIG;
 
-    CMutableTransaction txCredit = BuildCreditingTx(scriptPubKey);
+    const CMutableTransaction txCredit = BuildCreditingTx(scriptPubKey);
     CMutableTransaction txSpend  = BuildSpendingTx(txCredit, txVersion);
 
     // Sign the spending tx using the full scriptPubKey and default sighash type.
@@ -1079,10 +1079,11 @@ static bsv::CMutableTransactionExtended MakeSignedExtendedTx(
 }
 
 static TxError Verify(const bsv::CMutableTransactionExtended& eTX,
+                      // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
                       int32_t utxoHeight,
                       int32_t blockHeight,
                       bool consensus,
-                      bsv::CTxValidator& se)
+                      const bsv::CTxValidator& se)
 {
     CDataStream out(SER_NETWORK, PROTOCOL_VERSION);
     out << eTX;
@@ -1097,9 +1098,10 @@ static TxError Verify(const bsv::CMutableTransactionExtended& eTX,
 }
 
 static TxError VerifyWithFlags(const bsv::CMutableTransactionExtended& eTX,
+                               // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
                                int32_t blockHeight,
                                uint32_t flags,
-                               bsv::CTxValidator& se)
+                               const bsv::CTxValidator& se)
 {
     CDataStream out(SER_NETWORK, PROTOCOL_VERSION);
     out << eTX;

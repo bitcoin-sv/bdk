@@ -21,7 +21,9 @@ constexpr const char* VALID_EXTENDED_TX =
 constexpr int32_t UTXO_HEIGHT = 574441;
 constexpr int32_t BLOCK_HEIGHT = 620940;
 
-int positiveArgument(const char* value, const char* name) {
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+int positiveArgument(const char* value, const char* name)
+{
     const long parsed = std::strtol(value, nullptr, 10);
     if(parsed <= 0 || parsed > 100000000L) {
         throw std::invalid_argument(std::string{name} + " must be between 1 and 100000000");
@@ -29,14 +31,19 @@ int positiveArgument(const char* value, const char* name) {
     return static_cast<int>(parsed);
 }
 
-double percentile(const std::vector<double>& sorted, double fraction) {
+double percentile(const std::vector<double>& sorted, double fraction)
+{
+    // NOLINTNEXTLINE(*-narrowing-conversions)
     const auto index = static_cast<size_t>((sorted.size() - 1) * fraction);
     return sorted[index];
 }
 
 } // namespace
 
-int main(int argc, char** argv) try {
+// NOLINTNEXTLINE(misc-const-correctness)
+int main(int argc, char** argv)
+try
+{
     const int iterations = argc > 1 ? positiveArgument(argv[1], "iterations") : 1000;
     const int samples = argc > 2 ? positiveArgument(argv[2], "samples") : 9;
     const int warmupIterations = std::max(20, iterations / 10);
@@ -87,7 +94,7 @@ int main(int argc, char** argv) try {
     const double p95 = percentile(microsPerOperation, 0.95);
     const double mean = std::accumulate(
         microsPerOperation.begin(), microsPerOperation.end(), 0.0) /
-        microsPerOperation.size();
+        microsPerOperation.size(); // NOLINT(*-narrowing-conversions)
 
     std::cout << std::fixed << std::setprecision(3)
               << "{\n"
@@ -102,7 +109,9 @@ int main(int argc, char** argv) try {
               << "  \"resultGuard\": " << resultGuard << "\n"
               << "}\n";
     return 0;
-} catch(const std::exception& error) {
+}
+catch(const std::exception& error)
+{
     std::cerr << error.what() << '\n';
     return 1;
 }

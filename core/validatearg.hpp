@@ -63,7 +63,6 @@ public:
 
     // Add a single element to the batch
     void add(const ValidateArg& arg);
-    void add(ValidateArg&& arg);
 
     // Clear all elements from the batch
     void clear();

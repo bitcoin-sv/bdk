@@ -69,7 +69,7 @@ inline std::span<const uint8_t> byte_span(const char* ptr, uint64_t len)
     if (ptr == nullptr) {
         throw AbiArgumentError(bsv::AbiError_t::NullBuffer);
     }
-    return { static_cast<const uint8_t*>(reinterpret_cast<const void*>(ptr)), n };
+    return { reinterpret_cast<const uint8_t*>(ptr), n };
 }
 
 inline std::span<const int32_t> int32_span(const int32_t* ptr, uint64_t len)
