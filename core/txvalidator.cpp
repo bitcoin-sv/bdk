@@ -1501,7 +1501,7 @@ TxError bsv::CTxValidator::implIsFreeConsolidation(const CTransaction& tx,
         && tx.vout[0].nValue.GetSatoshis() == 0
         && IsDustReturnScript(tx.vout[0].scriptPubKey);
     const uint64_t factor = isDonation ? tx.vin.size() : consolidationMinFactor;
-    const int32_t minConf = isDonation ? int32_t(0) : static_cast<int32_t>(consolidationMinConf);
+    const int32_t minConf = isDonation ? int32_t{0} : static_cast<int32_t>(consolidationMinConf);
 
     if (tx.vin.size() < factor * tx.vout.size())
         return notFree();
