@@ -32,10 +32,9 @@ std::optional<double> CgroupCpuLimit(const std::string& root);
 size_t LimitCpuCount(size_t cpus, std::optional<double> cgroupLimit);
 
 // CPUs this process may use: hardware_concurrency(), lowered on Linux to the
-// calling thread's sched_getaffinity mask (so the input pool takes the mask
-// of the thread that creates it, the first caller with a large tx) and, by
-// LimitCpuCount, to the cgroup limit read under `cgroupRoot` ("/" on a live
-// system; tests pass a fixture root). Reads the system on every call; the
+// process's sched_getaffinity mask (the main thread's, whichever thread
+// calls) and, by LimitCpuCount, to the cgroup limit read under `cgroupRoot`
+// ("/" on a live system; tests pass a fixture root). Reads the system on every call; the
 // input pool calls it once, again only after failing to allocate or to start
 // a helper.
 size_t EffectiveCpuCount(const std::string& cgroupRoot = "/");

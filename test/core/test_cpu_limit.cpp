@@ -148,9 +148,10 @@ BOOST_AUTO_TEST_CASE(effective_cpu_count_applies_the_cgroup_limit)
         BOOST_TEST_MESSAGE("only " << unlimited << " CPUs: the 2.5-CPU limit cannot lower the count here");
 }
 
-// EffectiveCpuCount respects the calling thread's affinity mask, which
-// hardware_concurrency() ignores. Pin only the calling thread; any created
-// process-lifetime pool is idle during this unit test.
+// EffectiveCpuCount respects the process's affinity mask, which
+// hardware_concurrency() ignores. On Linux that is the main thread's mask, and
+// Boost.Test runs test cases on the main thread, so pinning it here narrows
+// the mask EffectiveCpuCount reads.
 BOOST_AUTO_TEST_CASE(effective_cpu_count_applies_the_affinity_mask)
 {
     cpu_set_t original;
@@ -179,6 +180,33 @@ BOOST_AUTO_TEST_CASE(effective_cpu_count_applies_the_affinity_mask)
     const RestoreAffinity restore{ original };
     BOOST_REQUIRE_EQUAL(sched_setaffinity(0, sizeof(one), &one), 0);
     BOOST_CHECK_EQUAL(bsv::detail::EffectiveCpuCount(FixtureRoot("v2_max")), 1u);
+}
+
+// A thread pinned to one CPU still sees the process's CPUs: the count does not
+// depend on which thread asks.
+BOOST_AUTO_TEST_CASE(effective_cpu_count_ignores_the_calling_threads_mask)
+{
+    const size_t process = bsv::detail::EffectiveCpuCount(FixtureRoot("v2_max"));
+    int pinResult = -1;
+    size_t fromPinnedThread = 0;
+    std::thread pinned([&pinResult, &fromPinnedThread] {
+        cpu_set_t mask;
+        CPU_ZERO(&mask);
+        if (sched_getaffinity(0, sizeof(mask), &mask) != 0)
+            return;
+        int first = 0;
+        while (first < CPU_SETSIZE && !CPU_ISSET(first, &mask))
+            ++first;
+        CPU_ZERO(&mask);
+        CPU_SET(first, &mask);
+        pinResult = sched_setaffinity(0, sizeof(mask), &mask);
+        fromPinnedThread = bsv::detail::EffectiveCpuCount(FixtureRoot("v2_max"));
+    });
+    pinned.join();
+    BOOST_REQUIRE_EQUAL(pinResult, 0);
+    if (process <= 1)
+        BOOST_TEST_MESSAGE("only " << process << " CPU: pinning a thread cannot lower the count here");
+    BOOST_CHECK_EQUAL(fromPinnedThread, process);
 }
 #endif
 

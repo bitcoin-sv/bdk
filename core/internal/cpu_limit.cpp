@@ -23,6 +23,7 @@
 
 #if defined(__linux__) && !defined(__EMSCRIPTEN__)
 #include <sched.h>
+#include <unistd.h>
 #endif
 
 static std::optional<std::string> ReadFile(const std::string& path)
@@ -244,7 +245,12 @@ size_t bsv::detail::LimitCpuCount(size_t cpus, std::optional<double> cgroupLimit
 }
 
 #if defined(__linux__) && !defined(__EMSCRIPTEN__)
-// CPUs in the calling thread's affinity mask, sized for any CPU count.
+// CPUs in the process's affinity mask, sized for any CPU count. getpid()
+// names the main thread (its thread ID is the process ID), so every caller
+// reads the main thread's mask, whichever thread it runs on. Go reads the
+// same mask: runtime/os_linux.go getCPUCount calls sched_getaffinity(0) from
+// the main thread at startup (osinit). If the main thread has exited, this
+// fails with ESRCH and the count falls back to hardware_concurrency().
 static std::optional<size_t> AffinityCpuCount()
 {
     constexpr int INITIAL_AFFINITY_CPUS = 1024;
@@ -257,7 +263,7 @@ static std::optional<size_t> AffinityCpuCount()
             return std::nullopt;
         const size_t size = CPU_ALLOC_SIZE(ncpus);
         CPU_ZERO_S(size, mask.get());
-        const int rc = sched_getaffinity(0, size, mask.get());
+        const int rc = sched_getaffinity(getpid(), size, mask.get());
         const int saved = errno;
         const int count = rc == 0 ? CPU_COUNT_S(size, mask.get()) : 0;
         if (rc == 0)
