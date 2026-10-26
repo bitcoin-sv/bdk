@@ -10,6 +10,7 @@
 #include <limits>
 #include <ostream>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -79,7 +80,7 @@ T CheckedConvert(const cpp_int& value)
 
 std::string HexMagnitude(const cpp_int& value)
 {
-    static constexpr char digits[] = "0123456789ABCDEF";
+    static constexpr std::string_view digits = "0123456789ABCDEF";
     const auto bytes = MagnitudeBytes(value);
     if(bytes.empty()) return "0";
     std::string result;
@@ -331,6 +332,7 @@ size_t bsv::bint::serialized_size() const
     const int bytes = size_bytes();
     if(bytes == 0) return 0;
     const auto magnitude = MagnitudeBytes(value_->value);
+    //NOLINTNEXTLINE(bugprone-misplaced-widening-cast)
     return static_cast<size_t>(bytes + ((magnitude.front() & 0x80) != 0 ? 1 : 0));
 }
 

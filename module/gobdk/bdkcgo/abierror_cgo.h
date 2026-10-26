@@ -11,6 +11,7 @@ extern "C" {
  * These codes report a failure to express the call, never a verdict on the
  * transaction: a consumer must classify TX_ERR_DOMAIN_ABI as a local fault.
  */
+// NOLINTNEXTLINE(cppcoreguidelines-use-enum-class)
 typedef enum {
     ABI_ERR_OK                       = 0,
     ABI_ERR_LENGTH_NEGATIVE          = 1,

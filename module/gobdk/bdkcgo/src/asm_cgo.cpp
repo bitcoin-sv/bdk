@@ -73,10 +73,11 @@ const char* cgo_from_asm_v2(const char* asmPtr, uint64_t asmLen, uint64_t* scrip
 
 const char* cgo_to_asm_v2(const char* scriptPtr, uint64_t scriptLen)
 {
-    try {
+    try
+    {
         const std::span<const uint8_t> script = bdkcgo::byte_span(scriptPtr, scriptLen);
-        auto asmStr = bsv::to_asm(script);
-        auto asmLen = asmStr.size()+1; // extra null terminator in C-String
+        const auto asmStr = bsv::to_asm(script);
+        const auto asmLen = asmStr.size()+1; // extra null terminator in C-String
 
         // NOLINTNEXTLINE(cppcoreguidelines-no-malloc, cppcoreguidelines-owning-memory)
         char* asmPtr = static_cast<char*>(malloc(asmLen));
@@ -85,7 +86,9 @@ const char* cgo_to_asm_v2(const char* scriptPtr, uint64_t scriptLen)
         }
         std::memcpy(asmPtr, asmStr.c_str(), asmLen);
         return asmPtr;
-    } catch (...) {
+    }
+    catch(...)
+    {
         // Catch-all: nothing may cross the extern "C" boundary. The diagnostic blob is
         // this function's only failure channel, and its content does not depend on the
         // exception, so every category takes the same path.

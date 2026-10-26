@@ -164,10 +164,19 @@ BOOST_AUTO_TEST_CASE(effective_cpu_count_applies_the_affinity_mask)
     cpu_set_t one;
     CPU_ZERO(&one);
     CPU_SET(pinned, &one);
-    struct RestoreAffinity {
-        const cpu_set_t& mask;
-        ~RestoreAffinity() { sched_setaffinity(0, sizeof(mask), &mask); }
-    } restore{ original };
+    class RestoreAffinity {
+    public:
+        explicit RestoreAffinity(const cpu_set_t& mask) : mask_{ mask } {}
+        ~RestoreAffinity() { sched_setaffinity(0, sizeof(mask_), &mask_); }
+        RestoreAffinity(const RestoreAffinity&) = delete;
+        RestoreAffinity& operator=(const RestoreAffinity&) = delete;
+        RestoreAffinity(RestoreAffinity&&) = delete;
+        RestoreAffinity& operator=(RestoreAffinity&&) = delete;
+
+    private:
+        cpu_set_t mask_;
+    };
+    const RestoreAffinity restore{ original };
     BOOST_REQUIRE_EQUAL(sched_setaffinity(0, sizeof(one), &one), 0);
     BOOST_CHECK_EQUAL(bsv::detail::EffectiveCpuCount(FixtureRoot("v2_max")), 1u);
 }

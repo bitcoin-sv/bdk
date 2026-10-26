@@ -4,9 +4,12 @@
 
 extern "C" void bdkffi_free(void* p)
 {
-    try {
+    try
+    {
         // NOLINTNEXTLINE(cppcoreguidelines-no-malloc, cppcoreguidelines-owning-memory)
         std::free(p);
-    } catch (...) {
+    }
+    catch(...) // NOLINT(bugprone-empty-catch)
+    {
     }
 }

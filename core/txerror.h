@@ -9,6 +9,7 @@ extern "C" {
 /**
  * TxErrorDomain_t identifies which error domain a TxError code belongs to.
  */
+// NOLINTNEXTLINE(cppcoreguidelines-use-enum-class)
 typedef enum {
     TX_ERR_DOMAIN_OK        = 0,  /* success, code is irrelevant */
     TX_ERR_DOMAIN_SCRIPT    = 1,  /* code is ScriptError_t (script execution failure) */

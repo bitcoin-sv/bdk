@@ -428,7 +428,7 @@ static Consensus::Params consensusParameters(bsv::TxValidationNetwork network)
     return params;
 }
 
-bsv::CTxValidator::CTxValidator(const std::string& chainName)
+bsv::CTxValidator::CTxValidator(std::string_view chainName)
     : source{ task::CCancellationSource::Make() }
 {
     // Before the chain params below, which already hash the genesis block
@@ -512,7 +512,7 @@ bool bsv::CTxValidator::SetGenesisActivationHeight(int32_t genesisActivationHeig
     ok = ok && policySettings.SetGenesisActivationHeight(genesisActivationHeightIn, err);
 
     // Chronicle height should be always at least genesis height
-    auto chronicleHeight = policySettings.GetChronicleActivationHeight();
+    const auto chronicleHeight = policySettings.GetChronicleActivationHeight();
     if ( chronicleHeight < policySettings.GetGenesisActivationHeight() ) {
         ok = ok && policySettings.SetChronicleActivationHeight(genesisActivationHeightIn, err);
     }
@@ -526,7 +526,7 @@ bool bsv::CTxValidator::SetChronicleActivationHeight(int32_t chronicleActivation
     ok = ok && policySettings.SetChronicleActivationHeight(chronicleActivationHeightIn, err);
 
     // Chronicle height should be always at least genesis height
-    auto genesisHeight = policySettings.GetGenesisActivationHeight();
+    const auto genesisHeight = policySettings.GetGenesisActivationHeight();
     if ( policySettings.GetChronicleActivationHeight() < genesisHeight ) {
         ok = ok && policySettings.SetGenesisActivationHeight(chronicleActivationHeightIn, err);
     }
@@ -770,8 +770,8 @@ bool bsv::CTxValidator::GetPermitBareMultisig() const
 
 uint32_t bsv::CTxValidator::CalculateFlags(int32_t utxoHeight, int32_t blockHeight, bool consensus) const
 {
-    ProtocolEra era;
-    uint32_t protocolFlags;
+    ProtocolEra era{};
+    uint32_t protocolFlags{};
     if (consensus) {
         // For tx coming from a block.
         // blockHeight is the block the tx belong to
@@ -786,7 +786,7 @@ uint32_t bsv::CTxValidator::CalculateFlags(int32_t utxoHeight, int32_t blockHeig
         protocolFlags = GetScriptVerifyFlags(era, requireStandard);
     }
 
-    ProtocolEra utxoEra{ GetProtocolEra(policySettings, resolveUtxoEraHeight(utxoHeight, blockHeight + 1)) };
+    const ProtocolEra utxoEra{ GetProtocolEra(policySettings, resolveUtxoEraHeight(utxoHeight, blockHeight + 1)) };
     const uint32_t utxoFlags { InputScriptVerifyFlags(era, utxoEra) };
 
     return (protocolFlags | utxoFlags);
@@ -799,8 +799,10 @@ uint32_t bsv::CTxValidator::CalculateFlags(int32_t utxoHeight, int32_t blockHeig
 //
 // So we replicate them here
 uint64_t bsv::CTxValidator::GetSigOpCount(std::span<const uint8_t> extendedTX, std::span<const int32_t> utxoHeights, int32_t blockHeight, bool countP2SHSigOps, bool consensus) const {
-    if (consensus) {
-        for (auto h : utxoHeights) {
+    if(consensus)
+    {
+        for(const auto h : utxoHeights)
+        {
             if (h == MEMPOOL_HEIGHT)
                 throw std::runtime_error("MEMPOOL_HEIGHT UTXO is invalid in consensus sigop counting");
         }
@@ -949,6 +951,7 @@ TxError bsv::CTxValidator::VerifySpend(
     std::span<const uint8_t> transaction,
     uint32_t inputIndex,
     std::span<const uint8_t> lockingScript,
+    // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
     int64_t sourceSatoshis,
     int32_t utxoHeight,
     int32_t blockHeight,
@@ -1562,7 +1565,8 @@ TxError bsv::CTxValidator::implCheckConsensusSigops(const CTransaction& tx,
     if (IsProtocolActive(era, ProtocolName::Genesis))
         return bsv::TxErrorOk();
 
-    for (auto h : utxoHeights) {
+    for(const auto h : utxoHeights)
+    {
         if (h == MEMPOOL_HEIGHT)
             return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::UnconfirmedInputInBlock));
     }
@@ -1666,7 +1670,7 @@ TxError bsv::CTxValidator::implIsFreeConsolidation(const CTransaction& tx,
         if (tx.vin[i].scriptSig.size() > consolidationMaxInputScriptSize)
             return notFree();
 
-        txnouttype dummyType;
+        txnouttype dummyType{};
         if (!consolidationAcceptNonStd && !IsStandardOutput(policySettings, prevUTXO[i].scriptPubKey, coinHeight, dummyType))
             return notFree();
 

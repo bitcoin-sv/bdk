@@ -1,0 +1,7 @@
+# Directory-scoped exception to the root .clang-tidy (everything else is inherited).
+#
+# misc-use-internal-linkage: every BOOST_AUTO_TEST_CASE expands to a struct with
+# external linkage, so the check fires on each test case by construction. Tests
+# are never linked into anything else, so internal linkage buys nothing here.
+InheritParentConfig: true
+Checks: '-misc-use-internal-linkage'
