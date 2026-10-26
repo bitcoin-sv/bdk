@@ -675,7 +675,7 @@ static const std::vector<OpcodeCase>& Cases()
     static const std::vector<OpcodeCase> cases = {
     // ── String / byte-array opcodes ─────────────────────────────────────
     {"cat",    "OP_CAT",    0x7E, "Concatenate two byte arrays",
-     "scriptSig: <sig> <pk> <\"BSV\"> <\"!\">  |  scriptPubKey: OP_CAT <\"BSV!\"> OP_EQUALVERIFY ... OP_CHECKSIG",
+     R"(scriptSig: <sig> <pk> <"BSV"> <"!">  |  scriptPubKey: OP_CAT <"BSV!"> OP_EQUALVERIFY ... OP_CHECKSIG)",
      BuildOpCat},
 
     {"split",  "OP_SPLIT",  0x7F, "Split byte array at position n",
