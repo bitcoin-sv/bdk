@@ -426,9 +426,9 @@ int main(int argc, char* argv[])
     std::cout << "  Note: attack tx is " << attackBin.size() << " bytes vs "
               << standardBin.size() << " bytes standard — "
               << std::setprecision(1)
-              << static_cast<double>(atkResult.avg_us()) / attackBin.size()
+              << atkResult.avg_us() / attackBin.size()
               << " µs/byte vs "
-              << static_cast<double>(stdResult.avg_us()) / standardBin.size()
+              << stdResult.avg_us() / standardBin.size()
               << " µs/byte.\n";
     std::cout << sep << "\n";
     // NOLINTEND(*-narrowing-conversions)
