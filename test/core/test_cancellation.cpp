@@ -48,19 +48,20 @@ namespace {
 
 // Mainnet tx 7be4fa421844154ec4105894def768a8bcd80da25792947d585274ce38c07105, extended,
 // valid in consensus mode at blockHeight 632099 (same fixture as test_txvalidator).
-const std::string kValidTxHex = "020000000000000000ef023f6c667203b47ce2fed8c8bcc78d764c39da9c0094f1a49074e05f66910e9c44000000006b4c69522102401d5481712745cf7ada12b7251c85ca5f1b8b6c859c7e81b8002a85b0f36d3c21039d8b1e461715ddd4d10806125be8592e6f48fb69e4c31699ce6750da1c9eaeb32103af3b35d4ad547fd1ce102bbd5cce36de2277723796f1b4001ec0ea6a1db6474053aeffffffffa73018250000000017a91413402e079464ec2a85e5a613732c78b0613fcc65873f6c667203b47ce2fed8c8bcc78d764c39da9c0094f1a49074e05f66910e9c44010000006b4c69522102401d5481712745cf7ada12b7251c85ca5f1b8b6c859c7e81b8002a85b0f36d3c21039d8b1e461715ddd4d10806125be8592e6f48fb69e4c31699ce6750da1c9eaeb32103af3b35d4ad547fd1ce102bbd5cce36de2277723796f1b4001ec0ea6a1db6474053aeffffffff34b82f000000000017a91413402e079464ec2a85e5a613732c78b0613fcc65870187e74725000000001976a9141be3d23725148a90807ee6df191bcdfcf083a3b288ac00000000";
+constexpr const char* kValidTxHex = "020000000000000000ef023f6c667203b47ce2fed8c8bcc78d764c39da9c0094f1a49074e05f66910e9c44000000006b4c69522102401d5481712745cf7ada12b7251c85ca5f1b8b6c859c7e81b8002a85b0f36d3c21039d8b1e461715ddd4d10806125be8592e6f48fb69e4c31699ce6750da1c9eaeb32103af3b35d4ad547fd1ce102bbd5cce36de2277723796f1b4001ec0ea6a1db6474053aeffffffffa73018250000000017a91413402e079464ec2a85e5a613732c78b0613fcc65873f6c667203b47ce2fed8c8bcc78d764c39da9c0094f1a49074e05f66910e9c44010000006b4c69522102401d5481712745cf7ada12b7251c85ca5f1b8b6c859c7e81b8002a85b0f36d3c21039d8b1e461715ddd4d10806125be8592e6f48fb69e4c31699ce6750da1c9eaeb32103af3b35d4ad547fd1ce102bbd5cce36de2277723796f1b4001ec0ea6a1db6474053aeffffffff34b82f000000000017a91413402e079464ec2a85e5a613732c78b0613fcc65870187e74725000000001976a9141be3d23725148a90807ee6df191bcdfcf083a3b288ac00000000";
 constexpr int32_t kValidTxBlockHeight = 632099;
-const std::vector<int32_t> kValidTxUtxoHeights{ 631924, 631924 };
+constexpr std::array<int32_t, 2> kValidTxUtxoHeights{ 631924, 631924 };
 
 task::CCancellationToken CancelledToken()
 {
-    auto source = task::CCancellationSource::Make();
+    const auto source = task::CCancellationSource::Make();
     source->Cancel();
     return source->GetToken();
 }
 
 // Sets a cancel flag the way a binding does: an atomic store from another thread.
-void StoreFlagRelaxed(int32_t* flag, int32_t value)
+// NOLINTNEXTLINE(misc-const-correctness)
+void StoreFlagRelaxed(int32_t* flag, const int32_t value)
 {
 #if defined(_MSC_VER) && !defined(__clang__)
     __iso_volatile_store32(reinterpret_cast<volatile __int32*>(flag), value);
@@ -76,7 +77,7 @@ bool IsCancelled(const TxError& r)
 
 // Regtest heights at which the spent output and the block are post-Chronicle.
 constexpr int32_t kLongBlockHeight = 20000;
-const std::vector<int32_t> kLongUtxoHeights{ 19000 };
+constexpr std::array<int32_t, 1> kLongUtxoHeights{ 19000 };
 
 // A valid one-input transaction whose script runs for seconds: the unlocking script
 // pushes a 1 MB element and the locking script hashes it `rounds` times
@@ -209,7 +210,7 @@ private:
 // FORKID signature: every OP_CHECKSIG hashes the whole locking script, a single step
 // with no poll inside. Mainnet, post-Genesis.
 constexpr int32_t kSighashBlockHeight = 800000;
-const std::vector<int32_t> kSighashUtxoHeights{ 700000, 700000 };
+constexpr std::array<int32_t, 2> kSighashUtxoHeights{ 700000, 700000 };
 
 std::vector<uint8_t> LargeSighashTx(size_t scriptCodeBytes)
 {
@@ -255,7 +256,7 @@ std::vector<uint8_t> LargeSighashTx(size_t scriptCodeBytes)
 // One input, one output per entry of outputValues, mainnet post-Genesis heights
 // (kSimpleBlockHeight / kSimpleUtxoHeights). Scripts are given verbatim.
 constexpr int32_t kSimpleBlockHeight = 800000;
-const std::vector<int32_t> kSimpleUtxoHeights{ 700000 };
+constexpr std::array<int32_t, 1> kSimpleUtxoHeights{ 700000 };
 
 std::vector<uint8_t> SimpleTx(const CScript& scriptSig, const CScript& lockingScript,
                               int64_t inputValue, const std::vector<int64_t>& outputValues)
@@ -293,7 +294,8 @@ std::vector<uint8_t> EmptyScriptsTx() { return SimpleTx(CScript(), CScript(), 10
 // Pre-Genesis standardness fixtures (regtest, block 5000, inputs from 4000), for a
 // validator with standardness required. P2PKH inputs need no script evaluation to be
 // standard, so the interpreter never polls while checking them.
-const std::vector<int32_t> kPreGenesisUtxoHeights2{ 4000, 4000 };
+constexpr std::array<int32_t, 2> kPreGenesisUtxoHeights2{ 4000, 4000 };
+constexpr std::array<int32_t, 1> kPreGenesisP2SHUtxoHeights{ 4000 };
 CScript P2PKHScript()
 {
     return CScript() << OP_DUP << OP_HASH160 << std::vector<uint8_t>(20, 0x11) << OP_EQUALVERIFY << OP_CHECKSIG;
@@ -427,8 +429,9 @@ BOOST_AUTO_TEST_CASE(cancelled_mid_script_returns_cancelled_promptly)
     const std::span<const uint8_t> etx(tx.data(), tx.size());
     const bsv::CTxValidator validator = LongRunningValidator();
 
-    for (const bool consensus : { true, false }) {
-        auto source = task::CCancellationSource::Make();
+    for(const bool consensus : {true, false})
+    {
+        const auto source = task::CCancellationSource::Make();
         const auto token = source->GetToken();
         const auto [result, latency] = RunAndCancelAfter(source, std::chrono::milliseconds(50), [&] {
             return validator.ValidateTransaction(etx, kLongUtxoHeights, kLongBlockHeight, consensus, token);
@@ -451,7 +454,7 @@ BOOST_AUTO_TEST_CASE(cancel_at_every_poll_gives_cancelled_or_the_uncancelled_res
     struct Case {
         const char* name;
         std::vector<uint8_t> tx;
-        std::vector<int32_t> utxoHeights;
+        std::span<const int32_t> utxoHeights; // views a static array
         int32_t blockHeight;
         std::string chain;
         bool requireStandard;  // pre-Genesis, non-standard outputs are refused when true
@@ -461,7 +464,7 @@ BOOST_AUTO_TEST_CASE(cancel_at_every_poll_gives_cancelled_or_the_uncancelled_res
     const std::vector<Case> cases{
         { "valid", ParseHex(kValidTxHex), kValidTxUtxoHeights, kValidTxBlockHeight, CBaseChainParams::MAIN, false },
         { "bad-signature", invalid, kValidTxUtxoHeights, kValidTxBlockHeight, CBaseChainParams::MAIN, false },
-        { "pre-genesis-p2sh", PreGenesisP2SHTx(), { 4000 }, 5000, CBaseChainParams::REGTEST, true },
+        { "pre-genesis-p2sh", PreGenesisP2SHTx(), kPreGenesisP2SHUtxoHeights, 5000, CBaseChainParams::REGTEST, true },
         { "no-outputs", NoOutputsTx(), kSimpleUtxoHeights, kSimpleBlockHeight, CBaseChainParams::MAIN, false },
         { "inputs-below-outputs", InputsBelowOutputsTx(), kSimpleUtxoHeights, kSimpleBlockHeight, CBaseChainParams::MAIN, false },
         { "empty-scripts", EmptyScriptsTx(), kSimpleUtxoHeights, kSimpleBlockHeight, CBaseChainParams::MAIN, false },
@@ -749,8 +752,9 @@ BOOST_AUTO_TEST_CASE(verify_spend_cancelled_mid_script_returns_cancelled_promptl
     const std::vector<uint8_t> lockBytes(lock.begin(), lock.end());
     const bsv::CTxValidator validator = LongRunningValidator();
 
-    for (const bool consensus : { true, false }) {
-        auto source = task::CCancellationSource::Make();
+    for(const bool consensus : {true, false})
+    {
+        const auto source = task::CCancellationSource::Make();
         const auto token = source->GetToken();
         const auto [result, latency] = RunAndCancelAfter(source, std::chrono::milliseconds(50), [&] {
             return validator.VerifySpend(tx, 0, lockBytes, 100000, kLongUtxoHeights[0], kLongBlockHeight, consensus, std::nullopt, token);
@@ -812,11 +816,11 @@ BOOST_AUTO_TEST_CASE(flag_token_cancels_when_the_flag_is_set_from_another_thread
     const std::span<const uint8_t> validTx(valid.data(), valid.size());
     const bsv::CTxValidator mainValidator("main");
 
-    alignas(4) int32_t zero = 0;
+    alignas(4) const int32_t zero = 0;
     BOOST_CHECK(bsv::TxErrorIsOk(mainValidator.ValidateTransaction(validTx, kValidTxUtxoHeights, kValidTxBlockHeight, true, bsv::MakeFlagCancellationToken(&zero))));
     BOOST_CHECK(bsv::TxErrorIsOk(mainValidator.ValidateTransaction(validTx, kValidTxUtxoHeights, kValidTxBlockHeight, true, bsv::MakeFlagCancellationToken(nullptr))));
 
-    alignas(4) int32_t set = 1;
+    alignas(4) const int32_t set = 1;
     BOOST_CHECK(IsCancelled(mainValidator.ValidateTransaction(validTx, kValidTxUtxoHeights, kValidTxBlockHeight, true, bsv::MakeFlagCancellationToken(&set))));
 
     const std::vector<uint8_t> tx = LongRunningTx(2000);

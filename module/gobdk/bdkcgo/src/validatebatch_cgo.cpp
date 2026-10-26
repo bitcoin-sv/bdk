@@ -16,7 +16,8 @@ static void helper_log_cgo_exception(const char* where, const char* what) noexce
     try {
         std::cout << "CGO EXCEPTION : " << where << " " << what << '\n' << std::flush;
     }
-    catch (...) {
+    catch(...) // NOLINT(bugprone-empty-catch)
+    {
     }
 }
 
@@ -40,18 +41,19 @@ ValidateBatchCGO ValidateBatch_CreateV2()
 
 void ValidateBatch_Destroy(ValidateBatchCGO cgoBatch)
 {
-    bsv::ValidateBatch* ptr = static_cast<bsv::ValidateBatch*>(cgoBatch);
+    const bsv::ValidateBatch* ptr = static_cast<bsv::ValidateBatch*>(cgoBatch);
     // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
     delete ptr;
 }
 
-TxError ValidateBatch_Add(
-    ValidateBatchCGO cgoBatch,
-    const char* extendedTxPtr, uint64_t extendedTxLen,
-    const int32_t* hUTXOsPtr, uint64_t hUTXOsLen,
-    int32_t blockHeight,
-    bool consensus
-)
+TxError ValidateBatch_Add(ValidateBatchCGO cgoBatch,
+                          const char* extendedTxPtr,
+                          uint64_t extendedTxLen,
+                          const int32_t* hUTXOsPtr,
+                          // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+                          uint64_t hUTXOsLen,
+                          int32_t blockHeight,
+                          bool consensus)
 {
     try {
         // Convert C-style parameters to C++ spans
@@ -59,7 +61,7 @@ TxError ValidateBatch_Add(
         const std::span<const int32_t> hUTXOs = bdkcgo::int32_span(hUTXOsPtr, hUTXOsLen);
 
         // Create ValidateArg and add to batch
-        bsv::ValidateArg arg(extendedTx, hUTXOs, blockHeight, consensus);
+        const bsv::ValidateArg arg(extendedTx, hUTXOs, blockHeight, consensus);
         static_cast<bsv::ValidateBatch*>(cgoBatch)->add(arg);
         return bsv::TxErrorOk();
     }
@@ -109,6 +111,7 @@ void ValidateBatch_Reserve(ValidateBatchCGO cgoBatch, uint64_t capacity)
     try {
         static_cast<bsv::ValidateBatch*>(cgoBatch)->reserve(static_cast<size_t>(capacity));
     }
-    catch (...) {
+    catch(...) // NOLINT(bugprone-empty-catch)
+    {
     }
 }

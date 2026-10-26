@@ -54,15 +54,15 @@ BOOST_AUTO_TEST_SUITE(test_txvalidator)
 // A custom chain params
 class MyParams : public CChainParams {
 public:
-    static const std::string CustomName;
+    static constexpr const char* CustomName = "MyParams";
 
     MyParams() = default;
 };
 
-const std::string MyParams::CustomName = "MyParams";
 
 // Registration custom chain params
-static bsv::RegisterCustomChainParams<MyParams> myParamsReg(MyParams::CustomName);
+// NOLINTNEXTLINE(bugprone-throwing-static-initialization): registered before main() by design
+const static bsv::RegisterCustomChainParams<MyParams> myParamsReg(MyParams::CustomName);
 
 // BDK installs the fastest SHA-256 transforms this CPU supports while it is
 // loaded, so every validator, and every test below, validates through them.
@@ -82,7 +82,7 @@ BOOST_AUTO_TEST_CASE(validator_by_network_has_sha256_backend)
 // its own process (test_txvalidator_chain_name_has_backend).
 BOOST_AUTO_TEST_CASE(validator_by_chain_name_has_sha256_backend)
 {
-    const bsv::CTxValidator validator{std::string{"main"}};
+    const bsv::CTxValidator validator{"main"};
     sha256_test::CheckInstalledBackend();
     BOOST_TEST(bsv::SelectSha256Backend() == sha256_test::ExpectedSelection());
 }
@@ -99,8 +99,27 @@ BOOST_AUTO_TEST_CASE(custom_chainparams)
 
     BOOST_TEST(bsv::CreateCustomChainParams(MyParams::CustomName) != nullptr);
 
+    // The public name constants compare by value, not by pointer: a name built at
+    // runtime, in storage that is not the literal's, must still match and resolve.
+    // Concatenated so the compiler cannot merge it with the constant's literal,
+    // which would let a pointer comparison pass by accident.
+    const std::string runtimeName{std::string{"tera"} + "testnet"};
+    const char* const runtimeCString{runtimeName.c_str()};
+    // Double parentheses: BOOST_TEST would otherwise decompose the expression and
+    // compare C strings by content itself, hiding a pointer comparison
+    BOOST_TEST((runtimeName == CustomChainParams::TERATESTNET));
+    BOOST_TEST((runtimeCString == CustomChainParams::TERATESTNET));
+    BOOST_TEST(bsv::CreateCustomChainParams(runtimeName) != nullptr);
+    BOOST_TEST(bsv::CreateCustomChainParams(runtimeCString) != nullptr);
+
+    // The constants, a std::string and a literal all construct a validator
+    BOOST_CHECK_NO_THROW(bsv::CTxValidator{CustomChainParams::TERATESTNET});
+    BOOST_CHECK_NO_THROW(bsv::CTxValidator{CustomChainParams::TERASCALINGTESTNET});
+    BOOST_CHECK_NO_THROW(bsv::CTxValidator{runtimeName});
+    BOOST_CHECK_NO_THROW(bsv::CTxValidator{"main"});
+
     // Unknown network should throw a exception
-    BOOST_CHECK_THROW(bsv::CreateCustomChainParams(std::string{ "unknownchain" }), std::runtime_error);
+    BOOST_CHECK_THROW(bsv::CreateCustomChainParams("unknownchain"), std::runtime_error);
 }
 
 BOOST_AUTO_TEST_CASE(built_in_network_parameters_match_chainparams)
@@ -129,7 +148,7 @@ BOOST_AUTO_TEST_CASE(built_in_network_parameters_match_chainparams)
 
     for(const auto& network : networks) {
         const bsv::CTxValidator compact{network.network};
-        const bsv::CTxValidator full{std::string{network.chainName}};
+        const bsv::CTxValidator full{network.chainName};
         BOOST_CHECK_EQUAL(compact.GetRequireStandard(), full.GetRequireStandard());
         BOOST_CHECK_EQUAL(compact.GetGenesisActivationHeight(), full.GetGenesisActivationHeight());
         BOOST_CHECK_EQUAL(compact.GetChronicleActivationHeight(), full.GetChronicleActivationHeight());
@@ -152,7 +171,7 @@ BOOST_AUTO_TEST_CASE(stn_string_constructor_has_deterministic_activation_flags)
     // Repeated string construction must use BDK's explicit STN table instead
     // of inheriting platform- and stack-dependent values from those fields.
     for(int iteration = 0; iteration < 32; ++iteration) {
-        const bsv::CTxValidator stringNamed{std::string{"stn"}};
+        const bsv::CTxValidator stringNamed{"stn"};
         for(const int32_t height : {1, 14, 15, 99, 100, 249, 250, 2199, 2200}) {
             BOOST_CHECK_EQUAL(
                 stringNamed.CalculateFlags(height, height, false),
@@ -317,8 +336,8 @@ BOOST_AUTO_TEST_CASE(test_verify_script)
 
     const std::vector<uint8_t> etxBin = ParseHex(TxHexExtended);
     const std::span<const uint8_t> etx(etxBin.data(), etxBin.size());
-    std::span<const int32_t> utxo(utxoArray);
-    bsv::CTxValidator se("main");
+    const std::span<const int32_t> utxo(utxoArray);
+    const bsv::CTxValidator se("main");
     const auto status = se.ValidateTransaction(etx, utxo, blockHeight, true);
     BOOST_CHECK(bsv::TxErrorIsOk(status));
 }
@@ -334,9 +353,9 @@ BOOST_AUTO_TEST_CASE(test_verify_script_custom_flags)
 
     const std::vector<uint8_t> etxBin = ParseHex(TxHexExtended);
     const std::span<const uint8_t> etx(etxBin.data(), etxBin.size());
-    std::span<const int32_t> utxo(utxoArray);
-    std::span<const uint32_t> customFlags(customFlagsArray);
-    bsv::CTxValidator se("main");
+    const std::span<const int32_t> utxo(utxoArray);
+    const std::span<const uint32_t> customFlags(customFlagsArray);
+    const bsv::CTxValidator se("main");
     const auto status = se.VerifyScript(etx, utxo, blockHeight, true, customFlags);  // VerifyScript with custom flags stays as-is
     BOOST_CHECK(bsv::TxErrorIsOk(status));
 }
@@ -347,7 +366,7 @@ BOOST_AUTO_TEST_CASE(test_verify_empty_utxos)
     // This is on mainnet TxID = "7be4fa421844154ec4105894def768a8bcd80da25792947d585274ce38c07105";
     // This tx was whitelisted prior to the beta-8
     const std::string TxHexExtended = "020000000000000000ef023f6c667203b47ce2fed8c8bcc78d764c39da9c0094f1a49074e05f66910e9c44000000006b4c69522102401d5481712745cf7ada12b7251c85ca5f1b8b6c859c7e81b8002a85b0f36d3c21039d8b1e461715ddd4d10806125be8592e6f48fb69e4c31699ce6750da1c9eaeb32103af3b35d4ad547fd1ce102bbd5cce36de2277723796f1b4001ec0ea6a1db6474053aeffffffffa73018250000000017a91413402e079464ec2a85e5a613732c78b0613fcc65873f6c667203b47ce2fed8c8bcc78d764c39da9c0094f1a49074e05f66910e9c44010000006b4c69522102401d5481712745cf7ada12b7251c85ca5f1b8b6c859c7e81b8002a85b0f36d3c21039d8b1e461715ddd4d10806125be8592e6f48fb69e4c31699ce6750da1c9eaeb32103af3b35d4ad547fd1ce102bbd5cce36de2277723796f1b4001ec0ea6a1db6474053aeffffffff34b82f000000000017a91413402e079464ec2a85e5a613732c78b0613fcc65870187e74725000000001976a9141be3d23725148a90807ee6df191bcdfcf083a3b288ac00000000";
-    std::span<const int32_t> utxo;
+    const std::span<const int32_t> utxo;
     const int32_t blockHeight = 632099;
 
     const std::vector<uint8_t> etxBin = ParseHex(TxHexExtended);
@@ -371,7 +390,7 @@ BOOST_AUTO_TEST_CASE(test_verify_empty_utxos)
     std::vector<uint8_t> emptyUtxoEtxBin(ss.begin(), ss.end());
     const std::span<const uint8_t> emptyUtxoEtx(emptyUtxoEtxBin.data(), emptyUtxoEtxBin.size());
 
-    bsv::CTxValidator se("main");
+    const bsv::CTxValidator se("main");
     const auto status = se.ValidateTransaction(emptyUtxoEtx, utxo, blockHeight, true);
     BOOST_CHECK(!bsv::TxErrorIsOk(status));
 }
@@ -613,7 +632,7 @@ BOOST_AUTO_TEST_CASE(check_fee_policy_path)
 
     // Policy mode, fee rate = 0 (no policy) — accept regardless of tx fees.
     {
-        bsv::CTxValidator se("main");
+        const bsv::CTxValidator se("main");
         const auto status = se.ValidateTransaction(etx, utxo, blockHeight, /*consensus=*/false);
         BOOST_CHECK(bsv::TxErrorIsOk(status));
     }
@@ -704,7 +723,7 @@ BOOST_AUTO_TEST_CASE(check_fee_free_consolidation_bypass)
     const std::span<const uint8_t> donationEtx(donationBin.data(), donationBin.size());
     const std::span<const int32_t> utxo(utxoArray);
 
-    auto runOnce = [&](uint64_t minConsolidationFactor) {
+    const auto runOnce = [&](uint64_t minConsolidationFactor) {
         bsv::CTxValidator se("main");
         std::string err;
         BOOST_REQUIRE(se.SetMinMiningTxFee(1'000'000'000'000LL, &err));
@@ -743,7 +762,7 @@ BOOST_AUTO_TEST_CASE(empty_extended_tx_stays_in_the_exception_domain)
     const std::span<const uint8_t> emptyEtx;
     const std::span<const int32_t> utxo;
 
-    bsv::CTxValidator se("main");
+    const bsv::CTxValidator se("main");
     const auto status = se.ValidateTransaction(emptyEtx, utxo, /*blockHeight=*/632099, /*consensus=*/true);
     BOOST_CHECK_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_EXCEPTION), status.domain);
 }
@@ -810,7 +829,7 @@ BOOST_AUTO_TEST_CASE(small_bare_large_aggregate_previous_scripts)
     const std::vector<int32_t> utxoHeights(scriptSizes.size(), utxoHeight);
     const std::span<const int32_t> utxo(utxoHeights);
 
-    bsv::CTxValidator se("main");
+    const bsv::CTxValidator se("main");
     for (const bool consensus : { true, false }) {
         const auto status = se.ValidateTransaction(etx, utxo, blockHeight, consensus);
         BOOST_CHECK_MESSAGE(status.domain != static_cast<int32_t>(TX_ERR_DOMAIN_EXCEPTION),
@@ -831,6 +850,7 @@ constexpr int64_t P2PKH_OUTPUT_SATOSHIS = 1000;
 constexpr int32_t P2PKH_BLOCK_HEIGHT = 700000;  // post-Genesis, pre-Chronicle on mainnet
 constexpr int32_t P2PKH_UTXO_HEIGHT = 699999;
 
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 static CKey MakeDeterministicTestKey(uint8_t lastByte, uint8_t secondLastByte = 0)
 {
     std::array<uint8_t, 32> rawKey{};
@@ -929,7 +949,7 @@ static TxError ValidateP2PKHSpend(const bsv::CTxValidator& se,
 static void CorruptP2PKHSignature(bsv::CMutableTransactionExtended& eTx, size_t index)
 {
     CScript::const_iterator pc = eTx.mtx.vin[index].scriptSig.begin();
-    opcodetype opcode;
+    opcodetype opcode{};
     std::vector<uint8_t> sig;
     std::vector<uint8_t> pubkey;
     BOOST_REQUIRE(eTx.mtx.vin[index].scriptSig.GetOp(pc, opcode, sig));
@@ -940,21 +960,25 @@ static void CorruptP2PKHSignature(bsv::CMutableTransactionExtended& eTx, size_t 
     eTx.mtx.vin[index].scriptSig = CScript() << sig << pubkey;
 }
 
-static const std::array<SigHashType, 6> FORKID_SIGHASH_TYPES{
+static const std::array<SigHashType, 6>& ForkIdSigHashTypes()
+{
+    static const std::array<SigHashType, 6> types{
     SigHashType().withBaseType(BaseSigHashType::ALL).withForkId(),
     SigHashType().withBaseType(BaseSigHashType::NONE).withForkId(),
     SigHashType().withBaseType(BaseSigHashType::SINGLE).withForkId(),
     SigHashType().withBaseType(BaseSigHashType::ALL).withForkId().withAnyoneCanPay(),
     SigHashType().withBaseType(BaseSigHashType::NONE).withForkId().withAnyoneCanPay(),
     SigHashType().withBaseType(BaseSigHashType::SINGLE).withForkId().withAnyoneCanPay(),
-};
+    };
+    return types;
+}
 
 // Each FORKID sighash type, with and without ANYONECANPAY, on every input of a
 // multi-input, multi-output tx. SINGLE has a matching output for every input.
 BOOST_AUTO_TEST_CASE(forkid_sighash_types_validate_on_multi_input_tx)
 {
     const bsv::CTxValidator se("main");
-    for (const SigHashType& type : FORKID_SIGHASH_TYPES) {
+    for (const SigHashType& type : ForkIdSigHashTypes()) {
         const std::vector<SigHashType> types(3, type);
         const auto etxBin = SerializeExtended(MakeSignedP2PKHSpend(types, /*nOutputs=*/3));
         for (const bool consensus : { true, false }) {
@@ -970,7 +994,7 @@ BOOST_AUTO_TEST_CASE(forkid_sighash_types_validate_on_multi_input_tx)
 BOOST_AUTO_TEST_CASE(mixed_forkid_sighash_types_validate_in_one_tx)
 {
     const bsv::CTxValidator se("main");
-    const std::vector<SigHashType> types(FORKID_SIGHASH_TYPES.begin(), FORKID_SIGHASH_TYPES.end());
+    const std::vector<SigHashType> types(ForkIdSigHashTypes().begin(), ForkIdSigHashTypes().end());
     const auto etxBin = SerializeExtended(MakeSignedP2PKHSpend(types, /*nOutputs=*/types.size()));
     for (const bool consensus : { true, false }) {
         const auto status = ValidateP2PKHSpend(se, etxBin, types.size(), consensus);
@@ -1061,7 +1085,7 @@ static void CorruptSecondMultisigSignature(MultisigSpend& spend)
 {
     const CScript& scriptSig = spend.eTx.mtx.vin[spend.index].scriptSig;
     CScript::const_iterator pc = scriptSig.begin();
-    opcodetype opcode;
+    opcodetype opcode{};
     std::vector<uint8_t> dummy, sig1, sig2;
     BOOST_REQUIRE(scriptSig.GetOp(pc, opcode, dummy));
     BOOST_REQUIRE(scriptSig.GetOp(pc, opcode, sig1));
@@ -1140,6 +1164,7 @@ constexpr int32_t PRE_UAHF_UTXO_HEIGHT = 469999;
 
 static TxError ValidateAtHeights(const bsv::CTxValidator& se,
                                  const bsv::CMutableTransactionExtended& eTx,
+                                 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
                                  int32_t utxoHeight,
                                  int32_t blockHeight,
                                  bool consensus)
@@ -1307,6 +1332,7 @@ struct ManyKeyMultisigSpend {
     uint32_t index;
 };
 
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
 static ManyKeyMultisigSpend MakeManyKeyMultisigSpend(size_t nInputs, size_t nKeys)
 {
     const SigHashType allForkId = SigHashType().withForkId();

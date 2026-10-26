@@ -26,9 +26,12 @@ bdkffi_TxError to_ffi_error(const TxError& error)
 
 void log_exception(const char* function_name, const char* message)
 {
-    try {
+    try
+    {
         std::cerr << "bdkffi exception in " << function_name << ": " << message << '\n';
-    } catch (...) {
+    }
+    catch(...) // NOLINT(bugprone-empty-catch)
+    {
     }
 }
 
@@ -156,6 +159,7 @@ bdkffi_TxError* malloc_single_exception(int* result_size)
 
 } // namespace
 
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
 #define BDKFFI_CATCH_RETURN(value) \
     catch (const std::exception& e) { \
         log_exception(__func__, e.what()); \
@@ -166,6 +170,7 @@ bdkffi_TxError* malloc_single_exception(int* result_size)
         return (value); \
     }
 
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
 #define BDKFFI_CATCH_VOID \
     catch (const std::exception& e) { \
         log_exception(__func__, e.what()); \
@@ -174,6 +179,7 @@ bdkffi_TxError* malloc_single_exception(int* result_size)
         log_exception(__func__, "unknown C++ exception"); \
     }
 
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
 #define BDKFFI_SETTER_1(function_name, method_name, value_type) \
     extern "C" char* function_name(bdkffi_txvalidator_t validator, value_type value) \
     { \
@@ -191,6 +197,7 @@ bdkffi_TxError* malloc_single_exception(int* result_size)
         } \
     }
 
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
 #define BDKFFI_VOID_SETTER_1(function_name, method_name, value_type) \
     extern "C" void function_name(bdkffi_txvalidator_t validator, value_type value) \
     { \

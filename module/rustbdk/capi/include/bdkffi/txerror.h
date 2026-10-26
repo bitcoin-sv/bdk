@@ -7,6 +7,7 @@
 extern "C" {
 #endif
 
+// NOLINTNEXTLINE(cppcoreguidelines-use-enum-class)
 typedef enum bdkffi_tx_error_domain {
     BDKFFI_TX_ERR_DOMAIN_OK = 0,
     BDKFFI_TX_ERR_DOMAIN_SCRIPT = 1,

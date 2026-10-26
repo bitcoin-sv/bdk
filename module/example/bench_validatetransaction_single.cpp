@@ -5,6 +5,8 @@
 #include <iomanip>
 #include <vector>
 #include <string>
+#include <array>
+#include <string_view>
 #include <stdexcept>
 #include <chrono>
 
@@ -21,14 +23,15 @@ namespace po = boost::program_options;
 // TXID: d43ad4d4b46632b311b844117a5a9e9598afd1ee13e95d98106bf2adeae0bad7
 // Block: 620940
 // Size: 192 bytes (1 input, 1 output, no OP_RETURN)
-const std::string CHAIN_NET = "main";
+constexpr const char* CHAIN_NET = "main";
 const int32_t BLOCK_HEIGHT = 620940;
-const std::string TX_ID = "d43ad4d4b46632b311b844117a5a9e9598afd1ee13e95d98106bf2adeae0bad7";
-const std::string TX_HEX_EXTENDED = "010000000000000000ef0120fa0d2c5974cfe6e3aec71f7f6539cfa1c1e474082d2cdb41fb830f6267b7d7000000006b4830450221008788b545ebd6ebcb15f938045b71c1fa7efafd55d1f4e64e96602a04f3214cda0220717ddadfa7d1dc6a22ccb077350aef7a2073ee58fe780d86b77a31c24c664a21412103ef28c47337b05ec3f14b63d904db7ae023e897389dbdbf531221e13fd5e5b105ffffffffdc3de103000000001976a91437fb14a40d021abbb1763497f963a130286d1ad188ac017239e103000000001976a914962eba38504bcfb140ff0246afa795658812b42788ac00000000";
-const std::vector<int32_t> UTXO_HEIGHTS = {574441};
+constexpr const char* TX_ID = "d43ad4d4b46632b311b844117a5a9e9598afd1ee13e95d98106bf2adeae0bad7";
+constexpr std::string_view TX_HEX_EXTENDED = "010000000000000000ef0120fa0d2c5974cfe6e3aec71f7f6539cfa1c1e474082d2cdb41fb830f6267b7d7000000006b4830450221008788b545ebd6ebcb15f938045b71c1fa7efafd55d1f4e64e96602a04f3214cda0220717ddadfa7d1dc6a22ccb077350aef7a2073ee58fe780d86b77a31c24c664a21412103ef28c47337b05ec3f14b63d904db7ae023e897389dbdbf531221e13fd5e5b105ffffffffdc3de103000000001976a91437fb14a40d021abbb1763497f963a130286d1ad188ac017239e103000000001976a914962eba38504bcfb140ff0246afa795658812b42788ac00000000";
+constexpr std::array<int32_t, 1> UTXO_HEIGHTS = {574441};
 
 ////////////////////////////////////////////////////////////////////////////////
 // Main benchmark program
+//NOLINTNEXTLINE(bugprone-exception-escape)
 int main(int argc, char* argv[])
 {
     int iterations = 10000;
@@ -67,7 +70,7 @@ int main(int argc, char* argv[])
     std::cout << '\n';
 
     // Preparse the transaction binary
-    const std::vector<uint8_t> txBinExtended = ParseHex(TX_HEX_EXTENDED);
+    const std::vector<uint8_t> txBinExtended = ParseHex(std::string{TX_HEX_EXTENDED});
     const std::span<const int32_t> utxoHeights(UTXO_HEIGHTS);
     const bool consensus = !disableConsensus;
 
@@ -91,17 +94,18 @@ int main(int argc, char* argv[])
     std::chrono::nanoseconds minDuration = std::chrono::nanoseconds::max();
     std::chrono::nanoseconds maxDuration(0);
 
-    for (int i = 0; i < iterations; ++i) {
-        auto start = std::chrono::high_resolution_clock::now();
+    for(int i = 0; i < iterations; ++i)
+    {
+        const auto start = std::chrono::high_resolution_clock::now();
         const TxError ret = se.ValidateTransaction(txBinExtended, utxoHeights, BLOCK_HEIGHT, consensus);
-        auto end = std::chrono::high_resolution_clock::now();
+        const auto end = std::chrono::high_resolution_clock::now();
 
         if (!bsv::TxErrorIsOk(ret)) {
             std::cerr << "ERROR: ValidateTransaction failed at iteration " << i << '\n';
             return 1;
         }
 
-        auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+        const auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
         totalDuration += duration;
 
         if (duration < minDuration) {
@@ -113,9 +117,10 @@ int main(int argc, char* argv[])
     }
 
     // Calculate statistics
-    double avgNanoseconds = static_cast<double>(totalDuration.count()) / iterations;
-    double avgMicroseconds = avgNanoseconds / 1000.0;
-    double totalSeconds = totalDuration.count() / 1e9;
+    // NOLINTBEGIN(*-narrowing-conversions)
+    const double avgNanoseconds = static_cast<double>(totalDuration.count()) / iterations;
+    const double avgMicroseconds = avgNanoseconds / 1000.0;
+    const double totalSeconds = totalDuration.count() / 1e9;
 
     std::cout << '\n';
     std::cout << "Benchmark Results:" << '\n';
@@ -129,6 +134,7 @@ int main(int argc, char* argv[])
     std::cout << "Max:               " << std::setprecision(2) << maxDuration.count() / 1000.0 << " µs ("
               << maxDuration.count() << " ns)" << '\n';
     std::cout << "Throughput:        " << std::setprecision(0) << (iterations / totalSeconds) << " calls/sec" << '\n';
+    // NOLINTEND(*-narrowing-conversions)
 
     return 0;
 }

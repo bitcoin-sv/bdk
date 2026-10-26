@@ -24,7 +24,7 @@ namespace
         {
             bsv::SelectSha256Backend();
         }
-        catch(...)
+        catch(...) //NOLINT(bugprone-empty-catch)
         {
             // Out of memory at load: the scalar transforms stay installed, and
             // the next SelectSha256Backend() call tries again
