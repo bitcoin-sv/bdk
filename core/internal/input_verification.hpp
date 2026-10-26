@@ -53,17 +53,20 @@
 //
 // Pool lifetime. InputVerifyPool::Get creates the pool on the first large
 // transaction while the helper limit is not 0, sized once from
-// EffectiveCpuCount(): cores - 1 detached helper threads, each with an
-// INPUT_HELPER_STACK_BYTES (8 MiB) stack on POSIX. The helper limit caps the
-// helpers working at once, not the threads created: any non-zero limit
-// creates the full pool. Only a limit of 0 set before the first large
-// transaction means no helper thread is ever started. Fewer than 2 CPUs, or
-// no helper thread starting at all (a thread or process limit), is recorded
+// EffectiveCpuCount(), which reads the process's affinity mask (the main
+// thread's, whichever thread calls): cores - 1 detached helper threads, each
+// with an INPUT_HELPER_STACK_BYTES (8 MiB) stack on POSIX. Helper threads
+// inherit the affinity of the thread that creates the pool, so a pool created
+// from a caller pinned to fewer CPUs runs its helpers on those. The helper
+// limit caps the helpers working at once, not the threads created: any
+// non-zero limit creates the full pool. Only a limit of 0 set before the first
+// large transaction means no helper thread is ever started. Fewer than 2 CPUs,
+// or no helper thread starting at all (a thread or process limit), is recorded
 // once and never retried: the process verifies serially. Only a failure to
-// allocate the pool is retried by a later call. Once a helper has started,
-// the pool is published and lives for the rest of the process: helpers never
-// exit and nothing destroys it. Idle helpers sleep on a condition variable
-// and use no CPU. This avoids ordering pool teardown against static destructors and
+// allocate the pool is retried by a later call. Once a helper has started, the
+// pool is published and lives for the rest of the process: helpers never exit
+// and nothing destroys it. Idle helpers sleep on a condition variable and use
+// no CPU. This avoids ordering pool teardown against static destructors and
 // against callers still inside BDK on other threads during exit. It also means
 // BDK cannot be unloaded (dlclose) once the pool exists.
 

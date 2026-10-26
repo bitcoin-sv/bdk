@@ -26,13 +26,18 @@ installed alongside the package (`CMakeLists.txt`).
   identical at every setting. What embedders should know:
   - The helpers belong to one process-wide pool, created on the first such transaction and never
     torn down (they idle on a condition variable). It has one helper per available CPU minus one.
-  - Available CPUs are `std::thread::hardware_concurrency()`, lowered on Linux to the affinity
-    mask of the thread that creates the pool and to the cgroup CPU limit (v2 `cpu.max`, v1
-    `cpu.cfs_quota_us`/`cpu.cfs_period_us`); the cgroup limit is rounded up and never lowers the
-    count below 2, as Go's default GOMAXPROCS does. Both are read once, by the first such
-    transaction. On a single CPU (one hardware thread, or an affinity mask of one) there is no pool
-    and every transaction is verified on its caller alone. Only a failure to allocate the pool or
-    start any helper is retried, by the next such transaction.
+    Helper threads inherit the CPU affinity of the thread that creates the pool, so a pool created
+    from a caller pinned to fewer CPUs runs its helpers on those.
+  - Available CPUs are `std::thread::hardware_concurrency()`, lowered on Linux to the process's
+    affinity mask (the main thread's, whichever thread creates the pool) and to the cgroup CPU
+    limit (v2 `cpu.max`, v1 `cpu.cfs_quota_us`/`cpu.cfs_period_us`); the cgroup limit is rounded
+    up and never lowers the count below 2, as Go's default GOMAXPROCS does. Both are read once, by
+    the first such transaction. On a single CPU (one hardware thread, or an affinity mask of one)
+    there is no pool and every transaction is verified on its caller alone. The same holds for the
+    life of the process if no helper thread can start (a thread or process limit). Only a failure
+    to allocate the pool is retried, by the next such transaction.
+  - A `std::bad_alloc` that reaches a helper is not taken as its input's result: that input is
+    verified again on the caller, as serial verification would.
   - Helpers only use CPUs that callers leave free: a helper joins a job only while fewer threads
     than CPUs are verifying, and leaves before its next input once more are. Callers are never held
     back: when callers alone fill every CPU, a large transaction starts on its caller alone and a
