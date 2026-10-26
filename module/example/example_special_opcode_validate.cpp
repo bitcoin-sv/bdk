@@ -833,7 +833,11 @@ int main(int argc, char* argv[])
     try
     {
         po::store(po::parse_command_line(argc, argv, desc), vm);
-        if (vm.count("help")) { std::cout << desc << "\n"; return 0; }
+        if(vm.contains("help"))
+        {
+            std::cout << desc << "\n";
+            return 0;
+        }
         po::notify(vm);
     }
     catch (const po::error& e)
@@ -843,7 +847,7 @@ int main(int argc, char* argv[])
     }
 
     // Validate the selector (unless it is "all")
-    if (opcodeKey != "all" && CaseIndex().find(opcodeKey) == CaseIndex().end())
+    if(opcodeKey != "all" && !CaseIndex().contains(opcodeKey))
     {
         std::cerr << "Unknown opcode key '" << opcodeKey << "'.\n" << desc << "\n";
         return 1;

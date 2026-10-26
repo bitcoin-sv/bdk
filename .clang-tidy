@@ -45,7 +45,6 @@ Checks: >
   -readability-redundant-nested-if,
   -readability-trailing-comma,
 
-  -readability-container-contains,
   -readability-isolate-declaration,
   -readability-use-concise-preprocessor-directives,
   -readability-use-std-min-max,
