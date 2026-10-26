@@ -48,7 +48,6 @@ Checks: >
   -readability-container-contains,
   -readability-convert-member-functions-to-static,
   -readability-isolate-declaration,
-  -readability-math-missing-parentheses,
   -readability-uppercase-literal-suffix,
   -readability-use-concise-preprocessor-directives,
   -readability-use-std-min-max,

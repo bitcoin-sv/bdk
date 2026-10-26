@@ -789,7 +789,7 @@ BOOST_AUTO_TEST_CASE(cancelled_during_a_signature_hash_stops_at_the_next_input)
     // Uncancelled run: the verdict, the poll count, and how long one OP_CHECKSIG takes.
     const auto reference = RecordingSource::Make();
     BOOST_REQUIRE(bsv::TxErrorIsOk(validator.ValidateTransaction(etx, kSighashUtxoHeights, kSighashBlockHeight, true, reference->GetToken())));
-    BOOST_REQUIRE_EQUAL(kPrefixPolls + 2 * kPollsPerInput, reference->polls());
+    BOOST_REQUIRE_EQUAL(kPrefixPolls + (2 * kPollsPerInput), reference->polls());
     const auto checksig = reference->pollTime(kInput1First) - reference->pollTime(kInput0Checksig);
 
     const auto source = RecordingSource::Make(kInput0Checksig);

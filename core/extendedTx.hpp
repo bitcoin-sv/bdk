@@ -76,7 +76,7 @@ public:
         size_t nMid = 0;
         size_t chunkSize = STARTING_CHUNK_SIZE;
         while (nMid < nSize) {
-            nMid += std::min(nSize, 1 + (chunkSize - 1) / (sizeof(CTxIn)+ sizeof(CTxOut)) );
+            nMid += std::min(nSize, 1 + ((chunkSize - 1) / (sizeof(CTxIn) + sizeof(CTxOut))));
             chunkSize *= CHUNK_GROWTH_RATE;
             if (nMid > nSize) {
                 nMid = nSize;

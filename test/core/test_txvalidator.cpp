@@ -478,7 +478,7 @@ BOOST_AUTO_TEST_CASE(test_repeated_checksig_cache)
     {
         std::string err;
         BOOST_REQUIRE(se.SetMaxScriptSizePolicy(static_cast<int64_t>(lockingScript.size()) + 1, &err));
-        BOOST_REQUIRE(se.SetMaxOpsPerScriptPolicy(static_cast<int64_t>(TEST_N * 2 + 10), &err));
+        BOOST_REQUIRE(se.SetMaxOpsPerScriptPolicy(static_cast<int64_t>((TEST_N * 2) + 10), &err));
     }
 
     const std::array<int32_t, 1> utxoArray{ blockHeight - 1 };
@@ -1316,7 +1316,7 @@ static double ProcessCpuSeconds()
 #else
     timespec now{};
     BOOST_REQUIRE(clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &now) == 0);
-    return static_cast<double>(now.tv_sec) + static_cast<double>(now.tv_nsec) * 1e-9;
+    return static_cast<double>(now.tv_sec) + (static_cast<double>(now.tv_nsec) * 1e-9);
 #endif
 }
 

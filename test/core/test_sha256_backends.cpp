@@ -278,7 +278,7 @@ BOOST_AUTO_TEST_CASE(every_backend_matches_scalar_on_random_messages, *boost::un
 BOOST_AUTO_TEST_CASE(direct_transforms_at_unaligned_offsets, *boost::unit_test::timeout(120))
 {
     std::mt19937_64 rng{TestSeed()};
-    std::vector<uint8_t> buffer(16 + 8 * 64);
+    std::vector<uint8_t> buffer(16 + (8 * 64));
     std::ranges::generate(buffer, [&] { return static_cast<uint8_t>(rng()); });
     const std::array<uint32_t, 8> init = {0x6a09e667ul, 0xbb67ae85ul, 0x3c6ef372ul, 0xa54ff53aul,
                                           0x510e527ful, 0x9b05688cul, 0x1f83d9abul, 0x5be0cd19ul};

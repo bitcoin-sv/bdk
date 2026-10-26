@@ -84,7 +84,7 @@ std::string HexMagnitude(const cpp_int& value)
     const auto bytes = MagnitudeBytes(value);
     if(bytes.empty()) return "0";
     std::string result;
-    result.reserve(bytes.size() * 2 + (value < 0 ? 1 : 0));
+    result.reserve((bytes.size() * 2) + (value < 0 ? 1 : 0));
     if(value < 0) result.push_back('-');
     for(const uint8_t byte : bytes) {
         result.push_back(digits[byte >> 4]);
