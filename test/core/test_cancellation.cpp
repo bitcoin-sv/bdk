@@ -61,7 +61,7 @@ task::CCancellationToken CancelledToken()
 }
 
 // Sets a cancel flag the way a binding does: an atomic store from another thread.
-// NOLINTNEXTLINE(misc-const-correctness)
+// NOLINTNEXTLINE(misc-const-correctness, readability-non-const-parameter)
 void StoreFlagRelaxed(int32_t* flag, const int32_t value)
 {
 #if defined(_MSC_VER) && !defined(__clang__)

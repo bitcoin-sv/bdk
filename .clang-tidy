@@ -49,7 +49,6 @@ Checks: >
   -readability-convert-member-functions-to-static,
   -readability-isolate-declaration,
   -readability-math-missing-parentheses,
-  -readability-non-const-parameter,
   -readability-redundant-casting,
   -readability-redundant-inline-specifier,
   -readability-redundant-lambda-parameter-list,
