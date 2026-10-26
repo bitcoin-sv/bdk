@@ -1,4 +1,6 @@
+#include <cmath>
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <string>
 #include <thread>
@@ -95,21 +97,69 @@ BOOST_AUTO_TEST_CASE(cgroup_mount_root_matches_whole_path_components)
     BOOST_CHECK_CLOSE(Present(limit), 3.0, 1e-9);
 }
 
-// A malformed mountinfo line (no " - " separator, or too few fields after
-// it), a mount root not starting with /, or a bad \ooo escape in a mount
-// point makes the file unreadable even when a valid cgroup2 mount follows,
-// as in Go. Where the malformed line would otherwise resolve to a cgroup
-// directory, that directory holds a decoy limit.
+// A malformed mountinfo line (no " - " separator, or no filesystem type
+// after it), a blank line, a bad \ooo escape in the selected mount point, or
+// an escape above \377 in the root of a cgroup2 mount makes the file
+// unreadable even when a valid cgroup2 mount follows, as in Go. Where the
+// malformed line would otherwise resolve to a cgroup directory, that
+// directory holds a decoy limit.
 BOOST_AUTO_TEST_CASE(malformed_mountinfo_gives_no_limit)
 {
-    for (const char* name : { "malformed_mount_line", "malformed_mount_root", "malformed_mount_tail", "malformed_mount_escape" })
+    for (const char* name : { "malformed_mount_line", "malformed_mount_tail", "malformed_mount_escape", "blank_mountinfo_line",
+             "escape_out_of_range" })
         BOOST_CHECK_MESSAGE(!FixtureCpuLimit(name).has_value(), name);
 }
 
+// Go rejects mountinfo when the root of any mount, not only a cgroup mount,
+// does not start with '/'. An nsfs bind mount (root net:[...]) listed before
+// the cgroup2 mount is enough: Go applies no limit, and neither does BDK.
+BOOST_AUTO_TEST_CASE(mount_root_not_starting_with_a_slash_gives_no_limit)
+{
+    for (const char* name : { "malformed_mount_root", "nsfs_mount_before_cgroup2" })
+        BOOST_CHECK_MESSAGE(!FixtureCpuLimit(name).has_value(), name);
+}
+
+// Like Go, only the selected mount's mount point is unescaped: a bad escape
+// in the mount point of a cgroup2 mount whose root does not contain the
+// cgroup is never read.
+BOOST_AUTO_TEST_CASE(unselected_mount_point_is_not_unescaped)
+{
+    const auto limit = FixtureCpuLimit("bad_escape_on_unselected_mount");
+    BOOST_CHECK_CLOSE(Present(limit), 2.5, 1e-9);
+}
+
+// Go reads only the fields it needs: a cgroup2 mount needs its filesystem type
+// and the space after it, not the source or super options. The last line of
+// mountinfo needs no newline.
+BOOST_AUTO_TEST_CASE(mountinfo_fields_are_read_as_go_reads_them)
+{
+    for (const char* name : { "short_tail_after_separator", "unterminated_mountinfo_line" })
+        BOOST_CHECK_CLOSE(Present(FixtureCpuLimit(name)), 2.5, 1e-9);
+}
+
+// A blank line in proc/self/cgroup, a last line without its newline, and a
+// cpu.max of 64 bytes or more (Go reads at most 63) are malformed, as in Go.
 BOOST_AUTO_TEST_CASE(unreadable_cgroup_files_give_no_limit)
 {
-    for (const char* name : { "garbage", "garbage_cgroup", "missing", "missing_cpu_max", "no_such_fixture" })
+    for (const char* name : { "garbage", "garbage_cgroup", "missing", "missing_cpu_max", "no_such_fixture", "blank_cgroup_line",
+             "unterminated_cgroup_line", "long_cpu_max" })
         BOOST_CHECK_MESSAGE(!FixtureCpuLimit(name).has_value(), name);
+}
+
+// Go takes quota / period as it is, so a zero quota is a limit of 0 CPUs,
+// which the rounding raises to 2.
+BOOST_AUTO_TEST_CASE(zero_quota_is_a_limit)
+{
+    for (const char* name : { "v2_zero_quota", "v1_zero_quota" })
+        BOOST_CHECK_MESSAGE(Present(FixtureCpuLimit(name)) == 0.0, name);
+}
+
+// Go divides by a zero period as float64 does, so 250000 / 0 is +Inf. The
+// kernel never reports a period below 1 ms.
+BOOST_AUTO_TEST_CASE(zero_period_divides_like_go)
+{
+    const double limit = Present(FixtureCpuLimit("v2_zero_period"));
+    BOOST_CHECK(std::isinf(limit) && limit > 0);
 }
 
 // Go's default GOMAXPROCS rule (runtime/cgroup_linux.go, the same from go1.25.0 on,
@@ -148,9 +198,10 @@ BOOST_AUTO_TEST_CASE(effective_cpu_count_applies_the_cgroup_limit)
         BOOST_TEST_MESSAGE("only " << unlimited << " CPUs: the 2.5-CPU limit cannot lower the count here");
 }
 
-// EffectiveCpuCount respects the calling thread's affinity mask, which
-// hardware_concurrency() ignores. Pin only the calling thread; any created
-// process-lifetime pool is idle during this unit test.
+// EffectiveCpuCount respects the process's affinity mask, which
+// hardware_concurrency() ignores. On Linux that is the main thread's mask, and
+// Boost.Test runs test cases on the main thread, so pinning it here narrows
+// the mask EffectiveCpuCount reads.
 BOOST_AUTO_TEST_CASE(effective_cpu_count_applies_the_affinity_mask)
 {
     cpu_set_t original;
@@ -180,10 +231,38 @@ BOOST_AUTO_TEST_CASE(effective_cpu_count_applies_the_affinity_mask)
     BOOST_REQUIRE_EQUAL(sched_setaffinity(0, sizeof(one), &one), 0);
     BOOST_CHECK_EQUAL(bsv::detail::EffectiveCpuCount(FixtureRoot("v2_max")), 1u);
 }
+
+// A thread pinned to one CPU still sees the process's CPUs: the count does not
+// depend on which thread asks.
+BOOST_AUTO_TEST_CASE(effective_cpu_count_ignores_the_calling_threads_mask)
+{
+    const size_t process = bsv::detail::EffectiveCpuCount(FixtureRoot("v2_max"));
+    int pinResult = -1;
+    size_t fromPinnedThread = 0;
+    std::thread pinned([&pinResult, &fromPinnedThread] {
+        cpu_set_t mask;
+        CPU_ZERO(&mask);
+        if (sched_getaffinity(0, sizeof(mask), &mask) != 0)
+            return;
+        int first = 0;
+        while (first < CPU_SETSIZE && !CPU_ISSET(first, &mask))
+            ++first;
+        CPU_ZERO(&mask);
+        CPU_SET(first, &mask);
+        pinResult = sched_setaffinity(0, sizeof(mask), &mask);
+        fromPinnedThread = bsv::detail::EffectiveCpuCount(FixtureRoot("v2_max"));
+    });
+    pinned.join();
+    BOOST_REQUIRE_EQUAL(pinResult, 0);
+    if (process <= 1)
+        BOOST_TEST_MESSAGE("only " << process << " CPU: pinning a thread cannot lower the count here");
+    BOOST_CHECK_EQUAL(fromPinnedThread, process);
+}
 #endif
 
-// cgroup integers are whole-string base 10: anything after the digits, and
-// any surrounding whitespace, rejects the value.
+// cgroup integers are whole-string base 10 with an optional sign, as Go's
+// strconv.ParseInt(s, 10, 64): anything after the digits, and any surrounding
+// whitespace, rejects the value.
 BOOST_AUTO_TEST_CASE(cgroup_integers_parse_the_whole_string)
 {
     using bsv::detail::ParseCgroupInt;
@@ -192,9 +271,11 @@ BOOST_AUTO_TEST_CASE(cgroup_integers_parse_the_whole_string)
     BOOST_CHECK(ParseCgroupInt("-1") == std::optional<int64_t>(-1));
     BOOST_CHECK(ParseCgroupInt("9223372036854775807") == std::optional<int64_t>(INT64_MAX));
     BOOST_CHECK(ParseCgroupInt("-9223372036854775808") == std::optional<int64_t>(INT64_MIN));
+    BOOST_CHECK(ParseCgroupInt("+5") == std::optional<int64_t>(5));
+    BOOST_CHECK(ParseCgroupInt("+9223372036854775807") == std::optional<int64_t>(INT64_MAX));
     for (const char* text : { "250000x", "100000 ", "100000\n", "1 2", "12.5", "0x10" })
         BOOST_CHECK_MESSAGE(!ParseCgroupInt(text), "trailing characters accepted: '" << text << "'");
-    for (const char* text : { "", " 5", "\t5", "+5", "-", "x1", "9223372036854775808", "-9223372036854775809" })
+    for (const char* text : { "", " 5", "\t5", "+", "-", "+-5", "-+5", "++5", "x1", "9223372036854775808", "-9223372036854775809" })
         BOOST_CHECK_MESSAGE(!ParseCgroupInt(text), "accepted: '" << text << "'");
 }
 
@@ -206,6 +287,13 @@ BOOST_AUTO_TEST_CASE(cpu_count_rounds_the_limit_like_gomaxprocs)
     BOOST_CHECK_EQUAL(LimitCpuCount(16, 2.5), 3u);
     BOOST_CHECK_EQUAL(LimitCpuCount(16, 1.01), 2u);
     BOOST_CHECK_EQUAL(LimitCpuCount(16, 0.5), 2u);
+    BOOST_CHECK_EQUAL(LimitCpuCount(16, 0.0), 2u);
+    BOOST_CHECK_EQUAL(LimitCpuCount(16, -1.0), 2u);
+    // Go: max(ceil(-Inf), 2) is 2. Go's int32 conversion of +Inf and NaN is
+    // platform-specific; BDK leaves the count unchanged.
+    BOOST_CHECK_EQUAL(LimitCpuCount(16, -std::numeric_limits<double>::infinity()), 2u);
+    BOOST_CHECK_EQUAL(LimitCpuCount(16, std::numeric_limits<double>::infinity()), 16u);
+    BOOST_CHECK_EQUAL(LimitCpuCount(16, std::numeric_limits<double>::quiet_NaN()), 16u);
     BOOST_CHECK_EQUAL(LimitCpuCount(4, 8.0), 4u);
     BOOST_CHECK_EQUAL(LimitCpuCount(1, 0.5), 1u);
 }
