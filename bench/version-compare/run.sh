@@ -4,7 +4,8 @@
 # Then, on x86_64, ROUNDS more rounds of v1.4.0 with BDK_SHA256_FORCE_SCALAR=1.
 #
 # Env: ROUNDS (10), CORE (2), TIMEOUT seconds per process (120),
-#      VERSIONS ("v1.3.0 v1.3.1 v1.4.0"), BIN (./bin), OUT (./results), SCALAR_PASS (auto).
+#      VERSIONS ("v1.3.0 v1.3.1 v1.4.0"), BIN (./bin), OUT (./results), SCALAR_PASS (auto),
+#      SHAPES (space-separated subset; default every shape).
 set -uo pipefail
 SRC=$(cd "$(dirname "$0")" && pwd)
 ROUNDS=${ROUNDS:-10}
@@ -68,7 +69,11 @@ run_one() {
 }
 
 host_info > "$OUT/host.json"
-mapfile -t SHAPES < <("$BIN/bdk-bench-${VERSIONS[-1]}" -list)
+if [ -n "${SHAPES:-}" ]; then
+	read -r -a SHAPES <<< "$SHAPES"
+else
+	mapfile -t SHAPES < <("$BIN/bdk-bench-${VERSIONS[-1]}" -list)
+fi
 log "start rounds=$ROUNDS versions=${VERSIONS[*]} shapes=${#SHAPES[@]} core=$CORE scalar_pass=$SCALAR_PASS"
 
 n=${#VERSIONS[@]}

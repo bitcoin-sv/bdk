@@ -2,7 +2,8 @@
 # Builds one bdk-bench binary per gobdk version into $OUT (default ./bin).
 # Usage: build.sh [v1.3.0 v1.3.1 v1.4.0 label=<version or commit> ...]
 # A label=version argument names the binary bdk-bench-<label>; anything other than a
-# v1.3.x or v1.4.0 release is built with parallel input verification (bdk67).
+# v1.3.x or v1.4.0 release is built with parallel input verification (bdk67) unless
+# TAGS says otherwise.
 set -euo pipefail
 SRC=$(cd "$(dirname "$0")" && pwd)
 OUT=${OUT:-$SRC/bin}
@@ -22,6 +23,8 @@ for arg in "${VERSIONS[@]}"; do
 	# SHA256_BACKEND() first appears in v1.4.0.
 	# Parallel input verification (SetParallelInputHelpers) is in neither release.
 	case "$v" in v1.3.*) tags="" ;; v1.4.0) tags="bdk14" ;; *) tags="bdk14 bdk67" ;; esac
+	# TAGS overrides, e.g. TAGS=bdk14 for a later commit without parallel input verification.
+	tags=${TAGS-$tags}
 	(cd "$d" &&
 		GOFLAGS=-mod=mod go get "github.com/bitcoin-sv/bdk/module/gobdk@$v" &&
 		GOFLAGS=-mod=mod go mod tidy &&
