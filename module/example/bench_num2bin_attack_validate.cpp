@@ -17,6 +17,7 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <algorithm>
 #include <tuple>
 
 #include <boost/program_options.hpp>
@@ -259,8 +260,8 @@ static BenchResult RunBenchmark(const bsv::CTxValidator&   se,
         const int64_t ns =
             std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
         r.total_ns += ns;
-        if (ns < r.min_ns) r.min_ns = ns;
-        if (ns > r.max_ns) r.max_ns = ns;
+        r.min_ns = std::min(r.min_ns, ns);
+        r.max_ns = std::max(r.max_ns, ns);
     }
 
     return r;

@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <span>
 #include <vector>
+#include <algorithm>
 
 #include <primitives/transaction.h>
 #include <streams.h>
@@ -78,9 +79,7 @@ public:
         while (nMid < nSize) {
             nMid += std::min(nSize, 1 + ((chunkSize - 1) / (sizeof(CTxIn) + sizeof(CTxOut))));
             chunkSize *= CHUNK_GROWTH_RATE;
-            if (nMid > nSize) {
-                nMid = nSize;
-            }
+            nMid = std::min(nMid, nSize);
             this->vin.resize(nMid);
             this->vutxo.resize(nMid);
             for (; i < nMid; i++) {
