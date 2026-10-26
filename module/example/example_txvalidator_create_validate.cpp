@@ -13,7 +13,6 @@
 #include "univalue/include/univalue.h"
 
 #include "keystore.h"
-#include "script/script_num.h"
 #include "script/sign.h"
 
 #include "extendedTx.hpp"

@@ -48,7 +48,6 @@ Checks: >
   -readability-avoid-const-params-in-decls,
   -readability-container-contains,
   -readability-convert-member-functions-to-static,
-  -readability-duplicate-include,
   -readability-isolate-declaration,
   -readability-math-missing-parentheses,
   -readability-non-const-parameter,

@@ -20,7 +20,6 @@
 
 #include <boost/algorithm/hex.hpp>
 #include <boost/test/unit_test.hpp>
-#include <boost/algorithm/hex.hpp>
 
 #include "streams.h"
 #include "version.h"
