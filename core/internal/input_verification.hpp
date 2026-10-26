@@ -79,17 +79,21 @@
 namespace bsv::detail {
 // Shared process controls read by the transaction adapter. Other pool/test
 // state stays in input_verification.cpp; no internal headers are installed.
+// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables): process-wide pool state and test hooks, atomic by design
 extern std::atomic<size_t> parallelInputThreshold;
 extern std::atomic<bool> inputCountersEnabled;
 extern std::atomic<uint64_t> jobVerifiedInputs;
 extern std::atomic<bsv::detail::InputHook> inputHook;
 extern std::atomic<bsv::detail::ValidationStageHook> validationStageHook;
 extern std::atomic<bsv::detail::InputPoolHook> inputPoolHook;
+// NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 #if BDK_PARALLEL_INPUTS
 inline constexpr size_t MIN_INPUTS_PER_PARTICIPANT = 8;
+// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables): process-wide pool state and test hooks, atomic by design
 extern std::atomic<size_t> busyThreads;
 extern thread_local bool threadIsBusy;
+// NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 size_t HelperLimit();
 
 // A job claims a contiguous prefix; its owner drains participants before

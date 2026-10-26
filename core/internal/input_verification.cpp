@@ -28,6 +28,7 @@ namespace bsv::detail {
 // macos-15 CI (3 vCPU) and an Apple M3 Max; at 2-4 inputs the macos-15 runner
 // was slower.
 static_assert(bsv::detail::DEFAULT_PARALLEL_INPUT_THRESHOLD == 16);
+// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables): process-wide pool state and test hooks, atomic by design
 std::atomic<size_t> parallelInputThreshold{ bsv::detail::DEFAULT_PARALLEL_INPUT_THRESHOLD };
 // Test-only counters, written only while inputCountersEnabled (off by
 // default); participation counters read the flag outside the input loop.
@@ -44,14 +45,17 @@ std::atomic<bsv::detail::InputPoolHook> inputPoolHook{ nullptr };  // tests only
 static std::atomic<size_t> inputPoolCoresCap{ 0 };  // 0: no cap (tests only)
 static std::atomic<bsv::detail::InputPoolCreationHook> inputPoolCreationHook{ nullptr };
 static std::atomic<int64_t> parallelInputHelpers{ -1 };  // SetParallelInputHelpers; < 0: automatic
+// NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 
 #if BDK_PARALLEL_INPUTS
 // How often a caller waiting for joined helpers polls its token.
 static constexpr std::chrono::milliseconds CALLER_CANCELLATION_POLL_INTERVAL{ 10 };
 
+// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables): process-wide pool state and test hooks, atomic by design
 std::atomic<size_t> busyThreads{ 0 };
 thread_local bool threadIsBusy{ false };
+// NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 // The most helpers that may be on jobs at once, from SetParallelInputHelpers.
 size_t HelperLimit()
@@ -158,7 +162,7 @@ size_t InputJob::HelperUnclaimedInputs() const
 
 bool InputJob::TryJoin()
 {
-    std::scoped_lock lock{ mutex_ };
+    const std::scoped_lock lock{ mutex_ };
     if (closed_ || helpersUnavailable_.load(std::memory_order_relaxed))
         return false;
     ++joined_;
@@ -167,7 +171,7 @@ bool InputJob::TryJoin()
 
 void InputJob::Leave()
 {
-    std::scoped_lock lock{ mutex_ };
+    const std::scoped_lock lock{ mutex_ };
     if (--joined_ == 0 && closed_)
         left_.notify_one();
 }
@@ -208,7 +212,7 @@ void InputJob::CloseAndWait(bool pollCancellation)
 
 std::optional<TxError> InputJob::CompletedResult()
 {
-    std::scoped_lock lock{ mutex_ };
+    const std::scoped_lock lock{ mutex_ };
     // Claims form a contiguous prefix, and every joined participant has
     // drained. A real failure is definitive only if no lower claim was
     // abandoned. Higher cancellations cannot replace that verdict.
@@ -241,7 +245,7 @@ void InputJob::Fail(size_t index, const TxError& result, std::exception_ptr exce
 {
     if (const auto hook = inputHook.load(std::memory_order_relaxed))
         hook(index, bsv::detail::InputEvent::Failed);
-    std::scoped_lock lock{ mutex_ };
+    const std::scoped_lock lock{ mutex_ };
     if (result.domain == TX_ERR_DOMAIN_CANCELLED) {
         lowestCancelled_ = std::min(lowestCancelled_, index);
         return;
@@ -260,7 +264,7 @@ InputVerifyPool* InputVerifyPool::Get()
     if (tooFewCores_.load(std::memory_order_acquire))
         return nullptr;
     static std::mutex creationMutex;
-    std::scoped_lock lock{ creationMutex };
+    const std::scoped_lock lock{ creationMutex };
     if (auto* pool = Existing())
         return pool;
     if (tooFewCores_.load(std::memory_order_relaxed))
@@ -288,7 +292,7 @@ size_t InputVerifyPool::AvailableHelpers(size_t limit) const
 void InputVerifyPool::Offer(const std::shared_ptr<InputJob>& job, size_t maxHelpers)
 {
     {
-        std::scoped_lock lock{ mutex_ };
+        const std::scoped_lock lock{ mutex_ };
         jobs_.push_back(job);
         openJobs_.fetch_add(1, std::memory_order_seq_cst);
     }
@@ -302,14 +306,14 @@ void InputVerifyPool::Offer(const std::shared_ptr<InputJob>& job, size_t maxHelp
 
 void InputVerifyPool::WakeHelpersForTesting(bool all)
 {
-    std::scoped_lock lock{ mutex_ };
+    const std::scoped_lock lock{ mutex_ };
     if (all) wake_.notify_all();
     else wake_.notify_one();
 }
 
 void InputVerifyPool::Withdraw(const std::shared_ptr<InputJob>& job)
 {
-    std::scoped_lock lock{ mutex_ };
+    const std::scoped_lock lock{ mutex_ };
     const auto it = std::ranges::find(jobs_, job);
     if (it != jobs_.end()) {
         jobs_.erase(it);
@@ -319,7 +323,7 @@ void InputVerifyPool::Withdraw(const std::shared_ptr<InputJob>& job)
 
 size_t InputVerifyPool::QueuedJobs()
 {
-    std::scoped_lock lock{ mutex_ };
+    const std::scoped_lock lock{ mutex_ };
     return jobs_.size();
 }
 
@@ -328,7 +332,7 @@ bool InputVerifyPool::ReleasedCore(size_t busyAfter)
     if (busyAfter >= cores_ || openJobs_.load(std::memory_order_seq_cst) == 0
         || helpersOnJobs_.load(std::memory_order_seq_cst) >= HelperLimit())
         return false;
-    { std::scoped_lock lock{ mutex_ }; }  // a helper checking the budget is now waiting
+    { const std::scoped_lock lock{ mutex_ }; }  // a helper checking the budget is now waiting
     wake_.notify_one();
     return true;
 }
@@ -635,7 +639,7 @@ size_t bsv::detail::QueuedJobCountForTesting()
 size_t bsv::detail::InputPoolHelperCountForTesting()
 {
 #if BDK_PARALLEL_INPUTS
-    if (InputVerifyPool* pool = InputVerifyPool::Get())
+    if (const InputVerifyPool* pool = InputVerifyPool::Get())
         return pool->Helpers();
 #endif
     return 0;

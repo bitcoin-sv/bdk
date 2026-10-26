@@ -68,15 +68,15 @@ BOOST_AUTO_TEST_CASE(helper_reads_published_flag_without_calling_caller)
         unsigned reads{ 0 };
         bool IsCanceled() override { ++reads; return true; }
     };
-    auto caller = std::make_shared<CountingSource>();
+    const auto caller = std::make_shared<CountingSource>();
     const auto callerToken = caller->GetToken();
-    std::atomic<size_t> lowest{ 4 };
+    const std::atomic<size_t> lowest{ 4 };
     std::atomic<bool> cancelled{ false };
-    auto helper = std::make_shared<InputCancellationSource>(lowest, cancelled);
+    const auto helper = std::make_shared<InputCancellationSource>(lowest, cancelled);
     helper->SetIndex(1);
     BOOST_CHECK(!helper->GetToken().IsCanceled());
     BOOST_CHECK_EQUAL(caller->reads, 0u);
-    auto source = std::make_shared<InputCancellationSource>(lowest, cancelled, &callerToken);
+    const auto source = std::make_shared<InputCancellationSource>(lowest, cancelled, &callerToken);
     BOOST_CHECK(source->GetToken().IsCanceled());
     BOOST_CHECK_EQUAL(caller->reads, 1u);
     BOOST_CHECK(helper->GetToken().IsCanceled());
@@ -92,6 +92,10 @@ struct InternalState {
     const int64_t limit = bsv::GetParallelInputHelpers();
     InternalState() { bsv::SetParallelInputHelpers(-1); }
     ~InternalState() { busyThreads.store(busy); bsv::SetParallelInputHelpers(limit); }
+    InternalState(const InternalState&) = delete;
+    InternalState& operator=(const InternalState&) = delete;
+    InternalState(InternalState&&) = delete;
+    InternalState& operator=(InternalState&&) = delete;
 };
 } // namespace
 
@@ -106,7 +110,7 @@ BOOST_AUTO_TEST_CASE(claims_form_a_prefix_and_success_requires_all_inputs)
 {
     const auto source = task::CCancellationSource::Make();
     const auto token = source->GetToken();
-    auto job = ValidJob(3, token);
+    const auto job = ValidJob(3, token);
     BOOST_CHECK(!job->CompletedResult());
     for (size_t i = 0; i < 3; ++i) {
         const auto claim = job->Claim();
@@ -121,7 +125,7 @@ BOOST_AUTO_TEST_CASE(lowest_failure_wins_and_higher_cancellation_cannot_replace_
 {
     const auto source = task::CCancellationSource::Make();
     const auto token = source->GetToken();
-    auto job = ValidJob(4, token);
+    const auto job = ValidJob(4, token);
     for (size_t i = 0; i < 4; ++i) BOOST_REQUIRE(job->Claim());
     job->Fail(3, bsv::TxErrorScript(SCRIPT_ERR_EVAL_FALSE), nullptr);
     job->Fail(0, bsv::TxErrorScript(SCRIPT_ERR_VERIFY), nullptr);
@@ -140,7 +144,7 @@ BOOST_AUTO_TEST_CASE(claims_stop_above_the_lowest_failure)
 {
     const auto source = task::CCancellationSource::Make();
     const auto token = source->GetToken();
-    auto job = ValidJob(8, token);
+    const auto job = ValidJob(8, token);
     for (size_t i = 0; i < 3; ++i) BOOST_REQUIRE(job->Claim());
     job->Fail(1, bsv::TxErrorScript(SCRIPT_ERR_VERIFY), nullptr);
     BOOST_CHECK(!job->Claim());
@@ -162,7 +166,7 @@ BOOST_AUTO_TEST_CASE(lower_cancelled_input_prevents_a_higher_failure_verdict)
 {
     const auto source = task::CCancellationSource::Make();
     const auto token = source->GetToken();
-    auto job = ValidJob(3, token);
+    const auto job = ValidJob(3, token);
     for (size_t i = 0; i < 3; ++i) BOOST_REQUIRE(job->Claim());
     job->Fail(2, bsv::TxErrorScript(SCRIPT_ERR_VERIFY), nullptr);
     job->Fail(1, bsv::TxErrorCancelled(), nullptr);
@@ -174,13 +178,13 @@ BOOST_AUTO_TEST_CASE(stored_exception_keeps_input_order)
 {
     const auto source = task::CCancellationSource::Make();
     const auto token = source->GetToken();
-    auto job = ValidJob(2, token);
+    const auto job = ValidJob(2, token);
     BOOST_REQUIRE(job->Claim()); BOOST_REQUIRE(job->Claim());
     job->Fail(1, bsv::TxErrorException(), std::make_exception_ptr(std::runtime_error("higher")));
     job->Fail(0, bsv::TxErrorScript(SCRIPT_ERR_VERIFY), nullptr);
     job->CloseAndWait();
     BOOST_CHECK_EQUAL(Present(job->CompletedResult()).code, SCRIPT_ERR_VERIFY);
-    auto exceptional = ValidJob(1, token);
+    const auto exceptional = ValidJob(1, token);
     BOOST_REQUIRE(exceptional->Claim());
     exceptional->Fail(0, bsv::TxErrorException(), std::make_exception_ptr(std::runtime_error("first")));
     exceptional->CloseAndWait();
@@ -192,7 +196,7 @@ BOOST_AUTO_TEST_CASE(closed_job_rejects_new_participants)
 {
     const auto source = task::CCancellationSource::Make();
     const auto token = source->GetToken();
-    auto job = ValidJob(1, token);
+    const auto job = ValidJob(1, token);
     BOOST_REQUIRE(job->TryJoin());
     job->Leave();
     job->CloseAndWait();
@@ -205,7 +209,7 @@ BOOST_AUTO_TEST_CASE(close_drains_joined_work_without_reading_token)
         std::atomic<unsigned> reads{ 0 };
         bool IsCanceled() override { ++reads; return false; }
     };
-    auto source = std::make_shared<CountingSource>();
+    const auto source = std::make_shared<CountingSource>();
     const auto token = source->GetToken();
     auto job = ValidJob(1, token);
     BOOST_REQUIRE(job->TryJoin());
@@ -233,7 +237,7 @@ BOOST_AUTO_TEST_CASE(helper_work_never_polls_caller_token)
         unsigned reads{ 0 };
         bool IsCanceled() override { ++reads; return false; }
     };
-    auto source = std::make_shared<CountingSource>();
+    const auto source = std::make_shared<CountingSource>();
     const auto token = source->GetToken();
     InputJob job(3, [](size_t, const auto& inputToken) {
         return inputToken.IsCanceled() ? bsv::TxErrorCancelled() : bsv::TxErrorOk();
@@ -256,8 +260,13 @@ BOOST_AUTO_TEST_CASE(participant_reuses_one_source_for_successive_inputs)
         const InputHook previous = SetInputHookForTesting(+[](size_t index, InputEvent event) {
             if (event == InputEvent::Polled) polledIndex = index;
         });
+        PollGuard() = default;
         ~PollGuard() { SetInputHookForTesting(previous); }
-    } guard;
+        PollGuard(const PollGuard&) = delete;
+        PollGuard& operator=(const PollGuard&) = delete;
+        PollGuard(PollGuard&&) = delete;
+        PollGuard& operator=(PollGuard&&) = delete;
+    } const guard;
     const auto source = task::CCancellationSource::Make();
     const auto token = source->GetToken();
     std::optional<task::CCancellationToken> retained;
@@ -294,7 +303,7 @@ BOOST_AUTO_TEST_CASE(helper_keeps_working_at_the_core_budget)
 {
     const auto source = task::CCancellationSource::Make();
     const auto token = source->GetToken();
-    auto job = ValidJob(3, token);
+    const auto job = ValidJob(3, token);
     std::atomic<size_t> places{ 1 };
     InputJob::HelperTerms terms{ .cores = 2, .places = &places };
     busyThreads.store(2);
@@ -308,7 +317,7 @@ BOOST_AUTO_TEST_CASE(excess_helper_leaves_before_claiming)
 {
     const auto source = task::CCancellationSource::Make();
     const auto token = source->GetToken();
-    auto job = ValidJob(3, token);
+    const auto job = ValidJob(3, token);
     std::atomic<size_t> places{ 2 };
     InputJob::HelperTerms terms{ .cores = 2, .places = &places };
     busyThreads.store(3);
@@ -362,7 +371,7 @@ BOOST_AUTO_TEST_CASE(largest_job_wins_and_positive_ties_keep_queue_order)
     const auto source = task::CCancellationSource::Make();
     const auto token = source->GetToken();
     InputVerifyPool pool(2);
-    auto small = ValidJob(1, token), first = ValidJob(4, token), second = ValidJob(4, token);
+    const auto small = ValidJob(1, token), first = ValidJob(4, token), second = ValidJob(4, token);
     pool.Offer(small, 0); pool.Offer(first, 0); pool.Offer(second, 0);
     BOOST_CHECK(pool.NextJob() == first);
     BOOST_REQUIRE(first->Claim());
@@ -404,7 +413,7 @@ BOOST_AUTO_TEST_CASE(next_job_takes_the_most_unclaimed_inputs)
             InputVerifyPool pool(2);
             std::vector<std::shared_ptr<InputJob>> jobs;
             for (const Queued& queued : row.jobs) {
-                auto job = ValidJob(queued.inputs, token);
+                const auto job = ValidJob(queued.inputs, token);
                 for (size_t i = 0; i < queued.claimed; ++i) BOOST_REQUIRE(job->Claim());
                 if (queued.failed)
                     job->Fail(queued.failed.value_or(0), bsv::TxErrorScript(SCRIPT_ERR_VERIFY), nullptr);
@@ -421,7 +430,7 @@ BOOST_AUTO_TEST_CASE(finished_front_jobs_are_removed)
     const auto source = task::CCancellationSource::Make();
     const auto token = source->GetToken();
     InputVerifyPool pool(2);
-    auto finished = ValidJob(1, token), live = ValidJob(2, token);
+    const auto finished = ValidJob(1, token), live = ValidJob(2, token);
     BOOST_REQUIRE(finished->Work());
     pool.Offer(finished, 0); pool.Offer(live, 0);
     BOOST_CHECK(pool.NextJob() == live);
@@ -463,8 +472,13 @@ BOOST_AUTO_TEST_CASE(concurrent_first_callers_share_one_pool, *boost::unit_test:
     struct CreationGuard {
         const size_t cores = SetInputPoolCoresForTesting(2);
         const InputPoolCreationHook hook = SetInputPoolCreationHookForTesting(+[] { ++attempts; });
+        CreationGuard() = default;
         ~CreationGuard() { SetInputPoolCreationHookForTesting(hook); SetInputPoolCoresForTesting(cores); }
-    } guard;
+        CreationGuard(const CreationGuard&) = delete;
+        CreationGuard& operator=(const CreationGuard&) = delete;
+        CreationGuard(CreationGuard&&) = delete;
+        CreationGuard& operator=(CreationGuard&&) = delete;
+    } const guard;
     std::array<InputVerifyPool*, 8> pools{};
     std::atomic<bool> start{ false };
     {
@@ -483,8 +497,13 @@ BOOST_AUTO_TEST_CASE(concurrent_first_callers_share_one_pool, *boost::unit_test:
         } callers;
         struct StartTogether {
             std::atomic<bool>& start;
+            explicit StartTogether(std::atomic<bool>& flag) : start{ flag } {}
             ~StartTogether() { start.store(true); }
-        } together{ start };
+            StartTogether(const StartTogether&) = delete;
+            StartTogether& operator=(const StartTogether&) = delete;
+            StartTogether(StartTogether&&) = delete;
+            StartTogether& operator=(StartTogether&&) = delete;
+        } const together{ start };
         for (auto& pool : pools) {
             callers.threads.emplace_back([&start, slot = &pool] {
                 while (!start.load()) std::this_thread::yield();

@@ -70,15 +70,15 @@ using namespace bsv;
 // parallel input threshold set to N; ctest runs the suite once with 2, so every
 // multi-input tx is verified on several threads. `--input-pool-cores=N` sizes
 // the input pool to at most N cores, to reproduce a CI-sized pool locally.
-// The parallel input threshold the library starts with, read before any
-// test or argument changes it.
-static size_t shippedParallelInputThreshold = 0;
-// The helper limit the library starts with, read the same way.
-static int64_t shippedParallelInputHelpers = 0;
-// Whether the test-only input counters were on when the library started.
-static bool shippedInputCountersEnabled = true;
-
 struct ParallelInputThresholdFromArgs {
+    // The parallel input threshold the library starts with, read before any
+    // test or argument changes it.
+    static inline size_t shippedParallelInputThreshold = 0;
+    // The helper limit the library starts with, read the same way.
+    static inline int64_t shippedParallelInputHelpers = 0;
+    // Whether the test-only input counters were on when the library started.
+    static inline bool shippedInputCountersEnabled = true;
+
     ParallelInputThresholdFromArgs()
     {
         shippedParallelInputThreshold = bsv::detail::SetParallelInputThresholdForTesting(0);
@@ -125,10 +125,14 @@ struct HangWatchdog : boost::unit_test::test_observer {
             }
         });
     }
+    HangWatchdog(const HangWatchdog&) = delete;
+    HangWatchdog& operator=(const HangWatchdog&) = delete;
+    HangWatchdog(HangWatchdog&&) = delete;
+    HangWatchdog& operator=(HangWatchdog&&) = delete;
     ~HangWatchdog() override
     {
         {
-            std::lock_guard lock{ mutex };
+            const std::lock_guard lock{ mutex };
             stop = true;
         }
         woken.notify_one();
@@ -140,7 +144,7 @@ struct HangWatchdog : boost::unit_test::test_observer {
     {
         if (unit.p_type != boost::unit_test::TUT_CASE)
             return;
-        std::lock_guard lock{ mutex };
+        const std::lock_guard lock{ mutex };
         running = true;
         started = std::chrono::steady_clock::now();
         name = unit.full_name();
@@ -149,7 +153,7 @@ struct HangWatchdog : boost::unit_test::test_observer {
     {
         if (unit.p_type != boost::unit_test::TUT_CASE)
             return;
-        std::lock_guard lock{ mutex };
+        const std::lock_guard lock{ mutex };
         running = false;
     }
 
@@ -1631,6 +1635,8 @@ struct InputThresholdGuard {
     ~InputThresholdGuard() { bsv::detail::SetParallelInputThresholdForTesting(previous); }
     InputThresholdGuard(const InputThresholdGuard&) = delete;
     InputThresholdGuard& operator=(const InputThresholdGuard&) = delete;
+    InputThresholdGuard(InputThresholdGuard&&) = delete;
+    InputThresholdGuard& operator=(InputThresholdGuard&&) = delete;
     const size_t previous;
 };
 
@@ -1666,6 +1672,8 @@ struct ScopedHook {
     ~ScopedHook() { Set(previous); }
     ScopedHook(const ScopedHook&) = delete;
     ScopedHook& operator=(const ScopedHook&) = delete;
+    ScopedHook(ScopedHook&&) = delete;
+    ScopedHook& operator=(ScopedHook&&) = delete;
     const Hook previous;
 };
 using ScopedInputHook = ScopedHook<&bsv::detail::SetInputHookForTesting>;
@@ -1683,6 +1691,8 @@ struct ActiveProbe {
     ~ActiveProbe() { current.store(nullptr); }
     ActiveProbe(const ActiveProbe&) = delete;
     ActiveProbe& operator=(const ActiveProbe&) = delete;
+    ActiveProbe(ActiveProbe&&) = delete;
+    ActiveProbe& operator=(ActiveProbe&&) = delete;
     static Probe& Get() { return *current.load(); }
     static inline std::atomic<Probe*> current{ nullptr };
 };
@@ -1695,6 +1705,8 @@ struct WakeHelpersAfterHooks {
     ~WakeHelpersAfterHooks() { bsv::detail::WakeInputHelpersForTesting(); }
     WakeHelpersAfterHooks(const WakeHelpersAfterHooks&) = delete;
     WakeHelpersAfterHooks& operator=(const WakeHelpersAfterHooks&) = delete;
+    WakeHelpersAfterHooks(WakeHelpersAfterHooks&&) = delete;
+    WakeHelpersAfterHooks& operator=(WakeHelpersAfterHooks&&) = delete;
 };
 
 // Sets the process-wide helper limit for a scope and restores the previous one.
@@ -1707,6 +1719,8 @@ public:
     ~HelperLimitGuard() { bsv::SetParallelInputHelpers(previous_); }
     HelperLimitGuard(const HelperLimitGuard&) = delete;
     HelperLimitGuard& operator=(const HelperLimitGuard&) = delete;
+    HelperLimitGuard(HelperLimitGuard&&) = delete;
+    HelperLimitGuard& operator=(HelperLimitGuard&&) = delete;
 
 private:
     const int64_t previous_;
@@ -1883,14 +1897,14 @@ constexpr unsigned PARALLEL_TEST_TIMEOUT_S = 60;
 // The library ships with parallel verification on, from the default threshold.
 BOOST_AUTO_TEST_CASE(shipped_threshold_is_the_default)
 {
-    BOOST_CHECK_EQUAL(shippedParallelInputThreshold, bsv::detail::DEFAULT_PARALLEL_INPUT_THRESHOLD);
+    BOOST_CHECK_EQUAL(ParallelInputThresholdFromArgs::shippedParallelInputThreshold, bsv::detail::DEFAULT_PARALLEL_INPUT_THRESHOLD);
 }
 
 // The library ships with the test-only input counters off, so production
 // does no per-input write to them.
 BOOST_AUTO_TEST_CASE(input_counters_are_off_by_default)
 {
-    BOOST_CHECK(!shippedInputCountersEnabled);
+    BOOST_CHECK(!ParallelInputThresholdFromArgs::shippedInputCountersEnabled);
 }
 
 BOOST_AUTO_TEST_CASE(valid_tx_validates_with_inputs_spread_over_helpers, *boost::unit_test::timeout(PARALLEL_TEST_TIMEOUT_S))
@@ -1980,7 +1994,7 @@ static void CheckParallelMatchesSerial(const bsv::CTxValidator& se,
 static void EmptyP2PKHSignature(bsv::CMutableTransactionExtended& eTx, size_t index)
 {
     CScript::const_iterator pc = eTx.mtx.vin[index].scriptSig.begin();
-    opcodetype opcode;
+    opcodetype opcode{};
     std::vector<uint8_t> sig;
     std::vector<uint8_t> pubkey;
     BOOST_REQUIRE(eTx.mtx.vin[index].scriptSig.GetOp(pc, opcode, sig));
@@ -2121,11 +2135,11 @@ BOOST_AUTO_TEST_CASE(mixed_sighash_types_and_multisig_input, PARALLEL_TEST_CASE_
     std::vector<SigHashType> types;
     types.reserve(PARITY_INPUTS);
     for (size_t i = 0; i < PARITY_INPUTS; ++i)
-        types.push_back(FORKID_SIGHASH_TYPES[i % FORKID_SIGHASH_TYPES.size()]);
+        types.push_back(ForkIdSigHashTypes()[i % ForkIdSigHashTypes().size()]);
     const auto mixed = MakeSignedP2PKHSpend(types, /*nOutputs=*/PARITY_INPUTS, /*precomputeForSigning=*/true);
     const std::vector<int32_t> utxoHeights(PARITY_INPUTS, P2PKH_UTXO_HEIGHT);
 
-    MultisigSpend multisig = MakeSpendWithMultisigInput(PARITY_INPUTS, /*index=*/PARITY_INPUTS / 3, /*nOutputs=*/3);
+    const MultisigSpend multisig = MakeSpendWithMultisigInput(PARITY_INPUTS, /*index=*/PARITY_INPUTS / 3, /*nOutputs=*/3);
     MultisigSpend brokenMultisig = multisig;
     CorruptSecondMultisigSignature(brokenMultisig);
 
@@ -2185,7 +2199,7 @@ template <typename Edit>
 static void EditP2PKHScriptSig(bsv::CMutableTransactionExtended& eTx, size_t index, Edit edit)
 {
     CScript::const_iterator pc = eTx.mtx.vin[index].scriptSig.begin();
-    opcodetype opcode;
+    opcodetype opcode{};
     std::vector<uint8_t> sig;
     std::vector<uint8_t> pubkey;
     BOOST_REQUIRE(eTx.mtx.vin[index].scriptSig.GetOp(pc, opcode, sig));
@@ -2362,6 +2376,8 @@ public:
     ~HeldSpenders() { ReleaseAll(); }
     HeldSpenders(const HeldSpenders&) = delete;
     HeldSpenders& operator=(const HeldSpenders&) = delete;
+    HeldSpenders(HeldSpenders&&) = delete;
+    HeldSpenders& operator=(HeldSpenders&&) = delete;
     // Whether every caller is on its core.
     bool Entered()
     {
@@ -2499,7 +2515,7 @@ BOOST_AUTO_TEST_CASE(thread_cpu_budget_is_polled_only_by_the_caller, PARALLEL_TE
     const bsv::CTxValidator validator("main");
     const InputThresholdGuard defaults(bsv::detail::DEFAULT_PARALLEL_INPUT_THRESHOLD);
     BOOST_REQUIRE(PoolIsIdle());
-    CpuBusyHelpers load(helpers);
+    const CpuBusyHelpers load(helpers);
     TxError result = bsv::TxErrorException();
     std::shared_ptr<CallerThreadBudget> source;
     bool callerBudgetExpired = true;
@@ -2848,6 +2864,10 @@ class ClaimGate {
 public:
     ClaimGate() = default;
     ~ClaimGate() { Open(); }
+    ClaimGate(const ClaimGate&) = delete;
+    ClaimGate& operator=(const ClaimGate&) = delete;
+    ClaimGate(ClaimGate&&) = delete;
+    ClaimGate& operator=(ClaimGate&&) = delete;
     void Step()
     {
         const std::lock_guard lock{ mutex_ };
@@ -2913,8 +2933,8 @@ private:
 
 // Inputs verified on helpers while validating `etxBin` up to `calls` times,
 // stopping at the first call that used a helper.
-static uint64_t HelperInputsWithin(const bsv::CTxValidator& se, const std::vector<uint8_t>& etxBin,
-                                   size_t nInputs, int calls)
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters): input count and call budget, named at each call
+static uint64_t HelperInputsWithin(const bsv::CTxValidator& se, const std::vector<uint8_t>& etxBin, size_t nInputs, int calls)
 {
     const uint64_t before = bsv::detail::HelperVerifiedInputCountForTesting();
     for (int call = 0; call < calls && bsv::detail::HelperVerifiedInputCountForTesting() == before; ++call)
@@ -2997,6 +3017,7 @@ BOOST_AUTO_TEST_CASE(idle_pool_wakes_for_a_new_job, PARALLEL_TEST_CASE_DECORATOR
 // against N - 1 wrong keys first and takes on the order of tens of
 // milliseconds. Verified with VerifyScript in consensus
 // mode (no post-Genesis key-count limit).
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters): input and key counts, named at each call
 static bsv::CMutableTransactionExtended MakeSlowMultisigSpend(size_t nInputs, size_t nKeys)
 {
     const SigHashType allForkId = SigHashType().withForkId();
@@ -3171,7 +3192,7 @@ BOOST_AUTO_TEST_CASE(tx_without_outputs_matches_serial, PARALLEL_TEST_CASE_DECOR
     const auto etxBin = SerializeExtended(eTx);
     const std::vector<int32_t> utxoHeights(PARITY_INPUTS, P2PKH_UTXO_HEIGHT);
     for (const bool consensus : { true, false }) {
-        TxError results[2];
+        std::array<TxError, 2> results{};
         for (const size_t threshold : { FORCE_PARALLEL, FORCE_SERIAL }) {
             const InputThresholdGuard guard(threshold);
             results[threshold == FORCE_SERIAL] = se.VerifyScript(std::span<const uint8_t>(etxBin),
@@ -3196,12 +3217,12 @@ public:
     // was missing, so nothing timed out).
     static bool Achieved()
     {
-        std::lock_guard lock{ mutex };
+        const std::lock_guard lock{ mutex };
         return !timedOut && released == sequence.size();
     }
     static void Reset()
     {
-        std::lock_guard lock{ mutex };
+        const std::lock_guard lock{ mutex };
         arrived.clear();
         released = 0;
         timedOut = false;
@@ -3239,7 +3260,7 @@ private:
     static bool Configure(std::vector<size_t> order)
     {
         {
-            std::lock_guard lock{ mutex };
+            const std::lock_guard lock{ mutex };
             sequence = std::move(order);
         }
         Reset();
@@ -3512,6 +3533,10 @@ class HelperReleaseOrder {
 public:
     HelperReleaseOrder() = default;
     ~HelperReleaseOrder() { releaseFirstHelper = releaseAll = true; }
+    HelperReleaseOrder(const HelperReleaseOrder&) = delete;
+    HelperReleaseOrder& operator=(const HelperReleaseOrder&) = delete;
+    HelperReleaseOrder(HelperReleaseOrder&&) = delete;
+    HelperReleaseOrder& operator=(HelperReleaseOrder&&) = delete;
 
     static inline thread_local unsigned caller = 0;
     static inline std::atomic<bool> firstCallerClaimed{ false }, secondCallerClaimed{ false };
@@ -3625,17 +3650,17 @@ public:
 
     static std::map<size_t, Claim> Claims()
     {
-        std::lock_guard lock{ mutex };
+        const std::lock_guard lock{ mutex };
         return claims;
     }
     static void Reset()
     {
-        std::lock_guard lock{ mutex };
+        const std::lock_guard lock{ mutex };
         claims.clear();
     }
     static bool OnHelper(size_t index)
     {
-        std::lock_guard lock{ mutex };
+        const std::lock_guard lock{ mutex };
         const auto it = claims.find(index);
         return it != claims.end() && it->second.thread != caller;
     }
@@ -3664,13 +3689,13 @@ private:
             return;
         bool holdHere = false;
         {
-            std::lock_guard lock{ mutex };
+            const std::lock_guard lock{ mutex };
             claims[index] = Claim{ std::this_thread::get_id(), CurrentStackBytes() };
             holdHere = index == 0 && std::this_thread::get_id() == caller;
         }
         if (holdHere) {
             WaitFor([] {
-                std::lock_guard lock{ mutex };
+                const std::lock_guard lock{ mutex };
                 return claims.size() >= holdUntil;
             });
         }
@@ -3684,7 +3709,7 @@ private:
     // Clears the record before the hook that fills it is installed.
     static bool Configure(size_t inputs)
     {
-        std::lock_guard lock{ mutex };
+        const std::lock_guard lock{ mutex };
         claims.clear();
         caller = std::this_thread::get_id();
         holdUntil = inputs;
@@ -3766,7 +3791,7 @@ private:
         if (helper) {
             if (self.failHelpers) {
                 {
-                    std::lock_guard lock{ self.mutex };
+                    const std::lock_guard lock{ self.mutex };
                     if (++self.attempts[std::this_thread::get_id()] > 1)
                         self.retriedHelper = true;
                 }
@@ -3793,7 +3818,7 @@ private:
             self.closed = true;
         }
         if (event == bsv::detail::InputPoolEvent::Waiting) {
-            std::lock_guard lock{ self.mutex };
+            const std::lock_guard lock{ self.mutex };
             const auto it = self.attempts.find(std::this_thread::get_id());
             if (it != self.attempts.end())
                 self.failedHelperParked = true;
@@ -3829,7 +3854,7 @@ BOOST_AUTO_TEST_CASE(participant_source_allocation_failure_preserves_valid_resul
     const InputThresholdGuard parallel(FORCE_PARALLEL);
     for (const bool failHelpers : { true, false }) {
         BOOST_REQUIRE(PoolIsIdle());
-        InputSourceAllocationFailure failure(failHelpers);
+        const InputSourceAllocationFailure failure(failHelpers);
         const auto result = ValidateP2PKHSpend(validator, bin, 32, true);
         BOOST_CHECK_MESSAGE(bsv::TxErrorIsOk(result), "failHelpers=" << failHelpers
             << " domain=" << result.domain << " code=" << result.code);
@@ -3906,7 +3931,7 @@ BOOST_AUTO_TEST_CASE(completed_helpers_keep_verdict_after_caller_setup_failure, 
         for (const bool fail : { false, true }) {
             BOOST_REQUIRE(PoolIsIdle());
             const auto source = task::CCancellationSource::Make();
-            AllocationAfterCompletedHelpers probe(source, fail);
+            const AllocationAfterCompletedHelpers probe(source, fail);
             const std::vector<int32_t> heights(32, P2PKH_UTXO_HEIGHT);
             const auto result = validator.ValidateTransaction(bin, heights, P2PKH_BLOCK_HEIGHT, true, source->GetToken());
             BOOST_CHECK(!probe.timedOut);
@@ -3956,6 +3981,7 @@ BOOST_AUTO_TEST_CASE(helpers_run_on_an_8_mib_stack, PARALLEL_TEST_CASE_DECORATOR
 // multisig signed by the key CHECKMULTISIG reaches last. Verified with
 // VerifyScript in consensus mode (no post-Genesis size, op or key-count
 // limits).
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters): nesting depth and key count, named at each call
 static bsv::CMutableTransactionExtended MakeDeepScriptSpend(size_t depth, size_t nKeys)
 {
     auto eTx = MakeSignedP2PKHSpend(std::vector<SigHashType>(3, SigHashType().withForkId()), 1);
@@ -4480,7 +4506,7 @@ static size_t MostConcurrentHelpers(size_t callers)
 // as set, every negative value reading back as -1.
 BOOST_AUTO_TEST_CASE(helper_limit_defaults_to_automatic_and_reads_back)
 {
-    BOOST_CHECK_EQUAL(shippedParallelInputHelpers, -1);
+    BOOST_CHECK_EQUAL(ParallelInputThresholdFromArgs::shippedParallelInputHelpers, -1);
     const HelperLimitGuard restore(bsv::GetParallelInputHelpers());
     for (const int64_t helpers : { int64_t{ 0 }, int64_t{ 1 }, int64_t{ 3 }, int64_t{ 1000 }, int64_t{ -1 } }) {
         bsv::SetParallelInputHelpers(helpers);
