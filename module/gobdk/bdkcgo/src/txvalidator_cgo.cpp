@@ -458,7 +458,7 @@ TxError TxValidator_ValidateTransactionCancellable(TxValidatorCGO cgoEngine,
 // report a failure that has no per-entry result to attach itself to.
 static TxError* helper_single_result(TxError result, uint64_t* resultSize) {
     // NOLINTNEXTLINE(cppcoreguidelines-no-malloc, cppcoreguidelines-owning-memory)
-    TxError* resultArray = static_cast<TxError*>(malloc(sizeof(TxError)));
+    auto* resultArray = static_cast<TxError*>(malloc(sizeof(TxError)));
     if (resultArray == nullptr) {
         *resultSize = 0;
         return nullptr;
@@ -507,7 +507,7 @@ TxError* TxValidator_ValidateBatchCancellable(TxValidatorCGO cgoEngine,
         }
 
         // NOLINTNEXTLINE(cppcoreguidelines-no-malloc, cppcoreguidelines-owning-memory)
-        TxError* resultArray = static_cast<TxError*>(malloc(size * sizeof(TxError)));
+        auto* resultArray = static_cast<TxError*>(malloc(size * sizeof(TxError)));
         if (resultArray == nullptr) {
             return nullptr;
         }

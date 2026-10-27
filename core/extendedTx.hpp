@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <span>
 #include <vector>
+#include <algorithm>
 
 #include <primitives/transaction.h>
 #include <streams.h>
@@ -32,7 +33,9 @@ public:
     // This is the modified version of the method
     //    void Serialize_impl(Stream &os, const std::vector<T, A> &v, const V &)
     // in $BSV/src/serialize.h:793
-    template <typename Stream> inline void Serialize(Stream& os) const {
+    template<typename Stream>
+    void Serialize(Stream& os) const
+    {
         if (this->vin.size() != this->vutxo.size()) {
             throw std::range_error("inconsistent size of vin and utxo");
         }
@@ -64,7 +67,9 @@ public:
     // This is the modified version of the method
     //    void Unserialize_impl(Stream &is, std::vector<T, A> &v, const V &)
     // in $BSV/src/serialize.h:823
-    template <typename Stream> inline void Unserialize(Stream& is) {
+    template<typename Stream>
+    void Unserialize(Stream& is)
+    {
         this->vin.clear();
         this->vutxo.clear();
         const size_t nSize = ReadCompactSize(is);
@@ -72,11 +77,9 @@ public:
         size_t nMid = 0;
         size_t chunkSize = STARTING_CHUNK_SIZE;
         while (nMid < nSize) {
-            nMid += std::min(nSize, size_t(1 + (chunkSize - 1) / (sizeof(CTxIn)+ sizeof(CTxOut)) ));
+            nMid += std::min(nSize, 1 + ((chunkSize - 1) / (sizeof(CTxIn) + sizeof(CTxOut))));
             chunkSize *= CHUNK_GROWTH_RATE;
-            if (nMid > nSize) {
-                nMid = nSize;
-            }
+            nMid = std::min(nMid, nSize);
             this->vin.resize(nMid);
             this->vutxo.resize(nMid);
             for (; i < nMid; i++) {
@@ -101,7 +104,9 @@ public:
 
     // See $BSV/src/primitives/transaction.h:256
     // Method inline void SerializeTransaction(const TxType &tx, Stream &s)
-    template <typename Stream> inline void Serialize(Stream& os) const {
+    template<typename Stream>
+    void Serialize(Stream& os) const
+    {
         // The 6 bytes marking the extended transactions (see BIP-239)
         const std::array<uint8_t, 6> efMarker{ 0x00, 0x00, 0x00, 0x00, 0x00, 0xEF };
         const ConstGlueExtendedInput glue(this->mtx.vin, this->vutxo);
@@ -114,7 +119,9 @@ public:
 
     // See $BSV/src/primitives/transaction.h:243
     // inline void UnserializeTransaction(TxType &tx, Stream &s)
-    template <typename Stream> inline void Unserialize(Stream& is) {
+    template<typename Stream>
+    void Unserialize(Stream& is)
+    {
         this->vutxo.clear();
         this->mtx.vin.clear();
         this->mtx.vout.clear();

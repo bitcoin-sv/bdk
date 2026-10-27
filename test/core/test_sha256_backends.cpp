@@ -133,7 +133,7 @@ namespace
     uint64_t TestSeed()
     {
         const char* v = std::getenv("BDK_SHA256_TEST_SEED");
-        return v != nullptr && *v != '\0' ? std::strtoull(v, nullptr, 0) : 20261016ull;
+        return v != nullptr && *v != '\0' ? std::strtoull(v, nullptr, 0) : 20261016ULL;
     }
 
     std::array<uint8_t, 32> OpenSslSha256d(std::span<const uint8_t> msg)
@@ -201,7 +201,7 @@ BOOST_AUTO_TEST_CASE(double_sha256_of_64_byte_pairs)
     std::mt19937_64 rng{TestSeed()};
     std::vector<std::array<uint8_t, 128>> random_pairs(64);
     for(auto& p : random_pairs)
-        std::generate(p.begin(), p.end(), [&] { return static_cast<uint8_t>(rng()); });
+        std::ranges::generate(p, [&] { return static_cast<uint8_t>(rng()); });
 
     const auto check_1way = [&](sha256_dispatch::DBlock1wayType d1, const std::string& name) {
         std::array<uint8_t, 64> out{};
@@ -249,9 +249,9 @@ BOOST_AUTO_TEST_CASE(every_backend_matches_scalar_on_random_messages, *boost::un
     {
         // Each message starts at offset 0..15 into its buffer, so the transforms
         // also see unaligned multi-block input, as they do in production
-        const size_t offset = static_cast<size_t>(i % 16);
+        const auto offset = static_cast<size_t>(i % 16);
         std::vector<uint8_t> storage(offset + length(rng));
-        std::generate(storage.begin(), storage.end(), [&] { return static_cast<uint8_t>(rng()); });
+        std::ranges::generate(storage, [&] { return static_cast<uint8_t>(rng()); });
         const std::span<const uint8_t> msg = std::span<const uint8_t>{storage}.subspan(offset);
         const size_t chunk = i % 3 == 0 ? msg.size() + 1 // one Write: the whole message goes to the transform at once
                                         : std::uniform_int_distribution<size_t>{1, msg.size() + 1}(rng);
@@ -278,10 +278,10 @@ BOOST_AUTO_TEST_CASE(every_backend_matches_scalar_on_random_messages, *boost::un
 BOOST_AUTO_TEST_CASE(direct_transforms_at_unaligned_offsets, *boost::unit_test::timeout(120))
 {
     std::mt19937_64 rng{TestSeed()};
-    std::vector<uint8_t> buffer(16 + 8 * 64);
-    std::generate(buffer.begin(), buffer.end(), [&] { return static_cast<uint8_t>(rng()); });
-    const std::array<uint32_t, 8> init = {0x6a09e667ul, 0xbb67ae85ul, 0x3c6ef372ul, 0xa54ff53aul,
-                                          0x510e527ful, 0x9b05688cul, 0x1f83d9abul, 0x5be0cd19ul};
+    std::vector<uint8_t> buffer(16 + (8 * 64));
+    std::ranges::generate(buffer, [&] { return static_cast<uint8_t>(rng()); });
+    const std::array<uint32_t, 8> init = {0x6a09e667UL, 0xbb67ae85UL, 0x3c6ef372UL, 0xa54ff53aUL,
+                                          0x510e527fUL, 0x9b05688cUL, 0x1f83d9abUL, 0x5be0cd19UL};
     const auto& backends = bsv::Sha256SupportedBackends();
 
     for(size_t offset = 1; offset < 16; ++offset)

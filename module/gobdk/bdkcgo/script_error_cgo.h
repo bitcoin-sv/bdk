@@ -13,7 +13,7 @@ extern "C" {
  * This is an exception being thrown by C++ code
  *
  */
-const char *cgo_script_error_string(const int error);
+const char* cgo_script_error_string(int error);
 
 #ifdef __cplusplus
 }

@@ -17,6 +17,8 @@
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <algorithm>
+#include <tuple>
 
 #include <boost/program_options.hpp>
 
@@ -117,7 +119,7 @@ static std::vector<uint8_t> Serialise(const bsv::CMutableTransactionExtended& eT
 {
     CDataStream out(SER_NETWORK, PROTOCOL_VERSION);
     out << eTX;
-    return std::vector<uint8_t>(out.begin(), out.end());
+    return {out.begin(), out.end()};
 }
 
 // ============================================================
@@ -227,12 +229,12 @@ namespace
         int     iters    = 0;
 
         // NOLINTBEGIN(*-narrowing-conversions)
-        double avg_us()     const { return total_ns / 1000.0 / iters; }
-        double min_us()     const { return min_ns   / 1000.0; }
-        double max_us()     const { return max_ns   / 1000.0; }
-        double avg_ms()     const { return avg_us() / 1000.0; }
-        double total_s()    const { return total_ns / 1.0e9; }
-        double throughput() const { return iters    / total_s(); }
+        [[nodiscard]] double avg_us()     const { return total_ns / 1000.0 / iters; }
+        [[nodiscard]] double min_us()     const { return min_ns   / 1000.0; }
+        [[nodiscard]] double max_us()     const { return max_ns   / 1000.0; }
+        [[nodiscard]] double avg_ms()     const { return avg_us() / 1000.0; }
+        [[nodiscard]] double total_s()    const { return total_ns / 1.0e9; }
+        [[nodiscard]] double throughput() const { return iters    / total_s(); }
         // NOLINTEND(*-narrowing-conversions)
     };
 }
@@ -258,8 +260,8 @@ static BenchResult RunBenchmark(const bsv::CTxValidator&   se,
         const int64_t ns =
             std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
         r.total_ns += ns;
-        if (ns < r.min_ns) r.min_ns = ns;
-        if (ns > r.max_ns) r.max_ns = ns;
+        r.min_ns = std::min(r.min_ns, ns);
+        r.max_ns = std::max(r.max_ns, ns);
     }
 
     return r;
@@ -304,7 +306,8 @@ int main(int argc, char* argv[])
     po::variables_map vm;
     try {
         po::store(po::parse_command_line(argc, argv, desc), vm);
-        if (vm.count("help")) {
+        if(vm.contains("help"))
+        {
             std::cout << desc << "\n";
             return 0;
         }
@@ -372,14 +375,14 @@ int main(int argc, char* argv[])
         constexpr int WARMUP_STD = 50;
         std::cout << "  Standard tx (" << WARMUP_STD << " iterations)... " << std::flush;
         for (int i = 0; i < WARMUP_STD; ++i)
-            se.ValidateTransaction(standardBin, utxoSpan, BLOCK_HEIGHT, CONSENSUS);
+            std::ignore = se.ValidateTransaction(standardBin, utxoSpan, BLOCK_HEIGHT, CONSENSUS);
         std::cout << "done.\n";
     }
     {
         constexpr int WARMUP_ATK = 3;
         std::cout << "  Attack  tx  (" << WARMUP_ATK << " iterations)... " << std::flush;
         for (int i = 0; i < WARMUP_ATK; ++i)
-            se.ValidateTransaction(attackBin, utxoSpan, BLOCK_HEIGHT, CONSENSUS);
+            std::ignore = se.ValidateTransaction(attackBin, utxoSpan, BLOCK_HEIGHT, CONSENSUS);
         std::cout << "done.\n";
     }
     std::cout << "\n";
@@ -425,9 +428,9 @@ int main(int argc, char* argv[])
     std::cout << "  Note: attack tx is " << attackBin.size() << " bytes vs "
               << standardBin.size() << " bytes standard — "
               << std::setprecision(1)
-              << static_cast<double>(atkResult.avg_us()) / attackBin.size()
+              << atkResult.avg_us() / attackBin.size()
               << " µs/byte vs "
-              << static_cast<double>(stdResult.avg_us()) / standardBin.size()
+              << stdResult.avg_us() / standardBin.size()
               << " µs/byte.\n";
     std::cout << sep << "\n";
     // NOLINTEND(*-narrowing-conversions)

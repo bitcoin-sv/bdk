@@ -2,7 +2,6 @@
 
 #include <cassert>
 #include <iostream>
-#include <iostream>
 #include <fstream>
 #include <sstream>
 #include <iomanip>
@@ -88,7 +87,7 @@ static std::string trim(const std::string& str)
         end--;
     } while (std::distance(start, end) > 0 && std::isspace(*end));
 
-    return std::string(start, end + 1);
+    return {start, end + 1};
 }
 
 // Enhanced split function to handle quotes
@@ -232,7 +231,8 @@ int main(int argc, char* argv[])
     po::variables_map vm;
     try {
         po::store(po::parse_command_line(argc, argv, desc), vm);
-        if (vm.count("help")) {
+        if(vm.contains("help"))
+        {
             std::cout << desc << '\n';
             return 0;
         }

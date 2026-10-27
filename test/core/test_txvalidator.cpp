@@ -20,7 +20,6 @@
 
 #include <boost/algorithm/hex.hpp>
 #include <boost/test/unit_test.hpp>
-#include <boost/algorithm/hex.hpp>
 
 #include "streams.h"
 #include "version.h"
@@ -479,7 +478,7 @@ BOOST_AUTO_TEST_CASE(test_repeated_checksig_cache)
     {
         std::string err;
         BOOST_REQUIRE(se.SetMaxScriptSizePolicy(static_cast<int64_t>(lockingScript.size()) + 1, &err));
-        BOOST_REQUIRE(se.SetMaxOpsPerScriptPolicy(static_cast<int64_t>(TEST_N * 2 + 10), &err));
+        BOOST_REQUIRE(se.SetMaxOpsPerScriptPolicy(static_cast<int64_t>((TEST_N * 2) + 10), &err));
     }
 
     const std::array<int32_t, 1> utxoArray{ blockHeight - 1 };
@@ -788,7 +787,7 @@ static CScript MakeConditionalDataScript(size_t totalSize)
     raw.push_back(OP_ENDIF);
     raw.push_back(OP_TRUE);
 
-    return CScript(raw.begin(), raw.end());
+    return {raw.begin(), raw.end()};
 }
 
 // A transaction whose bare size is a couple of hundred bytes but whose aggregate
@@ -930,7 +929,7 @@ static std::vector<uint8_t> SerializeExtended(const bsv::CMutableTransactionExte
 {
     CDataStream ss(SER_NETWORK, PROTOCOL_VERSION);
     ss << eTx;
-    return std::vector<uint8_t>(ss.begin(), ss.end());
+    return {ss.begin(), ss.end()};
 }
 
 static TxError ValidateP2PKHSpend(const bsv::CTxValidator& se,
@@ -1317,7 +1316,7 @@ static double ProcessCpuSeconds()
 #else
     timespec now{};
     BOOST_REQUIRE(clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &now) == 0);
-    return static_cast<double>(now.tv_sec) + static_cast<double>(now.tv_nsec) * 1e-9;
+    return static_cast<double>(now.tv_sec) + (static_cast<double>(now.tv_nsec) * 1e-9);
 #endif
 }
 
@@ -1336,7 +1335,7 @@ struct ManyKeyMultisigSpend {
 static ManyKeyMultisigSpend MakeManyKeyMultisigSpend(size_t nInputs, size_t nKeys)
 {
     const SigHashType allForkId = SigHashType().withForkId();
-    const uint32_t index = static_cast<uint32_t>(nInputs / 2);
+    const auto index = static_cast<uint32_t>(nInputs / 2);
 
     std::vector<CKey> keys;
     CScript multisig = CScript() << static_cast<int64_t>(nKeys);
@@ -1432,7 +1431,7 @@ BOOST_AUTO_TEST_CASE(verify_spend_shares_sighash_precompute_across_checks,
         }
     }
 
-    const double extraChecks = static_cast<double>(N_KEYS[1] - N_KEYS[0]);
+    const auto extraChecks = static_cast<double>(N_KEYS[1] - N_KEYS[0]);
     const double smallMarginalMs = (bestMs[0][1] - bestMs[0][0]) / extraChecks;
     const double largeMarginalMs = (bestMs[1][1] - bestMs[1][0]) / extraChecks;
     BOOST_REQUIRE_MESSAGE(smallMarginalMs > 0.0,

@@ -58,8 +58,7 @@ namespace bsv
         explicit RegisterCustomChainParams(std::string_view name)
         {
             ChainParamsRegistry::Instance().Register(std::string{name},
-                                                     []()
-                                                     { return std::make_unique<T>(); });
+                                                     [] { return std::make_unique<T>(); });
         }
     };
 }

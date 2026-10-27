@@ -85,13 +85,13 @@ namespace
     bool HaveSse41()
     {
         uint32_t eax{}, ebx{}, ecx{}, edx{};
-        return __get_cpuid(1, &eax, &ebx, &ecx, &edx) != 0 && ((ecx >> 19) & 1u) != 0;
+        return __get_cpuid(1, &eax, &ebx, &ecx, &edx) != 0 && ((ecx >> 19) & 1U) != 0;
     }
 
     bool HaveShani()
     {
         uint32_t eax{}, ebx{}, ecx{}, edx{};
-        return __get_cpuid_count(7, 0, &eax, &ebx, &ecx, &edx) != 0 && ((ebx >> 29) & 1u) != 0;
+        return __get_cpuid_count(7, 0, &eax, &ebx, &ecx, &edx) != 0 && ((ebx >> 29) & 1U) != 0;
     }
 #endif
 
@@ -111,14 +111,14 @@ namespace
             0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,    0,  0,
             0,  0,  0,  0,  0,  0,  0,  0,  2,  0};
         static const std::array<uint32_t, 8> init = {
-            0x6a09e667ul, 0xbb67ae85ul, 0x3c6ef372ul, 0xa54ff53aul,
-            0x510e527ful, 0x9b05688cul, 0x1f83d9abul, 0x5be0cd19ul};
+            0x6a09e667UL, 0xbb67ae85UL, 0x3c6ef372UL, 0xa54ff53aUL,
+            0x510e527fUL, 0x9b05688cUL, 0x1f83d9abUL, 0x5be0cd19UL};
         static const std::array<uint32_t, 8> out1 = {
-            0xe3b0c442ul, 0x98fc1c14ul, 0x9afbf4c8ul, 0x996fb924ul,
-            0x27ae41e4ul, 0x649b934cul, 0xa495991bul, 0x7852b855ul};
+            0xe3b0c442UL, 0x98fc1c14UL, 0x9afbf4c8UL, 0x996fb924UL,
+            0x27ae41e4UL, 0x649b934cUL, 0xa495991bUL, 0x7852b855UL};
         static const std::array<uint32_t, 8> out2 = {
-            0xce4153b0ul, 0x147c2a86ul, 0x3ed4298eul, 0xe0676bc8ul,
-            0x79fc77a1ul, 0x2abe1f49ul, 0xb2b055dful, 0x1069523eul};
+            0xce4153b0UL, 0x147c2a86UL, 0x3ed4298eUL, 0xe0676bc8UL,
+            0x79fc77a1UL, 0x2abe1f49UL, 0xb2b055dfUL, 0x1069523eUL};
 
         std::array<uint32_t, 8> buf = init;
         tr(std::span<const std::uint8_t>{}, buf);

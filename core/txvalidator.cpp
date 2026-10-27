@@ -19,6 +19,7 @@
 #include <cstdint>
 #include <cstring>
 #include <vector>
+#include <utility>
 
 ////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
@@ -353,6 +354,46 @@ static Consensus::Params consensusParameters(bsv::TxValidationNetwork network)
     return params;
 }
 
+// Pure functions of the transaction: no validator state is involved.
+// Replicates Consensus::CheckTxInputs (validation.cpp:2590-2655):
+//   - per-input MoneyRange check (bad-txns-inputvalues-outofrange, DoS 100)
+//   - accumulated nValueIn MoneyRange check
+//   - nValueIn >= tx.GetValueOut() (bad-txns-in-belowout, DoS 100)
+// Output values are already validated by implCheckTransactionCommon, so
+// GetValueOut() is safe to call here.
+[[nodiscard]] static TxError checkInputValues(const CTransaction& tx,
+                                              const std::vector<CTxOut>& prevUTXO)
+{
+    if (prevUTXO.size() != tx.vin.size())
+        throw std::runtime_error("CheckInputValues: inconsistent inputs size");
+
+    Amount nValueIn(0);
+    for (const auto& utxo : prevUTXO) {
+        if (!MoneyRange(utxo.nValue) || !MoneyRange(nValueIn + utxo.nValue))
+            return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::InputValuesOutOfRange));
+        nValueIn += utxo.nValue;
+    }
+
+    if (nValueIn < tx.GetValueOut())
+        return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::InputsBelowOutputs));
+
+    return bsv::TxErrorOk();
+}
+
+// Replicates CheckRegularTransaction (validation.cpp): null-prevout check and
+// duplicate-prevout detection (bad-txns-inputs-duplicate, DoS 100).
+[[nodiscard]] static TxError checkPrevOutputs(const CTransaction& tx)
+{
+    std::set<COutPoint> seen;
+    for (const auto& txin : tx.vin) {
+        if (txin.prevout.IsNull())
+            return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::NullPrevout));
+        if (!seen.insert(txin.prevout).second)
+            return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::DuplicateInputs));
+    }
+    return bsv::TxErrorOk();
+}
+
 bsv::CTxValidator::CTxValidator(std::string_view chainName)
     : source{ task::CCancellationSource::Make() }
 {
@@ -577,7 +618,8 @@ bool bsv::CTxValidator::SetMaxSigOpsPostGenesisPolicy(int64_t value, std::string
         if (err) *err = "Post-Genesis sigops policy limit cannot be negative";
         return false;
     }
-    if (static_cast<uint64_t>(value) > MAX_TX_SIGOPS_COUNT_POLICY_AFTER_GENESIS) {
+    if(std::cmp_greater(value, MAX_TX_SIGOPS_COUNT_POLICY_AFTER_GENESIS))
+    {
         if (err) *err = "Post-Genesis sigops policy limit exceeds maximum (" + std::to_string(MAX_TX_SIGOPS_COUNT_POLICY_AFTER_GENESIS) + ")";
         return false;
     }
@@ -1151,33 +1193,6 @@ TxError bsv::CTxValidator::implCheckStandardness(
     return bsv::TxErrorOk();
 }
 
-// Replicates Consensus::CheckTxInputs (validation.cpp:2590-2655):
-//   - per-input MoneyRange check (bad-txns-inputvalues-outofrange, DoS 100)
-//   - accumulated nValueIn MoneyRange check
-//   - nValueIn >= tx.GetValueOut() (bad-txns-in-belowout, DoS 100)
-// Output values are already validated by implCheckTransactionCommon, so
-// GetValueOut() is safe to call here.
-TxError bsv::CTxValidator::implCheckInputValues(
-    const CTransaction& tx,
-    const std::vector<CTxOut>& prevUTXO
-) const
-{
-    if (prevUTXO.size() != tx.vin.size())
-        throw std::runtime_error("implCheckInputValues: inconsistent inputs size");
-
-    Amount nValueIn(0);
-    for (const auto& utxo : prevUTXO) {
-        if (!MoneyRange(utxo.nValue) || !MoneyRange(nValueIn + utxo.nValue))
-            return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::InputValuesOutOfRange));
-        nValueIn += utxo.nValue;
-    }
-
-    if (nValueIn < tx.GetValueOut())
-        return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::InputsBelowOutputs));
-
-    return bsv::TxErrorOk();
-}
-
 int bsv::CPP_SCRIPT_ERR_ERROR_COUNT(){
     return SCRIPT_ERR_ERROR_COUNT;
 }
@@ -1235,7 +1250,7 @@ TxError bsv::CTxValidator::ValidateTransaction(std::span<const uint8_t> extended
         const int32_t checkHeight = consensus ? blockHeight : blockHeight + 1;
 
         if (auto r = implCheckTransactionCommon(ctx, checkHeight);                              !bsv::TxErrorIsOk(r)) return r;
-        if (auto r = implCheckPrevOutputs(ctx);                                                 !bsv::TxErrorIsOk(r)) return r;
+        if (auto r = checkPrevOutputs(ctx);                                                 !bsv::TxErrorIsOk(r)) return r;
         if (auto r = implCheckOutputs(ctx, checkHeight);                                        !bsv::TxErrorIsOk(r)) return r;
         if (token.IsCanceled())
             return bsv::TxErrorCancelled();
@@ -1245,7 +1260,7 @@ TxError bsv::CTxValidator::ValidateTransaction(std::span<const uint8_t> extended
         } else {
             if (auto r = implCheckConsensusSigops(ctx, eTX.vutxo, utxoHeights, blockHeight);   !bsv::TxErrorIsOk(r)) return r;
         }
-        if (auto r = implCheckInputValues(ctx, eTX.vutxo);                                     !bsv::TxErrorIsOk(r)) return r;
+        if (auto r = checkInputValues(ctx, eTX.vutxo);                                     !bsv::TxErrorIsOk(r)) return r;
         // Fee check runs only in policy mode and only after implCheckInputValues, so MoneyRange
         // holds and the inputs - outputs subtraction inside implCheckFee is well-defined.
         if (!consensus) {
@@ -1259,7 +1274,7 @@ TxError bsv::CTxValidator::ValidateTransaction(std::span<const uint8_t> extended
     }
 }
 
-TxError bsv::CTxValidator::CheckPrevOutputs(std::span<const uint8_t> extendedTX) const
+TxError bsv::CTxValidator::CheckPrevOutputs(std::span<const uint8_t> extendedTX)
 {
     try {
         const char* begin{ reinterpret_cast<const char*>(extendedTX.data()) };
@@ -1268,7 +1283,7 @@ TxError bsv::CTxValidator::CheckPrevOutputs(std::span<const uint8_t> extendedTX)
         bsv::CMutableTransactionExtended eTX;
         tx_stream >> eTX;
         const CTransaction ctx(eTX.mtx);
-        return implCheckPrevOutputs(ctx);
+        return checkPrevOutputs(ctx);
     }
     catch (const std::exception&) {
         return bsv::TxErrorException();
@@ -1372,20 +1387,6 @@ TxError bsv::CTxValidator::implCheckTransactionCommon(
     return bsv::TxErrorOk();
 }
 
-// Replicates CheckRegularTransaction (validation.cpp): null-prevout check and
-// duplicate-prevout detection (bad-txns-inputs-duplicate, DoS 100).
-TxError bsv::CTxValidator::implCheckPrevOutputs(const CTransaction& tx) const
-{
-    std::set<COutPoint> seen;
-    for (const auto& txin : tx.vin) {
-        if (txin.prevout.IsNull())
-            return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::NullPrevout));
-        if (!seen.insert(txin.prevout).second)
-            return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::DuplicateInputs));
-    }
-    return bsv::TxErrorOk();
-}
-
 // Replicates the hasP2SHOutput check in CheckRegularTransaction (validation.cpp).
 TxError bsv::CTxValidator::implCheckOutputs(const CTransaction& tx, int32_t blockHeight) const
 {
@@ -1486,7 +1487,7 @@ TxError bsv::CTxValidator::implIsFreeConsolidation(const CTransaction& tx,
                                                      std::span<const int32_t> utxoHeights,
                                                      int32_t blockHeight) const
 {
-    constexpr auto notFree = []() {
+    constexpr auto notFree = []{
         return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::NotFreeConsolidation));
     };
 
@@ -1501,7 +1502,7 @@ TxError bsv::CTxValidator::implIsFreeConsolidation(const CTransaction& tx,
         && tx.vout[0].nValue.GetSatoshis() == 0
         && IsDustReturnScript(tx.vout[0].scriptPubKey);
     const uint64_t factor = isDonation ? tx.vin.size() : consolidationMinFactor;
-    const int32_t minConf = isDonation ? int32_t(0) : static_cast<int32_t>(consolidationMinConf);
+    const int32_t minConf = isDonation ? int32_t{0} : static_cast<int32_t>(consolidationMinConf);
 
     if (tx.vin.size() < factor * tx.vout.size())
         return notFree();
@@ -1595,7 +1596,7 @@ TxError bsv::CTxValidator::implCheckFee(const CTransaction& tx,
         nValueIn += utxo.nValue;
     const Amount nFees = nValueIn - tx.GetValueOut();
 
-    const int64_t txSize = static_cast<int64_t>(tx.GetTotalSize());  // delta (d)
+    const auto txSize = static_cast<int64_t>(tx.GetTotalSize());  // delta (d)
     int64_t minFeeSats = (txSize * minMiningTxFeeSatPerKB) / 1000;   // delta (f)
     if (minFeeSats == 0 && txSize > 0 && minMiningTxFeeSatPerKB > 0)
         minFeeSats = 1;

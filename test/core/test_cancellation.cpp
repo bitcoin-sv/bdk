@@ -8,6 +8,7 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <tuple>
 
 /// Define test module name with debug postfix
 #ifdef NDEBUG
@@ -60,7 +61,7 @@ task::CCancellationToken CancelledToken()
 }
 
 // Sets a cancel flag the way a binding does: an atomic store from another thread.
-// NOLINTNEXTLINE(misc-const-correctness)
+// NOLINTNEXTLINE(misc-const-correctness, readability-non-const-parameter)
 void StoreFlagRelaxed(int32_t* flag, const int32_t value)
 {
 #if defined(_MSC_VER) && !defined(__clang__)
@@ -381,7 +382,7 @@ BOOST_AUTO_TEST_CASE(every_entry_point_cancelled_before_start_returns_cancelled)
                 batch.add(bsv::ValidateArg(etx, kValidTxUtxoHeights, kValidTxBlockHeight, consensus));
                 batch.add(bsv::ValidateArg(etx, kValidTxUtxoHeights, kValidTxBlockHeight, consensus));
                 const auto results = validator.ValidateBatch(batch, token);
-                BOOST_REQUIRE_EQUAL(2u, results.size());
+                BOOST_REQUIRE_EQUAL(2U, results.size());
                 BOOST_CHECK(IsCancelled(results[0]));
                 BOOST_CHECK(IsCancelled(results[1]));
             }
@@ -408,12 +409,12 @@ BOOST_AUTO_TEST_CASE(batch_cancelled_part_way_keeps_finished_verdicts)
 
     // Polls taken by the first two entries, so the token fires at the third.
     const auto counter = CountdownSource::Make(UINT64_MAX);
-    validator.ValidateTransaction(validTx, kValidTxUtxoHeights, kValidTxBlockHeight, true, counter->GetToken());
-    validator.ValidateTransaction(invalidTx, kValidTxUtxoHeights, kValidTxBlockHeight, true, counter->GetToken());
+    std::ignore = validator.ValidateTransaction(validTx, kValidTxUtxoHeights, kValidTxBlockHeight, true, counter->GetToken());
+    std::ignore = validator.ValidateTransaction(invalidTx, kValidTxUtxoHeights, kValidTxBlockHeight, true, counter->GetToken());
 
     const auto source = CountdownSource::Make(counter->polls());
     const auto results = validator.ValidateBatch(batch, source->GetToken());
-    BOOST_REQUIRE_EQUAL(4u, results.size());
+    BOOST_REQUIRE_EQUAL(4U, results.size());
     BOOST_CHECK(bsv::TxErrorIsOk(results[0]));
     BOOST_CHECK_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_SCRIPT), results[1].domain);
     BOOST_CHECK(IsCancelled(results[2]));
@@ -557,13 +558,13 @@ BOOST_AUTO_TEST_CASE(verify_spend_and_check_standardness_poll_after_deserialisin
         const auto source = RecordingSource::Make(1);  // cancel lands while deserialising
         const auto r = mainValidator.VerifySpend(tx, 0, emptyLock, 1000, kSimpleUtxoHeights[0], kSimpleBlockHeight, true, std::nullopt, source->GetToken());
         BOOST_CHECK_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_CANCELLED), r.domain);
-        BOOST_CHECK_EQUAL(2u, source->polls());
+        BOOST_CHECK_EQUAL(2U, source->polls());
 
         // Cancel lands while the shared signature-hash data is built.
         const auto during = RecordingSource::Make(2);
         const auto d = mainValidator.VerifySpend(tx, 0, emptyLock, 1000, kSimpleUtxoHeights[0], kSimpleBlockHeight, true, std::nullopt, during->GetToken());
         BOOST_CHECK_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_CANCELLED), d.domain);
-        BOOST_CHECK_EQUAL(3u, during->polls());
+        BOOST_CHECK_EQUAL(3U, during->polls());
 
         // Checks right after deserialising that return a result: an unconfirmed input
         // in consensus mode (a DoS result) and an input index out of range (an
@@ -573,14 +574,14 @@ BOOST_AUTO_TEST_CASE(verify_spend_and_check_standardness_poll_after_deserialisin
         const auto unconfirmed = RecordingSource::Make(1);
         BOOST_CHECK_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_CANCELLED),
                           mainValidator.VerifySpend(tx, 0, emptyLock, 1000, MEMPOOL_HEIGHT, kSimpleBlockHeight, true, std::nullopt, unconfirmed->GetToken()).domain);
-        BOOST_CHECK_EQUAL(2u, unconfirmed->polls());
+        BOOST_CHECK_EQUAL(2U, unconfirmed->polls());
 
         BOOST_REQUIRE_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_EXCEPTION),
                             mainValidator.VerifySpend(tx, 5, emptyLock, 1000, kSimpleUtxoHeights[0], kSimpleBlockHeight, true).domain);
         const auto badIndex = RecordingSource::Make(1);
         BOOST_CHECK_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_CANCELLED),
                           mainValidator.VerifySpend(tx, 5, emptyLock, 1000, kSimpleUtxoHeights[0], kSimpleBlockHeight, true, std::nullopt, badIndex->GetToken()).domain);
-        BOOST_CHECK_EQUAL(2u, badIndex->polls());
+        BOOST_CHECK_EQUAL(2U, badIndex->polls());
     }
     {
         // VerifyScript with one height for a two-input transaction: its argument
@@ -592,7 +593,7 @@ BOOST_AUTO_TEST_CASE(verify_spend_and_check_standardness_poll_after_deserialisin
         const auto source = RecordingSource::Make(1);
         BOOST_CHECK_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_CANCELLED),
                           mainValidator.VerifyScript(valid, oneHeight, kValidTxBlockHeight, true, {}, source->GetToken()).domain);
-        BOOST_CHECK_EQUAL(2u, source->polls());
+        BOOST_CHECK_EQUAL(2U, source->polls());
     }
 
     bsv::CTxValidator validator(CBaseChainParams::REGTEST);
@@ -606,7 +607,7 @@ BOOST_AUTO_TEST_CASE(verify_spend_and_check_standardness_poll_after_deserialisin
         const auto source = RecordingSource::Make(1);  // cancel lands while deserialising
         BOOST_CHECK_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_CANCELLED),
                           validator.CheckStandardness(tx, kPreGenesisUtxoHeights2, 5000, source->GetToken()).domain);
-        BOOST_CHECK_EQUAL(2u, source->polls());
+        BOOST_CHECK_EQUAL(2U, source->polls());
     }
     {
         // Standard, with two P2PKH inputs whose checks run no script.
@@ -616,12 +617,12 @@ BOOST_AUTO_TEST_CASE(verify_spend_and_check_standardness_poll_after_deserialisin
         const auto source = RecordingSource::Make(2);  // cancel lands in the output check
         BOOST_CHECK_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_CANCELLED),
                           validator.CheckStandardness(tx, kPreGenesisUtxoHeights2, 5000, source->GetToken()).domain);
-        BOOST_CHECK_EQUAL(3u, source->polls());
+        BOOST_CHECK_EQUAL(3U, source->polls());
 
         const auto second = RecordingSource::Make(3);  // cancel lands in input 0's check
         BOOST_CHECK_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_CANCELLED),
                           validator.CheckStandardness(tx, kPreGenesisUtxoHeights2, 5000, second->GetToken()).domain);
-        BOOST_CHECK_EQUAL(4u, second->polls());
+        BOOST_CHECK_EQUAL(4U, second->polls());
     }
 }
 
@@ -710,7 +711,7 @@ BOOST_AUTO_TEST_CASE(post_deserialisation_cancel_precedes_trailing_bytes)
             // result from the poll, but finishes with the source already cancelled.
             const auto source = RecordingSource::Make(1);
             BOOST_CHECK_EQUAL(static_cast<int32_t>(TX_ERR_DOMAIN_CANCELLED), call(source->GetToken()).domain);
-            BOOST_CHECK_EQUAL(2u, source->polls());
+            BOOST_CHECK_EQUAL(2U, source->polls());
         }
     };
     for (const bool consensus : { true, false }) {
@@ -772,7 +773,7 @@ BOOST_AUTO_TEST_CASE(verify_spend_cancelled_mid_script_returns_cancelled_promptl
 // poll before input 0's OP_CHECKSIG, so the cancel always lands inside it.
 BOOST_AUTO_TEST_CASE(cancelled_during_a_signature_hash_stops_at_the_next_input)
 {
-    const std::vector<uint8_t> tx = LargeSighashTx(20u << 20);
+    const std::vector<uint8_t> tx = LargeSighashTx(20U << 20);
     const std::span<const uint8_t> etx(tx.data(), tx.size());
     const bsv::CTxValidator validator("main");
 
@@ -788,7 +789,7 @@ BOOST_AUTO_TEST_CASE(cancelled_during_a_signature_hash_stops_at_the_next_input)
     // Uncancelled run: the verdict, the poll count, and how long one OP_CHECKSIG takes.
     const auto reference = RecordingSource::Make();
     BOOST_REQUIRE(bsv::TxErrorIsOk(validator.ValidateTransaction(etx, kSighashUtxoHeights, kSighashBlockHeight, true, reference->GetToken())));
-    BOOST_REQUIRE_EQUAL(kPrefixPolls + 2 * kPollsPerInput, reference->polls());
+    BOOST_REQUIRE_EQUAL(kPrefixPolls + (2 * kPollsPerInput), reference->polls());
     const auto checksig = reference->pollTime(kInput1First) - reference->pollTime(kInput0Checksig);
 
     const auto source = RecordingSource::Make(kInput0Checksig);

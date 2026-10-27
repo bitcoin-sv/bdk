@@ -22,10 +22,13 @@ class AbiArgumentError : public std::exception {
 public:
     explicit AbiArgumentError(bsv::AbiError_t code) : mCode(code) {}
 
-    bsv::AbiError_t code() const noexcept { return mCode; }
+    [[nodiscard]] bsv::AbiError_t code() const noexcept { return mCode; }
 
     // AbiErrorString returns a view over a string literal, so it is null terminated.
-    const char* what() const noexcept override { return bsv::AbiErrorString(mCode).data(); }
+    [[nodiscard]] const char* what() const noexcept override
+    {
+        return bsv::AbiErrorString(mCode).data();
+    }
 
 private:
     bsv::AbiError_t mCode;
