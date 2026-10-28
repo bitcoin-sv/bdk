@@ -181,9 +181,48 @@ target_link_libraries(test_big_int_boost PRIVATE Boost::boost)
 target_compile_features(test_big_int_boost PRIVATE cxx_std_20)
 bdk_add_unit_test(test_big_int_boost)
 
+## The two suites that drive the input pool link bdk_core_testing: the core
+## built from the same sources with the pool's test hooks compiled in
+## (core/CMakeLists.txt). Every other test links the shipped bdk_core.
 add_executable(test_txvalidator "${CMAKE_CURRENT_SOURCE_DIR}/test_txvalidator.cpp" "${BSV_APPLICATION_HDR_FILES}" "${BSV_APPLICATION_SRC_FILES}")
-target_link_libraries(test_txvalidator PRIVATE bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono ${CMAKE_DL_LIBS})
+target_link_libraries(test_txvalidator PRIVATE bdk_core_testing secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono ${CMAKE_DL_LIBS})
 bdk_add_unit_test(test_txvalidator)
+add_executable(test_txvalidator_internal "${CMAKE_CURRENT_SOURCE_DIR}/test_txvalidator_internal.cpp" "${BSV_APPLICATION_HDR_FILES}" "${BSV_APPLICATION_SRC_FILES}")
+target_link_libraries(test_txvalidator_internal PRIVATE bdk_core_testing secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono ${CMAKE_DL_LIBS})
+bdk_add_unit_test(test_txvalidator_internal)
+add_test(NAME test_txvalidator_pool_creation_retry
+         COMMAND $<TARGET_FILE:test_txvalidator> --report_level=detailed
+                 --run_test=test_txvalidator/pool_creation_failure_is_retried
+                 -- --input-pool-cores=4)
+add_test(NAME test_txvalidator_pool_below_two_cores
+         COMMAND $<TARGET_FILE:test_txvalidator> --report_level=detailed
+                 --run_test=test_txvalidator/pool_below_two_cores_is_not_retried
+                 -- --input-pool-cores=1)
+add_test(NAME test_txvalidator_pool_without_helper_threads
+         COMMAND $<TARGET_FILE:test_txvalidator> --report_level=detailed
+                 --run_test=test_txvalidator/pool_without_helper_threads_is_not_retried
+                 -- --input-pool-cores=4)
+## The same suite with every multi-input transaction verified on several threads,
+## on a pool of at most 4 cores (CI-sized, on any machine)
+add_test(NAME test_txvalidator_parallel_inputs
+         COMMAND $<TARGET_FILE:test_txvalidator> --report_level=detailed -- --parallel-input-threshold=2 --input-pool-cores=4)
+## Keep the helper hand-off regression cheap to repeat, including on 3-core CI.
+add_test(NAME test_txvalidator_helper_release
+         COMMAND $<TARGET_FILE:test_txvalidator> --report_level=detailed
+                 --run_test=test_txvalidator/parallel_input_verification/leaving_helper_wakes_another_for_a_queued_job
+                 -- --input-pool-cores=3)
+## Coordinate release before publication, independently of the queued-job case.
+add_test(NAME test_txvalidator_release_before_offer
+         COMMAND $<TARGET_FILE:test_txvalidator> --report_level=detailed
+                 --run_test=test_txvalidator/parallel_input_verification/release_before_job_publication_recruits_a_helper
+                 -- --input-pool-cores=4)
+## A hang in the input pool fails the run instead of waiting for the CI job timeout
+get_directory_property(_bdk_core_tests TESTS)
+foreach(_t IN LISTS _bdk_core_tests)
+  if(_t MATCHES "^test_txvalidator")
+    set_tests_properties(${_t} PROPERTIES TIMEOUT 600)
+  endif()
+endforeach()
 
 add_executable(test_chronicle "${CMAKE_CURRENT_SOURCE_DIR}/test_chronicle.cpp" "${BSV_APPLICATION_HDR_FILES}" "${BSV_APPLICATION_SRC_FILES}")
 target_link_libraries(test_chronicle PRIVATE bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono ${CMAKE_DL_LIBS})
@@ -207,7 +246,19 @@ foreach(_t test_cancellation test_cancellationd)
   endif()
 endforeach()
 add_custom_target(bdk_tsan_tests)
-add_dependencies(bdk_tsan_tests test_cancellation)
+## Keep wall-clock cache-performance assertions in the native suite; TSAN
+## instruments the complete parallel-input suite through its own entry.
+add_test(NAME test_txvalidator_parallel_inputs_tsan
+         COMMAND $<TARGET_FILE:test_txvalidator> --report_level=detailed
+                 --run_test=test_txvalidator/parallel_input_verification
+                 -- --parallel-input-threshold=2 --input-pool-cores=4)
+set_tests_properties(test_txvalidator_parallel_inputs_tsan PROPERTIES LABELS tsan TIMEOUT 600)
+add_dependencies(bdk_tsan_tests test_cancellation test_txvalidator test_txvalidator_internal)
+foreach(_t test_txvalidator_internal test_txvalidator_internald)
+  if(TEST ${_t})
+    set_tests_properties(${_t} PROPERTIES LABELS tsan TIMEOUT 600)
+  endif()
+endforeach()
 add_executable(test_sha256_backends "${CMAKE_CURRENT_SOURCE_DIR}/test_sha256_backends.cpp")
 target_link_libraries(test_sha256_backends PRIVATE bdk_core OpenSSL::Crypto)
 bdk_add_unit_test(test_sha256_backends)
@@ -215,6 +266,12 @@ bdk_add_unit_test(test_sha256_backends)
 add_executable(test_sha256_select_race "${CMAKE_CURRENT_SOURCE_DIR}/test_sha256_select_race.cpp" "${BSV_APPLICATION_HDR_FILES}" "${BSV_APPLICATION_SRC_FILES}")
 target_link_libraries(test_sha256_select_race PRIVATE bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT})
 bdk_add_unit_test(test_sha256_select_race)
+
+## CPU count and cgroup limit, read from fixture trees under data/cgroup
+add_executable(test_cpu_limit "${CMAKE_CURRENT_SOURCE_DIR}/test_cpu_limit.cpp")
+target_link_libraries(test_cpu_limit PRIVATE bdk_core)
+target_compile_definitions(test_cpu_limit PRIVATE BDK_CGROUP_FIXTURE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data/cgroup")
+bdk_add_unit_test(test_cpu_limit)
 
 ## The same suites again with the scalar SHA-256 transforms forced, so the
 ## fallback is proven on every runner as well as the hardware backend
@@ -250,11 +307,13 @@ if(CMAKE_CONFIGURATION_TYPES)
   set_target_properties(test_big_int PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")
   set_target_properties(test_big_int_boost PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")
   set_target_properties(test_txvalidator PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d
+  set_target_properties(test_txvalidator_internal PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")
   set_target_properties(test_chronicle PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d
   set_target_properties(test_sigopcount PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d
   set_target_properties(test_cancellation PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d
   set_target_properties(test_sha256_backends PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")
   set_target_properties(test_sha256_select_race PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")
+  set_target_properties(test_cpu_limit PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")
 else()
   set_target_properties(test_bsv PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
   set_target_properties(test_assembler PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
@@ -263,11 +322,13 @@ else()
   set_target_properties(test_big_int PROPERTIES DEBUG_POSTFIX "")
   set_target_properties(test_big_int_boost PROPERTIES DEBUG_POSTFIX "")
   set_target_properties(test_txvalidator PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
+  set_target_properties(test_txvalidator_internal PROPERTIES DEBUG_POSTFIX "")
   set_target_properties(test_chronicle PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
   set_target_properties(test_sigopcount PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
   set_target_properties(test_cancellation PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
   set_target_properties(test_sha256_backends PROPERTIES DEBUG_POSTFIX "")
   set_target_properties(test_sha256_select_race PROPERTIES DEBUG_POSTFIX "")
+  set_target_properties(test_cpu_limit PROPERTIES DEBUG_POSTFIX "")
 endif()
 
 ## Timing tests in test_txvalidator are disabled by default and labelled

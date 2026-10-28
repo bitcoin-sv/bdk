@@ -38,10 +38,11 @@ enum class TxValidationNetwork {
  * token use it, so they always run to a verdict.
  *
  * Cancellation. The overloads that take a task::CCancellationToken return
- * TxErrorCancelled() (TX_ERR_DOMAIN_CANCELLED) once the token has fired: no verdict,
- * in either mode. The token is polled only at the points each overload lists, and by
- * the interpreter before every opcode it runs (also before each signature of
- * OP_CHECKMULTISIG and each chunk of OP_LSHIFT / OP_RSHIFT). Work between two polls
+ * TxErrorCancelled() (TX_ERR_DOMAIN_CANCELLED) when cancellation leaves necessary
+ * verification unfinished: no verdict, in either mode. A completed verdict is kept:
+ * all inputs passed, or a real failure and every lower input finished. The token is
+ * polled at the points each overload lists and at the interpreter's loop,
+ * multisig signature-search and shift-chunk poll points. Work between two polls
  * finishes before a cancel is seen: deserialising and hashing the transaction, the
  * linear transaction checks, building the shared signature-hash data, one signature
  * hash, one hash or big-number opcode. A token that fires after the call's last poll
@@ -49,11 +50,20 @@ enum class TxValidationNetwork {
  * the call runs; each call takes its own token, so concurrent calls on one validator
  * cancel independently.
  *
- * Use a source whose answer does not depend on the thread that asks, such as
- * task::CTimedCancellationSource (steady clock). task::CThreadTimedCancellationSource
- * measures the CPU clock of whichever thread polls it: today that is the calling
- * thread, but a token may be read on other threads if inputs come to be verified in
- * parallel, and a CPU-time budget would then be measured on the wrong thread.
+ * The caller's token is read only on the calling thread, including when inputs
+ * run in parallel. In a parallel job the caller polls between its input claims and in its
+ * interpreter, publishing observed cancellation to helpers through an atomic
+ * job flag. While waiting for joined helpers, the caller also polls after each
+ * 10 ms condition-variable wait timeout. Helpers poll the flag, never the caller's
+ * token. A CThreadTimedCancellationSource created on the caller accounts only
+ * for that caller thread's CPU; helpers never poll the source and their CPU is
+ * excluded. It is not a total CPU budget for the call. Until the caller's last
+ * claim it bounds only the caller's share of the inputs; after that the caller
+ * waits for helpers without using CPU, so the token gives no bound at all on
+ * the helpers' remaining work.
+ * A drained job needs no further poll; a completed verdict
+ * survives cancellation observed as helpers finish. Scheduling and work between
+ * interpreter polls can delay cancellation beyond the nominal wait interval.
  *
  * Checks present in bitcoin-sv's TxnValidation / BlockValidateTxns that are intentionally
  * absent here. In every case BDK is missing the chain / mempool / node-state context the
@@ -467,6 +477,31 @@ class CTxValidator
 
 // export the value of SCRIPT_ERR_ERROR_COUNT
 int CPP_SCRIPT_ERR_ERROR_COUNT();
+
+// The most helper threads that verify a large transaction's inputs alongside
+// its caller at any one time, process-wide (VerifyScript, ValidateTransaction
+// and ValidateBatch split a transaction with 16 or more inputs across the
+// caller and idle helpers).
+//   helpers < 0  automatic, the default: up to one helper per CPU this process
+//                may use, minus one (on Linux, the affinity mask and the
+//                container's cgroup CPU limit)
+//   helpers == 0 no helpers: every transaction is verified on its caller's
+//                thread, and no helper thread is ever started
+//   helpers > 0  at most `helpers` helpers, and never more than automatic
+// Helpers only ever take cores that BDK's own threads leave idle; this limit
+// also leaves room for other work in the process, such as Go code calling
+// BDK. Results are the same at every setting. Safe to call at any time from
+// any thread. A lower limit holds from each helper's next input: helpers over
+// it finish the input they are verifying and leave the transaction to its
+// caller and the helpers within the limit. A higher limit applies to helpers
+// joining from then on. Without thread support (WASM)
+// the setting is kept but has no effect: every transaction is verified on its
+// caller.
+void SetParallelInputHelpers(int64_t helpers);
+
+// The setting last passed to SetParallelInputHelpers, with every negative
+// value read back as -1 (automatic); -1 until it is first set.
+int64_t GetParallelInputHelpers();
 
 } // namespace bsv
 

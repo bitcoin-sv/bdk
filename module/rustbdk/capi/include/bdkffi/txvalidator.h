@@ -17,6 +17,15 @@ bdkffi_txvalidator_t bdkffi_txvalidator_create(const char* network_name, int net
 void bdkffi_txvalidator_destroy(bdkffi_txvalidator_t validator);
 
 /*
+ * Process-wide: the most helper threads that verify a large transaction's
+ * inputs alongside its caller at once. < 0 automatic (the default), 0 none,
+ * > 0 at most that many. See bsv::SetParallelInputHelpers in
+ * core/txvalidator.hpp. The getter returns the setting, -1 for automatic.
+ */
+void bdkffi_set_parallel_input_helpers(int64_t helpers);
+int64_t bdkffi_get_parallel_input_helpers(void);
+
+/*
  * Fallible setters return NULL on success, otherwise a malloc-owned
  * null-terminated error string. Free it with bdkffi_free.
  */
@@ -142,10 +151,13 @@ bdkffi_TxError* bdkffi_txvalidator_validate_batch(
  * until it returns. NULL means never cancelled.
  *
  * A cancelled call returns {BDKFFI_TX_ERR_DOMAIN_CANCELLED, 0}: no verdict about the
- * transaction. The flag is polled at entry, between the transaction checks and before
- * every opcode; a step already started (deserialising, one signature hash, one hash
- * or arithmetic opcode) finishes first. A flag set after the last poll leaves the
- * call to return its verdict.
+ * transaction. The flag is polled at entry, between transaction checks and at
+ * interpreter loop, multisig signature-search and shift-chunk poll points. In
+ * parallel jobs the caller also polls after each 10 ms wait timeout while helpers
+ * remain, publishing to a flag helpers read; only the caller reads cancel_flag.
+ * Scheduling and a step already started (deserialising, one signature hash, one
+ * hash or arithmetic opcode) can add delay. Completed success or a definitive
+ * lowest failure is retained even if cancellation is observed while draining.
  *
  * custom_flags_len == 0 means the calculated flags. The batch variant returns
  * {BDKFFI_TX_ERR_DOMAIN_CANCELLED, 0} for every entry not finished when the flag was

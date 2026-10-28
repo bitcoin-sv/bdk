@@ -13,6 +13,14 @@ uint64_t TxValidator_ABI_EchoLength(uint64_t len){
     return len;
 }
 
+void TxValidator_SetParallelInputHelpers(int64_t helpers){
+    bsv::SetParallelInputHelpers(helpers);
+}
+
+int64_t TxValidator_GetParallelInputHelpers(){
+    return bsv::GetParallelInputHelpers();
+}
+
 // Internal helper to emit a diagnostic from a catch handler.
 // Stream insertion and the explicit flush can allocate, so they can throw — and a
 // catch handler that throws leaves an extern "C" function with an exception already in

@@ -4,11 +4,12 @@ use std::sync::atomic::{AtomicI32, Ordering};
 ///
 /// Pass `&CancelFlag` to the call and share the flag (for example in an
 /// `Arc`) with whichever thread may cancel it. [`cancel`](Self::cancel) is safe
-/// from any thread at any time: the call stops at its next check and returns
-/// [`TxError::Cancelled`](crate::TxError::Cancelled), never a verdict. A step
-/// already started (deserialising, one signature hash, one hash or arithmetic
-/// opcode) finishes first. Cancelling after the call's last check leaves it to
-/// return its verdict.
+/// from any thread at any time. At its next check the call returns
+/// [`TxError::Cancelled`](crate::TxError::Cancelled) if necessary verification
+/// is unfinished. A completed job keeps its verdict even if a later check
+/// observes cancellation. A step already started (deserialising, one signature
+/// hash, one hash or arithmetic opcode) finishes first. Cancelling after the
+/// call's last check leaves it to return its verdict.
 ///
 /// A flag stays cancelled; use a new one per call that may need cancelling.
 #[derive(Debug, Default)]

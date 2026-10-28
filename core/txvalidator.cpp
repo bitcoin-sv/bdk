@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <set>
 
 #include <base58.h>
@@ -13,8 +14,21 @@
 #include <chainparams_bdk.hpp>
 #include <extendedTx.hpp>
 #include <txvalidator.hpp>
+#include <internal/txvalidator_internal.hpp>
+#include <internal/input_verification.hpp>
+namespace hooks = bsv::detail::hooks;
+#if BDK_PARALLEL_INPUTS
+using bsv::detail::InputJob;
+using bsv::detail::InputVerifyPool;
+using bsv::detail::JobCaller;
+using bsv::detail::BusyScope;
+using bsv::detail::HelperLimit;
+using bsv::detail::MIN_INPUTS_PER_PARTICIPANT;
+#endif
+
 #include <sha256_backend.hpp>
 
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -273,6 +287,62 @@ private:
     mutable std::vector<Entry> cache_;
     mutable std::vector<uint8_t> last_code_bytes_;
 };
+
+/*
+ * Parallel input verification
+ * ---------------------------
+ * implVerifyScript verifies the inputs of a transaction with at least
+ * DEFAULT_PARALLEL_INPUT_THRESHOLD inputs on the calling thread plus idle helpers from
+ * one process-wide pool. The result is the serial result: the outcome of the
+ * lowest-index input that fails, whether a TxError or an exception.
+ *
+ * Every participant claims the next input index from one shared counter, so
+ * inputs are verified in index order and every index below the lowest known
+ * failure is claimed, and finished before the caller returns. Indices above it
+ * are skipped. The calling thread works from the start and only ever waits for
+ * helpers that have joined and are verifying an input; a helper that reaches a
+ * closed job drops it. Nested use (a helper's work calling back in) therefore
+ * cannot deadlock.
+ *
+ * Oversubscription: busyThreads counts every VerifyScript, ValidateTransaction
+ * or VerifySpend caller after its entry poll, plus every helper on a job.
+ * Deserialization, hashing and transaction checks count against that budget. A helper joins only while that count
+ * is below the core count, and checks it again before claiming each input,
+ * leaving the job once the count exceeds the core count. So a helper holds a
+ * core for at most one more input once the machine is oversubscribed. Callers
+ * are never held back: when callers alone occupy every core a large tx's job
+ * is queued without waking anyone and its caller starts alone; a helper joins
+ * when a core frees. The core count is
+ * EffectiveCpuCount(): on Linux it respects the affinity mask and a
+ * container's cgroup CPU limit, rounded as Go sets GOMAXPROCS.
+ *
+ * Helper limit: SetParallelInputHelpers caps the helpers on jobs at once,
+ * process-wide. A helper takes a place under the limit before it takes a
+ * core, whichever wake brought it, and gives it back when it leaves the job.
+ * Before each claim a helper also checks the places against the limit, and
+ * while more are held than it allows, gives its own back and leaves, so a
+ * lowered limit holds from each helper's next input. A limit of 0 never
+ * creates the pool.
+ *
+ * Cancellation: only the calling thread polls the caller's token, between its
+ * input claims, at interpreter poll points and during its wait for joined
+ * helpers, publishing observed cancellation to a job flag. A pre-claim token
+ * exception also publishes that flag before unwinding. Each participant reuses
+ * a source combining it with lowestFailure < its current input index; helpers
+ * never read the caller token.
+ * Higher inputs stop at their next interpreter poll. After joined helpers drain,
+ * return a real failure only if every lower input completed, or success if all
+ * inputs passed. Necessary work abandoned due to cancellation returns CANCELLED.
+ * A completed verdict survives cancellation or a token exception observed
+ * during the wait. A caller-thread CPU budget excludes helper CPU.
+ *
+ * Shared by all participants, read only: the CTransaction, its
+ * PrecomputedTransactionData, the previous outputs, heights and flags, and the
+ * CTxValidator's settings. Each input gets its own CachingScriptChecker.
+ *
+ * The invariants this relies on, and the pool's process lifetime, are set out
+ * in core/internal/input_verification.hpp.
+ */
 
 } // anonymous namespace
 
@@ -869,7 +939,12 @@ TxError bsv::CTxValidator::VerifyScript(std::span<const uint8_t> extendedTX, std
     if (token.IsCanceled())
         return bsv::TxErrorCancelled();
 
+#if BDK_PARALLEL_INPUTS
+    const BusyScope busy;  // count deserialization, hashing and transaction checks
+#endif
+
     try {
+        hooks::OnStage(bsv::detail::ValidationStage::Deserializing);
         const char* begin{ reinterpret_cast<const char*>(extendedTX.data()) };
         const char* end{ reinterpret_cast<const char*>(extendedTX.data() + extendedTX.size()) };
         CDataStream tx_stream(begin, end, SER_NETWORK, PROTOCOL_VERSION);
@@ -923,6 +998,10 @@ TxError bsv::CTxValidator::VerifySpend(
 {
     if (token.IsCanceled())
         return bsv::TxErrorCancelled();
+
+#if BDK_PARALLEL_INPUTS
+    const BusyScope busy;  // one input, verified here, but it takes a core
+#endif
 
     try {
         if (sourceSatoshis < 0)
@@ -1044,6 +1123,7 @@ TxError bsv::CTxValidator::implVerifyScript(
     if (!customFlags.empty() && customFlags.size() != prevUTXO.size())
         throw std::runtime_error("inconsistent custom flags size");
 
+    hooks::OnStage(bsv::detail::ValidationStage::PrecomputedData);
     // Hashed once here and shared by every input's FORKID signature checks.
     const PrecomputedTransactionData txdata(ctx);
     // Building it is linear in the transaction size with no poll inside, so poll
@@ -1054,7 +1134,8 @@ TxError bsv::CTxValidator::implVerifyScript(
         return bsv::TxErrorCancelled();
 
     const bool useCustomFlags = !customFlags.empty();
-    for (size_t index = 0; index < prevUTXO.size(); ++index) {
+    // Reads only shared state and its own checker, so inputs can run on any thread.
+    const auto verifyInput = [&](size_t index, const task::CCancellationToken& inputToken) -> TxError {
         const uint64_t amount = prevUTXO[index].nValue.GetSatoshis();
         const CScript& lscript = prevUTXO[index].scriptPubKey;
         const CScript& uscript = ctx.vin[index].scriptSig;
@@ -1064,16 +1145,73 @@ TxError bsv::CTxValidator::implVerifyScript(
             return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::UnconfirmedInputInBlock));
         const uint32_t flags = !useCustomFlags ? CalculateFlags(utxoHeight, blockHeight, consensus) : customFlags[index];
 
-        TxError verifyResult = bsv::TxErrorOk();
         if (!ctx.vin.empty() && !ctx.vout.empty()) {
             const Amount amt{ amount };
             CachingScriptChecker sig_checker(&ctx, index, amt, txdata);
-            verifyResult = bsvVerifyScript(uscript, lscript, consensus, flags, sig_checker, token);
-        } else {
-            BaseSignatureChecker sig_checker;
-            verifyResult = bsvVerifyScript(uscript, lscript, consensus, flags, sig_checker, token);
+            return bsvVerifyScript(uscript, lscript, consensus, flags, sig_checker, inputToken);
         }
+        BaseSignatureChecker sig_checker;
+        return bsvVerifyScript(uscript, lscript, consensus, flags, sig_checker, inputToken);
+    };
 
+    const size_t nInputs = prevUTXO.size();
+    size_t firstSerialInput = 0;
+#if BDK_PARALLEL_INPUTS
+    const size_t threshold = hooks::ParallelInputThreshold();
+    // A limit of 0 never creates the pool, so no helper thread is started.
+    const size_t helperLimit = nInputs >= threshold ? HelperLimit() : 0;
+    if (helperLimit > 0) {
+        if (InputVerifyPool* pool = InputVerifyPool::Get()) {
+            // A tx at the threshold is offered at least one helper when a core
+            // is free. participants - 1 is the job's helper count: no more
+            // helpers join it at once, whether woken by the offer or later.
+            const size_t perParticipant = std::clamp<size_t>(threshold / 2, 1, MIN_INPUTS_PER_PARTICIPANT);
+            const size_t participants = (nInputs + perParticipant - 1) / perParticipant;
+            // With every core already busy the job is still queued, waking no
+            // one: a helper joins it when a core frees.
+            hooks::OnPool(bsv::detail::InputPoolEvent::BeforeOffer);
+            std::shared_ptr<InputJob> job;
+            try {
+                job = std::make_shared<InputJob>(nInputs, verifyInput, token, participants - 1);
+                pool->Offer(job);
+            } catch (const std::exception&) {
+                job.reset();  // not queued (bad_alloc, system_error): verify serially below
+            }
+            if (job) {
+                std::optional<size_t> verified;
+                try {
+                    JobCaller caller(*pool, job);
+                    verified = job->Work();
+                    if (!verified)
+                        pool->Withdraw(job);  // no new selections while joined helpers drain
+                    hooks::CountJobInputs(verified.value_or(0), /*helper=*/false);
+                    caller.Finish();
+                } catch (...) {
+                    // JobCaller has drained every joined helper. A token
+                    // exception must not discard their definitive verdict.
+                    if (const auto result = job->CompletedResult())
+                        return *result;
+                    throw;
+                }
+                // Setup failure must not discard a verdict already completed
+                // by helpers. Replay serially only if that job is unfinished.
+                if (const auto result = job->CompletedResult())
+                    return *result;
+                if (verified) {
+                    // Inputs a helper abandoned for lack of memory are verified
+                    // here, from the lowest; a cancelled caller stops.
+                    const auto resume = job->SerialResumeIndex();
+                    if (!resume)
+                        return bsv::TxErrorCancelled();
+                    firstSerialInput = *resume;
+                }
+            }
+        }
+    }
+#endif
+    for (size_t index = firstSerialInput; index < nInputs; ++index) {
+        const TxError verifyResult = verifyInput(index, token);
+        hooks::OnInput(index, bsv::detail::InputEvent::Verified);
         if (!bsv::TxErrorIsOk(verifyResult))
             return verifyResult;
     }
@@ -1214,7 +1352,12 @@ TxError bsv::CTxValidator::ValidateTransaction(std::span<const uint8_t> extended
     if (token.IsCanceled())
         return bsv::TxErrorCancelled();
 
+#if BDK_PARALLEL_INPUTS
+    const BusyScope busy;  // count deserialization, hashing and transaction checks
+#endif
+
     try {
+        hooks::OnStage(bsv::detail::ValidationStage::Deserializing);
         const char* begin{ reinterpret_cast<const char*>(extendedTX.data()) };
         const char* end{ reinterpret_cast<const char*>(extendedTX.data() + extendedTX.size()) };
         CDataStream tx_stream(begin, end, SER_NETWORK, PROTOCOL_VERSION);
@@ -1235,6 +1378,7 @@ TxError bsv::CTxValidator::ValidateTransaction(std::span<const uint8_t> extended
         if (!tx_stream.empty())
             throw std::runtime_error("error serializing extended tx");
 
+        hooks::OnStage(bsv::detail::ValidationStage::TransactionChecks);
         if (ctx.IsCoinBase())
             return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::CoinbaseNotAllowed));
 

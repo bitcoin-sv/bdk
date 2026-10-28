@@ -589,15 +589,19 @@ func (se *TxValidator) ValidateBatchContext(ctx context.Context, batch *Validate
 
 // ValidateTransactionContext is ValidateTransaction, cancellable through ctx.
 //
-// When ctx is done before BDK reaches a verdict, the result is a *CancelledError:
+// When cancellation leaves necessary verification unfinished, the result is a *CancelledError:
 // errors.Is(err, ErrCancelled) is true, its ContextCause() method returns context.Cause(ctx),
 // and errors.As never finds a ScriptError, DoSError or ABIError in it, whatever the
 // cause. It says nothing about the
 // transaction, in consensus and policy mode alike. BDK checks for cancellation at
-// entry, between its checks and before every script opcode; a step already started
-// (deserialising, one signature hash, one hash or arithmetic opcode) finishes first.
-// If ctx is done after BDK's last check, the verdict is returned as usual: use the
-// result, not ctx.Err(), as the outcome.
+// entry, between transaction checks and at interpreter poll points (loop,
+// multisig signature search and shift chunks). In parallel validation, the caller
+// also polls after each 10 ms wait timeout while helpers remain and publishes to
+// a flag helpers read. Only the caller reads the caller's token. A step already
+// started (deserialising, one signature hash, one hash or arithmetic opcode)
+// finishes first. Scheduling can add to the nominal wait interval. Completed
+// success or a definitive lowest failure is retained: use the result, not
+// ctx.Err(), as the outcome.
 //
 // A context that can never be cancelled (Done returns nil, as for context.Background
 // and context.TODO) costs nothing over ValidateTransaction. Otherwise the call
@@ -660,6 +664,33 @@ func (se *TxValidator) ValidateTransaction(extendedTX []byte, utxoHeights []int3
 // for values a C int could never have carried.
 func ABIEchoLength(n uint64) uint64 {
 	return uint64(C.TxValidator_ABI_EchoLength(C.uint64_t(n)))
+}
+
+// SetParallelInputHelpers sets, for the whole process, the most helper threads that
+// verify a large transaction's inputs alongside the calling goroutine at once.
+// VerifyScript, VerifyScriptWithCustomFlags, ValidateTransaction and ValidateBatch
+// split a transaction with 16 or more inputs across the caller and idle helper threads.
+//
+//   - helpers < 0: automatic, the default. Up to one helper per CPU the process may use,
+//     minus one; on Linux that follows the affinity mask and the container's CPU limit.
+//   - helpers == 0: no helpers. Every transaction is verified on the calling goroutine's
+//     thread and no helper thread is started.
+//   - helpers > 0: at most that many helpers, and never more than automatic.
+//
+// Helpers only take cores that BDK's own threads leave idle, but they do not see
+// goroutines: while a large transaction is verified they compete with Go code for the
+// CPUs. A lower limit leaves more of the machine to Go at the cost of slower large
+// transactions. Results are the same at every setting. Safe to call at any time from
+// any goroutine; a lower limit holds from each helper's next input, as helpers over it
+// finish the input they are verifying and leave.
+func SetParallelInputHelpers(helpers int64) {
+	C.TxValidator_SetParallelInputHelpers(C.int64_t(helpers))
+}
+
+// GetParallelInputHelpers returns the setting last passed to SetParallelInputHelpers,
+// -1 for automatic (any negative value reads back as -1).
+func GetParallelInputHelpers() int64 {
+	return int64(C.TxValidator_GetParallelInputHelpers())
 }
 
 // translateTxError converts a C TxError into a Go error. Returns nil on success.

@@ -487,6 +487,60 @@ Open `http://localhost:8000`, inspect the navigation and diagrams, then stop the
 server with Ctrl-C. Mermaid is rendered client-side. Java is required only if
 PlantUML diagrams are added; in that case put `cmake/doc_tools` on PATH.
 
+## Testing parallel input verification
+
+The native tests separate internal mechanics from transaction-level integration:
+
+| Target / CTest entry | Coverage |
+| --- | --- |
+| `test_txvalidator_internal` | Cancellation index boundaries and caller flags; job claims, completed verdicts, cancellation and exception order; admission against the helper cap and core budget; largest-job selection and stable ties. CPU-count and cgroup fixtures are in `test_cpu_limit` (bitcoin-sv/bdk#75). |
+| `test_txvalidator` and `test_txvalidator_parallel_inputs` | Real script verification, serial parity, caller-only token access, helper recruitment and lifetime, allocation fallback, wait cancellation, and configured helper limits. |
+| `test_txvalidator_pool_creation_retry` | A fresh process injects a creation failure: the first large transaction runs serially, then a later transaction creates the pool and uses helpers. |
+| `test_txvalidator_pool_below_two_cores` | A fresh process capped to one core: after one injected creation failure, a single attempt reads the CPU count, finds fewer than 2 and is not repeated by later large transactions. |
+
+The comment above the `parallel_input_verification` suite in
+`test/core/test_txvalidator.cpp` maps each behaviour fixed during review to
+the tests that hold it, and `core/internal/input_verification.hpp` states the
+invariants and the pool's process lifetime.
+
+The internal target also starts concurrent first callers and checks that they
+share one pool. Most internal tests instantiate a pool without workers or run a
+job with a small verification callback. They exercise the same claim, result and
+admission code that the transaction adapter uses, without requiring signed
+transactions or timing-sensitive helper scheduling. The headers under
+`core/internal/` are not installed or exposed through bindings.
+
+Build and run the native targets in an out-of-tree build configured above:
+
+```bash
+cmake --build build --target test_txvalidator test_txvalidator_internal --parallel 4
+ctest --test-dir build -R '^test_txvalidator' --output-on-failure --timeout 120
+```
+
+Single-config Debug registers the internal entry with the same `d` test-name
+postfix as the other core tests; executable paths use CMake target expressions.
+The internal target is included in `bdk_tsan_tests` and labelled `tsan`.
+The sanitizer workflow compiles both the core and tests with instrumentation,
+requires an intentional-race positive control, then runs `ctest -L tsan`.
+A normal native build alone does not establish sanitizer coverage.
+
+Direct assertions replace the old cancellation-source-construction and
+helper-release-notification counters. Source reuse is checked through the
+first retained token: its source must report each successive input index when
+polled. This detects source replacement without counting diagnostic hook calls.
+Token-wrapper allocation reuse is checked in source, not independently measured
+by this unit. Admission tests check whether `ReleasedCore` sends a wake at the
+helper cap. The live scheduling and lifetime
+hooks remain for the integration regressions that need coordinated participants.
+
+For local static analysis, the parallel core additions are checked with
+`bugprone-*`, `performance-*`, `modernize-*` and `cppcoreguidelines-*`, restricted
+to changed core lines and their headers. Broad style checks for trailing return
+types, `auto`, `nodiscard`, magic numbers, mutable globals and blanket pointer
+bounds modernization are excluded. Actual polling and affinity bounds are named,
+temporary resources use RAII, and the process-lifetime pool handoff is explicit.
+This scoped profile is separate from any repository-wide clang-tidy policy.
+
 ## Keeping this page in sync
 
 Cross-check these workflow roles when changing the build instructions:

@@ -1,0 +1,3 @@
+# cgroup fixtures mirror /proc and /sys byte for byte; a CRLF checkout
+# would add a \r that the parser, like Go's, rejects.
+test/core/data/cgroup/** -text
