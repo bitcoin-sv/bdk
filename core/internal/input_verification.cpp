@@ -67,8 +67,8 @@ size_t HelperLimit()
 }
 
 // One transaction's inputs [0, n), shared by its caller and the helpers that join.
-InputJob::InputJob(size_t n, VerifyInput verify, const task::CCancellationToken& callerToken)
-    : n_{ n }, verify_{ std::move(verify) }, callerToken_{ callerToken },
+InputJob::InputJob(size_t n, size_t helpers, VerifyInput verify, const task::CCancellationToken& callerToken)
+    : n_{ n }, helpers_{ helpers }, verify_{ std::move(verify) }, callerToken_{ callerToken },
       lowestFailure_{ n }, lowestCancelled_{ n } {}
 
 std::optional<size_t> InputJob::Work(HelperTerms* helper)
@@ -166,24 +166,29 @@ size_t InputJob::UnclaimedInputs() const
 
 bool InputJob::HasWork() const { return UnclaimedInputs() != 0; }
 
+size_t InputJob::Helpers() const { return helpers_; }
+
 size_t InputJob::HelperUnclaimedInputs() const
 {
-    return helpersUnavailable_.load(std::memory_order_relaxed) ? 0 : UnclaimedInputs();
+    // A job holding its helpers is skipped; TryJoin decides under the mutex.
+    if (helpersUnavailable_.load(std::memory_order_relaxed) || joined_.load(std::memory_order_relaxed) >= helpers_)
+        return 0;
+    return UnclaimedInputs();
 }
 
 bool InputJob::TryJoin()
 {
     const std::scoped_lock lock{ mutex_ };
-    if (closed_ || helpersUnavailable_.load(std::memory_order_relaxed))
+    if (closed_ || helpersUnavailable_.load(std::memory_order_relaxed) || joined_.load(std::memory_order_relaxed) >= helpers_)
         return false;
-    ++joined_;
+    joined_.fetch_add(1, std::memory_order_relaxed);
     return true;
 }
 
 void InputJob::Leave()
 {
     const std::scoped_lock lock{ mutex_ };
-    if (--joined_ == 0 && closed_)
+    if (joined_.fetch_sub(1, std::memory_order_relaxed) == 1 && closed_)
         left_.notify_one();
 }
 
@@ -195,14 +200,14 @@ void InputJob::CloseAndWait(bool pollCancellation)
         if (const auto hook = inputPoolHook.load(std::memory_order_relaxed))
             hook(bsv::detail::InputPoolEvent::JobClosed);
     }
-    while (joined_ != 0) {
+    while (joined_.load(std::memory_order_relaxed) != 0) {
         if (!pollCancellation || callerCancelled_.load(std::memory_order_relaxed)) {
-            left_.wait(lock, [this] { return joined_ == 0; });
+            left_.wait(lock, [this] { return joined_.load(std::memory_order_relaxed) == 0; });
             break;
         }
         // Only an active caller tail wait has a timer. Idle pool helpers
         // remain parked; an already-drained job never polls here.
-        if (left_.wait_for(lock, CALLER_CANCELLATION_POLL_INTERVAL, [this] { return joined_ == 0; }))
+        if (left_.wait_for(lock, CALLER_CANCELLATION_POLL_INTERVAL, [this] { return joined_.load(std::memory_order_relaxed) == 0; }))
             break;
         // A token can invoke caller code. Do not hold the job mutex while
         // polling it, and never invoke it from noexcept unwind cleanup.
@@ -311,7 +316,7 @@ size_t InputVerifyPool::AvailableHelpers(size_t limit) const
     return std::min({ helpers_, cores_ - busy, limit - onJobs });
 }
 
-void InputVerifyPool::Offer(const std::shared_ptr<InputJob>& job, size_t maxHelpers)
+void InputVerifyPool::Offer(const std::shared_ptr<InputJob>& job)
 {
     {
         const std::scoped_lock lock{ mutex_ };
@@ -321,7 +326,7 @@ void InputVerifyPool::Offer(const std::shared_ptr<InputJob>& job, size_t maxHelp
     // Publish before the decisive capacity read. A release that saw no
     // open job is visible here; a later release sees the published job
     // and notifies through ReleasedCore. Do not wake a genuinely full pool.
-    const size_t helpers = std::min(AvailableHelpers(HelperLimit()), maxHelpers);
+    const size_t helpers = std::min(AvailableHelpers(HelperLimit()), job->Helpers());
     for (size_t i = 0; i < helpers; ++i)
         wake_.notify_one();
 }

@@ -1127,7 +1127,9 @@ TxError bsv::CTxValidator::implVerifyScript(
     const size_t helperLimit = nInputs >= threshold ? HelperLimit() : 0;
     if (helperLimit > 0) {
         if (InputVerifyPool* pool = InputVerifyPool::Get()) {
-            // A tx at the threshold is offered at least one helper when a core is free.
+            // A tx at the threshold is offered at least one helper when a core
+            // is free. participants - 1 is the job's helper count: no more
+            // helpers join it at once, whether woken by the offer or later.
             const size_t perParticipant = std::clamp<size_t>(threshold / 2, 1, MIN_INPUTS_PER_PARTICIPANT);
             const size_t participants = (nInputs + perParticipant - 1) / perParticipant;
             // With every core already busy the job is still queued, waking no
@@ -1136,8 +1138,8 @@ TxError bsv::CTxValidator::implVerifyScript(
                 hook(bsv::detail::InputPoolEvent::BeforeOffer);
             std::shared_ptr<InputJob> job;
             try {
-                job = std::make_shared<InputJob>(nInputs, verifyInput, token);
-                pool->Offer(job, participants - 1);
+                job = std::make_shared<InputJob>(nInputs, participants - 1, verifyInput, token);
+                pool->Offer(job);
             } catch (const std::exception&) {
                 job.reset();  // not queued (bad_alloc, system_error): verify serially below
             }

@@ -3482,6 +3482,47 @@ BOOST_AUTO_TEST_CASE(large_tx_started_with_every_core_busy_takes_a_helper_when_o
     BOOST_CHECK_EQUAL(bsv::detail::QueuedJobCountForTesting(), 0u);
 }
 
+// A job takes one helper per MIN_INPUTS_PER_PARTICIPANT inputs beyond the
+// caller's share, and helpers that freed cores wake later keep to it: at the
+// default threshold a 16-input tx has the caller and one helper, however many
+// cores free while it runs. The job is queued with every core busy, so only
+// the releases can recruit; the gate holds each claim so joined helpers stay.
+BOOST_AUTO_TEST_CASE(helpers_woken_by_freed_cores_keep_to_the_job_helper_count, PARALLEL_TEST_CASE_DECORATORS)
+{
+    const size_t helpers = bsv::detail::InputPoolHelperCountForTesting();
+    if (helpers < 2) {
+        BOOST_TEST_MESSAGE(helpers << " helper(s): a second helper is needed to exceed the count");
+        return;
+    }
+    constexpr size_t nInputs = 16;
+    const bsv::CTxValidator se("main");
+    const auto etxBin = SignedP2PKHBin(nInputs);
+    const InputThresholdGuard defaults(bsv::detail::DEFAULT_PARALLEL_INPUT_THRESHOLD);
+    BOOST_REQUIRE(PoolIsIdle());
+    ClaimGate gate;
+    bsv::detail::ScopedBusyThreadsForTesting everyCore(helpers + 1);
+    TxError status = bsv::TxErrorException();
+    std::thread caller([&] {
+        ClaimGate::isCaller = true;
+        status = ValidateP2PKHSpend(se, etxBin, nInputs, /*consensus=*/true);
+    });
+    const bool queued = WaitFor([&] { return bsv::detail::QueuedJobCountForTesting() == 1; });
+    everyCore.Release();  // each freed core below the pool size wakes a helper
+    const bool joined = WaitFor([&] { return gate.Held() >= 1; });
+    // A second helper would claim at once; give every woken one the chance.
+    const bool second = WaitFor([&] { return gate.Held() > 1; }, std::chrono::milliseconds(300));
+    const size_t held = gate.Held();
+    gate.Open();
+    caller.join();
+
+    BOOST_CHECK(bsv::TxErrorIsOk(status));
+    BOOST_CHECK(!gate.TimedOut());
+    BOOST_REQUIRE_MESSAGE(queued, "the tx queued no job with every core busy");
+    BOOST_CHECK_MESSAGE(joined, "no helper joined the job after the cores were released");
+    BOOST_CHECK_MESSAGE(!second, held << " helpers joined a job offered to one");
+    BOOST_CHECK(PoolIsIdle());
+}
+
 // Coordinate the missing release-before-publication interval. Waiting events
 // acknowledge that every helper has parked; the callback never blocks while
 // holding the pool mutex. Only BeforeOffer and claimed inputs may wait.

@@ -39,7 +39,10 @@
 //    (helpersOnJobs_) and then a core (busyThreads below cores_) before it
 //    joins, and checks both again before every claim: it leaves when more
 //    threads than cores are busy or more places are held than the limit
-//    allows. Callers are never refused, so the count can briefly exceed the
+//    allows. A job also holds no more helpers at once than its helper count,
+//    which implVerifyScript sets from the input count: NextJob skips a job
+//    that holds them and TryJoin refuses one more, however the helper was
+//    woken. Callers are never refused, so the count can briefly exceed the
 //    cores; it is a cooperative budget for BDK's own threads, not a cap on
 //    process CPU.
 // 6. Publication. Offer publishes the job (queue, then openJobs_, seq_cst)
@@ -108,7 +111,8 @@ size_t HelperLimit();
 class InputJob {
 public:
     using VerifyInput = std::function<TxError(size_t, const task::CCancellationToken&)>;
-    InputJob(size_t n, VerifyInput verify, const task::CCancellationToken& callerToken);
+    // At most `helpers` helpers are joined at once; the caller is not one.
+    InputJob(size_t n, size_t helpers, VerifyInput verify, const task::CCancellationToken& callerToken);
     struct HelperTerms {
         size_t cores{ 0 };
         std::atomic<size_t>* places{ nullptr };
@@ -119,6 +123,9 @@ public:
     std::optional<size_t> Claim();
     size_t UnclaimedInputs() const;
     bool HasWork() const;
+    size_t Helpers() const;
+    // Unclaimed inputs, or 0 while helpers cannot join: an allocation failed
+    // or the job already holds its helpers.
     size_t HelperUnclaimedInputs() const;
     bool TryJoin();
     void Leave();
@@ -131,6 +138,7 @@ public:
 private:
     static bool HelperShouldLeave(HelperTerms& helper);
     const size_t n_;
+    const size_t helpers_;
     const VerifyInput verify_;
     const task::CCancellationToken& callerToken_;
     std::atomic<bool> callerCancelled_{ false };  // only the caller polls its token
@@ -141,7 +149,7 @@ private:
 
     std::mutex mutex_;
     std::condition_variable left_;
-    size_t joined_{ 0 };
+    std::atomic<size_t> joined_{ 0 };  // helpers; written under mutex_, read by NextJob without it
     bool closed_{ false };
     TxError failure_{ bsv::TxErrorOk() };
     std::exception_ptr failureException_;
@@ -157,7 +165,8 @@ public:
     static InputVerifyPool* Existing();
     size_t Helpers() const;
     size_t AvailableHelpers(size_t limit) const;
-    void Offer(const std::shared_ptr<InputJob>& job, size_t maxHelpers);
+    // Queues the job and wakes up to its helper count of idle helpers.
+    void Offer(const std::shared_ptr<InputJob>& job);
     void WakeHelpersForTesting(bool all);
     void Withdraw(const std::shared_ptr<InputJob>& job);
     size_t QueuedJobs();

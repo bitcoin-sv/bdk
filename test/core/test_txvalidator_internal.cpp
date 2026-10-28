@@ -1,6 +1,7 @@
 #include <atomic>
 #include <array>
 #include <chrono>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <stdexcept>
@@ -99,9 +100,12 @@ struct InternalState {
 };
 } // namespace
 
-static std::shared_ptr<InputJob> ValidJob(size_t count, const task::CCancellationToken& token)
+// No limit of its own on the helpers a job takes.
+static constexpr size_t ANY_HELPERS = std::numeric_limits<size_t>::max();
+
+static std::shared_ptr<InputJob> ValidJob(size_t count, const task::CCancellationToken& token, size_t helpers = ANY_HELPERS)
 {
-    return std::make_shared<InputJob>(count, [](size_t, const auto&) { return bsv::TxErrorOk(); }, token);
+    return std::make_shared<InputJob>(count, helpers, [](size_t, const auto&) { return bsv::TxErrorOk(); }, token);
 }
 
 BOOST_FIXTURE_TEST_SUITE(input_jobs, InternalState)
@@ -152,7 +156,7 @@ BOOST_AUTO_TEST_CASE(claims_stop_above_the_lowest_failure)
     BOOST_CHECK_EQUAL(job->UnclaimedInputs(), 0u);
 
     std::vector<size_t> verified;
-    InputJob failing(8, [&](size_t index, const auto&) {
+    InputJob failing(8, ANY_HELPERS, [&](size_t index, const auto&) {
         verified.push_back(index);
         return index == 2 ? bsv::TxErrorScript(SCRIPT_ERR_VERIFY) : bsv::TxErrorOk();
     }, token);
@@ -239,14 +243,14 @@ BOOST_AUTO_TEST_CASE(helper_work_never_polls_caller_token)
     };
     const auto source = std::make_shared<CountingSource>();
     const auto token = source->GetToken();
-    InputJob job(3, [](size_t, const auto& inputToken) {
+    InputJob job(3, ANY_HELPERS, [](size_t, const auto& inputToken) {
         return inputToken.IsCanceled() ? bsv::TxErrorCancelled() : bsv::TxErrorOk();
     }, token);
     std::atomic<size_t> places{ 1 };
     InputJob::HelperTerms terms{ .cores = 2, .places = &places };
     BOOST_CHECK_EQUAL(Present(job.Work(&terms)), 3u);
     BOOST_CHECK_EQUAL(source->reads, 0u);
-    InputJob caller(1, [](size_t, const auto& inputToken) {
+    InputJob caller(1, ANY_HELPERS, [](size_t, const auto& inputToken) {
         return inputToken.IsCanceled() ? bsv::TxErrorCancelled() : bsv::TxErrorOk();
     }, token);
     BOOST_CHECK_EQUAL(Present(caller.Work()), 1u);
@@ -281,7 +285,7 @@ BOOST_AUTO_TEST_CASE(participant_reuses_one_source_for_successive_inputs)
         observed.at(calls++) = polledIndex;
         return cancelled ? bsv::TxErrorCancelled() : bsv::TxErrorOk();
     };
-    InputJob job(3, verify, token);
+    InputJob job(3, ANY_HELPERS, verify, token);
     BOOST_CHECK_EQUAL(Present(job.Work()), 3u);
     BOOST_CHECK_EQUAL(calls, 3u);
     BOOST_CHECK_EQUAL(observed[0], 0u);
@@ -289,7 +293,7 @@ BOOST_AUTO_TEST_CASE(participant_reuses_one_source_for_successive_inputs)
     BOOST_CHECK_EQUAL(observed[2], 2u);
     BOOST_CHECK_EQUAL(Present(job.Work()), 0u);
     retained.reset(); calls = 0; observed.fill(0);
-    InputJob helper(3, verify, token);
+    InputJob helper(3, ANY_HELPERS, verify, token);
     std::atomic<size_t> places{ 1 };
     InputJob::HelperTerms terms{ .cores = 2, .places = &places };
     BOOST_CHECK_EQUAL(Present(helper.Work(&terms)), 3u);
@@ -372,7 +376,7 @@ BOOST_AUTO_TEST_CASE(largest_job_wins_and_positive_ties_keep_queue_order)
     const auto token = source->GetToken();
     InputVerifyPool pool(2);
     const auto small = ValidJob(1, token), first = ValidJob(4, token), second = ValidJob(4, token);
-    pool.Offer(small, 0); pool.Offer(first, 0); pool.Offer(second, 0);
+    pool.Offer(small); pool.Offer(first); pool.Offer(second);
     BOOST_CHECK(pool.NextJob() == first);
     BOOST_REQUIRE(first->Claim());
     BOOST_CHECK(pool.NextJob() == second);
@@ -417,12 +421,39 @@ BOOST_AUTO_TEST_CASE(next_job_takes_the_most_unclaimed_inputs)
                 for (size_t i = 0; i < queued.claimed; ++i) BOOST_REQUIRE(job->Claim());
                 if (queued.failed)
                     job->Fail(queued.failed.value_or(0), bsv::TxErrorScript(SCRIPT_ERR_VERIFY), nullptr);
-                pool.Offer(job, 0);
+                pool.Offer(job);
                 jobs.push_back(job);
             }
             BOOST_CHECK(pool.NextJob() == jobs.at(row.expected));
         }
     }
+}
+
+// A job holds no more helpers at once than its helper count: TryJoin refuses
+// one more, NextJob passes the job over while it holds them, and a helper
+// leaving makes room again. A job with a count of 0 is verified by its caller.
+BOOST_AUTO_TEST_CASE(job_holds_at_most_its_helper_count)
+{
+    const auto source = task::CCancellationSource::Make();
+    const auto token = source->GetToken();
+    InputVerifyPool pool(4);
+    const auto capped = ValidJob(32, token, 1), other = ValidJob(8, token);
+    pool.Offer(capped); pool.Offer(other);
+    BOOST_CHECK(pool.NextJob() == capped);
+    BOOST_REQUIRE(capped->TryJoin());
+    BOOST_CHECK(!capped->TryJoin());
+    BOOST_CHECK_EQUAL(capped->HelperUnclaimedInputs(), 0u);
+    BOOST_CHECK(pool.NextJob() == other);
+    capped->Leave();
+    BOOST_CHECK(pool.NextJob() == capped);
+    BOOST_REQUIRE(capped->TryJoin());
+    capped->Leave();
+
+    const auto callerOnly = ValidJob(8, token, 0);
+    BOOST_CHECK(!callerOnly->TryJoin());
+    BOOST_CHECK_EQUAL(callerOnly->HelperUnclaimedInputs(), 0u);
+    BOOST_CHECK_EQUAL(Present(callerOnly->Work()), 8u);
+    BOOST_CHECK(bsv::TxErrorIsOk(Present(callerOnly->CompletedResult())));
 }
 
 BOOST_AUTO_TEST_CASE(finished_front_jobs_are_removed)
@@ -432,7 +463,7 @@ BOOST_AUTO_TEST_CASE(finished_front_jobs_are_removed)
     InputVerifyPool pool(2);
     const auto finished = ValidJob(1, token), live = ValidJob(2, token);
     BOOST_REQUIRE(finished->Work());
-    pool.Offer(finished, 0); pool.Offer(live, 0);
+    pool.Offer(finished); pool.Offer(live);
     BOOST_CHECK(pool.NextJob() == live);
     BOOST_CHECK_EQUAL(pool.QueuedJobs(), 1u);
     pool.Withdraw(live);
@@ -445,7 +476,7 @@ BOOST_AUTO_TEST_CASE(core_release_notifies_only_with_queued_work_and_capacity)
     const auto token = source->GetToken();
     InputVerifyPool pool(2);
     BOOST_CHECK(!pool.ReleasedCore(0));
-    pool.Offer(ValidJob(2, token), 0);
+    pool.Offer(ValidJob(2, token));
     BOOST_CHECK(!pool.ReleasedCore(2));
     BOOST_CHECK(pool.ReleasedCore(1));
     bsv::SetParallelInputHelpers(1);
