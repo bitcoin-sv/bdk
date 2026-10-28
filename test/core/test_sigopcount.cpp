@@ -11,17 +11,17 @@
 
 #include <boost/test/unit_test.hpp>
 
-#include "streams.h"
-#include "version.h"
-#include "script/script.h"
-#include "utilstrencodings.h"
 #include "amount.h"
 #include "primitives/transaction.h"
+#include "script/script.h"
+#include "streams.h"
+#include "utilstrencodings.h"
+#include "version.h"
 
-#include "txvalidator.hpp"
+#include "doserror.hpp"
 #include "extendedTx.hpp"
 #include "txerror.h"
-#include "doserror.hpp"
+#include "txvalidator.hpp"
 
 using namespace bsv;
 
@@ -59,7 +59,8 @@ static std::vector<uint8_t> MakeETX(const CScript& inputScript,
 static std::vector<uint8_t> MakeETXWithOutputSigOps(int n)
 {
     CScript out;
-    for (int i = 0; i < n; ++i) out << OP_CHECKSIG;
+    for(int i = 0; i < n; ++i)
+        out << OP_CHECKSIG;
     return MakeETX(CScript{}, out);
 }
 
@@ -68,8 +69,10 @@ static std::vector<uint8_t> MakeETXWithOutputSigOps(int n)
 static std::vector<uint8_t> MakeETXWithSplitSigOps(int nIn, int nOut)
 {
     CScript in, out;
-    for (int i = 0; i < nIn;  ++i) in  << OP_CHECKSIG;
-    for (int i = 0; i < nOut; ++i) out << OP_CHECKSIG;
+    for(int i = 0; i < nIn; ++i)
+        in << OP_CHECKSIG;
+    for(int i = 0; i < nOut; ++i)
+        out << OP_CHECKSIG;
     return MakeETX(in, out);
 }
 
@@ -80,8 +83,7 @@ static const std::span<const int32_t> kOneUtxoH0(kUtxoH0);
 // Helper to check DoS error code
 static bool IsDosError(TxError r, DoSError_t code)
 {
-    return r.domain == TX_ERR_DOMAIN_DOS &&
-           r.code   == static_cast<int32_t>(code);
+    return r.domain == TX_ERR_DOMAIN_DOS && r.code == static_cast<int32_t>(code);
 }
 
 // ---------------------------------------------------------------------------
@@ -95,9 +97,12 @@ static bool IsDosError(TxError r, DoSError_t code)
 BOOST_AUTO_TEST_SUITE(check_consensus_sigops)
 
 // Shared fixture: validator with genesis=1000
-struct Fixture {
+struct Fixture
+{
     bsv::CTxValidator v{"main"};
-    Fixture() {
+
+    Fixture()
+    {
         std::string err;
         v.SetGenesisActivationHeight(1000, &err);
     }
@@ -135,7 +140,9 @@ BOOST_FIXTURE_TEST_CASE(post_genesis_allows_unlimited_sigops, Fixture)
     // 100,000 OP_CHECKSIG — way over pre-Genesis limit, but post-Genesis is unlimited
     auto etxBin = MakeETXWithOutputSigOps(100000);
     const std::span<const uint8_t> etx(etxBin);
-    const auto r = v.CheckConsensusSigops(etx, kOneUtxoH0, 1000); // blockHeight=1000 → post-Genesis
+    const auto r = v.CheckConsensusSigops(etx,
+                                          kOneUtxoH0,
+                                          1000); // blockHeight=1000 → post-Genesis
     BOOST_CHECK(TxErrorIsOk(r));
 }
 
@@ -170,22 +177,35 @@ BOOST_AUTO_TEST_SUITE_END()
 
 BOOST_AUTO_TEST_SUITE(check_sigops_policy)
 
-static constexpr const char* kTestTxHex =
-    "010000000000000000ef01074024ca185c3dea94748dc93bb369e82816bed423ad9ebcd41e112dc984f307"
-    "00000000fd5d01004730440220320f4c56a764c80d7cddb930026b8af9cf00e88aa934710c969aa23883ec"
-    "45bb0220701d81304f88258e116d3c9e988d6879839c805e7bdd96a17d56bdae115ff56541483045022100"
-    "a3147b9488006b6952b39d9c432dacb8984f4fd59187a41f041f089355e1217502206f643471e74005f039"
-    "323533b8a80b82c12bb3706a4b63f4bfba90df4bc39e97414cc95241040b4c866585dd868a9d62348a9cd0"
-    "08d6a312937048fff31670e7e920cfc7a7447b5f0bba9e01e6fe4735c8383e6e7a3347a0fd72381b8f797a"
-    "19f694054e5a694104183905ae25e815634ce7f5d9bedbaa2c39032ab98c75b5e88fe43f8dd8246f3c5473"
-    "ccd4ab475e6a9e6620b52f5ce2fd15a2de32cbe905154b3a05844af707854104f028892bad7ed57d2fb57b"
-    "f33081d5cfcf6f9ed3d3d7f159c2e2fff579dc341a07cf33da18bd734c600b96a72bbc4749d5141c90ec8a"
-    "c328ae52ddfe2e505bdb53aeffffffff60e316000000000017a914c51a96cac717c6b1bc2d6c65a6b5cc88"
-    "9d6a5b43870320a10700000000001976a914ff197b14e502ab41f3bc8ccb48c4abac9eab35bc88ac20a107"
-    "00000000001976a9149a823b698f778ece90b094dc3f12a81f5e3c334588ac20a10700000000001976a914"
-    "211b74ca4686f81efda5641767fc84ef16dafe0b88ac00000000";
+static constexpr const char*
+    kTestTxHex = "010000000000000000ef01074024ca185c3dea94748dc93bb369e82816bed423ad9ebcd"
+                 "41e112dc984f307"
+                 "00000000fd5d01004730440220320f4c56a764c80d7cddb930026b8af9cf00e88aa9347"
+                 "10c969aa23883ec"
+                 "45bb0220701d81304f88258e116d3c9e988d6879839c805e7bdd96a17d56bdae115ff56"
+                 "541483045022100"
+                 "a3147b9488006b6952b39d9c432dacb8984f4fd59187a41f041f089355e1217502206f6"
+                 "43471e74005f039"
+                 "323533b8a80b82c12bb3706a4b63f4bfba90df4bc39e97414cc95241040b4c866585dd8"
+                 "68a9d62348a9cd0"
+                 "08d6a312937048fff31670e7e920cfc7a7447b5f0bba9e01e6fe4735c8383e6e7a3347a"
+                 "0fd72381b8f797a"
+                 "19f694054e5a694104183905ae25e815634ce7f5d9bedbaa2c39032ab98c75b5e88fe43"
+                 "f8dd8246f3c5473"
+                 "ccd4ab475e6a9e6620b52f5ce2fd15a2de32cbe905154b3a05844af707854104f028892"
+                 "bad7ed57d2fb57b"
+                 "f33081d5cfcf6f9ed3d3d7f159c2e2fff579dc341a07cf33da18bd734c600b96a72bbc4"
+                 "749d5141c90ec8a"
+                 "c328ae52ddfe2e505bdb53aeffffffff60e316000000000017a914c51a96cac717c6b1b"
+                 "c2d6c65a6b5cc88"
+                 "9d6a5b43870320a10700000000001976a914ff197b14e502ab41f3bc8ccb48c4abac9ea"
+                 "b35bc88ac20a107"
+                 "00000000001976a9149a823b698f778ece90b094dc3f12a81f5e3c334588ac20a107000"
+                 "00000001976a914"
+                 "211b74ca4686f81efda5641767fc84ef16dafe0b88ac00000000";
 
-struct PolicyFixture {
+struct PolicyFixture
+{
     std::vector<uint8_t> etxBin;
     std::span<const uint8_t> etx;
 
@@ -198,16 +218,19 @@ struct PolicyFixture {
         return v;
     }
 
-    PolicyFixture() {
+    PolicyFixture()
+    {
         etxBin = ParseHex(kTestTxHex);
-        etx    = std::span<const uint8_t>(etxBin);
+        etx = std::span<const uint8_t>(etxBin);
     }
 };
 
-// All tests use blockHeight=998 so blockHeight+1=999 < genesis=1000 → pre-Genesis era → check runs.
-// The UTXO height controls whether P2SH redeem scripts are counted (pre-Genesis UTXO) or not.
+// All tests use blockHeight=998 so blockHeight+1=999 < genesis=1000 → pre-Genesis era →
+// check runs. The UTXO height controls whether P2SH redeem scripts are counted
+// (pre-Genesis UTXO) or not.
 
-// -- Scenario 1: Post-Genesis UTXO (height=1000) → P2SH redeem ignored → 3 sigops from outputs only --
+// -- Scenario 1: Post-Genesis UTXO (height=1000) → P2SH redeem ignored → 3 sigops from
+// outputs only --
 
 BOOST_FIXTURE_TEST_CASE(policy_post_genesis_utxo_limit2_fails, PolicyFixture)
 {
@@ -227,7 +250,8 @@ BOOST_FIXTURE_TEST_CASE(policy_post_genesis_utxo_limit3_passes, PolicyFixture)
     BOOST_CHECK(TxErrorIsOk(r));
 }
 
-// -- Scenario 2: Pre-Genesis UTXO (height=999) → P2SH redeem counted → 3 outputs + 3 P2SH = 6 sigops --
+// -- Scenario 2: Pre-Genesis UTXO (height=999) → P2SH redeem counted → 3 outputs + 3 P2SH
+// = 6 sigops --
 
 BOOST_FIXTURE_TEST_CASE(p2sh_pre_genesis_utxo_limit5_fails, PolicyFixture)
 {

@@ -1,8 +1,8 @@
-#include <bdkcgo/validatebatch_cgo.h>
 #include <bdkcgo/src/abiguard.hpp>
+#include <bdkcgo/validatebatch_cgo.h>
 #include <core/validatearg.hpp>
-#include <vector>
 #include <iostream>
+#include <vector>
 
 // Internal helper to emit a diagnostic from a catch handler.
 // Stream insertion and the explicit flush can allocate, so they can throw — and a
@@ -13,7 +13,8 @@
 // unflushed stdout buffer would lose the only record of the exception.
 static void helper_log_cgo_exception(const char* where, const char* what) noexcept
 {
-    try {
+    try
+    {
         std::cout << "CGO EXCEPTION : " << where << " " << what << '\n' << std::flush;
     }
     catch(...) // NOLINT(bugprone-empty-catch)
@@ -23,18 +24,22 @@ static void helper_log_cgo_exception(const char* where, const char* what) noexce
 
 ValidateBatchCGO ValidateBatch_CreateV2()
 {
-    try {
+    try
+    {
         // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
         return new bsv::ValidateBatch();
     }
-    catch (const std::exception& e) {
+    catch(const std::exception& e)
+    {
         helper_log_cgo_exception(__FILE__ " at ValidateBatch_CreateV2", e.what());
         return nullptr;
     }
-    catch (...) {
+    catch(...)
+    {
         // Nothing may cross the extern "C" boundary; a non-std exception takes the
         // same channel as any other construction failure.
-        helper_log_cgo_exception(__FILE__ " at ValidateBatch_CreateV2", "unknown exception");
+        helper_log_cgo_exception(__FILE__ " at ValidateBatch_CreateV2",
+                                 "unknown exception");
         return nullptr;
     }
 }
@@ -55,9 +60,11 @@ TxError ValidateBatch_Add(ValidateBatchCGO cgoBatch,
                           int32_t blockHeight,
                           bool consensus)
 {
-    try {
+    try
+    {
         // Convert C-style parameters to C++ spans
-        const std::span<const uint8_t> extendedTx = bdkcgo::byte_span(extendedTxPtr, extendedTxLen);
+        const std::span<const uint8_t> extendedTx = bdkcgo::byte_span(extendedTxPtr,
+                                                                      extendedTxLen);
         const std::span<const int32_t> hUTXOs = bdkcgo::int32_span(hUTXOsPtr, hUTXOsLen);
 
         // Create ValidateArg and add to batch
@@ -65,16 +72,19 @@ TxError ValidateBatch_Add(ValidateBatchCGO cgoBatch,
         static_cast<bsv::ValidateBatch*>(cgoBatch)->add(arg);
         return bsv::TxErrorOk();
     }
-    catch (const bdkcgo::AbiArgumentError& e) {
+    catch(const bdkcgo::AbiArgumentError& e)
+    {
         // Nothing was appended: the caller must not carry on filling a batch whose
         // results would no longer line up with its own input list.
         return bsv::AbiErrorToTxError(e.code());
     }
-    catch (const std::exception& e) {
+    catch(const std::exception& e)
+    {
         helper_log_cgo_exception(__FILE__ " at ValidateBatch_Add", e.what());
         return bsv::TxErrorException();
     }
-    catch (...) {
+    catch(...)
+    {
         return bsv::TxErrorException();
     }
 }
@@ -96,7 +106,8 @@ bool ValidateBatch_Empty(ValidateBatchCGO cgoBatch)
 
 void ValidateBatch_Reserve(ValidateBatchCGO cgoBatch, uint64_t capacity)
 {
-    if (capacity == 0) {
+    if(capacity == 0)
+    {
         return;
     }
 
@@ -104,12 +115,15 @@ void ValidateBatch_Reserve(ValidateBatchCGO cgoBatch, uint64_t capacity)
     // is ignored rather than clamped, and length_error / bad_alloc is swallowed here:
     // failing to honour the hint is harmless, letting an exception cross extern "C"
     // is not.
-    if (capacity > static_cast<uint64_t>(std::vector<bsv::ValidateArg>().max_size())) {
+    if(capacity > static_cast<uint64_t>(std::vector<bsv::ValidateArg>().max_size()))
+    {
         return;
     }
 
-    try {
-        static_cast<bsv::ValidateBatch*>(cgoBatch)->reserve(static_cast<size_t>(capacity));
+    try
+    {
+        static_cast<bsv::ValidateBatch*>(cgoBatch)->reserve(
+            static_cast<size_t>(capacity));
     }
     catch(...) // NOLINT(bugprone-empty-catch)
     {

@@ -64,7 +64,8 @@ namespace
 
 BOOST_AUTO_TEST_SUITE(test_sha256_select_race)
 
-BOOST_AUTO_TEST_CASE(selected_at_load_before_threads_hash, *boost::unit_test::timeout(120))
+BOOST_AUTO_TEST_CASE(selected_at_load_before_threads_hash,
+                     *boost::unit_test::timeout(120))
 {
     const char* control = std::getenv("BDK_TEST_SHA256_RACE_CONTROL");
     const bool race_on_purpose = control != nullptr && std::string{control} == "1";
@@ -74,8 +75,18 @@ BOOST_AUTO_TEST_CASE(selected_at_load_before_threads_hash, *boost::unit_test::ti
     sha256_test::CheckInstalledBackend();
 
     constexpr int per_role = 4;
-    //NOLINTNEXTLINE(cppcoreguidelines-use-enum-class)
-    enum Role { NetworkValidator, ChainNameValidator, Getter, HashOnly, Asm, RoleCount };
+
+    // NOLINTNEXTLINE(cppcoreguidelines-use-enum-class)
+    enum Role
+    {
+        NetworkValidator,
+        ChainNameValidator,
+        Getter,
+        HashOnly,
+        Asm,
+        RoleCount
+    };
+
     constexpr int hashers = per_role * RoleCount;
     const int threads = hashers + (race_on_purpose ? 1 : 0);
 
@@ -85,56 +96,64 @@ BOOST_AUTO_TEST_CASE(selected_at_load_before_threads_hash, *boost::unit_test::ti
     pool.reserve(hashers);
     for(int i = 0; i < hashers; ++i)
     {
-        pool.emplace_back([&, i] {
-            const std::vector<uint8_t> msg((64 * 1024) + i, static_cast<uint8_t>(i));
-            go.arrive_and_wait();
-            switch(static_cast<Role>(i % RoleCount))
+        pool.emplace_back(
+            [&, i]
             {
-            case NetworkValidator:
-            {
-                const bsv::CTxValidator validator{bsv::TxValidationNetwork::Main};
-                ok[i] = HashMatchesOpenSsl(msg);
-                break;
-            }
-            case ChainNameValidator:
-            {
-                const bsv::CTxValidator validator{"main"};
-                ok[i] = HashMatchesOpenSsl(msg);
-                break;
-            }
-            case Getter:
-                ok[i] = !bsv::SelectSha256Backend().empty() && HashMatchesOpenSsl(msg);
-                break;
-            case HashOnly:
-                ok[i] = HashMatchesOpenSsl(msg);
-                break;
-            case Asm:
-            {
-                bool same = true;
-                for(int n = 0; n < 200; ++n)
+                const std::vector<uint8_t> msg((64 * 1024) + i, static_cast<uint8_t>(i));
+                go.arrive_and_wait();
+                switch(static_cast<Role>(i % RoleCount))
                 {
-                    const CScript script = bsv::from_asm("DUP HASH160 EQUALVERIFY CHECKSIG");
-                    same = same && bsv::to_asm(std::span<const uint8_t>{script.data(), script.size()})
-                                       == "DUP HASH160 EQUALVERIFY CHECKSIG";
+                case NetworkValidator:
+                {
+                    const bsv::CTxValidator validator{bsv::TxValidationNetwork::Main};
+                    ok[i] = HashMatchesOpenSsl(msg);
+                    break;
                 }
-                ok[i] = same;
-                break;
-            }
-            case RoleCount:
-                break;
-            }
-        });
+                case ChainNameValidator:
+                {
+                    const bsv::CTxValidator validator{"main"};
+                    ok[i] = HashMatchesOpenSsl(msg);
+                    break;
+                }
+                case Getter:
+                    ok[i] = !bsv::SelectSha256Backend().empty()
+                         && HashMatchesOpenSsl(msg);
+                    break;
+                case HashOnly:
+                    ok[i] = HashMatchesOpenSsl(msg);
+                    break;
+                case Asm:
+                {
+                    bool same = true;
+                    for(int n = 0; n < 200; ++n)
+                    {
+                        const CScript script = bsv::from_asm(
+                            "DUP HASH160 EQUALVERIFY CHECKSIG");
+                        same = same
+                            && bsv::to_asm(
+                                   std::span<const uint8_t>{script.data(), script.size()})
+                                   == "DUP HASH160 EQUALVERIFY CHECKSIG";
+                    }
+                    ok[i] = same;
+                    break;
+                }
+                case RoleCount:
+                    break;
+                }
+            });
     }
     if(race_on_purpose)
     {
-        pool.emplace_back([&] {
-            go.arrive_and_wait();
-            // An unsynchronised write while the others hash: the race the
-            // load-time selection prevents. Volatile, so the compiler cannot
-            // drop a store of the value just read.
-            volatile sha256_dispatch::StreamType& stream = sha256_dispatch::stream;
-            stream = sha256_dispatch::StreamType{stream};
-        });
+        pool.emplace_back(
+            [&]
+            {
+                go.arrive_and_wait();
+                // An unsynchronised write while the others hash: the race the
+                // load-time selection prevents. Volatile, so the compiler cannot
+                // drop a store of the value just read.
+                volatile sha256_dispatch::StreamType& stream = sha256_dispatch::stream;
+                stream = sha256_dispatch::StreamType{stream};
+            });
     }
     for(auto& t : pool)
         t.join();

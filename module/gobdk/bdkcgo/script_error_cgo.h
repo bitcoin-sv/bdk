@@ -1,19 +1,21 @@
 #pragma once
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
-/**
- * cgo_script_error_string convert an error code to C-string
- * 
- * The client SHOULD NOT free memory of the string becaues the returned result is a const literal string
- * 
- * By convention, if an returned error is higher than SCRIPT_ERR_ERROR_COUNT
- * This is an exception being thrown by C++ code
- *
- */
-const char* cgo_script_error_string(int error);
+    /**
+     * cgo_script_error_string convert an error code to C-string
+     *
+     * The client SHOULD NOT free memory of the string becaues the returned result is a
+     * const literal string
+     *
+     * By convention, if an returned error is higher than SCRIPT_ERR_ERROR_COUNT
+     * This is an exception being thrown by C++ code
+     *
+     */
+    const char* cgo_script_error_string(int error);
 
 #ifdef __cplusplus
 }

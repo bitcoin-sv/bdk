@@ -16,9 +16,9 @@ BOOST_AUTO_TEST_SUITE(test_script_error_suite)
 
 BOOST_AUTO_TEST_CASE(script_error_count)
 {
-	// We make sure that bsv hasn't introduced a new error in enum list
-	// If that happens, this test failure notifies this
-	BOOST_TEST(SCRIPT_ERR_ERROR_COUNT==47);
+    // We make sure that bsv hasn't introduced a new error in enum list
+    // If that happens, this test failure notifies this
+    BOOST_TEST(SCRIPT_ERR_ERROR_COUNT == 47);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

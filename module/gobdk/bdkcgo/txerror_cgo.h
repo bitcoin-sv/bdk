@@ -9,16 +9,18 @@
    Define TxError and TxErrorDomain_t directly — must stay in sync with core/txerror.h. */
 #include <stdint.h>
 
-typedef enum {
-    TX_ERR_DOMAIN_OK        = 0,
-    TX_ERR_DOMAIN_SCRIPT    = 1,
-    TX_ERR_DOMAIN_DOS       = 2,
+typedef enum
+{
+    TX_ERR_DOMAIN_OK = 0,
+    TX_ERR_DOMAIN_SCRIPT = 1,
+    TX_ERR_DOMAIN_DOS = 2,
     TX_ERR_DOMAIN_EXCEPTION = 3,
-    TX_ERR_DOMAIN_ABI       = 4,
+    TX_ERR_DOMAIN_ABI = 4,
     TX_ERR_DOMAIN_CANCELLED = 5
 } TxErrorDomain_t;
 
-typedef struct {
+typedef struct
+{
     int32_t domain;
     int32_t code;
 } TxError;

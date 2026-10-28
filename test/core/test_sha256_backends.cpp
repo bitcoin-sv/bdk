@@ -108,25 +108,49 @@ namespace
     std::vector<KnownAnswer> KnownAnswers()
     {
         return {
-            {"empty", {}, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
-            {"abc", Bytes("abc"), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"},
-            {"448-bit", Bytes("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq"),
+            {"empty",
+             {},
+             "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},
+            {"abc",
+             Bytes("abc"),
+             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"},
+            {"448-bit",
+             Bytes("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq"),
              "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1"},
             {"896-bit",
              Bytes("abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmno"
                    "ijklmnopjklmnopqklmnopqrlmnopqrsmnopqrstnopqrstu"),
              "cf5b16a778af8380036ce59e7b0492370b249b11e8f07a51afac45037afee9d1"},
-            {"million a", std::vector<uint8_t>(1000000, 'a'),
+            {"million a",
+             std::vector<uint8_t>(1000000, 'a'),
              "cdc76e5c9914fb9281a1c7e284d73e67f1809a48a497200e046d39ccc7112cd0"},
-            {"counting 55", Counting(55), "463eb28e72f82e0a96c0a4cc53690c571281131f672aa229e0d45ae59b598b59"},
-            {"counting 56", Counting(56), "da2ae4d6b36748f2a318f23e7ab1dfdf45acdc9d049bd80e59de82a60895f562"},
-            {"counting 63", Counting(63), "29af2686fd53374a36b0846694cc342177e428d1647515f078784d69cdb9e488"},
-            {"counting 64", Counting(64), "fdeab9acf3710362bd2658cdc9a29e8f9c757fcf9811603a8c447cd1d9151108"},
-            {"counting 65", Counting(65), "4bfd2c8b6f1eec7a2afeb48b934ee4b2694182027e6d0fc075074f2fabb31781"},
-            {"counting 127", Counting(127), "92ca0fa6651ee2f97b884b7246a562fa71250fedefe5ebf270d31c546bfea976"},
-            {"counting 128", Counting(128), "471fb943aa23c511f6f72f8d1652d9c880cfa392ad80503120547703e56a2be5"},
-            {"counting 129", Counting(129), "5099c6a56203f9687f7d33f4bfdf576d31dc91f6b695ecea38b2770c87631135"},
-            {"counting 1000", Counting(1000), "a8af099bf2e878609558dbf69d8f88f4a31040a8cf84b549a0cfa912f12ffc3f"},
+            {"counting 55",
+             Counting(55),
+             "463eb28e72f82e0a96c0a4cc53690c571281131f672aa229e0d45ae59b598b59"},
+            {"counting 56",
+             Counting(56),
+             "da2ae4d6b36748f2a318f23e7ab1dfdf45acdc9d049bd80e59de82a60895f562"},
+            {"counting 63",
+             Counting(63),
+             "29af2686fd53374a36b0846694cc342177e428d1647515f078784d69cdb9e488"},
+            {"counting 64",
+             Counting(64),
+             "fdeab9acf3710362bd2658cdc9a29e8f9c757fcf9811603a8c447cd1d9151108"},
+            {"counting 65",
+             Counting(65),
+             "4bfd2c8b6f1eec7a2afeb48b934ee4b2694182027e6d0fc075074f2fabb31781"},
+            {"counting 127",
+             Counting(127),
+             "92ca0fa6651ee2f97b884b7246a562fa71250fedefe5ebf270d31c546bfea976"},
+            {"counting 128",
+             Counting(128),
+             "471fb943aa23c511f6f72f8d1652d9c880cfa392ad80503120547703e56a2be5"},
+            {"counting 129",
+             Counting(129),
+             "5099c6a56203f9687f7d33f4bfdf576d31dc91f6b695ecea38b2770c87631135"},
+            {"counting 1000",
+             Counting(1000),
+             "a8af099bf2e878609558dbf69d8f88f4a31040a8cf84b549a0cfa912f12ffc3f"},
         };
     }
 
@@ -175,9 +199,11 @@ BOOST_AUTO_TEST_CASE(known_answers_through_every_backend, *boost::unit_test::tim
         const UseBackend use{backend};
         for(const auto& ka : KnownAnswers())
         {
-            for(const size_t chunk : {size_t{1}, size_t{63}, size_t{64}, size_t{65}, size_t{1} << 20})
+            for(const size_t chunk :
+                {size_t{1}, size_t{63}, size_t{64}, size_t{65}, size_t{1} << 20})
             {
-                BOOST_TEST_CONTEXT(backend.name << " " << ka.label << " in pieces of " << chunk)
+                BOOST_TEST_CONTEXT(
+                    backend.name << " " << ka.label << " in pieces of " << chunk)
                 {
                     BOOST_TEST(CSha256Hex(ka.msg, chunk) == ka.digest);
                 }
@@ -189,21 +215,23 @@ BOOST_AUTO_TEST_CASE(known_answers_through_every_backend, *boost::unit_test::tim
 BOOST_AUTO_TEST_CASE(double_sha256_of_64_byte_pairs)
 {
     // Bitcoin Core's TransformD64 vector: two 64-byte pairs, double-SHA-256 of each
-    const std::string text =
-        "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do "
-        "eiusmod tempor incididunt ut labore et dolore magna aliqua. Et m";
+    const std::string
+        text = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do "
+               "eiusmod tempor incididunt ut labore et dolore magna aliqua. Et m";
     std::array<uint8_t, 128> pairs{};
     std::memcpy(pairs.data(), text.data(), pairs.size());
-    const std::string expected =
-        "093ac4d00ff757e172857942fee7e0a0fc52d7db076345fb53147d172286f052"
-        "48b6119e6e48816dcc571fb297a8d5259b82aa89e2fd2d56e828830be2fa53b7";
+    const std::string
+        expected = "093ac4d00ff757e172857942fee7e0a0fc52d7db076345fb53147d172286f052"
+                   "48b6119e6e48816dcc571fb297a8d5259b82aa89e2fd2d56e828830be2fa53b7";
 
     std::mt19937_64 rng{TestSeed()};
     std::vector<std::array<uint8_t, 128>> random_pairs(64);
     for(auto& p : random_pairs)
         std::ranges::generate(p, [&] { return static_cast<uint8_t>(rng()); });
 
-    const auto check_1way = [&](sha256_dispatch::DBlock1wayType d1, const std::string& name) {
+    const auto check_1way =
+        [&](sha256_dispatch::DBlock1wayType d1, const std::string& name)
+    {
         std::array<uint8_t, 64> out{};
         d1(std::span{pairs}.first<64>(), std::span{out}.first<32>());
         d1(std::span{pairs}.last<64>(), std::span{out}.last<32>());
@@ -212,7 +240,8 @@ BOOST_AUTO_TEST_CASE(double_sha256_of_64_byte_pairs)
         {
             std::array<uint8_t, 32> h{};
             d1(std::span{p}.first<64>(), std::span{h});
-            BOOST_TEST(Hex(h) == Hex(OpenSslSha256d(std::span{p}.first<64>())), name << " 1way random");
+            BOOST_TEST(Hex(h) == Hex(OpenSslSha256d(std::span{p}.first<64>())),
+                       name << " 1way random");
         }
     };
     check_1way(sha256_dispatch::d_block_1way, "installed");
@@ -229,15 +258,18 @@ BOOST_AUTO_TEST_CASE(double_sha256_of_64_byte_pairs)
         for(const auto& p : random_pairs)
         {
             backend.d_block_2way(p, out);
-            BOOST_TEST(Hex(std::span{out}.first<32>()) == Hex(OpenSslSha256d(std::span{p}.first<64>())),
+            BOOST_TEST(Hex(std::span{out}.first<32>())
+                           == Hex(OpenSslSha256d(std::span{p}.first<64>())),
                        backend.name << " 2way random, first");
-            BOOST_TEST(Hex(std::span{out}.last<32>()) == Hex(OpenSslSha256d(std::span{p}.last<64>())),
+            BOOST_TEST(Hex(std::span{out}.last<32>())
+                           == Hex(OpenSslSha256d(std::span{p}.last<64>())),
                        backend.name << " 2way random, second");
         }
     }
 }
 
-BOOST_AUTO_TEST_CASE(every_backend_matches_scalar_on_random_messages, *boost::unit_test::timeout(120))
+BOOST_AUTO_TEST_CASE(every_backend_matches_scalar_on_random_messages,
+                     *boost::unit_test::timeout(120))
 {
     const uint64_t seed = TestSeed();
     std::cout << "differential seed (BDK_SHA256_TEST_SEED): " << seed << '\n';
@@ -252,9 +284,13 @@ BOOST_AUTO_TEST_CASE(every_backend_matches_scalar_on_random_messages, *boost::un
         const auto offset = static_cast<size_t>(i % 16);
         std::vector<uint8_t> storage(offset + length(rng));
         std::ranges::generate(storage, [&] { return static_cast<uint8_t>(rng()); });
-        const std::span<const uint8_t> msg = std::span<const uint8_t>{storage}.subspan(offset);
-        const size_t chunk = i % 3 == 0 ? msg.size() + 1 // one Write: the whole message goes to the transform at once
-                                        : std::uniform_int_distribution<size_t>{1, msg.size() + 1}(rng);
+        const std::span<const uint8_t> msg = std::span<const uint8_t>{storage}.subspan(
+            offset);
+        const size_t chunk = i % 3 == 0
+                               ? msg.size() + 1 // one Write: the whole message goes to
+                                                // the transform at once
+                               : std::uniform_int_distribution<size_t>{1, msg.size() + 1}(
+                                     rng);
 
         std::string scalar;
         {
@@ -262,26 +298,45 @@ BOOST_AUTO_TEST_CASE(every_backend_matches_scalar_on_random_messages, *boost::un
             scalar = CSha256Hex(msg, chunk);
         }
         BOOST_TEST(scalar == OpenSslSha256Hex(msg),
-                   "scalar vs OpenSSL, message " << i << ", " << msg.size() << " bytes at offset " << offset);
+                   "scalar vs OpenSSL, message "
+                       << i
+                       << ", "
+                       << msg.size()
+                       << " bytes at offset "
+                       << offset);
         for(const auto& backend : backends)
         {
             const UseBackend use{backend};
             BOOST_TEST(CSha256Hex(msg, chunk) == scalar,
-                       backend.name << " vs scalar, message " << i << ", " << msg.size() << " bytes at offset "
-                                    << offset << ", pieces of " << chunk);
+                       backend.name
+                           << " vs scalar, message "
+                           << i
+                           << ", "
+                           << msg.size()
+                           << " bytes at offset "
+                           << offset
+                           << ", pieces of "
+                           << chunk);
         }
     }
 }
 
 // The transforms called directly, as CSHA256 and the merkle code do, on input
 // and output that start 1 to 15 bytes past an aligned address
-BOOST_AUTO_TEST_CASE(direct_transforms_at_unaligned_offsets, *boost::unit_test::timeout(120))
+BOOST_AUTO_TEST_CASE(direct_transforms_at_unaligned_offsets,
+                     *boost::unit_test::timeout(120))
 {
     std::mt19937_64 rng{TestSeed()};
     std::vector<uint8_t> buffer(16 + (8 * 64));
     std::ranges::generate(buffer, [&] { return static_cast<uint8_t>(rng()); });
-    const std::array<uint32_t, 8> init = {0x6a09e667UL, 0xbb67ae85UL, 0x3c6ef372UL, 0xa54ff53aUL,
-                                          0x510e527fUL, 0x9b05688cUL, 0x1f83d9abUL, 0x5be0cd19UL};
+    const std::array<uint32_t, 8> init = {0x6a09e667UL,
+                                          0xbb67ae85UL,
+                                          0x3c6ef372UL,
+                                          0xa54ff53aUL,
+                                          0x510e527fUL,
+                                          0x9b05688cUL,
+                                          0x1f83d9abUL,
+                                          0x5be0cd19UL};
     const auto& backends = bsv::Sha256SupportedBackends();
 
     for(size_t offset = 1; offset < 16; ++offset)
@@ -295,7 +350,12 @@ BOOST_AUTO_TEST_CASE(direct_transforms_at_unaligned_offsets, *boost::unit_test::
             {
                 std::array<uint32_t, 8> state = init;
                 backend.stream(input, state);
-                BOOST_TEST((state == scalar), backend.name << " stream, " << blocks << " blocks at offset " << offset);
+                BOOST_TEST((state == scalar),
+                           backend.name
+                               << " stream, "
+                               << blocks
+                               << " blocks at offset "
+                               << offset);
             }
         }
 
@@ -309,8 +369,10 @@ BOOST_AUTO_TEST_CASE(direct_transforms_at_unaligned_offsets, *boost::unit_test::
             std::array<uint8_t, 16 + 64> out_storage{};
             const std::span<uint8_t, 64> out{out_storage.data() + offset, 64};
             backend.d_block_2way(pairs, out);
-            BOOST_TEST(Hex(out.first<32>()) == Hex(first), backend.name << " 2way first, offset " << offset);
-            BOOST_TEST(Hex(out.last<32>()) == Hex(second), backend.name << " 2way second, offset " << offset);
+            BOOST_TEST(Hex(out.first<32>()) == Hex(first),
+                       backend.name << " 2way first, offset " << offset);
+            BOOST_TEST(Hex(out.last<32>()) == Hex(second),
+                       backend.name << " 2way second, offset " << offset);
         }
     }
 }
@@ -325,17 +387,32 @@ BOOST_AUTO_TEST_CASE(throughput_per_backend, *boost::unit_test::timeout(120))
     std::array<uint8_t, 128> pairs{};
     std::array<uint8_t, 64> out{};
 
-    std::cout << "SHA-256 throughput, " << (rounds * buffer_bytes >> 20) << " MiB per backend:" << '\n';
+    std::cout
+        << "SHA-256 throughput, "
+        << (rounds * buffer_bytes >> 20)
+        << " MiB per backend:"
+        << '\n';
     for(const auto& backend : bsv::Sha256SupportedBackends())
     {
         std::array<uint32_t, 8> state{};
         const auto start = std::chrono::steady_clock::now();
         for(int r = 0; r < rounds; ++r)
             backend.stream(buffer, state);
-        const double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
-        std::cout << "  " << std::left << std::setw(10) << backend.name << " stream "
-                  << std::right << std::fixed << std::setprecision(0) << std::setw(7)
-                  << (rounds * buffer_bytes / 1e6) / secs << " MB/s";
+        const double secs = std::chrono::duration<double>(std::chrono::steady_clock::now()
+                                                          - start)
+                                .count();
+        std::cout
+            << "  "
+            << std::left
+            << std::setw(10)
+            << backend.name
+            << " stream "
+            << std::right
+            << std::fixed
+            << std::setprecision(0)
+            << std::setw(7)
+            << (rounds * buffer_bytes / 1e6) / secs
+            << " MB/s";
 
         if(backend.d_block_2way != nullptr)
         {
@@ -346,8 +423,14 @@ BOOST_AUTO_TEST_CASE(throughput_per_backend, *boost::unit_test::timeout(120))
                 pairs[0] = static_cast<uint8_t>(c);
                 backend.d_block_2way(pairs, out);
             }
-            const double secs2 = std::chrono::duration<double>(std::chrono::steady_clock::now() - start2).count();
-            std::cout << ", 2way " << std::setw(6) << (2.0 * calls / 1e6) / secs2 << " M pair-hashes/s";
+            const double secs2 = std::chrono::duration<double>(
+                                     std::chrono::steady_clock::now() - start2)
+                                     .count();
+            std::cout
+                << ", 2way "
+                << std::setw(6)
+                << (2.0 * calls / 1e6) / secs2
+                << " M pair-hashes/s";
         }
         std::cout << '\n';
         BOOST_TEST((state != std::array<uint32_t, 8>{}));

@@ -4,23 +4,26 @@
 #include <stdint.h>
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
-// NOLINTNEXTLINE(cppcoreguidelines-use-enum-class)
-typedef enum bdkffi_tx_error_domain {
-    BDKFFI_TX_ERR_DOMAIN_OK = 0,
-    BDKFFI_TX_ERR_DOMAIN_SCRIPT = 1,
-    BDKFFI_TX_ERR_DOMAIN_DOS = 2,
-    BDKFFI_TX_ERR_DOMAIN_EXCEPTION = 3,
-    /* 4 is the Go binding's ABI domain; this surface never returns it. */
-    BDKFFI_TX_ERR_DOMAIN_CANCELLED = 5
-} bdkffi_tx_error_domain;
+    // NOLINTNEXTLINE(cppcoreguidelines-use-enum-class)
+    typedef enum bdkffi_tx_error_domain
+    {
+        BDKFFI_TX_ERR_DOMAIN_OK = 0,
+        BDKFFI_TX_ERR_DOMAIN_SCRIPT = 1,
+        BDKFFI_TX_ERR_DOMAIN_DOS = 2,
+        BDKFFI_TX_ERR_DOMAIN_EXCEPTION = 3,
+        /* 4 is the Go binding's ABI domain; this surface never returns it. */
+        BDKFFI_TX_ERR_DOMAIN_CANCELLED = 5
+    } bdkffi_tx_error_domain;
 
-typedef struct bdkffi_TxError {
-    int32_t domain;
-    int32_t code;
-} bdkffi_TxError;
+    typedef struct bdkffi_TxError
+    {
+        int32_t domain;
+        int32_t code;
+    } bdkffi_TxError;
 
 #ifdef __cplusplus
 }

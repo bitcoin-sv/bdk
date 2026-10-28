@@ -1,23 +1,22 @@
 /// Use it as an example how to add a example
 
 #include <cassert>
-#include <iostream>
 #include <fstream>
-#include <sstream>
 #include <iomanip>
-#include <vector>
-#include <string>
+#include <iostream>
+#include <sstream>
 #include <stdexcept>
-
+#include <string>
+#include <vector>
 
 #include <boost/program_options.hpp>
-#include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/json_parser.hpp>
+#include <boost/property_tree/ptree.hpp>
 
-#include "extendedTx.hpp"
 #include "assembler.h"
-#include "utilstrencodings.h"
+#include "extendedTx.hpp"
 #include "txvalidator.hpp"
+#include "utilstrencodings.h"
 
 namespace po = boost::program_options;
 
@@ -43,31 +42,37 @@ static std::chrono::nanoseconds doValidateTransaction(const bsv::CTxValidator& s
     const std::span<const uint8_t> etx(record.txBinExtended.data(),
                                        record.txBinExtended.size());
 
-    const char* begin{ reinterpret_cast<const char*>(etx.data()) };
-    const char* end{ reinterpret_cast<const char*>(etx.data() + etx.size()) };
+    const char* begin{reinterpret_cast<const char*>(etx.data())};
+    const char* end{reinterpret_cast<const char*>(etx.data() + etx.size())};
     CDataStream is(begin, end, SER_NETWORK, PROTOCOL_VERSION);
     bsv::CMutableTransactionExtended eTX;
-    is>> eTX;
+    is >> eTX;
 
     ////Recover the binary
     CDataStream os(SER_NETWORK, PROTOCOL_VERSION);
     os << eTX;
     const std::vector<uint8_t> outBin(os.begin(), os.end());
-    if (record.txBinExtended != outBin) {
+    if(record.txBinExtended != outBin)
+    {
         throw std::runtime_error("ERROR recover binary for TxID " + record.txID);
     }
 
     const std::string recovTxID = eTX.mtx.GetId().ToString();
-    if (record.txID != recovTxID) {
+    if(record.txID != recovTxID)
+    {
         throw std::runtime_error("ERROR recover txID for TxID " + record.txID);
     }
 
     const std::span<const int32_t> utxoHeights(record.dataUTXOHeights);
     const auto verifyStart = std::chrono::high_resolution_clock::now();
-    const TxError ret = se.ValidateTransaction(record.txBinExtended, utxoHeights, record.blockHeight, consensus);
+    const TxError ret = se.ValidateTransaction(record.txBinExtended,
+                                               utxoHeights,
+                                               record.blockHeight,
+                                               consensus);
     const auto verifyEnd = std::chrono::high_resolution_clock::now();
 
-    if (!bsv::TxErrorIsOk(ret)) {
+    if(!bsv::TxErrorIsOk(ret))
+    {
         throw std::runtime_error("ERROR verify script for TxID " + record.txID);
     }
 
@@ -78,14 +83,16 @@ static std::chrono::nanoseconds doValidateTransaction(const bsv::CTxValidator& s
 static std::string trim(const std::string& str)
 {
     auto start = str.begin();
-    while (start != str.end() && std::isspace(*start)) {
+    while(start != str.end() && std::isspace(*start))
+    {
         start++;
     }
 
     auto end = str.end();
-    do {
+    do
+    {
         end--;
-    } while (std::distance(start, end) > 0 && std::isspace(*end));
+    } while(std::distance(start, end) > 0 && std::isspace(*end));
 
     return {start, end + 1};
 }
@@ -106,19 +113,23 @@ static std::vector<std::string> split(const std::string& line, char delimiter = 
             continue; // Skip the quote itself
         }
 
-        if (ch == delimiter && !inQuotes) {
+        if(ch == delimiter && !inQuotes)
+        {
             // If we encounter a delimiter outside quotes, push the token
             result.push_back(trim(ss.str()));
             ss.str(""); // Clear the stream for the next token
             ss.clear();
         }
-        else {
-            // Otherwise, add the character to the token (even if it's a comma inside quotes)
+        else
+        {
+            // Otherwise, add the character to the token (even if it's a comma inside
+            // quotes)
             ss << ch;
         }
     }
 
-    if (inQuotes) {
+    if(inQuotes)
+    {
         throw std::runtime_error("missing double quote");
     }
 
@@ -136,10 +147,12 @@ static std::vector<int32_t> parseUTXOStr(const std::string& utxoStr, char delimi
 
     while(std::getline(ss, token, delimiter))
     {
-        try {
+        try
+        {
             result.push_back(std::stoi(token));
         }
-        catch (const std::exception& e) {
+        catch(const std::exception& e)
+        {
             std::cerr << "Error parsing integer: " << e.what() << '\n';
         }
     }
@@ -153,16 +166,19 @@ static std::vector<CsvDataRecord> parseCSV(const std::string& filename)
     std::vector<CsvDataRecord> data;
     std::string line;
 
-    if (!file.is_open()) {
+    if(!file.is_open())
+    {
         std::cerr << "Error opening file: " << filename << '\n';
         return data;
     }
 
     // Read each line of the file
     int iLine(0);
-    while (std::getline(file, line)) {
+    while(std::getline(file, line))
+    {
         std::vector<std::string> row;
-        try {
+        try
+        {
             row = split(line);
         }
         catch(const std::exception& e)
@@ -172,10 +188,16 @@ static std::vector<CsvDataRecord> parseCSV(const std::string& filename)
             continue;
         }
 
-        //Skip the header
-        if (iLine > 0) {
-            if (row.size() != 5) {
-                throw std::runtime_error("bad line " + std::to_string(iLine) + " there are only " + std::to_string(row.size()) + " elements");
+        // Skip the header
+        if(iLine > 0)
+        {
+            if(row.size() != 5)
+            {
+                throw std::runtime_error("bad line "
+                                         + std::to_string(iLine)
+                                         + " there are only "
+                                         + std::to_string(row.size())
+                                         + " elements");
             }
 
             CsvDataRecord record;
@@ -187,15 +209,19 @@ static std::vector<CsvDataRecord> parseCSV(const std::string& filename)
 
             // Parse block height
             std::stringstream ss(row[1]);
-            if (!(ss >> record.blockHeight)) {
-                throw std::runtime_error("failed to convert to int32 block height at line " + std::to_string(iLine));
+            if(!(ss >> record.blockHeight))
+            {
+                throw std::runtime_error(
+                    "failed to convert to int32 block height at line "
+                    + std::to_string(iLine));
             }
 
             // Preparse binary tx (matching Go's hex.DecodeString)
             record.txBinExtended = ParseHex(record.txHexExtended);
 
             // Parse UTXO heights (matching Go's strings.Split and parsing)
-            if (!record.utxoHeights.empty()) {
+            if(!record.utxoHeights.empty())
+            {
                 record.dataUTXOHeights = parseUTXOStr(record.utxoHeights);
             }
 
@@ -222,14 +248,21 @@ int main(int argc, char* argv[])
 
     // Define and parse the command line options
     po::options_description desc("Allowed options");
-    desc.add_options()
-        ("help,h", "produce help message")
-        ("csv-file,f", po::value<std::string>(&csvFilePath)->required(), "path to the csv file")
-        ("network,n", po::value<std::string>(&network)->default_value("main"), "the name of the network type")
-        ("disable-consensus,c", po::bool_switch(&disableConsensus)->default_value(false), "disable the consensus");
+    desc.add_options()("help,h", "produce help message")(
+        "csv-file,f",
+        po::value<std::string>(&csvFilePath)->required(),
+        "path to the csv file")("network,n",
+                                po::value<std::string>(&network)->default_value("main"),
+                                "the name of the network type")("disable-consensus,c",
+                                                                po::bool_switch(
+                                                                    &disableConsensus)
+                                                                    ->default_value(
+                                                                        false),
+                                                                "disable the consensus");
 
     po::variables_map vm;
-    try {
+    try
+    {
         po::store(po::parse_command_line(argc, argv, desc), vm);
         if(vm.contains("help"))
         {
@@ -238,7 +271,8 @@ int main(int argc, char* argv[])
         }
         po::notify(vm); // throws error if required arguments are missing
     }
-    catch (po::error& e) {
+    catch(po::error& e)
+    {
         std::cerr << "Error: " << e.what() << '\n';
         std::cerr << desc << '\n';
         return 1;
@@ -248,18 +282,25 @@ int main(int argc, char* argv[])
     const bsv::CTxValidator se(network);
     std::chrono::duration<double> elapsed;
     std::chrono::nanoseconds verifyScriptElapsed(0);
-    size_t nbTx{ 0 };
+    size_t nbTx{0};
 
     // Check the network is consistent
-    for (size_t i = 0; i < csvData.size(); ++i) {
-        if (csvData[i].chainNet != network) {
-            throw std::runtime_error("ERROR record " + std::to_string(i) + ", inconsistent network. Data " +
-                                   csvData[i].chainNet + ", input " + network);
+    for(size_t i = 0; i < csvData.size(); ++i)
+    {
+        if(csvData[i].chainNet != network)
+        {
+            throw std::runtime_error("ERROR record "
+                                     + std::to_string(i)
+                                     + ", inconsistent network. Data "
+                                     + csvData[i].chainNet
+                                     + ", input "
+                                     + network);
         }
     }
 
     const bool consensus = !disableConsensus;
-    for (size_t i = 0; i < csvData.size(); ++i) {
+    for(size_t i = 0; i < csvData.size(); ++i)
+    {
         const auto& record = csvData[i];
 
         try
@@ -273,7 +314,14 @@ int main(int argc, char* argv[])
         }
         catch(const std::exception& e)
         {
-            std::cout << "ERROR test line : " << i + 1 <<" TxID : " << record.txID << " " << e.what() << '\n';
+            std::cout
+                << "ERROR test line : "
+                << i + 1
+                << " TxID : "
+                << record.txID
+                << " "
+                << e.what()
+                << '\n';
         }
     }
 
@@ -281,7 +329,14 @@ int main(int argc, char* argv[])
     std::cout << "Nb Txs " << nbTx << '\n';
     std::cout << "Processed Time " << elapsed.count() << '\n';
 
-    // NOLINTNEXTLINE(*-narrowing-conversions)
-    std::cout << "ValidateTransaction Time " << std::fixed << std::setprecision(4) << verifyScriptElapsed.count() / 1e9 << " seconds" << '\n';
+    // NOLINTBEGIN(*-narrowing-conversions)
+    std::cout
+        << "ValidateTransaction Time "
+        << std::fixed
+        << std::setprecision(4)
+        << verifyScriptElapsed.count() / 1e9
+        << " seconds"
+        << '\n';
+    // NOLINTEND(*-narrowing-conversions)
     return 0;
 }

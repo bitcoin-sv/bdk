@@ -3,7 +3,8 @@
 int main()
 {
     bdkffi_txvalidator_t validator = bdkffi_txvalidator_create("main", 4);
-    if (validator == nullptr) {
+    if(validator == nullptr)
+    {
         return 1;
     }
 

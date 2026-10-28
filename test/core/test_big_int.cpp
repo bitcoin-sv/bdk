@@ -28,12 +28,17 @@ BOOST_AUTO_TEST_SUITE(test_big_int)
 
 BOOST_AUTO_TEST_CASE(construction_and_conversion)
 {
-    const std::array<int64_t, 9> values{
-        std::numeric_limits<int64_t>::min(), -4294967296LL, -1, 0, 1,
-        2147483648LL, 4294967296LL, 9223372036854775806LL,
-        std::numeric_limits<int64_t>::max()
-    };
-    for(const int64_t value : values) {
+    const std::array<int64_t, 9> values{std::numeric_limits<int64_t>::min(),
+                                        -4294967296LL,
+                                        -1,
+                                        0,
+                                        1,
+                                        2147483648LL,
+                                        4294967296LL,
+                                        9223372036854775806LL,
+                                        std::numeric_limits<int64_t>::max()};
+    for(const int64_t value : values)
+    {
         const bint number{value};
         BOOST_CHECK_EQUAL(bsv::to_dec(number), std::to_string(value));
         BOOST_CHECK_EQUAL(bsv::to_int64_t(number), value);
@@ -45,8 +50,7 @@ BOOST_AUTO_TEST_CASE(construction_and_conversion)
                       "-12345678901234567890");
     BOOST_CHECK_THROW(bint{""}, bsv::big_int_error);
     BOOST_CHECK_THROW(bint{"not-a-number"}, bsv::big_int_error);
-    BOOST_CHECK_THROW(
-        bsv::to_int64_t(bint{"9223372036854775808"}), bsv::big_int_error);
+    BOOST_CHECK_THROW(bsv::to_int64_t(bint{"9223372036854775808"}), bsv::big_int_error);
     BOOST_CHECK_EQUAL(bsv::to_hex(bint{0}), "0");
     BOOST_CHECK_EQUAL(bsv::to_hex(bint{1}), "01");
     BOOST_CHECK_EQUAL(bsv::to_hex(bint{-255}), "-FF");
@@ -96,29 +100,31 @@ BOOST_AUTO_TEST_CASE(bitwise_and_shift_sign_semantics)
 
 BOOST_AUTO_TEST_CASE(script_number_serialization)
 {
-    struct Vector {
+    struct Vector
+    {
         int64_t value;
         std::vector<uint8_t> bytes;
     };
-    const std::array vectors{
-        Vector{0, {}},
-        Vector{1, {0x01}},
-        Vector{-1, {0x81}},
-        Vector{127, {0x7f}},
-        Vector{-127, {0xff}},
-        Vector{128, {0x80, 0x00}},
-        Vector{-128, {0x80, 0x80}},
-        Vector{255, {0xff, 0x00}},
-        Vector{-255, {0xff, 0x80}},
-        Vector{256, {0x00, 0x01}},
-        Vector{-256, {0x00, 0x81}},
-        Vector{std::numeric_limits<int64_t>::max(),
-               {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f}},
-        Vector{std::numeric_limits<int64_t>::min(),
-               {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x80}}
-    };
 
-    for(const auto& vector : vectors) {
+    const std::array
+        vectors{Vector{0, {}},
+                Vector{1, {0x01}},
+                Vector{-1, {0x81}},
+                Vector{127, {0x7f}},
+                Vector{-127, {0xff}},
+                Vector{128, {0x80, 0x00}},
+                Vector{-128, {0x80, 0x80}},
+                Vector{255, {0xff, 0x00}},
+                Vector{-255, {0xff, 0x80}},
+                Vector{256, {0x00, 0x01}},
+                Vector{-256, {0x00, 0x81}},
+                Vector{std::numeric_limits<int64_t>::max(),
+                       {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f}},
+                Vector{std::numeric_limits<int64_t>::min(),
+                       {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x80}}};
+
+    for(const auto& vector : vectors)
+    {
         const bint number{vector.value};
         BOOST_CHECK(number.serialize() == vector.bytes);
         BOOST_CHECK_EQUAL(number.serialized_size(), vector.bytes.size());
@@ -126,7 +132,8 @@ BOOST_AUTO_TEST_CASE(script_number_serialization)
     }
 
     BOOST_CHECK_EQUAL(bsv::to_dec(bint::deserialize(std::array<uint8_t, 1>{0x80})), "0");
-    BOOST_CHECK_EQUAL(bsv::to_dec(bint::deserialize(std::array<uint8_t, 2>{0x01, 0x00})), "1");
+    BOOST_CHECK_EQUAL(bsv::to_dec(bint::deserialize(std::array<uint8_t, 2>{0x01, 0x00})),
+                      "1");
     const bint huge{"340282366920938463463374607431768211455"};
     BOOST_CHECK(bint::deserialize(huge.serialize()) == huge);
 }

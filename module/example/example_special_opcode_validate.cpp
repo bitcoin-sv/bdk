@@ -93,24 +93,27 @@ namespace po = boost::program_options;
 /// Genesis activated at block 620,538.  UTXOs mined at height ≥ 620,539
 /// are "after-Genesis": script element size limits are lifted and big-number
 /// arithmetic is enabled.
-static constexpr int32_t GENESIS_HEIGHT = 620538;   // src/chainparams.cpp: GENESIS_ACTIVATION_MAIN
+static constexpr int32_t
+    GENESIS_HEIGHT = 620538; // src/chainparams.cpp: GENESIS_ACTIVATION_MAIN
 
 /// Chronicle activated at block 943,816.  UTXOs mined at height ≥ 943,817
 /// are "after-Chronicle": OP_2MUL and OP_2DIV become available.
-static constexpr int32_t CHRONICLE_HEIGHT = 943816; // src/chainparams.cpp: CHRONICLE_ACTIVATION_MAIN
+static constexpr int32_t
+    CHRONICLE_HEIGHT = 943816; // src/chainparams.cpp: CHRONICLE_ACTIVATION_MAIN
 
 /// UTXO height for all test cases — one block after Chronicle activation.
-static constexpr int32_t UTXO_HEIGHT  = CHRONICLE_HEIGHT + 1;   // 943,817
+static constexpr int32_t UTXO_HEIGHT = CHRONICLE_HEIGHT + 1; // 943,817
 
 /// Spending block height — well inside the post-Chronicle era.
 static constexpr int32_t BLOCK_HEIGHT = 950000;
 
 /// Value of every test UTXO (needed for the BIP143 sighash computation).
-static const Amount UTXO_AMOUNT{1'000'000};   // 0.01 BSV
+static const Amount UTXO_AMOUNT{1'000'000}; // 0.01 BSV
 
 /// WIF private key used to sign and unlock all test transactions.
 /// (same key used across the BDK example suite)
-static constexpr const char* WIF_KEY = "5HxWvvfubhXpYYpS3tJkw6fq9jE9j18THftkZjHHfmFiWtmAbrj";
+static constexpr const char*
+    WIF_KEY = "5HxWvvfubhXpYYpS3tJkw6fq9jE9j18THftkZjHHfmFiWtmAbrj";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Key helpers
@@ -119,7 +122,7 @@ static constexpr const char* WIF_KEY = "5HxWvvfubhXpYYpS3tJkw6fq9jE9j18THftkZjHH
 static CKey LoadKey()
 {
     CBitcoinSecret secret;
-    if (!secret.SetString(WIF_KEY))
+    if(!secret.SetString(WIF_KEY))
         throw std::runtime_error("Failed to decode WIF key");
     return secret.GetKey();
 }
@@ -133,15 +136,15 @@ static CKey LoadKey()
 static CMutableTransaction BuildCreditingTransaction(const CScript& scriptPubKey)
 {
     CMutableTransaction tx;
-    tx.nVersion  = 1;
+    tx.nVersion = 1;
     tx.nLockTime = 0;
     tx.vin.resize(1);
     tx.vout.resize(1);
-    tx.vin[0].prevout   = COutPoint();                           // coinbase-style origin
+    tx.vin[0].prevout = COutPoint(); // coinbase-style origin
     tx.vin[0].scriptSig = CScript() << CScriptNum(0) << CScriptNum(0);
     tx.vin[0].nSequence = CTxIn::SEQUENCE_FINAL;
     tx.vout[0].scriptPubKey = scriptPubKey;
-    tx.vout[0].nValue       = UTXO_AMOUNT;
+    tx.vout[0].nValue = UTXO_AMOUNT;
     return tx;
 }
 
@@ -150,15 +153,15 @@ static CMutableTransaction BuildCreditingTransaction(const CScript& scriptPubKey
 static CMutableTransaction BuildSpendingTransaction(const CMutableTransaction& txCredit)
 {
     CMutableTransaction tx;
-    tx.nVersion  = 1;
+    tx.nVersion = 1;
     tx.nLockTime = 0;
     tx.vin.resize(1);
     tx.vout.resize(1);
-    tx.vin[0].prevout   = COutPoint(txCredit.GetId(), 0);
-    tx.vin[0].scriptSig = CScript();                             // filled after signing
+    tx.vin[0].prevout = COutPoint(txCredit.GetId(), 0);
+    tx.vin[0].scriptSig = CScript(); // filled after signing
     tx.vin[0].nSequence = CTxIn::SEQUENCE_FINAL;
-    tx.vout[0].scriptPubKey = CScript();                         // anyone-can-spend output
-    tx.vout[0].nValue       = UTXO_AMOUNT;
+    tx.vout[0].scriptPubKey = CScript(); // anyone-can-spend output
+    tx.vout[0].nValue = UTXO_AMOUNT;
     return tx;
 }
 
@@ -169,11 +172,14 @@ static std::vector<uint8_t> SignSpendingTx(const CScript& scriptPubKey,
                                            const CKey& key)
 {
     const SigHashType sigHashType = SigHashType().withForkId();
-    const uint256 hash = SignatureHash(
-        scriptPubKey, CTransaction(txSpend), /*nIn=*/0, sigHashType, UTXO_AMOUNT);
+    const uint256 hash = SignatureHash(scriptPubKey,
+                                       CTransaction(txSpend),
+                                       /*nIn=*/0,
+                                       sigHashType,
+                                       UTXO_AMOUNT);
 
     std::vector<uint8_t> sig;
-    if (!key.Sign(hash, sig))
+    if(!key.Sign(hash, sig))
         throw std::runtime_error("ECDSA signing failed");
 
     sig.push_back(static_cast<uint8_t>(sigHashType.getRawSigHashType()));
@@ -196,16 +202,18 @@ static bsv::CMutableTransactionExtended MakeSignedExtendedTx(const CScript& opco
                                                              const CKey& key)
 {
     const CPubKey pubkey = key.GetPubKey();
-    const CKeyID  keyID  = pubkey.GetID();
+    const CKeyID keyID = pubkey.GetID();
 
     // ── 1. Full scriptPubKey ──────────────────────────────────────────────
     // Opcode check (consumes operands, verifies result) followed by the
     // standard P2PKH signature check (verifies key ownership).
     CScript scriptPubKey = opcodeCheck;
-    scriptPubKey << OP_DUP
-                 << OP_HASH160    << ToByteVector(keyID)
-                 << OP_EQUALVERIFY
-                 << OP_CHECKSIG;
+    scriptPubKey
+        << OP_DUP
+        << OP_HASH160
+        << ToByteVector(keyID)
+        << OP_EQUALVERIFY
+        << OP_CHECKSIG;
 
     // ── 2. Crediting transaction (the UTXO) ───────────────────────────────
     const CMutableTransaction txCredit = BuildCreditingTransaction(scriptPubKey);
@@ -230,8 +238,8 @@ static bsv::CMutableTransactionExtended MakeSignedExtendedTx(const CScript& opco
 
     // ── 6. Wrap into extended transaction ─────────────────────────────────
     bsv::CMutableTransactionExtended eTX;
-    eTX.vutxo = txCredit.vout;   // embed UTXO so VerifyScript can read it
-    eTX.mtx   = std::move(txSpend);
+    eTX.vutxo = txCredit.vout; // embed UTXO so VerifyScript can read it
+    eTX.mtx = std::move(txSpend);
     return eTX;
 }
 
@@ -245,7 +253,7 @@ namespace
     {
         std::string key;            // CLI selector, e.g. "cat"
         std::string name;           // e.g. "OP_CAT"
-        uint8_t     opcode_byte;    // e.g. 0x7E
+        uint8_t opcode_byte;        // e.g. 0x7E
         std::string description;    // one-liner of what the opcode does
         std::string script_comment; // documents scriptPubKey / scriptSig layout
 
@@ -279,9 +287,9 @@ namespace
 //     ... P2PKH ...→ [1]   → valid
 static std::pair<CScript, CScript> BuildOpCat()
 {
-    const std::vector<uint8_t> a{'B','S','V'};
+    const std::vector<uint8_t> a{'B', 'S', 'V'};
     const std::vector<uint8_t> b{'!'};
-    const std::vector<uint8_t> expected{'B','S','V','!'};
+    const std::vector<uint8_t> expected{'B', 'S', 'V', '!'};
 
     CScript opcodeCheck;
     opcodeCheck << OP_CAT << expected << OP_EQUALVERIFY;
@@ -309,15 +317,15 @@ static std::pair<CScript, CScript> BuildOpCat()
 //     ... P2PKH ...  → [1]   → valid
 static std::pair<CScript, CScript> BuildOpSplit()
 {
-    const std::vector<uint8_t> data {0xAB, 0xCD};
-    const std::vector<uint8_t> left {0xAB};
+    const std::vector<uint8_t> data{0xAB, 0xCD};
+    const std::vector<uint8_t> left{0xAB};
     const std::vector<uint8_t> right{0xCD};
 
     CScript opcodeCheck;
     opcodeCheck << OP_SPLIT << right << OP_EQUALVERIFY << left << OP_EQUALVERIFY;
 
     CScript operandPushes;
-    operandPushes << data << CScriptNum(1);   // split position on top
+    operandPushes << data << CScriptNum(1); // split position on top
 
     return {opcodeCheck, operandPushes};
 }
@@ -345,7 +353,7 @@ static std::pair<CScript, CScript> BuildOpNum2Bin()
     opcodeCheck << OP_NUM2BIN << expected << OP_EQUALVERIFY;
 
     CScript operandPushes;
-    operandPushes << CScriptNum(7) << CScriptNum(4);   // width on top
+    operandPushes << CScriptNum(7) << CScriptNum(4); // width on top
 
     return {opcodeCheck, operandPushes};
 }
@@ -366,7 +374,7 @@ static std::pair<CScript, CScript> BuildOpNum2Bin()
 //     ... P2PKH ... → [1]   → valid
 static std::pair<CScript, CScript> BuildOpBin2Num()
 {
-    const std::vector<uint8_t> data{0x07};   // 7 in minimal little-endian
+    const std::vector<uint8_t> data{0x07}; // 7 in minimal little-endian
 
     CScript opcodeCheck;
     opcodeCheck << OP_BIN2NUM << CScriptNum(7) << OP_EQUALVERIFY;
@@ -392,7 +400,7 @@ static std::pair<CScript, CScript> BuildOpBin2Num()
 //     ... P2PKH ... → [1]   → valid
 static std::pair<CScript, CScript> BuildOpInvert()
 {
-    const std::vector<uint8_t> input   {0xFF};
+    const std::vector<uint8_t> input{0xFF};
     const std::vector<uint8_t> expected{0x00};
 
     CScript opcodeCheck;
@@ -419,9 +427,9 @@ static std::pair<CScript, CScript> BuildOpInvert()
 //     ... P2PKH ... → [1]   → valid
 static std::pair<CScript, CScript> BuildOpAnd()
 {
-    const std::vector<uint8_t> a       {0xFF};
-    const std::vector<uint8_t> b       {0x0F};
-    const std::vector<uint8_t> expected{0x0F};   // 0xFF & 0x0F = 0x0F
+    const std::vector<uint8_t> a{0xFF};
+    const std::vector<uint8_t> b{0x0F};
+    const std::vector<uint8_t> expected{0x0F}; // 0xFF & 0x0F = 0x0F
 
     CScript opcodeCheck;
     opcodeCheck << OP_AND << expected << OP_EQUALVERIFY;
@@ -447,9 +455,9 @@ static std::pair<CScript, CScript> BuildOpAnd()
 //     ... P2PKH ... → [1]   → valid
 static std::pair<CScript, CScript> BuildOpOr()
 {
-    const std::vector<uint8_t> a       {0xF0};
-    const std::vector<uint8_t> b       {0x0F};
-    const std::vector<uint8_t> expected{0xFF};   // 0xF0 | 0x0F = 0xFF
+    const std::vector<uint8_t> a{0xF0};
+    const std::vector<uint8_t> b{0x0F};
+    const std::vector<uint8_t> expected{0xFF}; // 0xF0 | 0x0F = 0xFF
 
     CScript opcodeCheck;
     opcodeCheck << OP_OR << expected << OP_EQUALVERIFY;
@@ -475,9 +483,9 @@ static std::pair<CScript, CScript> BuildOpOr()
 //     ... P2PKH ... → [1]   → valid
 static std::pair<CScript, CScript> BuildOpXor()
 {
-    const std::vector<uint8_t> a       {0xFF};
-    const std::vector<uint8_t> b       {0x0F};
-    const std::vector<uint8_t> expected{0xF0};   // 0xFF ^ 0x0F = 0xF0
+    const std::vector<uint8_t> a{0xFF};
+    const std::vector<uint8_t> b{0x0F};
+    const std::vector<uint8_t> expected{0xF0}; // 0xFF ^ 0x0F = 0xF0
 
     CScript opcodeCheck;
     opcodeCheck << OP_XOR << expected << OP_EQUALVERIFY;
@@ -504,14 +512,14 @@ static std::pair<CScript, CScript> BuildOpXor()
 //     ... P2PKH ... → [1]   → valid
 static std::pair<CScript, CScript> BuildOpLShift()
 {
-    const std::vector<uint8_t> data    {0x01};
-    const std::vector<uint8_t> expected{0x10};   // 0x01 << 4 = 0x10
+    const std::vector<uint8_t> data{0x01};
+    const std::vector<uint8_t> expected{0x10}; // 0x01 << 4 = 0x10
 
     CScript opcodeCheck;
     opcodeCheck << OP_LSHIFT << expected << OP_EQUALVERIFY;
 
     CScript operandPushes;
-    operandPushes << data << CScriptNum(4);   // count on top
+    operandPushes << data << CScriptNum(4); // count on top
 
     return {opcodeCheck, operandPushes};
 }
@@ -532,14 +540,14 @@ static std::pair<CScript, CScript> BuildOpLShift()
 //     ... P2PKH ... → [1]   → valid
 static std::pair<CScript, CScript> BuildOpRShift()
 {
-    const std::vector<uint8_t> data    {0x10};
-    const std::vector<uint8_t> expected{0x01};   // 0x10 >> 4 = 0x01
+    const std::vector<uint8_t> data{0x10};
+    const std::vector<uint8_t> expected{0x01}; // 0x10 >> 4 = 0x01
 
     CScript opcodeCheck;
     opcodeCheck << OP_RSHIFT << expected << OP_EQUALVERIFY;
 
     CScript operandPushes;
-    operandPushes << data << CScriptNum(4);   // count on top
+    operandPushes << data << CScriptNum(4); // count on top
 
     return {opcodeCheck, operandPushes};
 }
@@ -587,7 +595,7 @@ static std::pair<CScript, CScript> BuildOpDiv()
     opcodeCheck << OP_DIV << CScriptNum(4) << OP_EQUALVERIFY;
 
     CScript operandPushes;
-    operandPushes << CScriptNum(12) << CScriptNum(3);   // divisor on top
+    operandPushes << CScriptNum(12) << CScriptNum(3); // divisor on top
 
     return {opcodeCheck, operandPushes};
 }
@@ -611,7 +619,7 @@ static std::pair<CScript, CScript> BuildOpMod()
     opcodeCheck << OP_MOD << CScriptNum(3) << OP_EQUALVERIFY;
 
     CScript operandPushes;
-    operandPushes << CScriptNum(13) << CScriptNum(5);   // divisor on top
+    operandPushes << CScriptNum(13) << CScriptNum(5); // divisor on top
 
     return {opcodeCheck, operandPushes};
 }
@@ -673,69 +681,128 @@ static std::pair<CScript, CScript> BuildOp2Div()
 static const std::vector<OpcodeCase>& Cases()
 {
     static const std::vector<OpcodeCase> cases = {
-    // ── String / byte-array opcodes ─────────────────────────────────────
-    {"cat",    "OP_CAT",    0x7E, "Concatenate two byte arrays",
-     R"(scriptSig: <sig> <pk> <"BSV"> <"!">  |  scriptPubKey: OP_CAT <"BSV!"> OP_EQUALVERIFY ... OP_CHECKSIG)",
-     BuildOpCat},
+        // ── String / byte-array opcodes ─────────────────────────────────────
+        {"cat",
+         "OP_CAT",
+         0x7E,
+         "Concatenate two byte arrays",
+         R"(scriptSig: <sig> <pk> <"BSV"> <"!">  |  scriptPubKey: OP_CAT <"BSV!"> OP_EQUALVERIFY ... OP_CHECKSIG)",
+         BuildOpCat},
 
-    {"split",  "OP_SPLIT",  0x7F, "Split byte array at position n",
-     "scriptSig: <sig> <pk> <{AB,CD}> <1>  |  scriptPubKey: OP_SPLIT <{CD}> EQUALVERIFY <{AB}> EQUALVERIFY ... OP_CHECKSIG",
-     BuildOpSplit},
+        {"split",
+         "OP_SPLIT",
+         0x7F,
+         "Split byte array at position n",
+         "scriptSig: <sig> <pk> <{AB,CD}> <1>  |  scriptPubKey: OP_SPLIT <{CD}> "
+         "EQUALVERIFY <{AB}> EQUALVERIFY ... OP_CHECKSIG",
+         BuildOpSplit},
 
-    {"num2bin","OP_NUM2BIN",0x80, "Encode integer as fixed-width little-endian bytes",
-     "scriptSig: <sig> <pk> <7> <4>  |  scriptPubKey: OP_NUM2BIN <{07,00,00,00}> OP_EQUALVERIFY ... OP_CHECKSIG",
-     BuildOpNum2Bin},
+        {"num2bin",
+         "OP_NUM2BIN",
+         0x80,
+         "Encode integer as fixed-width little-endian bytes",
+         "scriptSig: <sig> <pk> <7> <4>  |  scriptPubKey: OP_NUM2BIN <{07,00,00,00}> "
+         "OP_EQUALVERIFY ... OP_CHECKSIG",
+         BuildOpNum2Bin},
 
-    {"bin2num","OP_BIN2NUM",0x81, "Decode little-endian byte array to minimal CScriptNum",
-     "scriptSig: <sig> <pk> <{07}>  |  scriptPubKey: OP_BIN2NUM <7> OP_EQUALVERIFY ... OP_CHECKSIG",
-     BuildOpBin2Num},
+        {"bin2num",
+         "OP_BIN2NUM",
+         0x81,
+         "Decode little-endian byte array to minimal CScriptNum",
+         "scriptSig: <sig> <pk> <{07}>  |  scriptPubKey: OP_BIN2NUM <7> OP_EQUALVERIFY "
+         "... OP_CHECKSIG",
+         BuildOpBin2Num},
 
-    // ── Bitwise opcodes ──────────────────────────────────────────────────
-    {"invert", "OP_INVERT", 0x83, "Bitwise NOT of byte array",
-     "scriptSig: <sig> <pk> <{FF}>  |  scriptPubKey: OP_INVERT <{00}> OP_EQUALVERIFY ... OP_CHECKSIG",
-     BuildOpInvert},
+        // ── Bitwise opcodes ──────────────────────────────────────────────────
+        {"invert",
+         "OP_INVERT",
+         0x83,
+         "Bitwise NOT of byte array",
+         "scriptSig: <sig> <pk> <{FF}>  |  scriptPubKey: OP_INVERT <{00}> OP_EQUALVERIFY "
+         "... OP_CHECKSIG",
+         BuildOpInvert},
 
-    {"and",    "OP_AND",    0x84, "Bitwise AND of two equal-length byte arrays",
-     "scriptSig: <sig> <pk> <{FF}> <{0F}>  |  scriptPubKey: OP_AND <{0F}> OP_EQUALVERIFY ... OP_CHECKSIG",
-     BuildOpAnd},
+        {"and",
+         "OP_AND",
+         0x84,
+         "Bitwise AND of two equal-length byte arrays",
+         "scriptSig: <sig> <pk> <{FF}> <{0F}>  |  scriptPubKey: OP_AND <{0F}> "
+         "OP_EQUALVERIFY ... OP_CHECKSIG",
+         BuildOpAnd},
 
-    {"or",     "OP_OR",     0x85, "Bitwise OR of two equal-length byte arrays",
-     "scriptSig: <sig> <pk> <{F0}> <{0F}>  |  scriptPubKey: OP_OR <{FF}> OP_EQUALVERIFY ... OP_CHECKSIG",
-     BuildOpOr},
+        {"or",
+         "OP_OR",
+         0x85,
+         "Bitwise OR of two equal-length byte arrays",
+         "scriptSig: <sig> <pk> <{F0}> <{0F}>  |  scriptPubKey: OP_OR <{FF}> "
+         "OP_EQUALVERIFY ... OP_CHECKSIG",
+         BuildOpOr},
 
-    {"xor",    "OP_XOR",    0x86, "Bitwise XOR of two equal-length byte arrays",
-     "scriptSig: <sig> <pk> <{FF}> <{0F}>  |  scriptPubKey: OP_XOR <{F0}> OP_EQUALVERIFY ... OP_CHECKSIG",
-     BuildOpXor},
+        {"xor",
+         "OP_XOR",
+         0x86,
+         "Bitwise XOR of two equal-length byte arrays",
+         "scriptSig: <sig> <pk> <{FF}> <{0F}>  |  scriptPubKey: OP_XOR <{F0}> "
+         "OP_EQUALVERIFY ... OP_CHECKSIG",
+         BuildOpXor},
 
-    {"lshift", "OP_LSHIFT", 0x98, "Shift byte array left by n bits",
-     "scriptSig: <sig> <pk> <{01}> <4>  |  scriptPubKey: OP_LSHIFT <{10}> OP_EQUALVERIFY ... OP_CHECKSIG",
-     BuildOpLShift},
+        {"lshift",
+         "OP_LSHIFT",
+         0x98,
+         "Shift byte array left by n bits",
+         "scriptSig: <sig> <pk> <{01}> <4>  |  scriptPubKey: OP_LSHIFT <{10}> "
+         "OP_EQUALVERIFY ... OP_CHECKSIG",
+         BuildOpLShift},
 
-    {"rshift", "OP_RSHIFT", 0x99, "Shift byte array right by n bits",
-     "scriptSig: <sig> <pk> <{10}> <4>  |  scriptPubKey: OP_RSHIFT <{01}> OP_EQUALVERIFY ... OP_CHECKSIG",
-     BuildOpRShift},
+        {"rshift",
+         "OP_RSHIFT",
+         0x99,
+         "Shift byte array right by n bits",
+         "scriptSig: <sig> <pk> <{10}> <4>  |  scriptPubKey: OP_RSHIFT <{01}> "
+         "OP_EQUALVERIFY ... OP_CHECKSIG",
+         BuildOpRShift},
 
-    // ── Arithmetic opcodes ───────────────────────────────────────────────
-    {"mul",    "OP_MUL",    0x95, "Multiply two integers",
-     "scriptSig: <sig> <pk> <3> <4>  |  scriptPubKey: OP_MUL <12> OP_EQUALVERIFY ... OP_CHECKSIG",
-     BuildOpMul},
+        // ── Arithmetic opcodes ───────────────────────────────────────────────
+        {"mul",
+         "OP_MUL",
+         0x95,
+         "Multiply two integers",
+         "scriptSig: <sig> <pk> <3> <4>  |  scriptPubKey: OP_MUL <12> OP_EQUALVERIFY ... "
+         "OP_CHECKSIG",
+         BuildOpMul},
 
-    {"div",    "OP_DIV",    0x96, "Integer division (truncated toward zero)",
-     "scriptSig: <sig> <pk> <12> <3>  |  scriptPubKey: OP_DIV <4> OP_EQUALVERIFY ... OP_CHECKSIG",
-     BuildOpDiv},
+        {"div",
+         "OP_DIV",
+         0x96,
+         "Integer division (truncated toward zero)",
+         "scriptSig: <sig> <pk> <12> <3>  |  scriptPubKey: OP_DIV <4> OP_EQUALVERIFY ... "
+         "OP_CHECKSIG",
+         BuildOpDiv},
 
-    {"mod",    "OP_MOD",    0x97, "Integer modulo",
-     "scriptSig: <sig> <pk> <13> <5>  |  scriptPubKey: OP_MOD <3> OP_EQUALVERIFY ... OP_CHECKSIG",
-     BuildOpMod},
+        {"mod",
+         "OP_MOD",
+         0x97,
+         "Integer modulo",
+         "scriptSig: <sig> <pk> <13> <5>  |  scriptPubKey: OP_MOD <3> OP_EQUALVERIFY ... "
+         "OP_CHECKSIG",
+         BuildOpMod},
 
-    // ── Chronicle-only opcodes ───────────────────────────────────────────
-    {"2mul",   "OP_2MUL",   0x8D, "Multiply integer by 2  [Chronicle, block 943,816]",
-     "scriptSig: <sig> <pk> <5>  |  scriptPubKey: OP_2MUL <10> OP_EQUALVERIFY ... OP_CHECKSIG",
-     BuildOp2Mul},
+        // ── Chronicle-only opcodes ───────────────────────────────────────────
+        {"2mul",
+         "OP_2MUL",
+         0x8D,
+         "Multiply integer by 2  [Chronicle, block 943,816]",
+         "scriptSig: <sig> <pk> <5>  |  scriptPubKey: OP_2MUL <10> OP_EQUALVERIFY ... "
+         "OP_CHECKSIG",
+         BuildOp2Mul},
 
-    {"2div",   "OP_2DIV",   0x8E, "Integer divide by 2  [Chronicle, block 943,816]",
-     "scriptSig: <sig> <pk> <10>  |  scriptPubKey: OP_2DIV <5> OP_EQUALVERIFY ... OP_CHECKSIG",
-     BuildOp2Div},
+        {"2div",
+         "OP_2DIV",
+         0x8E,
+         "Integer divide by 2  [Chronicle, block 943,816]",
+         "scriptSig: <sig> <pk> <10>  |  scriptPubKey: OP_2DIV <5> OP_EQUALVERIFY ... "
+         "OP_CHECKSIG",
+         BuildOp2Div},
     };
     return cases;
 }
@@ -744,10 +811,11 @@ static const std::vector<OpcodeCase>& Cases()
 static std::map<std::string, const OpcodeCase*> BuildCaseIndex()
 {
     std::map<std::string, const OpcodeCase*> idx;
-    for (const auto& tc : Cases())
+    for(const auto& tc : Cases())
         idx[tc.key] = &tc;
     return idx;
 }
+
 static const std::map<std::string, const OpcodeCase*>& CaseIndex()
 {
     static const std::map<std::string, const OpcodeCase*> index = BuildCaseIndex();
@@ -760,27 +828,43 @@ static const std::map<std::string, const OpcodeCase*>& CaseIndex()
 // This is the single unit of work, shared identically by both the "all"
 // loop and a single-opcode run.  Returns true on VALID, false on INVALID.
 
-static bool RunCase(const OpcodeCase&               tc,
-                    size_t                           index,
-                    size_t                           total,
-                    const CKey&                      key,
-                    const bsv::CTxValidator&        se,
-                    const std::array<int32_t, 1>&    utxoHeights)
+static bool RunCase(const OpcodeCase& tc,
+                    size_t index,
+                    size_t total,
+                    const CKey& key,
+                    const bsv::CTxValidator& se,
+                    const std::array<int32_t, 1>& utxoHeights)
 {
-    std::cout << "[" << std::setw(2) << index << "/" << total << "]  "
-              << tc.name << "  (0x"
-              << std::hex << std::setw(2) << std::setfill('0')
-              << static_cast<int>(tc.opcode_byte)
-              << std::dec << std::setfill(' ') << ")\n"
-              << "       " << tc.description << "\n"
-              << "       " << tc.script_comment << "\n";
+    std::cout
+        << "["
+        << std::setw(2)
+        << index
+        << "/"
+        << total
+        << "]  "
+        << tc.name
+        << "  (0x"
+        << std::hex
+        << std::setw(2)
+        << std::setfill('0')
+        << static_cast<int>(tc.opcode_byte)
+        << std::dec
+        << std::setfill(' ')
+        << ")\n"
+        << "       "
+        << tc.description
+        << "\n"
+        << "       "
+        << tc.script_comment
+        << "\n";
 
     // Build opcode-specific script fragments
     auto [opcodeCheck, operandPushes] = tc.build_parts();
 
     // Assemble, sign, and wrap into an extended transaction
-    const bsv::CMutableTransactionExtended eTX =
-        MakeSignedExtendedTx(opcodeCheck, operandPushes, key);
+    const bsv::CMutableTransactionExtended eTX = MakeSignedExtendedTx(opcodeCheck,
+                                                                      operandPushes,
+                                                                      key);
 
     // Serialise to raw bytes
     CDataStream out(SER_NETWORK, PROTOCOL_VERSION);
@@ -788,23 +872,31 @@ static bool RunCase(const OpcodeCase&               tc,
     const std::vector<uint8_t> etxBin(out.begin(), out.end());
 
     // Verify in post-Chronicle consensus context
-    const TxError ret = se.ValidateTransaction(
-        etxBin,
-        std::span<const int32_t>(utxoHeights),
-        BLOCK_HEIGHT,
-        /*consensus=*/true);
+    const TxError ret = se.ValidateTransaction(etxBin,
+                                               std::span<const int32_t>(utxoHeights),
+                                               BLOCK_HEIGHT,
+                                               /*consensus=*/true);
 
-    if (bsv::TxErrorIsOk(ret))
+    if(bsv::TxErrorIsOk(ret))
     {
         const std::string etxHex = bsv::Bin2Hex(etxBin);
-        std::cout << "       Result           : VALID (SCRIPT_ERR_OK)\n"
-                  << "       ETX size         : " << etxBin.size() << " bytes\n"
-                  << "       ETX hex          : " << etxHex << "\n\n";
+        std::cout
+            << "       Result           : VALID (SCRIPT_ERR_OK)\n"
+            << "       ETX size         : "
+            << etxBin.size()
+            << " bytes\n"
+            << "       ETX hex          : "
+            << etxHex
+            << "\n\n";
         return true;
     }
 
-    std::cout << "       Result           : INVALID (domain=" << ret.domain
-              << " code=" << ret.code << ")\n\n";
+    std::cout
+        << "       Result           : INVALID (domain="
+        << ret.domain
+        << " code="
+        << ret.code
+        << ")\n\n";
     return false;
 }
 
@@ -817,17 +909,20 @@ int main(int argc, char* argv[])
     // ── CLI ──────────────────────────────────────────────────────────────
     // Build the list of valid keys for the help string.
     std::string keyList = "all";
-    for (const auto& tc : Cases())
+    for(const auto& tc : Cases())
         keyList += ", " + tc.key;
 
     std::string opcodeKey = "all";
 
     po::options_description desc("Special opcode transaction verifier");
-    desc.add_options()
-        ("help,h", "Show this help message")
-        ("opcode,o",
-            po::value<std::string>(&opcodeKey)->default_value("all"),
-            ("Opcode to test (default: all).  Valid values: " + keyList).c_str());
+    desc.add_options()("help,h",
+                       "Show this help message")("opcode,o",
+                                                 po::value<std::string>(&opcodeKey)
+                                                     ->default_value("all"),
+                                                 ("Opcode to test (default: all).  Valid "
+                                                  "values: "
+                                                  + keyList)
+                                                     .c_str());
 
     po::variables_map vm;
     try
@@ -840,7 +935,7 @@ int main(int argc, char* argv[])
         }
         po::notify(vm);
     }
-    catch (const po::error& e)
+    catch(const po::error& e)
     {
         std::cerr << "Argument error: " << e.what() << "\n" << desc << "\n";
         return 1;
@@ -865,31 +960,49 @@ int main(int argc, char* argv[])
     const bool runAll = (opcodeKey == "all");
     const size_t total = runAll ? Cases().size() : 1;
 
-    std::cout << std::string(70, '=') << "\n"
-              << "  Special Opcode Verification — real-world signed transactions\n"
-              << std::string(70, '=') << "\n"
-              << "  Selection            : " << (runAll ? "all (" + std::to_string(total) + " opcodes)" : opcodeKey) << "\n"
-              << "  Genesis activation   : block " << GENESIS_HEIGHT  << " (mainnet)\n"
-              << "  Chronicle activation : block " << CHRONICLE_HEIGHT << " (mainnet)\n"
-              << "  UTXO height          : " << UTXO_HEIGHT  << "  (post-Chronicle)\n"
-              << "  Block height         : " << BLOCK_HEIGHT << "  (post-Chronicle)\n"
-              << "  Consensus mode       : true  (block-validation, not mempool)\n"
-              << "  Network              : " << network << "\n"
-              << "  Sighash type         : SIGHASH_ALL | SIGHASH_FORKID (0x41)\n"
-              << "  Signing key (WIF)    : " << WIF_KEY << "\n"
-              << std::string(70, '=') << "\n\n";
+    std::cout
+        << std::string(70, '=')
+        << "\n"
+        << "  Special Opcode Verification — real-world signed transactions\n"
+        << std::string(70, '=')
+        << "\n"
+        << "  Selection            : "
+        << (runAll ? "all (" + std::to_string(total) + " opcodes)" : opcodeKey)
+        << "\n"
+        << "  Genesis activation   : block "
+        << GENESIS_HEIGHT
+        << " (mainnet)\n"
+        << "  Chronicle activation : block "
+        << CHRONICLE_HEIGHT
+        << " (mainnet)\n"
+        << "  UTXO height          : "
+        << UTXO_HEIGHT
+        << "  (post-Chronicle)\n"
+        << "  Block height         : "
+        << BLOCK_HEIGHT
+        << "  (post-Chronicle)\n"
+        << "  Consensus mode       : true  (block-validation, not mempool)\n"
+        << "  Network              : "
+        << network
+        << "\n"
+        << "  Sighash type         : SIGHASH_ALL | SIGHASH_FORKID (0x41)\n"
+        << "  Signing key (WIF)    : "
+        << WIF_KEY
+        << "\n"
+        << std::string(70, '=')
+        << "\n\n";
 
     // ── Execute ───────────────────────────────────────────────────────────
     int passed = 0;
     int failed = 0;
 
-    if (runAll)
+    if(runAll)
     {
         // Loop through every case; each iteration calls RunCase identically
         // to how a single-opcode run would call it.
-        for (size_t i = 0; i < Cases().size(); ++i)
+        for(size_t i = 0; i < Cases().size(); ++i)
         {
-            if (RunCase(Cases()[i], i + 1, total, key, se, utxoHeights))
+            if(RunCase(Cases()[i], i + 1, total, key, se, utxoHeights))
                 ++passed;
             else
                 ++failed;
@@ -898,26 +1011,48 @@ int main(int argc, char* argv[])
     else
     {
         // Single-opcode run — same RunCase call, index shown as 1/1.
-        if (RunCase(*CaseIndex().at(opcodeKey), 1, 1, key, se, utxoHeights))
+        if(RunCase(*CaseIndex().at(opcodeKey), 1, 1, key, se, utxoHeights))
             ++passed;
         else
             ++failed;
     }
 
     // ── Summary ──────────────────────────────────────────────────────────
-    std::cout << std::string(70, '=') << "\n"
-              << "  Summary\n"
-              << std::string(70, '=') << "\n"
-              << "  Passed : " << passed << " / " << total << "\n"
-              << "  Failed : " << failed << " / " << total << "\n"
-              << "  UTXO height  : " << UTXO_HEIGHT
-              << "  (post-Genesis: "   << (UTXO_HEIGHT > GENESIS_HEIGHT   ? "yes" : "no") << ", "
-              << "post-Chronicle: "    << (UTXO_HEIGHT > CHRONICLE_HEIGHT ? "yes" : "no") << ")\n"
-              << "  Block height : " << BLOCK_HEIGHT
-              << "  (post-Chronicle: " << (BLOCK_HEIGHT > CHRONICLE_HEIGHT ? "yes" : "no") << ")\n"
-              << "  Consensus    : true\n"
-              << "  Network      : " << network << "\n"
-              << std::string(70, '=') << "\n";
+    std::cout
+        << std::string(70, '=')
+        << "\n"
+        << "  Summary\n"
+        << std::string(70, '=')
+        << "\n"
+        << "  Passed : "
+        << passed
+        << " / "
+        << total
+        << "\n"
+        << "  Failed : "
+        << failed
+        << " / "
+        << total
+        << "\n"
+        << "  UTXO height  : "
+        << UTXO_HEIGHT
+        << "  (post-Genesis: "
+        << (UTXO_HEIGHT > GENESIS_HEIGHT ? "yes" : "no")
+        << ", "
+        << "post-Chronicle: "
+        << (UTXO_HEIGHT > CHRONICLE_HEIGHT ? "yes" : "no")
+        << ")\n"
+        << "  Block height : "
+        << BLOCK_HEIGHT
+        << "  (post-Chronicle: "
+        << (BLOCK_HEIGHT > CHRONICLE_HEIGHT ? "yes" : "no")
+        << ")\n"
+        << "  Consensus    : true\n"
+        << "  Network      : "
+        << network
+        << "\n"
+        << std::string(70, '=')
+        << "\n";
 
     return (failed == 0) ? 0 : 1;
 }

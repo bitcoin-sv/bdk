@@ -1,21 +1,22 @@
-/// Benchmark program for se.ValidateTransaction and se.ValidateBatch with hardcoded transaction data
+/// Benchmark program for se.ValidateTransaction and se.ValidateBatch with hardcoded
+/// transaction data
 
-#include <cassert>
-#include <iostream>
-#include <iomanip>
-#include <vector>
-#include <string>
 #include <array>
-#include <string_view>
-#include <stdexcept>
+#include <cassert>
 #include <chrono>
+#include <iomanip>
+#include <iostream>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <vector>
 
 #include <boost/program_options.hpp>
 
-#include "extendedTx.hpp"
 #include "assembler.h"
-#include "utilstrencodings.h"
+#include "extendedTx.hpp"
 #include "txvalidator.hpp"
+#include "utilstrencodings.h"
 #include "validatearg.hpp"
 
 namespace po = boost::program_options;
@@ -26,8 +27,15 @@ namespace po = boost::program_options;
 // Size: 192 bytes (1 input, 1 output, no OP_RETURN)
 constexpr const char* CHAIN_NET = "main";
 const int32_t BLOCK_HEIGHT = 620940;
-constexpr const char* TX_ID = "d43ad4d4b46632b311b844117a5a9e9598afd1ee13e95d98106bf2adeae0bad7";
-constexpr std::string_view TX_HEX_EXTENDED = "010000000000000000ef0120fa0d2c5974cfe6e3aec71f7f6539cfa1c1e474082d2cdb41fb830f6267b7d7000000006b4830450221008788b545ebd6ebcb15f938045b71c1fa7efafd55d1f4e64e96602a04f3214cda0220717ddadfa7d1dc6a22ccb077350aef7a2073ee58fe780d86b77a31c24c664a21412103ef28c47337b05ec3f14b63d904db7ae023e897389dbdbf531221e13fd5e5b105ffffffffdc3de103000000001976a91437fb14a40d021abbb1763497f963a130286d1ad188ac017239e103000000001976a914962eba38504bcfb140ff0246afa795658812b42788ac00000000";
+constexpr const char*
+    TX_ID = "d43ad4d4b46632b311b844117a5a9e9598afd1ee13e95d98106bf2adeae0bad7";
+constexpr std::string_view TX_HEX_EXTENDED =
+    "010000000000000000ef0120fa0d2c5974cfe6e3aec71f7f6539cfa1c1e474082d2cdb41fb830f6267b7"
+    "d7000000006b4830450221008788b545ebd6ebcb15f938045b71c1fa7efafd55d1f4e64e96602a04f321"
+    "4cda0220717ddadfa7d1dc6a22ccb077350aef7a2073ee58fe780d86b77a31c24c664a21412103ef28c4"
+    "7337b05ec3f14b63d904db7ae023e897389dbdbf531221e13fd5e5b105ffffffffdc3de1030000000019"
+    "76a91437fb14a40d021abbb1763497f963a130286d1ad188ac017239e103000000001976a914962eba38"
+    "504bcfb140ff0246afa795658812b42788ac00000000";
 constexpr std::array<int32_t, 1> UTXO_HEIGHTS = {574441};
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -42,15 +50,21 @@ int main(int argc, char* argv[])
 
     // Define and parse the command line options
     po::options_description desc("Allowed options");
-    desc.add_options()
-        ("help,h", "produce help message")
-        ("iterations,i", po::value<int>(&iterations)->default_value(10000), "number of iterations to run")
-        ("batch-size,b", po::value<int>(&batchSize)->default_value(1000), "batch size (number of transactions per batch)")
-        ("disable-consensus,c", po::bool_switch(&disableConsensus)->default_value(false), "disable the consensus")
-        ("bench-batch", po::bool_switch(&benchBatch)->default_value(false), "benchmark batch processing instead of single");
+    desc.add_options()("help,h", "produce help message")(
+        "iterations,i",
+        po::value<int>(&iterations)->default_value(10000),
+        "number of iterations to run")("batch-size,b",
+                                       po::value<int>(&batchSize)->default_value(1000),
+                                       "batch size (number of transactions per batch)")(
+        "disable-consensus,c",
+        po::bool_switch(&disableConsensus)->default_value(false),
+        "disable the consensus")("bench-batch",
+                                 po::bool_switch(&benchBatch)->default_value(false),
+                                 "benchmark batch processing instead of single");
 
     po::variables_map vm;
-    try {
+    try
+    {
         po::store(po::parse_command_line(argc, argv, desc), vm);
         if(vm.contains("help"))
         {
@@ -59,7 +73,8 @@ int main(int argc, char* argv[])
         }
         po::notify(vm);
     }
-    catch (po::error& e) {
+    catch(po::error& e)
+    {
         std::cerr << "Error: " << e.what() << '\n';
         std::cerr << desc << '\n';
         return 1;
@@ -69,9 +84,14 @@ int main(int argc, char* argv[])
     std::cout << "  Network: " << CHAIN_NET << '\n';
     std::cout << "  TXID: " << TX_ID << '\n';
     std::cout << "  Block Height: " << BLOCK_HEIGHT << '\n';
-    std::cout << "  Transaction Size: " << TX_HEX_EXTENDED.length() / 2 << " bytes" << '\n';
+    std::cout
+        << "  Transaction Size: "
+        << TX_HEX_EXTENDED.length() / 2
+        << " bytes"
+        << '\n';
     std::cout << "  Mode: " << (benchBatch ? "Batch" : "Single") << '\n';
-    if (benchBatch) {
+    if(benchBatch)
+    {
         std::cout << "  Batch Size: " << batchSize << " transactions" << '\n';
     }
     std::cout << "  Iterations: " << iterations << '\n';
@@ -89,31 +109,50 @@ int main(int argc, char* argv[])
     // Warmup run (not measured)
     std::cout << "Running warmup..." << '\n';
 
-    if (benchBatch) {
+    if(benchBatch)
+    {
         // Warmup for batch mode
-        for (int i = 0; i < 10; ++i) {
+        for(int i = 0; i < 10; ++i)
+        {
             bsv::ValidateBatch batch;
             batch.reserve(batchSize);
-            for (int j = 0; j < batchSize; ++j) {
-                batch.add(bsv::ValidateArg(txBinExtended, utxoHeights, BLOCK_HEIGHT, consensus));
+            for(int j = 0; j < batchSize; ++j)
+            {
+                batch.add(bsv::ValidateArg(txBinExtended,
+                                           utxoHeights,
+                                           BLOCK_HEIGHT,
+                                           consensus));
             }
             const auto results = se.ValidateBatch(batch);
-            if (results.size() != static_cast<size_t>(batchSize)) {
-                std::cerr << "ERROR: ValidateBatch returned wrong number of results during warmup" << '\n';
+            if(results.size() != static_cast<size_t>(batchSize))
+            {
+                std::cerr
+                    << "ERROR: ValidateBatch returned wrong number of results during "
+                       "warmup"
+                    << '\n';
                 return 1;
             }
-            for (const auto& ret : results) {
-                if (!bsv::TxErrorIsOk(ret)) {
+            for(const auto& ret : results)
+            {
+                if(!bsv::TxErrorIsOk(ret))
+                {
                     std::cerr << "ERROR: ValidateBatch failed during warmup" << '\n';
                     return 1;
                 }
             }
         }
-    } else {
+    }
+    else
+    {
         // Warmup for single mode
-        for (int i = 0; i < 100; ++i) {
-            const TxError ret = se.ValidateTransaction(txBinExtended, utxoHeights, BLOCK_HEIGHT, consensus);
-            if (!bsv::TxErrorIsOk(ret)) {
+        for(int i = 0; i < 100; ++i)
+        {
+            const TxError ret = se.ValidateTransaction(txBinExtended,
+                                                       utxoHeights,
+                                                       BLOCK_HEIGHT,
+                                                       consensus);
+            if(!bsv::TxErrorIsOk(ret))
+            {
                 std::cerr << "ERROR: ValidateTransaction failed during warmup" << '\n';
                 return 1;
             }
@@ -127,38 +166,59 @@ int main(int argc, char* argv[])
     std::chrono::nanoseconds minDuration = std::chrono::nanoseconds::max();
     std::chrono::nanoseconds maxDuration(0);
 
-    if (benchBatch) {
+    if(benchBatch)
+    {
         // Benchmark batch mode
-        for (int i = 0; i < iterations; ++i) {
+        for(int i = 0; i < iterations; ++i)
+        {
             bsv::ValidateBatch batch;
             batch.reserve(batchSize);
-            for (int j = 0; j < batchSize; ++j) {
-                batch.add(bsv::ValidateArg(txBinExtended, utxoHeights, BLOCK_HEIGHT, consensus));
+            for(int j = 0; j < batchSize; ++j)
+            {
+                batch.add(bsv::ValidateArg(txBinExtended,
+                                           utxoHeights,
+                                           BLOCK_HEIGHT,
+                                           consensus));
             }
 
             const auto start = std::chrono::high_resolution_clock::now();
             const auto results = se.ValidateBatch(batch);
             const auto end = std::chrono::high_resolution_clock::now();
 
-            if (results.size() != static_cast<size_t>(batchSize)) {
-                std::cerr << "ERROR: ValidateBatch returned wrong number of results at iteration " << i << '\n';
+            if(results.size() != static_cast<size_t>(batchSize))
+            {
+                std::cerr
+                    << "ERROR: ValidateBatch returned wrong number of results at "
+                       "iteration "
+                    << i
+                    << '\n';
                 return 1;
             }
 
-            for (size_t j = 0; j < results.size(); ++j) {
-                if (!bsv::TxErrorIsOk(results[j])) {
-                    std::cerr << "ERROR: ValidateBatch failed at iteration " << i << ", item " << j << '\n';
+            for(size_t j = 0; j < results.size(); ++j)
+            {
+                if(!bsv::TxErrorIsOk(results[j]))
+                {
+                    std::cerr
+                        << "ERROR: ValidateBatch failed at iteration "
+                        << i
+                        << ", item "
+                        << j
+                        << '\n';
                     return 1;
                 }
             }
 
-            const auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+            const auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                end - start);
             totalDuration += duration;
 
-            if (duration < minDuration) {
+            if(duration < minDuration)
+            {
                 minDuration = duration;
             }
-            if (duration > maxDuration) {
+            if(duration > maxDuration)
+            {
                 maxDuration = duration;
             }
         }
@@ -169,21 +229,31 @@ int main(int argc, char* argv[])
         for(int i = 0; i < iterations; ++i)
         {
             const auto start = std::chrono::high_resolution_clock::now();
-            const TxError ret = se.ValidateTransaction(txBinExtended, utxoHeights, BLOCK_HEIGHT, consensus);
+            const TxError ret = se.ValidateTransaction(txBinExtended,
+                                                       utxoHeights,
+                                                       BLOCK_HEIGHT,
+                                                       consensus);
             const auto end = std::chrono::high_resolution_clock::now();
 
-            if (!bsv::TxErrorIsOk(ret)) {
-                std::cerr << "ERROR: ValidateTransaction failed at iteration " << i << '\n';
+            if(!bsv::TxErrorIsOk(ret))
+            {
+                std::cerr
+                    << "ERROR: ValidateTransaction failed at iteration "
+                    << i
+                    << '\n';
                 return 1;
             }
 
-            const auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+            const auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                end - start);
             totalDuration += duration;
 
-            if (duration < minDuration) {
+            if(duration < minDuration)
+            {
                 minDuration = duration;
             }
-            if (duration > maxDuration) {
+            if(duration > maxDuration)
+            {
                 maxDuration = duration;
             }
         }
@@ -192,38 +262,89 @@ int main(int argc, char* argv[])
     // Calculate statistics
     const double avgNanoseconds = static_cast<double>(totalDuration.count()) / iterations;
     const double avgMicroseconds = avgNanoseconds / 1000.0;
-    //NOLINTBEGIN(*-narrowing-conversions)
+    // NOLINTBEGIN(*-narrowing-conversions)
     const double totalSeconds = totalDuration.count() / 1e9;
 
     std::cout << '\n';
     std::cout << "Benchmark Results:" << '\n';
     std::cout << "==================" << '\n';
     std::cout << std::fixed << std::setprecision(2);
-    std::cout << "Total time:        " << std::setprecision(4) << totalSeconds << " seconds" << '\n';
-    if (benchBatch) {
-        std::cout << "Average per batch: " << std::setprecision(2) << avgMicroseconds / 1000.0 << " ms ("
-                  << std::setprecision(0) << avgNanoseconds << " ns)" << '\n';
+    std::cout
+        << "Total time:        "
+        << std::setprecision(4)
+        << totalSeconds
+        << " seconds"
+        << '\n';
+    if(benchBatch)
+    {
+        std::cout
+            << "Average per batch: "
+            << std::setprecision(2)
+            << avgMicroseconds / 1000.0
+            << " ms ("
+            << std::setprecision(0)
+            << avgNanoseconds
+            << " ns)"
+            << '\n';
         const double avgPerTx = avgNanoseconds / batchSize;
-        std::cout << "Average per tx:    " << std::setprecision(2) << avgPerTx / 1000.0 << " µs ("
-                  << std::setprecision(0) << avgPerTx << " ns)" << '\n';
-    } else {
-        std::cout << "Average per call:  " << std::setprecision(2) << avgMicroseconds << " µs ("
-                  << std::setprecision(0) << avgNanoseconds << " ns)" << '\n';
+        std::cout
+            << "Average per tx:    "
+            << std::setprecision(2)
+            << avgPerTx / 1000.0
+            << " µs ("
+            << std::setprecision(0)
+            << avgPerTx
+            << " ns)"
+            << '\n';
     }
-    std::cout << "Min:               " << std::setprecision(2) << minDuration.count() / 1000.0 << " µs ("
-              << minDuration.count() << " ns)" << '\n';
-    std::cout << "Max:               " << std::setprecision(2) << maxDuration.count() / 1000.0 << " µs ("
-              << maxDuration.count() << " ns)" << '\n';
-    //NOLINTEND(*-narrowing-conversions)
+    else
+    {
+        std::cout
+            << "Average per call:  "
+            << std::setprecision(2)
+            << avgMicroseconds
+            << " µs ("
+            << std::setprecision(0)
+            << avgNanoseconds
+            << " ns)"
+            << '\n';
+    }
+    std::cout
+        << "Min:               "
+        << std::setprecision(2)
+        << minDuration.count() / 1000.0
+        << " µs ("
+        << minDuration.count()
+        << " ns)"
+        << '\n';
+    std::cout
+        << "Max:               "
+        << std::setprecision(2)
+        << maxDuration.count() / 1000.0
+        << " µs ("
+        << maxDuration.count()
+        << " ns)"
+        << '\n';
+    // NOLINTEND(*-narrowing-conversions)
 
     if(benchBatch)
     {
         const int totalTx = iterations * batchSize;
-        std::cout << "Throughput:        " << std::setprecision(0) << (totalTx / totalSeconds) << " tx/sec" << '\n';
+        std::cout
+            << "Throughput:        "
+            << std::setprecision(0)
+            << (totalTx / totalSeconds)
+            << " tx/sec"
+            << '\n';
     }
     else
     {
-        std::cout << "Throughput:        " << std::setprecision(0) << (iterations / totalSeconds) << " calls/sec" << '\n';
+        std::cout
+            << "Throughput:        "
+            << std::setprecision(0)
+            << (iterations / totalSeconds)
+            << " calls/sec"
+            << '\n';
     }
 
     return 0;
