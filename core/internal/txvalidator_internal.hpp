@@ -82,15 +82,15 @@ void CountHelperInput();
 void CountJobInputs(size_t inputs, bool helper);
 void CountHelperWakeWithoutCore();
 #else
-inline constexpr size_t ParallelInputThreshold() { return DEFAULT_PARALLEL_INPUT_THRESHOLD; }
+constexpr size_t ParallelInputThreshold() { return DEFAULT_PARALLEL_INPUT_THRESHOLD; }
 inline void OnInput(size_t, InputEvent) {}
 inline void OnStage(ValidationStage) {}
 inline void OnPool(InputPoolEvent) {}
 inline void OnSourceAllocation(bool) {}
 inline void OnHelperReleasedCore() {}
 inline void OnPoolCreation() {}
-inline constexpr size_t PoolCoresCap() { return 0; }
-inline constexpr bool HelperStartsFail() { return false; }
+constexpr size_t PoolCoresCap() { return 0; }
+constexpr bool HelperStartsFail() { return false; }
 inline void CountHelperInput() {}
 inline void CountJobInputs(size_t, bool) {}
 inline void CountHelperWakeWithoutCore() {}

@@ -111,7 +111,7 @@ public:
     std::optional<size_t> Claim();
     size_t UnclaimedInputs() const;
     bool HasWork() const;
-    size_t Helpers() const;
+    [[nodiscard]] size_t Helpers() const;
     // Unclaimed inputs, or 0 while helpers cannot join: an allocation failed
     // or the job already holds its helpers.
     size_t HelperUnclaimedInputs() const;
@@ -151,7 +151,7 @@ public:
     explicit InputVerifyPool(size_t cores);
     static InputVerifyPool* Get();
     static InputVerifyPool* Existing();
-    size_t Helpers() const;
+    [[nodiscard]] size_t Helpers() const;
     size_t AvailableHelpers(size_t limit) const;
     // Queues the job and wakes up to its helper count of idle helpers.
     void Offer(const std::shared_ptr<InputJob>& job);

@@ -442,7 +442,7 @@ BOOST_AUTO_TEST_CASE(job_holds_at_most_its_helper_count)
     BOOST_CHECK(pool.NextJob() == capped);
     BOOST_REQUIRE(capped->TryJoin());
     BOOST_CHECK(!capped->TryJoin());
-    BOOST_CHECK_EQUAL(capped->HelperUnclaimedInputs(), 0u);
+    BOOST_CHECK_EQUAL(capped->HelperUnclaimedInputs(), 0U);
     BOOST_CHECK(pool.NextJob() == other);
     capped->Leave();
     BOOST_CHECK(pool.NextJob() == capped);
@@ -451,8 +451,8 @@ BOOST_AUTO_TEST_CASE(job_holds_at_most_its_helper_count)
 
     const auto callerOnly = ValidJob(8, token, 0);
     BOOST_CHECK(!callerOnly->TryJoin());
-    BOOST_CHECK_EQUAL(callerOnly->HelperUnclaimedInputs(), 0u);
-    BOOST_CHECK_EQUAL(Present(callerOnly->Work()), 8u);
+    BOOST_CHECK_EQUAL(callerOnly->HelperUnclaimedInputs(), 0U);
+    BOOST_CHECK_EQUAL(Present(callerOnly->Work()), 8U);
     BOOST_CHECK(bsv::TxErrorIsOk(Present(callerOnly->CompletedResult())));
 }
 
