@@ -16,12 +16,7 @@
 #include <txvalidator.hpp>
 #include <internal/txvalidator_internal.hpp>
 #include <internal/input_verification.hpp>
-using bsv::detail::parallelInputThreshold;
-using bsv::detail::inputCountersEnabled;
-using bsv::detail::jobVerifiedInputs;
-using bsv::detail::inputHook;
-using bsv::detail::validationStageHook;
-using bsv::detail::inputPoolHook;
+namespace hooks = bsv::detail::hooks;
 #if BDK_PARALLEL_INPUTS
 using bsv::detail::InputJob;
 using bsv::detail::InputVerifyPool;
@@ -296,7 +291,7 @@ private:
  * Parallel input verification
  * ---------------------------
  * implVerifyScript verifies the inputs of a transaction with at least
- * parallelInputThreshold inputs on the calling thread plus idle helpers from
+ * DEFAULT_PARALLEL_INPUT_THRESHOLD inputs on the calling thread plus idle helpers from
  * one process-wide pool. The result is the serial result: the outcome of the
  * lowest-index input that fails, whether a TxError or an exception.
  *
@@ -907,8 +902,7 @@ TxError bsv::CTxValidator::VerifyScript(std::span<const uint8_t> extendedTX, std
 #endif
 
     try {
-        if (const auto hook = validationStageHook.load(std::memory_order_relaxed))
-            hook(bsv::detail::ValidationStage::Deserializing);
+        hooks::OnStage(bsv::detail::ValidationStage::Deserializing);
         const char* begin{ reinterpret_cast<const char*>(extendedTX.data()) };
         const char* end{ reinterpret_cast<const char*>(extendedTX.data() + extendedTX.size()) };
         CDataStream tx_stream(begin, end, SER_NETWORK, PROTOCOL_VERSION);
@@ -1087,8 +1081,7 @@ TxError bsv::CTxValidator::implVerifyScript(
     if (!customFlags.empty() && customFlags.size() != prevUTXO.size())
         throw std::runtime_error("inconsistent custom flags size");
 
-    if (const auto hook = validationStageHook.load(std::memory_order_relaxed))
-        hook(bsv::detail::ValidationStage::PrecomputedData);
+    hooks::OnStage(bsv::detail::ValidationStage::PrecomputedData);
     // Hashed once here and shared by every input's FORKID signature checks.
     const PrecomputedTransactionData txdata(ctx);
     // Building it is linear in the transaction size with no poll inside, so poll
@@ -1122,7 +1115,7 @@ TxError bsv::CTxValidator::implVerifyScript(
     const size_t nInputs = prevUTXO.size();
     size_t firstSerialInput = 0;
 #if BDK_PARALLEL_INPUTS
-    const size_t threshold = parallelInputThreshold.load(std::memory_order_relaxed);
+    const size_t threshold = hooks::ParallelInputThreshold();
     // A limit of 0 never creates the pool, so no helper thread is started.
     const size_t helperLimit = nInputs >= threshold ? HelperLimit() : 0;
     if (helperLimit > 0) {
@@ -1134,11 +1127,10 @@ TxError bsv::CTxValidator::implVerifyScript(
             const size_t participants = (nInputs + perParticipant - 1) / perParticipant;
             // With every core already busy the job is still queued, waking no
             // one: a helper joins it when a core frees.
-            if (const auto hook = inputPoolHook.load(std::memory_order_relaxed))
-                hook(bsv::detail::InputPoolEvent::BeforeOffer);
+            hooks::OnPool(bsv::detail::InputPoolEvent::BeforeOffer);
             std::shared_ptr<InputJob> job;
             try {
-                job = std::make_shared<InputJob>(nInputs, participants - 1, verifyInput, token);
+                job = std::make_shared<InputJob>(nInputs, verifyInput, token, participants - 1);
                 pool->Offer(job);
             } catch (const std::exception&) {
                 job.reset();  // not queued (bad_alloc, system_error): verify serially below
@@ -1150,8 +1142,7 @@ TxError bsv::CTxValidator::implVerifyScript(
                     verified = job->Work();
                     if (!verified)
                         pool->Withdraw(job);  // no new selections while joined helpers drain
-                    if (inputCountersEnabled.load(std::memory_order_relaxed))
-                        jobVerifiedInputs.fetch_add(verified.value_or(0), std::memory_order_relaxed);
+                    hooks::CountJobInputs(verified.value_or(0), /*helper=*/false);
                     caller.Finish();
                 } catch (...) {
                     // JobCaller has drained every joined helper. A token
@@ -1178,8 +1169,7 @@ TxError bsv::CTxValidator::implVerifyScript(
 #endif
     for (size_t index = firstSerialInput; index < nInputs; ++index) {
         const TxError verifyResult = verifyInput(index, token);
-        if (const auto hook = inputHook.load(std::memory_order_relaxed))
-            hook(index, bsv::detail::InputEvent::Verified);
+        hooks::OnInput(index, bsv::detail::InputEvent::Verified);
         if (!bsv::TxErrorIsOk(verifyResult))
             return verifyResult;
     }
@@ -1352,8 +1342,7 @@ TxError bsv::CTxValidator::ValidateTransaction(std::span<const uint8_t> extended
 #endif
 
     try {
-        if (const auto hook = validationStageHook.load(std::memory_order_relaxed))
-            hook(bsv::detail::ValidationStage::Deserializing);
+        hooks::OnStage(bsv::detail::ValidationStage::Deserializing);
         const char* begin{ reinterpret_cast<const char*>(extendedTX.data()) };
         const char* end{ reinterpret_cast<const char*>(extendedTX.data() + extendedTX.size()) };
         CDataStream tx_stream(begin, end, SER_NETWORK, PROTOCOL_VERSION);
@@ -1374,8 +1363,7 @@ TxError bsv::CTxValidator::ValidateTransaction(std::span<const uint8_t> extended
         if (!tx_stream.empty())
             throw std::runtime_error("error serializing extended tx");
 
-        if (const auto hook = validationStageHook.load(std::memory_order_relaxed))
-            hook(bsv::detail::ValidationStage::TransactionChecks);
+        hooks::OnStage(bsv::detail::ValidationStage::TransactionChecks);
         if (ctx.IsCoinBase())
             return bsv::TxErrorDoS(static_cast<int32_t>(bsv::DoSError_t::CoinbaseNotAllowed));
 

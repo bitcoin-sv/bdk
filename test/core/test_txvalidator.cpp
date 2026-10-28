@@ -76,16 +76,12 @@ struct ParallelInputThresholdFromArgs {
     static inline size_t shippedParallelInputThreshold = 0;
     // The helper limit the library starts with, read the same way.
     static inline int64_t shippedParallelInputHelpers = 0;
-    // Whether the test-only input counters were on when the library started.
-    static inline bool shippedInputCountersEnabled = true;
 
     ParallelInputThresholdFromArgs()
     {
         shippedParallelInputThreshold = bsv::detail::SetParallelInputThresholdForTesting(0);
         shippedParallelInputHelpers = bsv::GetParallelInputHelpers();
         bsv::detail::SetParallelInputThresholdForTesting(shippedParallelInputThreshold);
-        // The pool tests read the test-only input counters; they are off by default.
-        shippedInputCountersEnabled = bsv::detail::SetInputCountersEnabledForTesting(true);
         const std::string threshold = "--parallel-input-threshold=";
         const std::string cores = "--input-pool-cores=";
         const auto& suite = boost::unit_test::framework::master_test_suite();
@@ -1921,8 +1917,6 @@ BOOST_FIXTURE_TEST_CASE(pool_without_helper_threads_is_not_retried, FirstPoolCre
 //     pool_without_helper_threads_is_not_retried
 //   Helpers run on an 8 MiB stack: helpers_run_on_an_8_mib_stack,
 //     deep_scripts_verify_on_a_helper
-//   Test-only counters are off by default:
-//     input_counters_are_off_by_default, input_counters_count_only_when_enabled
 BOOST_AUTO_TEST_SUITE(parallel_input_verification)
 
 constexpr unsigned PARALLEL_TEST_TIMEOUT_S = 60;
@@ -1934,13 +1928,6 @@ constexpr unsigned PARALLEL_TEST_TIMEOUT_S = 60;
 BOOST_AUTO_TEST_CASE(shipped_threshold_is_the_default)
 {
     BOOST_CHECK_EQUAL(ParallelInputThresholdFromArgs::shippedParallelInputThreshold, bsv::detail::DEFAULT_PARALLEL_INPUT_THRESHOLD);
-}
-
-// The library ships with the test-only input counters off, so production
-// does no per-input write to them.
-BOOST_AUTO_TEST_CASE(input_counters_are_off_by_default)
-{
-    BOOST_CHECK(!ParallelInputThresholdFromArgs::shippedInputCountersEnabled);
 }
 
 BOOST_AUTO_TEST_CASE(valid_tx_validates_with_inputs_spread_over_helpers, *boost::unit_test::timeout(PARALLEL_TEST_TIMEOUT_S))
@@ -3797,48 +3784,6 @@ public:
     const bool configured;
     const ScopedInputHook hook{ &Hook };
 };
-
-// The test-only counters (inputs and participations)
-// stay untouched unless a test turns them on, so production does no
-// per-input write to them; helpers still verify inputs either way.
-BOOST_AUTO_TEST_CASE(input_counters_count_only_when_enabled, PARALLEL_TEST_CASE_DECORATORS)
-{
-    if (!PoolHasHelpers())
-        return;
-    constexpr size_t nInputs = 200;
-    const bsv::CTxValidator se("main");
-    const auto etxBin = SignedP2PKHBin(nInputs);
-    const InputThresholdGuard parallel(FORCE_PARALLEL);
-    BOOST_REQUIRE(PoolIsIdle());
-    const auto counters = [] {
-        return std::array<uint64_t, 3>{ bsv::detail::HelperVerifiedInputCountForTesting(),
-                                        bsv::detail::JobVerifiedInputCountForTesting(),
-                                        bsv::detail::HelperJobParticipationCountForTesting() };
-    };
-    const ClaimRecorder recorder(nInputs);
-    {
-        const bsv::detail::ScopedInputCountersForTesting off(false);
-        const auto before = counters();
-        bool helperVerified = false;
-        for (int call = 0; call < 5 && !helperVerified; ++call) {
-            ClaimRecorder::Reset();
-            BOOST_REQUIRE(bsv::TxErrorIsOk(ValidateP2PKHSpend(se, etxBin, nInputs, /*consensus=*/true)));
-            for (size_t i = 1; i < nInputs && !helperVerified; ++i)
-                helperVerified = ClaimRecorder::OnHelper(i);
-        }
-        BOOST_REQUIRE_MESSAGE(helperVerified, "no helper verified an input with the counters off");
-        BOOST_CHECK_MESSAGE(counters() == before, "a test-only counter moved with counting off");
-    }
-    {
-        const bsv::detail::ScopedInputCountersForTesting on(true);
-        const auto before = counters();
-        BOOST_REQUIRE(PoolIsIdle());
-        ClaimRecorder::Reset();
-        BOOST_REQUIRE(bsv::TxErrorIsOk(ValidateP2PKHSpend(se, etxBin, nInputs, /*consensus=*/true)));
-        BOOST_CHECK_GT(counters()[1], before[1]);
-        BOOST_CHECK_GT(counters()[0], before[0]);
-    }
-}
 
 // Allocation is a scheduling failure, not an invalid input. The helper-only
 // case requires caller work to wait for an injected failure; the caller-only

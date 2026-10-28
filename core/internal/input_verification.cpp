@@ -27,32 +27,15 @@ namespace bsv::detail {
 // against 1.4.0 on 8-vCPU m8g, m6a and c7i instances, 16 inputs with helpers
 // is 30-47% faster than 1.4.0 and already faster than 15 inputs serially.
 static_assert(bsv::detail::DEFAULT_PARALLEL_INPUT_THRESHOLD == 16);
-// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables): process-wide pool state and test hooks, atomic by design
-std::atomic<size_t> parallelInputThreshold{ bsv::detail::DEFAULT_PARALLEL_INPUT_THRESHOLD };
-// Test-only counters, written only while inputCountersEnabled (off by
-// default); participation counters read the flag outside the input loop.
-std::atomic<bool> inputCountersEnabled{ false };
-static std::atomic<uint64_t> helperVerifiedInputs{ 0 };
-std::atomic<uint64_t> jobVerifiedInputs{ 0 };  // caller and helpers, inside jobs
-static std::atomic<uint64_t> helperJobParticipations{ 0 };  // helper Work() calls that verified an input
-static std::atomic<uint64_t> helperWakesWithoutCore{ 0 };
-std::atomic<bsv::detail::InputHook> inputHook{ nullptr };  // tests only
-static std::atomic<bsv::detail::InputSourceAllocationHook> inputSourceAllocationHook{ nullptr };  // tests only
-std::atomic<bsv::detail::ValidationStageHook> validationStageHook{ nullptr };  // tests only
-static std::atomic<bsv::detail::HelperReleasedCoreHook> helperReleasedCoreHook{ nullptr };  // tests only
-std::atomic<bsv::detail::InputPoolHook> inputPoolHook{ nullptr };  // tests only
-static std::atomic<size_t> inputPoolCoresCap{ 0 };  // 0: no cap (tests only)
-static std::atomic<bsv::detail::InputPoolCreationHook> inputPoolCreationHook{ nullptr };
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): process-wide setting, atomic by design
 static std::atomic<int64_t> parallelInputHelpers{ -1 };  // SetParallelInputHelpers; < 0: automatic
-static std::atomic<bool> helperStartsFail{ false };  // tests only
-// NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 
 
 #if BDK_PARALLEL_INPUTS
 // How often a caller waiting for joined helpers polls its token.
 static constexpr std::chrono::milliseconds CALLER_CANCELLATION_POLL_INTERVAL{ 10 };
 
-// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables): process-wide pool state and test hooks, atomic by design
+// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables): process-wide pool state, atomic by design
 std::atomic<size_t> busyThreads{ 0 };
 thread_local bool threadIsBusy{ false };
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
@@ -67,14 +50,13 @@ size_t HelperLimit()
 }
 
 // One transaction's inputs [0, n), shared by its caller and the helpers that join.
-InputJob::InputJob(size_t n, size_t helpers, VerifyInput verify, const task::CCancellationToken& callerToken)
+InputJob::InputJob(size_t n, VerifyInput verify, const task::CCancellationToken& callerToken, size_t helpers)
     : n_{ n }, helpers_{ helpers }, verify_{ std::move(verify) }, callerToken_{ callerToken },
       lowestFailure_{ n }, lowestCancelled_{ n } {}
 
 std::optional<size_t> InputJob::Work(HelperTerms* helper)
 {
     size_t verified = 0;
-    const auto pollHook = inputHook.load(std::memory_order_relaxed);
     std::shared_ptr<bsv::detail::InputCancellationSource> cancellation;
     std::optional<task::CCancellationToken> inputToken;
     if (!HasWork() || (helper != nullptr && HelperShouldLeave(*helper)))
@@ -83,10 +65,9 @@ std::optional<size_t> InputJob::Work(HelperTerms* helper)
     // index. A helper can leave; the caller drains, retaining any completed
     // verdict before falling back to serial verification if needed.
     try {
-        if (const auto hook = inputSourceAllocationHook.load(std::memory_order_relaxed))
-            hook(helper != nullptr);
+        hooks::OnSourceAllocation(helper != nullptr);
         cancellation = std::make_shared<bsv::detail::InputCancellationSource>(
-            lowestFailure_, callerCancelled_, helper == nullptr ? &callerToken_ : nullptr, pollHook);
+            lowestFailure_, callerCancelled_, helper == nullptr ? &callerToken_ : nullptr);
         inputToken.emplace(cancellation->GetToken());
     } catch (const std::bad_alloc&) {
         // Do not spend helper CPU retrying allocation on this job. The
@@ -106,8 +87,7 @@ std::optional<size_t> InputJob::Work(HelperTerms* helper)
             try {
                 if (callerToken_.IsCanceled()) {
                     callerCancelled_.store(true, std::memory_order_relaxed);
-                    if (pollHook)
-                        pollHook(next_.load(std::memory_order_relaxed), bsv::detail::InputEvent::CallerCancelled);
+                    cancellation->Notify(next_.load(std::memory_order_relaxed), bsv::detail::InputEvent::CallerCancelled);
                 }
             } catch (...) {
                 callerCancelled_.store(true, std::memory_order_relaxed);
@@ -120,14 +100,12 @@ std::optional<size_t> InputJob::Work(HelperTerms* helper)
         if (!claimed)
             return verified;
         const size_t index = *claimed;
-        if (const auto hook = inputHook.load(std::memory_order_relaxed))
-            hook(index, bsv::detail::InputEvent::Claimed);
+        hooks::OnInput(index, bsv::detail::InputEvent::Claimed);
         ++verified;
         try {
             cancellation->SetIndex(index);
             const TxError result = verify_(index, *inputToken);
-            if (pollHook)
-                pollHook(index, bsv::detail::InputEvent::Verified);
+            cancellation->Notify(index, bsv::detail::InputEvent::Verified);
             if (!bsv::TxErrorIsOk(result))
                 Fail(index, result, nullptr);
         } catch (const std::bad_alloc&) {
@@ -144,8 +122,8 @@ std::optional<size_t> InputJob::Work(HelperTerms* helper)
         } catch (...) {
             Fail(index, bsv::TxErrorException(), std::current_exception());
         }
-        if (helper != nullptr && helper->inputs != nullptr)
-            helper->inputs->fetch_add(1, std::memory_order_relaxed);
+        if (helper != nullptr)
+            hooks::CountHelperInput();
     }
 }
 
@@ -197,8 +175,7 @@ void InputJob::CloseAndWait(bool pollCancellation)
     std::unique_lock lock{ mutex_ };
     if (!closed_) {
         closed_ = true;
-        if (const auto hook = inputPoolHook.load(std::memory_order_relaxed))
-            hook(bsv::detail::InputPoolEvent::JobClosed);
+        hooks::OnPool(bsv::detail::InputPoolEvent::JobClosed);
     }
     while (joined_.load(std::memory_order_relaxed) != 0) {
         if (!pollCancellation || callerCancelled_.load(std::memory_order_relaxed)) {
@@ -215,8 +192,7 @@ void InputJob::CloseAndWait(bool pollCancellation)
         try {
             if (callerToken_.IsCanceled()) {
                 callerCancelled_.store(true, std::memory_order_relaxed);
-                if (const auto hook = inputHook.load(std::memory_order_relaxed))
-                    hook(next_.load(std::memory_order_relaxed), bsv::detail::InputEvent::CallerCancelled);
+                hooks::OnInput(next_.load(std::memory_order_relaxed), bsv::detail::InputEvent::CallerCancelled);
             }
         } catch (...) {
             callerCancelled_.store(true, std::memory_order_relaxed);
@@ -270,8 +246,7 @@ bool InputJob::HelperShouldLeave(HelperTerms& helper)
 
 void InputJob::Fail(size_t index, const TxError& result, std::exception_ptr exception)
 {
-    if (const auto hook = inputHook.load(std::memory_order_relaxed))
-        hook(index, bsv::detail::InputEvent::Failed);
+    hooks::OnInput(index, bsv::detail::InputEvent::Failed);
     const std::scoped_lock lock{ mutex_ };
     if (result.domain == TX_ERR_DOMAIN_CANCELLED) {
         lowestCancelled_ = std::min(lowestCancelled_, index);
@@ -331,12 +306,14 @@ void InputVerifyPool::Offer(const std::shared_ptr<InputJob>& job)
         wake_.notify_one();
 }
 
+#if BDK_TESTING_HOOKS
 void InputVerifyPool::WakeHelpersForTesting(bool all)
 {
     const std::scoped_lock lock{ mutex_ };
     if (all) wake_.notify_all();
     else wake_.notify_one();
 }
+#endif
 
 void InputVerifyPool::Withdraw(const std::shared_ptr<InputJob>& job)
 {
@@ -368,12 +345,11 @@ InputVerifyPool::InputVerifyPool(size_t cores) : cores_{ cores } {}
 
 InputVerifyPool* InputVerifyPool::Create()
 {
-    if (const auto hook = inputPoolCreationHook.load(std::memory_order_relaxed))
-        hook();
+    hooks::OnPoolCreation();
     // Read once: a pool keeps this count, and fewer than 2 CPUs means no pool
     // for the process lifetime. Only a failure to allocate the pool retries.
     size_t cores = bsv::detail::EffectiveCpuCount();
-    if (const size_t cap = inputPoolCoresCap.load(); cap != 0)
+    if (const size_t cap = hooks::PoolCoresCap(); cap != 0)
         cores = std::min(cores, cap);
     if (cores < 2) {
         noPool_.store(true, std::memory_order_release);
@@ -399,7 +375,7 @@ InputVerifyPool* InputVerifyPool::Create()
 
 bool InputVerifyPool::StartHelper(InputVerifyPool* pool)
 {
-    if (helperStartsFail.load(std::memory_order_relaxed))
+    if (hooks::HelperStartsFail())
         return false;
 #if defined(_WIN32)
     try {
@@ -490,33 +466,24 @@ void InputVerifyPool::Run()
                 while (job && TryTakeHelperPlace()) {
                     if (TryTakeCore(cores_))
                         return true;
-                    if (const auto hook = inputPoolHook.load(std::memory_order_relaxed))
-                        hook(bsv::detail::InputPoolEvent::CoreUnavailable);
+                    hooks::OnPool(bsv::detail::InputPoolEvent::CoreUnavailable);
                     // Pair the returned reservation and the capacity check
                     // with ReleasedCore's seq_cst helper-cap load. If that
                     // release saw our reserved place as full, this check
                     // sees its freed core; retry before going to sleep.
                     helpersOnJobs_.fetch_sub(1, std::memory_order_seq_cst);
-                    if (inputCountersEnabled.load(std::memory_order_relaxed))
-                        helperWakesWithoutCore.fetch_add(1, std::memory_order_relaxed);
+                    hooks::CountHelperWakeWithoutCore();
                     if (busyThreads.load(std::memory_order_seq_cst) >= cores_)
                         break;
                 }
                 job.reset();  // don't keep a finished job alive while asleep
-                if (const auto hook = inputPoolHook.load(std::memory_order_relaxed))
-                    hook(bsv::detail::InputPoolEvent::Waiting);
+                hooks::OnPool(bsv::detail::InputPoolEvent::Waiting);
                 return false;
             });
         }
-        const bool count = inputCountersEnabled.load(std::memory_order_relaxed);
-        InputJob::HelperTerms terms{ .cores = cores_, .places = &helpersOnJobs_, .inputs = count ? &helperVerifiedInputs : nullptr };
+        InputJob::HelperTerms terms{ .cores = cores_, .places = &helpersOnJobs_ };
         if (job->TryJoin()) {
-            const size_t verified = job->Work(&terms).value_or(0);
-            if (count) {
-                if (verified > 0)
-                    helperJobParticipations.fetch_add(1, std::memory_order_relaxed);
-                jobVerifiedInputs.fetch_add(verified, std::memory_order_relaxed);
-            }
+            hooks::CountJobInputs(job->Work(&terms).value_or(0), /*helper=*/true);
             job->Leave();
         }
         job.reset();
@@ -524,8 +491,7 @@ void InputVerifyPool::Run()
             helpersOnJobs_.fetch_sub(1, std::memory_order_relaxed);
         const size_t busyAfter = busyThreads.fetch_sub(1, std::memory_order_seq_cst) - 1;
         ReleasedCore(busyAfter);
-        if (const auto hook = helperReleasedCoreHook.load(std::memory_order_relaxed))
-            hook();
+        hooks::OnHelperReleasedCore();
     }
 }
 
@@ -576,133 +542,4 @@ void bsv::SetParallelInputHelpers(int64_t helpers)
 int64_t bsv::GetParallelInputHelpers()
 {
     return bsv::detail::parallelInputHelpers.load(std::memory_order_relaxed);
-}
-
-size_t bsv::detail::SetParallelInputThresholdForTesting(size_t minInputs)
-{
-    return parallelInputThreshold.exchange(minInputs);
-}
-
-bsv::detail::InputPoolCreationHook bsv::detail::SetInputPoolCreationHookForTesting(InputPoolCreationHook hook)
-{
-    return inputPoolCreationHook.exchange(hook);
-}
-
-bool bsv::detail::SetHelperStartsFailForTesting(bool fail)
-{
-    return helperStartsFail.exchange(fail);
-}
-
-uint64_t bsv::detail::HelperVerifiedInputCountForTesting()
-{
-    return helperVerifiedInputs.load();
-}
-
-bool bsv::detail::SetInputCountersEnabledForTesting(bool enabled)
-{
-    return inputCountersEnabled.exchange(enabled);
-}
-
-uint64_t bsv::detail::HelperWakesWithoutCoreForTesting()
-{
-    return helperWakesWithoutCore.load();
-}
-
-uint64_t bsv::detail::HelperJobParticipationCountForTesting()
-{
-    return helperJobParticipations.load();
-}
-
-bsv::detail::InputSourceAllocationHook bsv::detail::SetInputSourceAllocationHookForTesting(InputSourceAllocationHook hook)
-{
-    return inputSourceAllocationHook.exchange(hook);
-}
-
-bsv::detail::ValidationStageHook bsv::detail::SetValidationStageHookForTesting(ValidationStageHook hook)
-{
-    return validationStageHook.exchange(hook);
-}
-
-bsv::detail::InputHook bsv::detail::SetInputHookForTesting(InputHook hook)
-{
-    return inputHook.exchange(hook);
-}
-
-bsv::detail::HelperReleasedCoreHook bsv::detail::SetHelperReleasedCoreHookForTesting(HelperReleasedCoreHook hook)
-{
-    return helperReleasedCoreHook.exchange(hook);
-}
-
-bsv::detail::InputPoolHook bsv::detail::SetInputPoolHookForTesting(InputPoolHook hook)
-{
-    return inputPoolHook.exchange(hook);
-}
-
-void bsv::detail::WakeInputHelpersForTesting(bool all)
-{
-#if BDK_PARALLEL_INPUTS
-    if (InputVerifyPool* pool = InputVerifyPool::Existing())
-        pool->WakeHelpersForTesting(all);
-#else
-    (void)all;
-#endif
-}
-
-uint64_t bsv::detail::JobVerifiedInputCountForTesting()
-{
-    return jobVerifiedInputs.load();
-}
-
-size_t bsv::detail::SetInputPoolCoresForTesting(size_t cores)
-{
-    return inputPoolCoresCap.exchange(cores);
-}
-
-size_t bsv::detail::BusyThreadCountForTesting()
-{
-#if BDK_PARALLEL_INPUTS
-    return busyThreads.load();
-#else
-    return 0;
-#endif
-}
-
-size_t bsv::detail::QueuedJobCountForTesting()
-{
-#if BDK_PARALLEL_INPUTS
-    if (InputVerifyPool* pool = InputVerifyPool::Existing())
-        return pool->QueuedJobs();
-#endif
-    return 0;
-}
-
-size_t bsv::detail::InputPoolHelperCountForTesting()
-{
-#if BDK_PARALLEL_INPUTS
-    if (const InputVerifyPool* pool = InputVerifyPool::Get())
-        return pool->Helpers();
-#endif
-    return 0;
-}
-
-void bsv::detail::AddBusyThreadsForTesting(size_t count)
-{
-#if BDK_PARALLEL_INPUTS
-    busyThreads.fetch_add(count);
-#else
-    (void)count;
-#endif
-}
-
-void bsv::detail::ReleaseBusyThreadsForTesting(size_t count)
-{
-#if BDK_PARALLEL_INPUTS
-    for (size_t i = 0; i < count; ++i) {
-        const size_t busyAfter = busyThreads.fetch_sub(1) - 1;
-        if (InputVerifyPool* pool = InputVerifyPool::Existing())
-            pool->ReleasedCore(busyAfter);
-    }
-#else
-    (void)count;
-#endif
 }

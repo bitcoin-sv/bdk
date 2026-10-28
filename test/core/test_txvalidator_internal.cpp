@@ -105,7 +105,7 @@ static constexpr size_t ANY_HELPERS = std::numeric_limits<size_t>::max();
 
 static std::shared_ptr<InputJob> ValidJob(size_t count, const task::CCancellationToken& token, size_t helpers = ANY_HELPERS)
 {
-    return std::make_shared<InputJob>(count, helpers, [](size_t, const auto&) { return bsv::TxErrorOk(); }, token);
+    return std::make_shared<InputJob>(count, [](size_t, const auto&) { return bsv::TxErrorOk(); }, token, helpers);
 }
 
 BOOST_FIXTURE_TEST_SUITE(input_jobs, InternalState)
@@ -156,10 +156,10 @@ BOOST_AUTO_TEST_CASE(claims_stop_above_the_lowest_failure)
     BOOST_CHECK_EQUAL(job->UnclaimedInputs(), 0u);
 
     std::vector<size_t> verified;
-    InputJob failing(8, ANY_HELPERS, [&](size_t index, const auto&) {
+    InputJob failing(8, [&](size_t index, const auto&) {
         verified.push_back(index);
         return index == 2 ? bsv::TxErrorScript(SCRIPT_ERR_VERIFY) : bsv::TxErrorOk();
-    }, token);
+    }, token, ANY_HELPERS);
     BOOST_CHECK_EQUAL(Present(failing.Work()), 3u);
     BOOST_CHECK(verified == std::vector<size_t>({ 0, 1, 2 }));
     failing.CloseAndWait();
@@ -243,16 +243,16 @@ BOOST_AUTO_TEST_CASE(helper_work_never_polls_caller_token)
     };
     const auto source = std::make_shared<CountingSource>();
     const auto token = source->GetToken();
-    InputJob job(3, ANY_HELPERS, [](size_t, const auto& inputToken) {
+    InputJob job(3, [](size_t, const auto& inputToken) {
         return inputToken.IsCanceled() ? bsv::TxErrorCancelled() : bsv::TxErrorOk();
-    }, token);
+    }, token, ANY_HELPERS);
     std::atomic<size_t> places{ 1 };
     InputJob::HelperTerms terms{ .cores = 2, .places = &places };
     BOOST_CHECK_EQUAL(Present(job.Work(&terms)), 3u);
     BOOST_CHECK_EQUAL(source->reads, 0u);
-    InputJob caller(1, ANY_HELPERS, [](size_t, const auto& inputToken) {
+    InputJob caller(1, [](size_t, const auto& inputToken) {
         return inputToken.IsCanceled() ? bsv::TxErrorCancelled() : bsv::TxErrorOk();
-    }, token);
+    }, token, ANY_HELPERS);
     BOOST_CHECK_EQUAL(Present(caller.Work()), 1u);
     BOOST_CHECK_GT(source->reads, 0u);
 }
@@ -285,7 +285,7 @@ BOOST_AUTO_TEST_CASE(participant_reuses_one_source_for_successive_inputs)
         observed.at(calls++) = polledIndex;
         return cancelled ? bsv::TxErrorCancelled() : bsv::TxErrorOk();
     };
-    InputJob job(3, ANY_HELPERS, verify, token);
+    InputJob job(3, verify, token, ANY_HELPERS);
     BOOST_CHECK_EQUAL(Present(job.Work()), 3u);
     BOOST_CHECK_EQUAL(calls, 3u);
     BOOST_CHECK_EQUAL(observed[0], 0u);
@@ -293,7 +293,7 @@ BOOST_AUTO_TEST_CASE(participant_reuses_one_source_for_successive_inputs)
     BOOST_CHECK_EQUAL(observed[2], 2u);
     BOOST_CHECK_EQUAL(Present(job.Work()), 0u);
     retained.reset(); calls = 0; observed.fill(0);
-    InputJob helper(3, ANY_HELPERS, verify, token);
+    InputJob helper(3, verify, token, ANY_HELPERS);
     std::atomic<size_t> places{ 1 };
     InputJob::HelperTerms terms{ .cores = 2, .places = &places };
     BOOST_CHECK_EQUAL(Present(helper.Work(&terms)), 3u);

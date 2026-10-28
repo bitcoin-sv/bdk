@@ -181,11 +181,14 @@ target_link_libraries(test_big_int_boost PRIVATE Boost::boost)
 target_compile_features(test_big_int_boost PRIVATE cxx_std_20)
 bdk_add_unit_test(test_big_int_boost)
 
+## The two suites that drive the input pool link bdk_core_testing: the core
+## built from the same sources with the pool's test hooks compiled in
+## (core/CMakeLists.txt). Every other test links the shipped bdk_core.
 add_executable(test_txvalidator "${CMAKE_CURRENT_SOURCE_DIR}/test_txvalidator.cpp" "${BSV_APPLICATION_HDR_FILES}" "${BSV_APPLICATION_SRC_FILES}")
-target_link_libraries(test_txvalidator PRIVATE bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono ${CMAKE_DL_LIBS})
+target_link_libraries(test_txvalidator PRIVATE bdk_core_testing secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono ${CMAKE_DL_LIBS})
 bdk_add_unit_test(test_txvalidator)
 add_executable(test_txvalidator_internal "${CMAKE_CURRENT_SOURCE_DIR}/test_txvalidator_internal.cpp" "${BSV_APPLICATION_HDR_FILES}" "${BSV_APPLICATION_SRC_FILES}")
-target_link_libraries(test_txvalidator_internal PRIVATE bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono ${CMAKE_DL_LIBS})
+target_link_libraries(test_txvalidator_internal PRIVATE bdk_core_testing secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono ${CMAKE_DL_LIBS})
 bdk_add_unit_test(test_txvalidator_internal)
 add_test(NAME test_txvalidator_pool_creation_retry
          COMMAND $<TARGET_FILE:test_txvalidator> --report_level=detailed

@@ -27,16 +27,13 @@ if(BDK_BUILD_LEVELDB)
   include("${CMAKE_CURRENT_SOURCE_DIR}/setting-leveldb.cmake")
 endif()
 
-## Canonical native core: OpenSSL-linked, no exclusions, no extra definitions
+## Native core variants: OpenSSL-linked, no extra definitions
 ## (OpenSSL discovery runs at root scope, visible to core/, module/ and test/).
 ## Threads: implVerifyScript verifies a large tx's inputs on a helper pool.
 ## SV's src/crypto/sha256.cpp (CSHA256) is compiled by core/sha256_hasher.cpp
-## instead, together with the load-time SHA-256 backend selection
-bdk_add_core_library(bdk_core
-  EXCLUDE_BSV_SOURCES "${BDK_BSV_ROOT_DIR}/src/crypto/sha256.cpp"
-  LINK_LIBRARIES OpenSSL::Crypto OpenSSL::SSL Threads::Threads)
-
-## Hardware SHA-256, native core only (the wasm variant stays scalar).
+## instead, together with the load-time SHA-256 backend selection.
+##
+## Hardware SHA-256, native variants only (the wasm variant stays scalar).
 ## sha256_dispatch.cpp defines sha256_dispatch::AutoDetect(), declared in the
 ## installed crypto/sha256_dispatch.h. The x86-64 sources below are built for
 ## every target: each guards itself with the compiler's own target macros, so
@@ -48,12 +45,35 @@ bdk_add_core_library(bdk_core
 ## The source properties are directory-scoped, so they never reach the wasm
 ## variant, which builds the same core/ files from its own directory.
 set(_bsv_crypto_dir "${BDK_BSV_ROOT_DIR}/src/crypto")
-target_sources(bdk_core PRIVATE
-  "${_bsv_crypto_dir}/sha256_dispatch.cpp"
-  "${_bsv_crypto_dir}/sha256_sse4.cpp"
-  "${_bsv_crypto_dir}/sha256_sse4_shim.cpp"
-  "${_bsv_crypto_dir}/sha256_shani_shim.cpp"
-  "${_bsv_crypto_dir}/sha256d64_shani_shim.cpp")
+function(bdk_add_native_core target)
+  bdk_add_core_library(${target}
+    EXCLUDE_BSV_SOURCES "${BDK_BSV_ROOT_DIR}/src/crypto/sha256.cpp"
+    LINK_LIBRARIES OpenSSL::Crypto OpenSSL::SSL Threads::Threads
+    ${ARGN})
+  target_sources(${target} PRIVATE
+    "${_bsv_crypto_dir}/sha256_dispatch.cpp"
+    "${_bsv_crypto_dir}/sha256_sse4.cpp"
+    "${_bsv_crypto_dir}/sha256_sse4_shim.cpp"
+    "${_bsv_crypto_dir}/sha256_shani_shim.cpp"
+    "${_bsv_crypto_dir}/sha256d64_shani_shim.cpp")
+  ## For the install block below
+  set(BDK_CORE_EXTRA_HDR_FILES ${BDK_CORE_EXTRA_HDR_FILES} PARENT_SCOPE)
+endfunction()
+
+## Canonical native core: the archive installed and merged into the Go and
+## Rust libraries
+bdk_add_native_core(bdk_core)
+
+## The same sources with the input pool's test hooks compiled in
+## (core/internal/txvalidator_internal.hpp), for the C++ tests that drive the
+## pool. Never installed or linked by a module. PUBLIC so the tests that link
+## it see the hook declarations.
+if(BDK_BUILD_CORE_TESTS)
+  bdk_add_native_core(bdk_core_testing
+    ADDITIONAL_SOURCES "${CMAKE_SOURCE_DIR}/test/core/testing_hooks.cpp")
+  target_compile_definitions(bdk_core_testing PUBLIC BDK_TESTING_HOOKS=1)
+endif()
+
 ## SV defines USE_ASM per target rather than in bitcoin-config.h; without it
 ## AutoDetect() silently skips SSE4. Only read under __x86_64__.
 set_source_files_properties("${_bsv_crypto_dir}/sha256_dispatch.cpp" PROPERTIES

@@ -87,20 +87,9 @@
 #endif
 
 namespace bsv::detail {
-// Shared process controls read by the transaction adapter. Other pool/test
-// state stays in input_verification.cpp; no internal headers are installed.
-// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables): process-wide pool state and test hooks, atomic by design
-extern std::atomic<size_t> parallelInputThreshold;
-extern std::atomic<bool> inputCountersEnabled;
-extern std::atomic<uint64_t> jobVerifiedInputs;
-extern std::atomic<bsv::detail::InputHook> inputHook;
-extern std::atomic<bsv::detail::ValidationStageHook> validationStageHook;
-extern std::atomic<bsv::detail::InputPoolHook> inputPoolHook;
-// NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
-
 #if BDK_PARALLEL_INPUTS
 inline constexpr size_t MIN_INPUTS_PER_PARTICIPANT = 8;
-// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables): process-wide pool state and test hooks, atomic by design
+// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables): process-wide pool state, atomic by design
 extern std::atomic<size_t> busyThreads;
 extern thread_local bool threadIsBusy;
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
@@ -112,11 +101,10 @@ class InputJob {
 public:
     using VerifyInput = std::function<TxError(size_t, const task::CCancellationToken&)>;
     // At most `helpers` helpers are joined at once; the caller is not one.
-    InputJob(size_t n, size_t helpers, VerifyInput verify, const task::CCancellationToken& callerToken);
+    InputJob(size_t n, VerifyInput verify, const task::CCancellationToken& callerToken, size_t helpers);
     struct HelperTerms {
         size_t cores{ 0 };
         std::atomic<size_t>* places{ nullptr };
-        std::atomic<uint64_t>* inputs{ nullptr };
         bool placeReturned = false;
     };
     std::optional<size_t> Work(HelperTerms* helper = nullptr);
@@ -167,7 +155,9 @@ public:
     size_t AvailableHelpers(size_t limit) const;
     // Queues the job and wakes up to its helper count of idle helpers.
     void Offer(const std::shared_ptr<InputJob>& job);
+#if BDK_TESTING_HOOKS
     void WakeHelpersForTesting(bool all);
+#endif
     void Withdraw(const std::shared_ptr<InputJob>& job);
     size_t QueuedJobs();
     // True exactly when a wake was sent; false if capacity/work cannot admit.
