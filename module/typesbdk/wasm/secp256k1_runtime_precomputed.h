@@ -12,6 +12,10 @@
 
 #define WINDOW_G ECMULT_WINDOW_SIZE
 
+/* secp256k1_ge_storage and ECMULT_TABLE_SIZE; included after the guard above so
+ * this header is self-contained whatever the including file's include order. */
+#include "ecmult.h"
+
 #ifdef __cplusplus
 extern "C"
 {
