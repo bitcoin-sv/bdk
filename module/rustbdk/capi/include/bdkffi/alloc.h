@@ -2,13 +2,14 @@
 #define BDKFFI_ALLOC_H
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
-/*
- * Frees every caller-owned buffer returned by the bdkffi C ABI.
- */
-void bdkffi_free(void* p);
+    /*
+     * Frees every caller-owned buffer returned by the bdkffi C ABI.
+     */
+    void bdkffi_free(void* p);
 
 #ifdef __cplusplus
 }

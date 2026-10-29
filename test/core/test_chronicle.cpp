@@ -34,8 +34,8 @@
 #include "script/script_error.h"
 #include "script/script_flags.h"
 #include "script/script_num.h"
-#include "script/sign.h"
 #include "script/sighashtype.h"
+#include "script/sign.h"
 #include "util.h"
 
 #include "extendedTx.hpp"
@@ -48,28 +48,29 @@
 /// Genesis activated at block 620,538.  A UTXO mined at height ≥ 620,539
 /// has SCRIPT_UTXO_AFTER_GENESIS set; required to allow large script numbers
 /// and other Genesis opcodes.
-static constexpr int32_t GENESIS_HEIGHT          = 620538;
+static constexpr int32_t GENESIS_HEIGHT = 620538;
 
 /// Chronicle activated at block 943,816.
 /// • Spending block height ≥ 943,817 → SCRIPT_CHRONICLE is set in block flags
 ///   (affects SIGHASH_CHRONICLE validation, push-only scriptSig rule).
 /// • UTXO mined at height ≥ 943,817 → SCRIPT_UTXO_AFTER_CHRONICLE is set
 ///   (gates opcode reactivation per input).
-static constexpr int32_t CHRONICLE_HEIGHT        = 943816;
+static constexpr int32_t CHRONICLE_HEIGHT = 943816;
 
-static constexpr int32_t PRE_GENESIS_UTXO_HEIGHT    = GENESIS_HEIGHT  - 1;
-static constexpr int32_t POST_GENESIS_UTXO_HEIGHT   = GENESIS_HEIGHT  + 1;   // 620,539
-static constexpr int32_t PRE_CHRONICLE_UTXO_HEIGHT  = CHRONICLE_HEIGHT - 1;  // 943,815
-static constexpr int32_t POST_CHRONICLE_UTXO_HEIGHT = CHRONICLE_HEIGHT + 1;  // 943,817
+static constexpr int32_t PRE_GENESIS_UTXO_HEIGHT = GENESIS_HEIGHT - 1;
+static constexpr int32_t POST_GENESIS_UTXO_HEIGHT = GENESIS_HEIGHT + 1;     // 620,539
+static constexpr int32_t PRE_CHRONICLE_UTXO_HEIGHT = CHRONICLE_HEIGHT - 1;  // 943,815
+static constexpr int32_t POST_CHRONICLE_UTXO_HEIGHT = CHRONICLE_HEIGHT + 1; // 943,817
 
-static constexpr int32_t PRE_CHRONICLE_BLOCK_HEIGHT  = CHRONICLE_HEIGHT - 1; // 943,815
+static constexpr int32_t PRE_CHRONICLE_BLOCK_HEIGHT = CHRONICLE_HEIGHT - 1; // 943,815
 static constexpr int32_t POST_CHRONICLE_BLOCK_HEIGHT = 950000;
 
 /// UTXO value used in every test transaction (needed for BIP143 sighash).
-static const Amount UTXO_AMOUNT{1'000'000};   // 0.01 BSV
+static const Amount UTXO_AMOUNT{1'000'000}; // 0.01 BSV
 
 /// WIF private key shared across all tests.
-static constexpr const char* WIF_KEY = "5HxWvvfubhXpYYpS3tJkw6fq9jE9j18THftkZjHHfmFiWtmAbrj";
+static constexpr const char*
+    WIF_KEY = "5HxWvvfubhXpYYpS3tJkw6fq9jE9j18THftkZjHHfmFiWtmAbrj";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Policy-path flags for PostGenesis / pre-Chronicle era
@@ -90,27 +91,28 @@ static constexpr const char* WIF_KEY = "5HxWvvfubhXpYYpS3tJkw6fq9jE9j18THftkZjHH
 //   src/policy/policy.h  : StandardScriptVerifyFlags()
 //   src/policy/policy.h  : InputScriptVerifyFlags()
 // bitcoin-sv's script flags are an unscoped enum: OR them as explicit uint32_t bits
-template <typename... Flag>
-static constexpr uint32_t ScriptFlags(Flag... flags) {
+template<typename... Flag>
+static constexpr uint32_t ScriptFlags(Flag... flags)
+{
     return (static_cast<uint32_t>(flags) | ...);
 }
 
 static constexpr uint32_t POLICY_FLAGS_PRE_CHRONICLE = ScriptFlags(
-    SCRIPT_VERIFY_P2SH,                         // (1U <<  0) mandatory
-    SCRIPT_VERIFY_STRICTENC,                    // (1U <<  1) mandatory
-    SCRIPT_VERIFY_DERSIG,                       // (1U <<  2) standard
-    SCRIPT_VERIFY_LOW_S,                        // (1U <<  3) mandatory
-    SCRIPT_VERIFY_NULLDUMMY,                    // (1U <<  4) standard
-    SCRIPT_VERIFY_SIGPUSHONLY,                  // (1U <<  5) Genesis per-input
-    SCRIPT_VERIFY_MINIMALDATA,                  // (1U <<  6) standard
-    SCRIPT_VERIFY_DISCOURAGE_UPGRADABLE_NOPS,   // (1U <<  7) standard (key flag)
-    SCRIPT_VERIFY_CLEANSTACK,                   // (1U <<  8) standard
-    SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY,          // (1U <<  9) standard
-    SCRIPT_VERIFY_CHECKSEQUENCEVERIFY,          // (1U << 10) standard
-    SCRIPT_VERIFY_NULLFAIL,                     // (1U << 14) mandatory
-    SCRIPT_ENABLE_SIGHASH_FORKID,               // (1U << 16) mandatory
-    SCRIPT_GENESIS,                             // (1U << 18) Genesis block flag
-    SCRIPT_UTXO_AFTER_GENESIS);                 // (1U << 19) Genesis UTXO flag
+    SCRIPT_VERIFY_P2SH,                       // (1U <<  0) mandatory
+    SCRIPT_VERIFY_STRICTENC,                  // (1U <<  1) mandatory
+    SCRIPT_VERIFY_DERSIG,                     // (1U <<  2) standard
+    SCRIPT_VERIFY_LOW_S,                      // (1U <<  3) mandatory
+    SCRIPT_VERIFY_NULLDUMMY,                  // (1U <<  4) standard
+    SCRIPT_VERIFY_SIGPUSHONLY,                // (1U <<  5) Genesis per-input
+    SCRIPT_VERIFY_MINIMALDATA,                // (1U <<  6) standard
+    SCRIPT_VERIFY_DISCOURAGE_UPGRADABLE_NOPS, // (1U <<  7) standard (key flag)
+    SCRIPT_VERIFY_CLEANSTACK,                 // (1U <<  8) standard
+    SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY,        // (1U <<  9) standard
+    SCRIPT_VERIFY_CHECKSEQUENCEVERIFY,        // (1U << 10) standard
+    SCRIPT_VERIFY_NULLFAIL,                   // (1U << 14) mandatory
+    SCRIPT_ENABLE_SIGHASH_FORKID,             // (1U << 16) mandatory
+    SCRIPT_GENESIS,                           // (1U << 18) Genesis block flag
+    SCRIPT_UTXO_AFTER_GENESIS);               // (1U << 19) Genesis UTXO flag
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Helper forward declarations
@@ -124,13 +126,13 @@ static CMutableTransaction BuildCreditingTx(const CScript& scriptPubKey);
 // scriptSig is left empty for the caller to fill, output is anyone-can-spend.
 // txVersion controls nVersion on the spending tx.
 static CMutableTransaction BuildSpendingTx(const CMutableTransaction& txCredit,
-                                            int32_t txVersion = 1);
+                                           int32_t txVersion = 1);
 
 // Compute DER sig + sighash byte for input 0 of txSpend.
 static std::vector<uint8_t> Sign(const CScript& scriptPubKey,
-                                  const CMutableTransaction& txSpend,
-                                  const CKey& key,
-                                  SigHashType sigHashType = SigHashType().withForkId());
+                                 const CMutableTransaction& txSpend,
+                                 const CKey& key,
+                                 SigHashType sigHashType = SigHashType().withForkId());
 
 // Standard "opcode + P2PKH" extended transaction builder (mirrors
 // example_special_opcode_verify.cpp MakeSignedExtendedTx).
@@ -141,11 +143,10 @@ static std::vector<uint8_t> Sign(const CScript& scriptPubKey,
 //
 // Operands for the opcode must be in operandPushes in bottom-to-top order
 // (they end up on top of the stack when scriptPubKey begins executing).
-static bsv::CMutableTransactionExtended MakeSignedExtendedTx(
-    const CScript& opcodeCheck,
-    const CScript& operandPushes,
-    const CKey& key,
-    int32_t txVersion = 1);
+static bsv::CMutableTransactionExtended MakeSignedExtendedTx(const CScript& opcodeCheck,
+                                                             const CScript& operandPushes,
+                                                             const CKey& key,
+                                                             int32_t txVersion = 1);
 
 // Serialize eTX to binary (BIP-239 extended format) and call VerifyScript.
 static TxError Verify(const bsv::CMutableTransactionExtended& eTX,
@@ -222,29 +223,43 @@ BOOST_AUTO_TEST_CASE(test_push_only_scriptsig)
     txSpendV2.vin[0].scriptSig = scriptSig;
 
     bsv::CMutableTransactionExtended eTX_V1, eTX_V2;
-    eTX_V1.vutxo = txCredit.vout;  eTX_V1.mtx = txSpendV1;
-    eTX_V2.vutxo = txCredit.vout;  eTX_V2.mtx = txSpendV2;
+    eTX_V1.vutxo = txCredit.vout;
+    eTX_V1.mtx = txSpendV1;
+    eTX_V2.vutxo = txCredit.vout;
+    eTX_V2.mtx = txSpendV2;
 
     // UTXO is post-Genesis so OP_ADD is allowed at the consensus level.
     const int32_t utxoH = POST_GENESIS_UTXO_HEIGHT;
 
     // Pre-Chronicle block: push-only always enforced regardless of tx version.
-    BOOST_CHECK(txErrorIsScript(
-        Verify(eTX_V1, utxoH, PRE_CHRONICLE_BLOCK_HEIGHT, /*consensus=*/true, se),
-        SCRIPT_ERR_SIG_PUSHONLY));
-    BOOST_CHECK(txErrorIsScript(
-        Verify(eTX_V2, utxoH, PRE_CHRONICLE_BLOCK_HEIGHT, /*consensus=*/true, se),
-        SCRIPT_ERR_SIG_PUSHONLY));
+    BOOST_CHECK(txErrorIsScript(Verify(eTX_V1,
+                                       utxoH,
+                                       PRE_CHRONICLE_BLOCK_HEIGHT,
+                                       /*consensus=*/true,
+                                       se),
+                                SCRIPT_ERR_SIG_PUSHONLY));
+    BOOST_CHECK(txErrorIsScript(Verify(eTX_V2,
+                                       utxoH,
+                                       PRE_CHRONICLE_BLOCK_HEIGHT,
+                                       /*consensus=*/true,
+                                       se),
+                                SCRIPT_ERR_SIG_PUSHONLY));
 
     // Post-Chronicle block, version = 1: push-only still enforced.
-    BOOST_CHECK(txErrorIsScript(
-        Verify(eTX_V1, utxoH, POST_CHRONICLE_BLOCK_HEIGHT, /*consensus=*/true, se),
-        SCRIPT_ERR_SIG_PUSHONLY));
+    BOOST_CHECK(txErrorIsScript(Verify(eTX_V1,
+                                       utxoH,
+                                       POST_CHRONICLE_BLOCK_HEIGHT,
+                                       /*consensus=*/true,
+                                       se),
+                                SCRIPT_ERR_SIG_PUSHONLY));
 
     // Post-Chronicle block, version = 2: push-only lifted for malleable txns.
-    BOOST_CHECK(txErrorIsScript(
-        Verify(eTX_V2, utxoH, POST_CHRONICLE_BLOCK_HEIGHT, /*consensus=*/true, se),
-        SCRIPT_ERR_OK));
+    BOOST_CHECK(txErrorIsScript(Verify(eTX_V2,
+                                       utxoH,
+                                       POST_CHRONICLE_BLOCK_HEIGHT,
+                                       /*consensus=*/true,
+                                       se),
+                                SCRIPT_ERR_OK));
 }
 
 // ── Test 2 ─────────────────────────────────────────────────────────────────
@@ -265,17 +280,20 @@ BOOST_AUTO_TEST_CASE(test_push_only_scriptsig)
 BOOST_AUTO_TEST_CASE(test_sighash_chronicle)
 {
     const bsv::CTxValidator se("main");
-    const CKey key    = LoadKey();
+    const CKey key = LoadKey();
     const CPubKey pub = key.GetPubKey();
 
     // Standard P2PKH locking script.
     CScript scriptPubKey;
-    scriptPubKey << OP_DUP << OP_HASH160
-                 << ToByteVector(pub.GetID())
-                 << OP_EQUALVERIFY << OP_CHECKSIG;
+    scriptPubKey
+        << OP_DUP
+        << OP_HASH160
+        << ToByteVector(pub.GetID())
+        << OP_EQUALVERIFY
+        << OP_CHECKSIG;
 
     const CMutableTransaction txCredit = BuildCreditingTx(scriptPubKey);
-    CMutableTransaction txSpend  = BuildSpendingTx(txCredit);
+    CMutableTransaction txSpend = BuildSpendingTx(txCredit);
 
     // Sign with SIGHASH_ALL | SIGHASH_FORKID | SIGHASH_CHRONICLE (= 0x61).
     const SigHashType chronicleSigHash = SigHashType().withForkId().withChronicle();
@@ -285,20 +303,26 @@ BOOST_AUTO_TEST_CASE(test_sighash_chronicle)
 
     bsv::CMutableTransactionExtended eTX;
     eTX.vutxo = txCredit.vout;
-    eTX.mtx   = txSpend;
+    eTX.mtx = txSpend;
 
     // UTXO is post-Genesis (chronicle modifier does not depend on UTXO era).
     const int32_t utxoH = POST_GENESIS_UTXO_HEIGHT;
 
     // Pre-Chronicle block: SCRIPT_CHRONICLE not set → modifier rejected.
-    BOOST_CHECK(txErrorIsScript(
-        Verify(eTX, utxoH, PRE_CHRONICLE_BLOCK_HEIGHT, /*consensus=*/true, se),
-        SCRIPT_ERR_ILLEGAL_CHRONICLE));
+    BOOST_CHECK(txErrorIsScript(Verify(eTX,
+                                       utxoH,
+                                       PRE_CHRONICLE_BLOCK_HEIGHT,
+                                       /*consensus=*/true,
+                                       se),
+                                SCRIPT_ERR_ILLEGAL_CHRONICLE));
 
     // Post-Chronicle block: SCRIPT_CHRONICLE set → modifier accepted.
-    BOOST_CHECK(txErrorIsScript(
-        Verify(eTX, utxoH, POST_CHRONICLE_BLOCK_HEIGHT, /*consensus=*/true, se),
-        SCRIPT_ERR_OK));
+    BOOST_CHECK(txErrorIsScript(Verify(eTX,
+                                       utxoH,
+                                       POST_CHRONICLE_BLOCK_HEIGHT,
+                                       /*consensus=*/true,
+                                       se),
+                                SCRIPT_ERR_OK));
 }
 
 // ── Test 3 ─────────────────────────────────────────────────────────────────
@@ -337,9 +361,9 @@ BOOST_AUTO_TEST_CASE(test_script_num_length)
 
     // 5-byte minimal positive CScriptNum encoding.
     // Little-endian sign-magnitude: {0x00×4, 0x01} = value 2^32.
-    // Minimal because the last byte (0x01) has non-zero magnitude bits (0x01 & 0x7f != 0).
-    // 5 bytes > 4-byte pre-Genesis consensus limit → overflow pre-Genesis.
-    // 5 bytes << 750 KB post-Genesis consensus limit → accepted post-Genesis.
+    // Minimal because the last byte (0x01) has non-zero magnitude bits (0x01 & 0x7f !=
+    // 0). 5 bytes > 4-byte pre-Genesis consensus limit → overflow pre-Genesis. 5 bytes <<
+    // 750 KB post-Genesis consensus limit → accepted post-Genesis.
     const std::vector<uint8_t> fiveByteNum{0x00, 0x00, 0x00, 0x00, 0x01};
 
     // OP_1ADD interprets the top of stack as a CScriptNum (triggers the limit check),
@@ -351,25 +375,31 @@ BOOST_AUTO_TEST_CASE(test_script_num_length)
     scriptSig << fiveByteNum;
 
     const CMutableTransaction txCredit = BuildCreditingTx(scriptPubKey);
-    CMutableTransaction txSpend  = BuildSpendingTx(txCredit);
-    txSpend.vin[0].scriptSig     = scriptSig;
+    CMutableTransaction txSpend = BuildSpendingTx(txCredit);
+    txSpend.vin[0].scriptSig = scriptSig;
 
     bsv::CMutableTransactionExtended eTX;
     eTX.vutxo = txCredit.vout;
-    eTX.mtx   = txSpend;
+    eTX.mtx = txSpend;
 
     // Block height post-Genesis so SCRIPT_GENESIS is set in block flags.
     const int32_t blockH = POST_GENESIS_UTXO_HEIGHT;
 
     // Pre-Genesis UTXO: consensus limit = 4 bytes; 5-byte operand rejected.
-    BOOST_CHECK(txErrorIsScript(
-        Verify(eTX, PRE_GENESIS_UTXO_HEIGHT, blockH, /*consensus=*/true, se),
-        SCRIPT_ERR_SCRIPTNUM_OVERFLOW));
+    BOOST_CHECK(txErrorIsScript(Verify(eTX,
+                                       PRE_GENESIS_UTXO_HEIGHT,
+                                       blockH,
+                                       /*consensus=*/true,
+                                       se),
+                                SCRIPT_ERR_SCRIPTNUM_OVERFLOW));
 
     // Post-Genesis UTXO: consensus limit = 750 KB; 5-byte operand accepted.
-    BOOST_CHECK(txErrorIsScript(
-        Verify(eTX, POST_GENESIS_UTXO_HEIGHT, blockH, /*consensus=*/true, se),
-        SCRIPT_ERR_OK));
+    BOOST_CHECK(txErrorIsScript(Verify(eTX,
+                                       POST_GENESIS_UTXO_HEIGHT,
+                                       blockH,
+                                       /*consensus=*/true,
+                                       se),
+                                SCRIPT_ERR_OK));
 }
 
 // ── Test 4 ─────────────────────────────────────────────────────────────────
@@ -404,20 +434,26 @@ BOOST_AUTO_TEST_CASE(test_op_ver)
 
     // No operand pushes needed: OP_VER takes nothing from the stack.
     const CScript noOperands;
-    const bsv::CMutableTransactionExtended eTX =
-        MakeSignedExtendedTx(opcodeCheck, noOperands, key, /*txVersion=*/1);
+    const bsv::CMutableTransactionExtended eTX = MakeSignedExtendedTx(opcodeCheck,
+                                                                      noOperands,
+                                                                      key,
+                                                                      /*txVersion=*/1);
 
     // Pre-Chronicle UTXO: OP_VER is a bad opcode.
-    BOOST_CHECK(txErrorIsScript(
-        Verify(eTX, PRE_CHRONICLE_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT,
-               /*consensus=*/true, se),
-        SCRIPT_ERR_BAD_OPCODE));
+    BOOST_CHECK(txErrorIsScript(Verify(eTX,
+                                       PRE_CHRONICLE_UTXO_HEIGHT,
+                                       POST_CHRONICLE_BLOCK_HEIGHT,
+                                       /*consensus=*/true,
+                                       se),
+                                SCRIPT_ERR_BAD_OPCODE));
 
     // Post-Chronicle UTXO: OP_VER pushes the tx version → comparison passes.
-    BOOST_CHECK(txErrorIsScript(
-        Verify(eTX, POST_CHRONICLE_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT,
-               /*consensus=*/true, se),
-        SCRIPT_ERR_OK));
+    BOOST_CHECK(txErrorIsScript(Verify(eTX,
+                                       POST_CHRONICLE_UTXO_HEIGHT,
+                                       POST_CHRONICLE_BLOCK_HEIGHT,
+                                       /*consensus=*/true,
+                                       se),
+                                SCRIPT_ERR_OK));
 }
 
 // ── Test 5 ─────────────────────────────────────────────────────────────────
@@ -479,24 +515,28 @@ BOOST_AUTO_TEST_CASE(test_op_verif)
         scriptPubKey << version1LE << OP_VERIF << OP_ENDIF << OP_1;
 
         const CMutableTransaction txCredit = BuildCreditingTx(scriptPubKey);
-        CMutableTransaction txSpend  = BuildSpendingTx(txCredit, /*txVersion=*/1);
+        CMutableTransaction txSpend = BuildSpendingTx(txCredit, /*txVersion=*/1);
         txSpend.vin[0].scriptSig = CScript();
 
         bsv::CMutableTransactionExtended eTX;
         eTX.vutxo = txCredit.vout;
-        eTX.mtx   = txSpend;
+        eTX.mtx = txSpend;
 
         // Pre-Chronicle UTXO: OP_VERIF is unconditionally bad (fExec=true).
-        BOOST_CHECK(txErrorIsScript(
-            Verify(eTX, PRE_CHRONICLE_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT,
-                   /*consensus=*/true, se),
-            SCRIPT_ERR_BAD_OPCODE));
+        BOOST_CHECK(txErrorIsScript(Verify(eTX,
+                                           PRE_CHRONICLE_UTXO_HEIGHT,
+                                           POST_CHRONICLE_BLOCK_HEIGHT,
+                                           /*consensus=*/true,
+                                           se),
+                                    SCRIPT_ERR_BAD_OPCODE));
 
         // Post-Chronicle UTXO: OP_VERIF compares version (1==1) → OK.
-        BOOST_CHECK(txErrorIsScript(
-            Verify(eTX, POST_CHRONICLE_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT,
-                   /*consensus=*/true, se),
-            SCRIPT_ERR_OK));
+        BOOST_CHECK(txErrorIsScript(Verify(eTX,
+                                           POST_CHRONICLE_UTXO_HEIGHT,
+                                           POST_CHRONICLE_BLOCK_HEIGHT,
+                                           /*consensus=*/true,
+                                           se),
+                                    SCRIPT_ERR_OK));
     }
 
     // ── Part B: dead branch — Genesis relaxed OP_VERIF's dead-branch behavior ─
@@ -522,27 +562,31 @@ BOOST_AUTO_TEST_CASE(test_op_verif)
         scriptPubKey << OP_0 << OP_IF << OP_VERIF << OP_ENDIF << OP_1;
 
         const CMutableTransaction txCredit = BuildCreditingTx(scriptPubKey);
-        CMutableTransaction txSpend  = BuildSpendingTx(txCredit);
+        CMutableTransaction txSpend = BuildSpendingTx(txCredit);
         // Empty scriptSig — the script is self-contained and requires no inputs.
         txSpend.vin[0].scriptSig = CScript();
 
         bsv::CMutableTransactionExtended eTX;
         eTX.vutxo = txCredit.vout;
-        eTX.mtx   = txSpend;
+        eTX.mtx = txSpend;
 
         // Pre-Genesis UTXO: OP_VERIF in dead branch → BAD_OPCODE
         // (utxo_after_genesis = false → no NOP exemption).
-        BOOST_CHECK(txErrorIsScript(
-            Verify(eTX, PRE_GENESIS_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT,
-                   /*consensus=*/true, se),
-            SCRIPT_ERR_BAD_OPCODE));
+        BOOST_CHECK(txErrorIsScript(Verify(eTX,
+                                           PRE_GENESIS_UTXO_HEIGHT,
+                                           POST_CHRONICLE_BLOCK_HEIGHT,
+                                           /*consensus=*/true,
+                                           se),
+                                    SCRIPT_ERR_BAD_OPCODE));
 
         // Post-Genesis, pre-Chronicle UTXO: Genesis NOP exemption applies →
         // OP_VERIF in dead branch is skipped → OP_1 → OK.
-        BOOST_CHECK(txErrorIsScript(
-            Verify(eTX, PRE_CHRONICLE_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT,
-                   /*consensus=*/true, se),
-            SCRIPT_ERR_OK));
+        BOOST_CHECK(txErrorIsScript(Verify(eTX,
+                                           PRE_CHRONICLE_UTXO_HEIGHT,
+                                           POST_CHRONICLE_BLOCK_HEIGHT,
+                                           /*consensus=*/true,
+                                           se),
+                                    SCRIPT_ERR_OK));
     }
 }
 
@@ -587,24 +631,26 @@ BOOST_AUTO_TEST_CASE(test_op_substr)
         scriptPubKey << OP_SUBSTR << OP_1;
 
         const CMutableTransaction txCredit = BuildCreditingTx(scriptPubKey);
-        CMutableTransaction txSpend  = BuildSpendingTx(txCredit);
-        txSpend.vin[0].scriptSig = CScript();   // empty — DISCOURAGE fires before operands matter
+        CMutableTransaction txSpend = BuildSpendingTx(txCredit);
+        txSpend.vin[0]
+            .scriptSig = CScript(); // empty — DISCOURAGE fires before operands matter
 
         bsv::CMutableTransactionExtended discourageTX;
         discourageTX.vutxo = txCredit.vout;
-        discourageTX.mtx   = txSpend;
+        discourageTX.mtx = txSpend;
 
         // POLICY_FLAGS_PRE_CHRONICLE matches GetScriptVerifyFlags(PostGenesis)
         // | InputScriptVerifyFlags(PostGenesis, PostGenesis): includes DISCOURAGE.
-        BOOST_CHECK(txErrorIsScript(
-            VerifyWithFlags(discourageTX, POST_CHRONICLE_BLOCK_HEIGHT,
-                            POLICY_FLAGS_PRE_CHRONICLE, se),
-            SCRIPT_ERR_DISCOURAGE_UPGRADABLE_NOPS));
+        BOOST_CHECK(txErrorIsScript(VerifyWithFlags(discourageTX,
+                                                    POST_CHRONICLE_BLOCK_HEIGHT,
+                                                    POLICY_FLAGS_PRE_CHRONICLE,
+                                                    se),
+                                    SCRIPT_ERR_DISCOURAGE_UPGRADABLE_NOPS));
     }
 
     // ── Consensus path: NOP leaves stack unchanged; EQUALVERIFY exposes it ──
-    const std::vector<uint8_t> data    {'A','B','C','D'};
-    const std::vector<uint8_t> expected{'B','C'};
+    const std::vector<uint8_t> data{'A', 'B', 'C', 'D'};
+    const std::vector<uint8_t> expected{'B', 'C'};
 
     CScript opcodeCheck;
     opcodeCheck << OP_SUBSTR << expected << OP_EQUALVERIFY;
@@ -614,20 +660,25 @@ BOOST_AUTO_TEST_CASE(test_op_substr)
     CScript operandPushes;
     operandPushes << data << CScriptNum(1) << CScriptNum(2);
 
-    const bsv::CMutableTransactionExtended eTX =
-        MakeSignedExtendedTx(opcodeCheck, operandPushes, key);
+    const bsv::CMutableTransactionExtended eTX = MakeSignedExtendedTx(opcodeCheck,
+                                                                      operandPushes,
+                                                                      key);
 
     // Pre-Chronicle, consensus: NOP leaves operands on stack; EQUALVERIFY fails.
-    BOOST_CHECK(txErrorIsScript(
-        Verify(eTX, PRE_CHRONICLE_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT,
-               /*consensus=*/true, se),
-        SCRIPT_ERR_EQUALVERIFY));
+    BOOST_CHECK(txErrorIsScript(Verify(eTX,
+                                       PRE_CHRONICLE_UTXO_HEIGHT,
+                                       POST_CHRONICLE_BLOCK_HEIGHT,
+                                       /*consensus=*/true,
+                                       se),
+                                SCRIPT_ERR_EQUALVERIFY));
 
     // Post-Chronicle: OP_SUBSTR extracts "BC" → EQUALVERIFY passes → OK.
-    BOOST_CHECK(txErrorIsScript(
-        Verify(eTX, POST_CHRONICLE_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT,
-               /*consensus=*/true, se),
-        SCRIPT_ERR_OK));
+    BOOST_CHECK(txErrorIsScript(Verify(eTX,
+                                       POST_CHRONICLE_UTXO_HEIGHT,
+                                       POST_CHRONICLE_BLOCK_HEIGHT,
+                                       /*consensus=*/true,
+                                       se),
+                                SCRIPT_ERR_OK));
 }
 
 // ── Test 7 ─────────────────────────────────────────────────────────────────
@@ -640,8 +691,9 @@ BOOST_AUTO_TEST_CASE(test_op_substr)
 //   scriptPubKey: OP_LEFT <"AB"> OP_EQUALVERIFY
 //                 OP_DUP OP_HASH160 <keyID> OP_EQUALVERIFY OP_CHECKSIG
 //
-// Pre-Chronicle UTXO, policy path: DISCOURAGE flag → SCRIPT_ERR_DISCOURAGE_UPGRADABLE_NOPS
-// Pre-Chronicle UTXO, consensus path: NOP5 — operands remain on stack →
+// Pre-Chronicle UTXO, policy path: DISCOURAGE flag →
+// SCRIPT_ERR_DISCOURAGE_UPGRADABLE_NOPS Pre-Chronicle UTXO, consensus path: NOP5 —
+// operands remain on stack →
 //   EQUALVERIFY fails → SCRIPT_ERR_EQUALVERIFY
 // Post-Chronicle UTXO: OP_LEFT extracts "AB" → OK
 //
@@ -658,22 +710,23 @@ BOOST_AUTO_TEST_CASE(test_op_left)
         scriptPubKey << OP_LEFT << OP_1;
 
         const CMutableTransaction txCredit = BuildCreditingTx(scriptPubKey);
-        CMutableTransaction txSpend  = BuildSpendingTx(txCredit);
+        CMutableTransaction txSpend = BuildSpendingTx(txCredit);
         txSpend.vin[0].scriptSig = CScript();
 
         bsv::CMutableTransactionExtended discourageTX;
         discourageTX.vutxo = txCredit.vout;
-        discourageTX.mtx   = txSpend;
+        discourageTX.mtx = txSpend;
 
-        BOOST_CHECK(txErrorIsScript(
-            VerifyWithFlags(discourageTX, POST_CHRONICLE_BLOCK_HEIGHT,
-                            POLICY_FLAGS_PRE_CHRONICLE, se),
-            SCRIPT_ERR_DISCOURAGE_UPGRADABLE_NOPS));
+        BOOST_CHECK(txErrorIsScript(VerifyWithFlags(discourageTX,
+                                                    POST_CHRONICLE_BLOCK_HEIGHT,
+                                                    POLICY_FLAGS_PRE_CHRONICLE,
+                                                    se),
+                                    SCRIPT_ERR_DISCOURAGE_UPGRADABLE_NOPS));
     }
 
     // ── Consensus path: NOP leaves stack unchanged; EQUALVERIFY exposes it ──
-    const std::vector<uint8_t> data    {'A','B','C','D'};
-    const std::vector<uint8_t> expected{'A','B'};
+    const std::vector<uint8_t> data{'A', 'B', 'C', 'D'};
+    const std::vector<uint8_t> expected{'A', 'B'};
 
     CScript opcodeCheck;
     opcodeCheck << OP_LEFT << expected << OP_EQUALVERIFY;
@@ -681,20 +734,25 @@ BOOST_AUTO_TEST_CASE(test_op_left)
     CScript operandPushes;
     operandPushes << data << CScriptNum(2); // length on top
 
-    const bsv::CMutableTransactionExtended eTX =
-        MakeSignedExtendedTx(opcodeCheck, operandPushes, key);
+    const bsv::CMutableTransactionExtended eTX = MakeSignedExtendedTx(opcodeCheck,
+                                                                      operandPushes,
+                                                                      key);
 
     // Pre-Chronicle, consensus: NOP leaves operands on stack; EQUALVERIFY fails.
-    BOOST_CHECK(txErrorIsScript(
-        Verify(eTX, PRE_CHRONICLE_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT,
-               /*consensus=*/true, se),
-        SCRIPT_ERR_EQUALVERIFY));
+    BOOST_CHECK(txErrorIsScript(Verify(eTX,
+                                       PRE_CHRONICLE_UTXO_HEIGHT,
+                                       POST_CHRONICLE_BLOCK_HEIGHT,
+                                       /*consensus=*/true,
+                                       se),
+                                SCRIPT_ERR_EQUALVERIFY));
 
     // Post-Chronicle: OP_LEFT extracts "AB" → EQUALVERIFY passes → OK.
-    BOOST_CHECK(txErrorIsScript(
-        Verify(eTX, POST_CHRONICLE_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT,
-               /*consensus=*/true, se),
-        SCRIPT_ERR_OK));
+    BOOST_CHECK(txErrorIsScript(Verify(eTX,
+                                       POST_CHRONICLE_UTXO_HEIGHT,
+                                       POST_CHRONICLE_BLOCK_HEIGHT,
+                                       /*consensus=*/true,
+                                       se),
+                                SCRIPT_ERR_OK));
 }
 
 // ── Test 8 ─────────────────────────────────────────────────────────────────
@@ -708,8 +766,9 @@ BOOST_AUTO_TEST_CASE(test_op_left)
 //   scriptPubKey: OP_RIGHT <"CD"> OP_EQUALVERIFY
 //                 OP_DUP OP_HASH160 <keyID> OP_EQUALVERIFY OP_CHECKSIG
 //
-// Pre-Chronicle UTXO, policy path: DISCOURAGE flag → SCRIPT_ERR_DISCOURAGE_UPGRADABLE_NOPS
-// Pre-Chronicle UTXO, consensus path: NOP6 — operands remain on stack →
+// Pre-Chronicle UTXO, policy path: DISCOURAGE flag →
+// SCRIPT_ERR_DISCOURAGE_UPGRADABLE_NOPS Pre-Chronicle UTXO, consensus path: NOP6 —
+// operands remain on stack →
 //   EQUALVERIFY fails → SCRIPT_ERR_EQUALVERIFY
 // Post-Chronicle UTXO: OP_RIGHT extracts "CD" → OK
 //
@@ -726,22 +785,23 @@ BOOST_AUTO_TEST_CASE(test_op_right)
         scriptPubKey << OP_RIGHT << OP_1;
 
         const CMutableTransaction txCredit = BuildCreditingTx(scriptPubKey);
-        CMutableTransaction txSpend  = BuildSpendingTx(txCredit);
+        CMutableTransaction txSpend = BuildSpendingTx(txCredit);
         txSpend.vin[0].scriptSig = CScript();
 
         bsv::CMutableTransactionExtended discourageTX;
         discourageTX.vutxo = txCredit.vout;
-        discourageTX.mtx   = txSpend;
+        discourageTX.mtx = txSpend;
 
-        BOOST_CHECK(txErrorIsScript(
-            VerifyWithFlags(discourageTX, POST_CHRONICLE_BLOCK_HEIGHT,
-                            POLICY_FLAGS_PRE_CHRONICLE, se),
-            SCRIPT_ERR_DISCOURAGE_UPGRADABLE_NOPS));
+        BOOST_CHECK(txErrorIsScript(VerifyWithFlags(discourageTX,
+                                                    POST_CHRONICLE_BLOCK_HEIGHT,
+                                                    POLICY_FLAGS_PRE_CHRONICLE,
+                                                    se),
+                                    SCRIPT_ERR_DISCOURAGE_UPGRADABLE_NOPS));
     }
 
     // ── Consensus path: NOP leaves stack unchanged; EQUALVERIFY exposes it ──
-    const std::vector<uint8_t> data    {'A','B','C','D'};
-    const std::vector<uint8_t> expected{'C','D'};
+    const std::vector<uint8_t> data{'A', 'B', 'C', 'D'};
+    const std::vector<uint8_t> expected{'C', 'D'};
 
     CScript opcodeCheck;
     opcodeCheck << OP_RIGHT << expected << OP_EQUALVERIFY;
@@ -749,20 +809,25 @@ BOOST_AUTO_TEST_CASE(test_op_right)
     CScript operandPushes;
     operandPushes << data << CScriptNum(2); // length on top
 
-    const bsv::CMutableTransactionExtended eTX =
-        MakeSignedExtendedTx(opcodeCheck, operandPushes, key);
+    const bsv::CMutableTransactionExtended eTX = MakeSignedExtendedTx(opcodeCheck,
+                                                                      operandPushes,
+                                                                      key);
 
     // Pre-Chronicle, consensus: NOP leaves operands on stack; EQUALVERIFY fails.
-    BOOST_CHECK(txErrorIsScript(
-        Verify(eTX, PRE_CHRONICLE_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT,
-               /*consensus=*/true, se),
-        SCRIPT_ERR_EQUALVERIFY));
+    BOOST_CHECK(txErrorIsScript(Verify(eTX,
+                                       PRE_CHRONICLE_UTXO_HEIGHT,
+                                       POST_CHRONICLE_BLOCK_HEIGHT,
+                                       /*consensus=*/true,
+                                       se),
+                                SCRIPT_ERR_EQUALVERIFY));
 
     // Post-Chronicle: OP_RIGHT extracts "CD" → EQUALVERIFY passes → OK.
-    BOOST_CHECK(txErrorIsScript(
-        Verify(eTX, POST_CHRONICLE_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT,
-               /*consensus=*/true, se),
-        SCRIPT_ERR_OK));
+    BOOST_CHECK(txErrorIsScript(Verify(eTX,
+                                       POST_CHRONICLE_UTXO_HEIGHT,
+                                       POST_CHRONICLE_BLOCK_HEIGHT,
+                                       /*consensus=*/true,
+                                       se),
+                                SCRIPT_ERR_OK));
 }
 
 // ── Test 9 ─────────────────────────────────────────────────────────────────
@@ -775,8 +840,9 @@ BOOST_AUTO_TEST_CASE(test_op_right)
 //   scriptPubKey: OP_LSHIFTNUM <12> OP_EQUALVERIFY
 //                 OP_DUP OP_HASH160 <keyID> OP_EQUALVERIFY OP_CHECKSIG
 //
-// Pre-Chronicle UTXO, policy path: DISCOURAGE flag → SCRIPT_ERR_DISCOURAGE_UPGRADABLE_NOPS
-// Pre-Chronicle UTXO, consensus path: NOP7 — operands remain on stack →
+// Pre-Chronicle UTXO, policy path: DISCOURAGE flag →
+// SCRIPT_ERR_DISCOURAGE_UPGRADABLE_NOPS Pre-Chronicle UTXO, consensus path: NOP7 —
+// operands remain on stack →
 //   EQUALVERIFY fails → SCRIPT_ERR_EQUALVERIFY
 // Post-Chronicle UTXO: 3 << 2 = 12 → EQUALVERIFY passes → OK
 //
@@ -793,17 +859,18 @@ BOOST_AUTO_TEST_CASE(test_op_lshiftnum)
         scriptPubKey << OP_LSHIFTNUM << OP_1;
 
         const CMutableTransaction txCredit = BuildCreditingTx(scriptPubKey);
-        CMutableTransaction txSpend  = BuildSpendingTx(txCredit);
+        CMutableTransaction txSpend = BuildSpendingTx(txCredit);
         txSpend.vin[0].scriptSig = CScript();
 
         bsv::CMutableTransactionExtended discourageTX;
         discourageTX.vutxo = txCredit.vout;
-        discourageTX.mtx   = txSpend;
+        discourageTX.mtx = txSpend;
 
-        BOOST_CHECK(txErrorIsScript(
-            VerifyWithFlags(discourageTX, POST_CHRONICLE_BLOCK_HEIGHT,
-                            POLICY_FLAGS_PRE_CHRONICLE, se),
-            SCRIPT_ERR_DISCOURAGE_UPGRADABLE_NOPS));
+        BOOST_CHECK(txErrorIsScript(VerifyWithFlags(discourageTX,
+                                                    POST_CHRONICLE_BLOCK_HEIGHT,
+                                                    POLICY_FLAGS_PRE_CHRONICLE,
+                                                    se),
+                                    SCRIPT_ERR_DISCOURAGE_UPGRADABLE_NOPS));
     }
 
     // ── Consensus path: NOP leaves stack unchanged; EQUALVERIFY exposes it ──
@@ -813,20 +880,25 @@ BOOST_AUTO_TEST_CASE(test_op_lshiftnum)
     CScript operandPushes;
     operandPushes << CScriptNum(3) << CScriptNum(2); // shift amount on top
 
-    const bsv::CMutableTransactionExtended eTX =
-        MakeSignedExtendedTx(opcodeCheck, operandPushes, key);
+    const bsv::CMutableTransactionExtended eTX = MakeSignedExtendedTx(opcodeCheck,
+                                                                      operandPushes,
+                                                                      key);
 
     // Pre-Chronicle, consensus: NOP leaves operands on stack; EQUALVERIFY fails.
-    BOOST_CHECK(txErrorIsScript(
-        Verify(eTX, PRE_CHRONICLE_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT,
-               /*consensus=*/true, se),
-        SCRIPT_ERR_EQUALVERIFY));
+    BOOST_CHECK(txErrorIsScript(Verify(eTX,
+                                       PRE_CHRONICLE_UTXO_HEIGHT,
+                                       POST_CHRONICLE_BLOCK_HEIGHT,
+                                       /*consensus=*/true,
+                                       se),
+                                SCRIPT_ERR_EQUALVERIFY));
 
     // Post-Chronicle: 3 << 2 = 12 → EQUALVERIFY passes → OK.
-    BOOST_CHECK(txErrorIsScript(
-        Verify(eTX, POST_CHRONICLE_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT,
-               /*consensus=*/true, se),
-        SCRIPT_ERR_OK));
+    BOOST_CHECK(txErrorIsScript(Verify(eTX,
+                                       POST_CHRONICLE_UTXO_HEIGHT,
+                                       POST_CHRONICLE_BLOCK_HEIGHT,
+                                       /*consensus=*/true,
+                                       se),
+                                SCRIPT_ERR_OK));
 }
 
 // ── Test 10 ────────────────────────────────────────────────────────────────
@@ -839,8 +911,9 @@ BOOST_AUTO_TEST_CASE(test_op_lshiftnum)
 //   scriptPubKey: OP_RSHIFTNUM <3> OP_EQUALVERIFY
 //                 OP_DUP OP_HASH160 <keyID> OP_EQUALVERIFY OP_CHECKSIG
 //
-// Pre-Chronicle UTXO, policy path: DISCOURAGE flag → SCRIPT_ERR_DISCOURAGE_UPGRADABLE_NOPS
-// Pre-Chronicle UTXO, consensus path: NOP8 — operands remain on stack →
+// Pre-Chronicle UTXO, policy path: DISCOURAGE flag →
+// SCRIPT_ERR_DISCOURAGE_UPGRADABLE_NOPS Pre-Chronicle UTXO, consensus path: NOP8 —
+// operands remain on stack →
 //   EQUALVERIFY fails → SCRIPT_ERR_EQUALVERIFY
 // Post-Chronicle UTXO: 12 >> 2 = 3 → EQUALVERIFY passes → OK
 //
@@ -857,17 +930,18 @@ BOOST_AUTO_TEST_CASE(test_op_rshiftnum)
         scriptPubKey << OP_RSHIFTNUM << OP_1;
 
         const CMutableTransaction txCredit = BuildCreditingTx(scriptPubKey);
-        CMutableTransaction txSpend  = BuildSpendingTx(txCredit);
+        CMutableTransaction txSpend = BuildSpendingTx(txCredit);
         txSpend.vin[0].scriptSig = CScript();
 
         bsv::CMutableTransactionExtended discourageTX;
         discourageTX.vutxo = txCredit.vout;
-        discourageTX.mtx   = txSpend;
+        discourageTX.mtx = txSpend;
 
-        BOOST_CHECK(txErrorIsScript(
-            VerifyWithFlags(discourageTX, POST_CHRONICLE_BLOCK_HEIGHT,
-                            POLICY_FLAGS_PRE_CHRONICLE, se),
-            SCRIPT_ERR_DISCOURAGE_UPGRADABLE_NOPS));
+        BOOST_CHECK(txErrorIsScript(VerifyWithFlags(discourageTX,
+                                                    POST_CHRONICLE_BLOCK_HEIGHT,
+                                                    POLICY_FLAGS_PRE_CHRONICLE,
+                                                    se),
+                                    SCRIPT_ERR_DISCOURAGE_UPGRADABLE_NOPS));
     }
 
     // ── Consensus path: NOP leaves stack unchanged; EQUALVERIFY exposes it ──
@@ -877,20 +951,25 @@ BOOST_AUTO_TEST_CASE(test_op_rshiftnum)
     CScript operandPushes;
     operandPushes << CScriptNum(12) << CScriptNum(2); // shift amount on top
 
-    const bsv::CMutableTransactionExtended eTX =
-        MakeSignedExtendedTx(opcodeCheck, operandPushes, key);
+    const bsv::CMutableTransactionExtended eTX = MakeSignedExtendedTx(opcodeCheck,
+                                                                      operandPushes,
+                                                                      key);
 
     // Pre-Chronicle, consensus: NOP leaves operands on stack; EQUALVERIFY fails.
-    BOOST_CHECK(txErrorIsScript(
-        Verify(eTX, PRE_CHRONICLE_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT,
-               /*consensus=*/true, se),
-        SCRIPT_ERR_EQUALVERIFY));
+    BOOST_CHECK(txErrorIsScript(Verify(eTX,
+                                       PRE_CHRONICLE_UTXO_HEIGHT,
+                                       POST_CHRONICLE_BLOCK_HEIGHT,
+                                       /*consensus=*/true,
+                                       se),
+                                SCRIPT_ERR_EQUALVERIFY));
 
     // Post-Chronicle: 12 >> 2 = 3 → EQUALVERIFY passes → OK.
-    BOOST_CHECK(txErrorIsScript(
-        Verify(eTX, POST_CHRONICLE_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT,
-               /*consensus=*/true, se),
-        SCRIPT_ERR_OK));
+    BOOST_CHECK(txErrorIsScript(Verify(eTX,
+                                       POST_CHRONICLE_UTXO_HEIGHT,
+                                       POST_CHRONICLE_BLOCK_HEIGHT,
+                                       /*consensus=*/true,
+                                       se),
+                                SCRIPT_ERR_OK));
 }
 
 // ── Test 11 ────────────────────────────────────────────────────────────────
@@ -923,18 +1002,23 @@ BOOST_AUTO_TEST_CASE(test_op_2mul)
     CScript operandPushes;
     operandPushes << CScriptNum(5);
 
-    const bsv::CMutableTransactionExtended eTX =
-        MakeSignedExtendedTx(opcodeCheck, operandPushes, key);
+    const bsv::CMutableTransactionExtended eTX = MakeSignedExtendedTx(opcodeCheck,
+                                                                      operandPushes,
+                                                                      key);
 
-    BOOST_CHECK(txErrorIsScript(
-        Verify(eTX, PRE_CHRONICLE_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT,
-               /*consensus=*/true, se),
-        SCRIPT_ERR_DISABLED_OPCODE));
+    BOOST_CHECK(txErrorIsScript(Verify(eTX,
+                                       PRE_CHRONICLE_UTXO_HEIGHT,
+                                       POST_CHRONICLE_BLOCK_HEIGHT,
+                                       /*consensus=*/true,
+                                       se),
+                                SCRIPT_ERR_DISABLED_OPCODE));
 
-    BOOST_CHECK(txErrorIsScript(
-        Verify(eTX, POST_CHRONICLE_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT,
-               /*consensus=*/true, se),
-        SCRIPT_ERR_OK));
+    BOOST_CHECK(txErrorIsScript(Verify(eTX,
+                                       POST_CHRONICLE_UTXO_HEIGHT,
+                                       POST_CHRONICLE_BLOCK_HEIGHT,
+                                       /*consensus=*/true,
+                                       se),
+                                SCRIPT_ERR_OK));
 }
 
 // ── Test 12 ────────────────────────────────────────────────────────────────
@@ -965,18 +1049,23 @@ BOOST_AUTO_TEST_CASE(test_op_2div)
     CScript operandPushes;
     operandPushes << CScriptNum(10);
 
-    const bsv::CMutableTransactionExtended eTX =
-        MakeSignedExtendedTx(opcodeCheck, operandPushes, key);
+    const bsv::CMutableTransactionExtended eTX = MakeSignedExtendedTx(opcodeCheck,
+                                                                      operandPushes,
+                                                                      key);
 
-    BOOST_CHECK(txErrorIsScript(
-        Verify(eTX, PRE_CHRONICLE_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT,
-               /*consensus=*/true, se),
-        SCRIPT_ERR_DISABLED_OPCODE));
+    BOOST_CHECK(txErrorIsScript(Verify(eTX,
+                                       PRE_CHRONICLE_UTXO_HEIGHT,
+                                       POST_CHRONICLE_BLOCK_HEIGHT,
+                                       /*consensus=*/true,
+                                       se),
+                                SCRIPT_ERR_DISABLED_OPCODE));
 
-    BOOST_CHECK(txErrorIsScript(
-        Verify(eTX, POST_CHRONICLE_UTXO_HEIGHT, POST_CHRONICLE_BLOCK_HEIGHT,
-               /*consensus=*/true, se),
-        SCRIPT_ERR_OK));
+    BOOST_CHECK(txErrorIsScript(Verify(eTX,
+                                       POST_CHRONICLE_UTXO_HEIGHT,
+                                       POST_CHRONICLE_BLOCK_HEIGHT,
+                                       /*consensus=*/true,
+                                       se),
+                                SCRIPT_ERR_OK));
 }
 
 BOOST_AUTO_TEST_SUITE_END()
@@ -988,7 +1077,7 @@ BOOST_AUTO_TEST_SUITE_END()
 static CKey LoadKey()
 {
     CBitcoinSecret secret;
-    if (!secret.SetString(WIF_KEY))
+    if(!secret.SetString(WIF_KEY))
         throw std::runtime_error("Failed to decode WIF key");
     return secret.GetKey();
 }
@@ -996,44 +1085,47 @@ static CKey LoadKey()
 static CMutableTransaction BuildCreditingTx(const CScript& scriptPubKey)
 {
     CMutableTransaction tx;
-    tx.nVersion  = 1;
+    tx.nVersion = 1;
     tx.nLockTime = 0;
     tx.vin.resize(1);
     tx.vout.resize(1);
-    tx.vin[0].prevout   = COutPoint();  // coinbase-style: no real previous output
+    tx.vin[0].prevout = COutPoint(); // coinbase-style: no real previous output
     tx.vin[0].scriptSig = CScript() << CScriptNum(0) << CScriptNum(0);
     tx.vin[0].nSequence = CTxIn::SEQUENCE_FINAL;
     tx.vout[0].scriptPubKey = scriptPubKey;
-    tx.vout[0].nValue       = UTXO_AMOUNT;
+    tx.vout[0].nValue = UTXO_AMOUNT;
     return tx;
 }
 
 static CMutableTransaction BuildSpendingTx(const CMutableTransaction& txCredit,
-                                            int32_t txVersion)
+                                           int32_t txVersion)
 {
     CMutableTransaction tx;
-    tx.nVersion  = txVersion;
+    tx.nVersion = txVersion;
     tx.nLockTime = 0;
     tx.vin.resize(1);
     tx.vout.resize(1);
-    tx.vin[0].prevout   = COutPoint(txCredit.GetId(), 0);
-    tx.vin[0].scriptSig = CScript();  // caller fills this in
+    tx.vin[0].prevout = COutPoint(txCredit.GetId(), 0);
+    tx.vin[0].scriptSig = CScript(); // caller fills this in
     tx.vin[0].nSequence = CTxIn::SEQUENCE_FINAL;
-    tx.vout[0].scriptPubKey = CScript();  // anyone-can-spend output
-    tx.vout[0].nValue       = UTXO_AMOUNT;
+    tx.vout[0].scriptPubKey = CScript(); // anyone-can-spend output
+    tx.vout[0].nValue = UTXO_AMOUNT;
     return tx;
 }
 
 static std::vector<uint8_t> Sign(const CScript& scriptPubKey,
-                                  const CMutableTransaction& txSpend,
-                                  const CKey& key,
-                                  SigHashType sigHashType)
+                                 const CMutableTransaction& txSpend,
+                                 const CKey& key,
+                                 SigHashType sigHashType)
 {
-    const uint256 hash = SignatureHash(
-        scriptPubKey, CTransaction(txSpend), /*nIn=*/0, sigHashType, UTXO_AMOUNT);
+    const uint256 hash = SignatureHash(scriptPubKey,
+                                       CTransaction(txSpend),
+                                       /*nIn=*/0,
+                                       sigHashType,
+                                       UTXO_AMOUNT);
 
     std::vector<uint8_t> sig;
-    if (!key.Sign(hash, sig))
+    if(!key.Sign(hash, sig))
         throw std::runtime_error("ECDSA signing failed");
 
     sig.push_back(static_cast<uint8_t>(sigHashType.getRawSigHashType()));
@@ -1047,18 +1139,20 @@ static bsv::CMutableTransactionExtended MakeSignedExtendedTx(const CScript& opco
                                                              int32_t txVersion)
 {
     const CPubKey pubkey = key.GetPubKey();
-    const CKeyID  keyID  = pubkey.GetID();
+    const CKeyID keyID = pubkey.GetID();
 
     // Full scriptPubKey: opcode check (consuming operands from the stack top)
     // followed by standard P2PKH ownership check.
     CScript scriptPubKey = opcodeCheck;
-    scriptPubKey << OP_DUP
-                 << OP_HASH160 << ToByteVector(keyID)
-                 << OP_EQUALVERIFY
-                 << OP_CHECKSIG;
+    scriptPubKey
+        << OP_DUP
+        << OP_HASH160
+        << ToByteVector(keyID)
+        << OP_EQUALVERIFY
+        << OP_CHECKSIG;
 
     const CMutableTransaction txCredit = BuildCreditingTx(scriptPubKey);
-    CMutableTransaction txSpend  = BuildSpendingTx(txCredit, txVersion);
+    CMutableTransaction txSpend = BuildSpendingTx(txCredit, txVersion);
 
     // Sign the spending tx using the full scriptPubKey and default sighash type.
     const auto sig = Sign(scriptPubKey, txSpend, key);
@@ -1074,7 +1168,7 @@ static bsv::CMutableTransactionExtended MakeSignedExtendedTx(const CScript& opco
 
     bsv::CMutableTransactionExtended eTX;
     eTX.vutxo = txCredit.vout;
-    eTX.mtx   = std::move(txSpend);
+    eTX.mtx = std::move(txSpend);
     return eTX;
 }
 
@@ -1090,11 +1184,10 @@ static TxError Verify(const bsv::CMutableTransactionExtended& eTX,
     const std::vector<uint8_t> etxBin(out.begin(), out.end());
 
     std::array<int32_t, 1> utxoHeights{utxoHeight};
-    return se.VerifyScript(
-        etxBin,
-        std::span<const int32_t>(utxoHeights),
-        blockHeight,
-        consensus);
+    return se.VerifyScript(etxBin,
+                           std::span<const int32_t>(utxoHeights),
+                           blockHeight,
+                           consensus);
 }
 
 static TxError VerifyWithFlags(const bsv::CMutableTransactionExtended& eTX,
@@ -1109,15 +1202,16 @@ static TxError VerifyWithFlags(const bsv::CMutableTransactionExtended& eTX,
 
     std::array<int32_t, 1> dummyHeights{0};
     std::array<uint32_t, 1> customFlags{flags};
-    return se.VerifyScript(
-        etxBin,
-        std::span<const int32_t>(dummyHeights),
-        blockHeight,
-        /*consensus=*/true,
-        std::span<const uint32_t>(customFlags));
+    return se.VerifyScript(etxBin,
+                           std::span<const int32_t>(dummyHeights),
+                           blockHeight,
+                           /*consensus=*/true,
+                           std::span<const uint32_t>(customFlags));
 }
 
-static bool txErrorIsScript(TxError r, ScriptError_t e) {
-    if (e == SCRIPT_ERR_OK) return r.domain == TX_ERR_DOMAIN_OK;
+static bool txErrorIsScript(TxError r, ScriptError_t e)
+{
+    if(e == SCRIPT_ERR_OK)
+        return r.domain == TX_ERR_DOMAIN_OK;
     return r.domain == TX_ERR_DOMAIN_SCRIPT && r.code == static_cast<int32_t>(e);
 }

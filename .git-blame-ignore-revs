@@ -1,0 +1,2 @@
+# apply scripts/check_clang_format.py: whole-tree reformat to the root .clang-format
+bbc304ae97e412f540fd10b5aa37fdc2371d663b

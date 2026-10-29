@@ -4,5 +4,12 @@
 
 extern "C" const char* bdkffi_sha256_backend(void)
 {
-    try { return bsv::SelectSha256Backend().c_str(); } catch (...) { return ""; }
+    try
+    {
+        return bsv::SelectSha256Backend().c_str();
+    }
+    catch(...)
+    {
+        return "";
+    }
 }

@@ -33,15 +33,15 @@
 
 /* Prepare the internal types before suppressing the static table header. */
 #define SECP256K1_BUILD
-#include "secp256k1.h"
 #include "assumptions.h"
 #include "checkmem.h"
-#include "util.h"
+#include "ecmult.h" /* declaration header only -- NOT ecmult_impl.h */
 #include "field_impl.h"
-#include "scalar_impl.h"                 /* defines split_128 AND split_lambda */
 #include "group_impl.h"
-#include "ecmult.h"                      /* declaration header only -- NOT ecmult_impl.h */
+#include "scalar_impl.h" /* defines split_128 AND split_lambda */
+#include "secp256k1.h"
 #include "secp256k1_runtime_precomputed.h" /* suppresses precomputed_ecmult.h; declares the tables */
+#include "util.h"
 
 /* (a) is handled by the patched tests.c main() calling
  * bdk_secp256k1_prepare_verification_tables() first (see wasm_tests_patch.cmake);
@@ -50,8 +50,10 @@
 /* Capture the genuine 128-bit split before the macro below, so the patched suite
  * can keep test_fixed_wnaf() exercising split_128 rather than the endomorphism
  * split. The patch script rewrites the tests.c call site to call this alias. */
-static void bdk_wasm_split_128(secp256k1_scalar *r1, secp256k1_scalar *r2,
-                               const secp256k1_scalar *k) {
+static void bdk_wasm_split_128(secp256k1_scalar* r1,
+                               secp256k1_scalar* r2,
+                               const secp256k1_scalar* k)
+{
     secp256k1_scalar_split_128(r1, r2, k);
 }
 

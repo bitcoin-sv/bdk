@@ -15,7 +15,10 @@
 #include "crypto/sha256_dispatch.h"
 #include "sha256_backend.hpp"
 
-#if (defined(__x86_64__) || defined(__amd64__)) && (defined(__GNUC__) || defined(__clang__)) && !defined(_MSC_VER) && !defined(__EMSCRIPTEN__)
+#if (defined(__x86_64__) || defined(__amd64__))                                          \
+    && (defined(__GNUC__) || defined(__clang__))                                         \
+    && !defined(_MSC_VER)                                                                \
+    && !defined(__EMSCRIPTEN__)
 #include <cpuid.h>
 #endif
 
@@ -27,11 +30,15 @@ namespace sha256_test
     // implements FEAT_SHA256.
     inline std::string_view ExpectedBestBackend()
     {
-#if (defined(__GNUC__) || defined(__clang__)) && !defined(_MSC_VER) && !defined(__EMSCRIPTEN__)
+#if (defined(__GNUC__) || defined(__clang__))                                            \
+    && !defined(_MSC_VER)                                                                \
+    && !defined(__EMSCRIPTEN__)
 #if defined(__x86_64__) || defined(__amd64__)
         uint32_t eax{}, ebx{}, ecx{}, edx{};
-        const bool sse41 = __get_cpuid(1, &eax, &ebx, &ecx, &edx) != 0 && ((ecx >> 19) & 1U) != 0;
-        const bool shani = __get_cpuid_count(7, 0, &eax, &ebx, &ecx, &edx) != 0 && ((ebx >> 29) & 1U) != 0;
+        const bool sse41 = __get_cpuid(1, &eax, &ebx, &ecx, &edx) != 0
+                        && ((ecx >> 19) & 1U) != 0;
+        const bool shani = __get_cpuid_count(7, 0, &eax, &ebx, &ecx, &edx) != 0
+                        && ((ebx >> 29) & 1U) != 0;
         if(sse41 && shani)
             return "shani";
         if(sse41)
@@ -101,13 +108,18 @@ namespace sha256_test
                                              [&](const bsv::Sha256Backend& b)
                                              { return best == b.name; });
         BOOST_REQUIRE_MESSAGE(it != supported.end(),
-                              "the CPU supports " << best << " but BDK does not offer it");
-        BOOST_TEST((it == std::prev(supported.end())), best << " is not BDK's fastest backend");
-        BOOST_TEST(sha256_dispatch::stream == it->stream, "installed stream is not " << best);
+                              "the CPU supports "
+                                  << best
+                                  << " but BDK does not offer it");
+        BOOST_TEST((it == std::prev(supported.end())),
+                   best << " is not BDK's fastest backend");
+        BOOST_TEST(sha256_dispatch::stream == it->stream,
+                   "installed stream is not " << best);
         if(HasTwoWay(best))
         {
             BOOST_TEST(it->d_block_2way != nullptr, best << " lost its 2-way transform");
-            BOOST_TEST(sha256_dispatch::d_block_2way == it->d_block_2way, "installed 2-way is not " << best);
+            BOOST_TEST(sha256_dispatch::d_block_2way == it->d_block_2way,
+                       "installed 2-way is not " << best);
         }
         else
         {

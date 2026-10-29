@@ -24,7 +24,7 @@ namespace
         {
             bsv::SelectSha256Backend();
         }
-        catch(...) //NOLINT(bugprone-empty-catch)
+        catch(...) // NOLINT(bugprone-empty-catch)
         {
             // Out of memory at load: the scalar transforms stay installed, and
             // the next SelectSha256Backend() call tries again
@@ -32,7 +32,10 @@ namespace
     }
 
 #if (defined(__GNUC__) || defined(__clang__)) && !defined(_MSC_VER)
-    [[gnu::constructor]] void RunSelectSha256BackendAtLoad() { SelectSha256BackendAtLoad(); }
+    [[gnu::constructor]] void RunSelectSha256BackendAtLoad()
+    {
+        SelectSha256BackendAtLoad();
+    }
 #else
     const bool kSelectedAtLoad = (SelectSha256BackendAtLoad(), true);
 #endif

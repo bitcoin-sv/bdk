@@ -6,19 +6,19 @@
 
 #include "base58.h"
 #include "chainparams.h"
-#include "util.h" // SelectParams
 #include "core_io.h"
 #include "key.h"
 #include "script/script_num.h"
 #include "univalue/include/univalue.h"
+#include "util.h" // SelectParams
 
 #include "keystore.h"
 #include "script/sign.h"
 
-#include "extendedTx.hpp"
 #include "assembler.h"
-#include "utilstrencodings.h"
+#include "extendedTx.hpp"
 #include "txvalidator.hpp"
+#include "utilstrencodings.h"
 
 static CMutableTransaction BuildCreditingTransaction(const CScript& scriptPubKey,
                                                      const Amount nValue)
@@ -66,7 +66,8 @@ static std::vector<uint8_t> MakeSig(const CScript& scriptPubkey,
                                        sigHashType,
                                        amount);
     std::vector<uint8_t> vchSig;
-    if (!key.Sign(hash, vchSig)) {
+    if(!key.Sign(hash, vchSig))
+    {
         throw std::runtime_error("ERROR signing");
     }
 
@@ -83,10 +84,12 @@ static CScript PushAll(const std::vector<valtype>& values)
         {
             result << OP_0;
         }
-        else if (v.size() == 1 && v[0] >= 1 && v[0] <= 16) {
+        else if(v.size() == 1 && v[0] >= 1 && v[0] <= 16)
+        {
             result << EncodeOP_N(v[0]);
         }
-        else {
+        else
+        {
             result << v;
         }
     }
@@ -94,14 +97,15 @@ static CScript PushAll(const std::vector<valtype>& values)
     return result;
 }
 
-static bsv::CMutableTransactionExtended BuildReguarTransaction(const std::string& network);
+static bsv::CMutableTransactionExtended BuildReguarTransaction(
+    const std::string& network);
 
 // This helper is to play and modify script pubkey (append op_code to that)
 // Here is the example of using OP_RETURN, but we can do other things
 static bool AppendScriptPubKey(CScript& /*script*/)
 {
-    //std::vector<uint8_t> data(1000, 1);
-    //script << OP_FALSE << OP_RETURN << data;
+    // std::vector<uint8_t> data(1000, 1);
+    // script << OP_FALSE << OP_RETURN << data;
     return true;
 }
 
@@ -112,20 +116,32 @@ int main(int /*argc*/, char* /*argv*/[])
     const bsv::CTxValidator se(network);
 
     const bsv::CMutableTransactionExtended eTX = BuildReguarTransaction(network);
-    //const bsv::CMutableTransactionExtended eTX = BuildP2SHTransaction(network);
+    // const bsv::CMutableTransactionExtended eTX = BuildP2SHTransaction(network);
 
     CDataStream out_stream(SER_NETWORK, PROTOCOL_VERSION);
     out_stream << eTX;
     const std::vector<uint8_t> etxBin(out_stream.begin(), out_stream.end());
-    std::array<int32_t, 1> utxoArray = { 620539 };
+    std::array<int32_t, 1> utxoArray = {620539};
     const int32_t blockHeight = 720540;
-    const bool consensus {true};
+    const bool consensus{true};
 
-    const TxError ret = se.ValidateTransaction(etxBin, std::span<const int32_t>(utxoArray) , blockHeight, consensus);
+    const TxError ret = se.ValidateTransaction(etxBin,
+                                               std::span<const int32_t>(utxoArray),
+                                               blockHeight,
+                                               consensus);
 
     const std::string etxHex = bsv::Bin2Hex(etxBin);
-    std::cout << '\n' << '\n' << "ExtendedTX Hex" << '\n' << '\n' << etxHex << '\n' << '\n';
-    if (!bsv::TxErrorIsOk(ret)) {
+    std::cout
+        << '\n'
+        << '\n'
+        << "ExtendedTX Hex"
+        << '\n'
+        << '\n'
+        << etxHex
+        << '\n'
+        << '\n';
+    if(!bsv::TxErrorIsOk(ret))
+    {
         throw std::runtime_error("ERROR verify script for tx " + etxHex);
     }
 
@@ -142,7 +158,8 @@ bsv::CMutableTransactionExtended BuildReguarTransaction(const std::string& netwo
     const CKey key1 = bsecret1.GetKey();
     const CPubKey pubkey1 = key1.GetPubKey();
 
-    CBasicKeyStore keystore;// Might not need the keystore as we use the private key we created
+    CBasicKeyStore
+        keystore; // Might not need the keystore as we use the private key we created
     keystore.AddKey(key1);
 
     if(key1.VerifyPubKey(pubkey1))
@@ -150,7 +167,9 @@ bsv::CMutableTransactionExtended BuildReguarTransaction(const std::string& netwo
 
     // Construct a tx
     const Amount amount{1000000};
-    CMutableTransaction txFrom = BuildCreditingTransaction(GetScriptForDestination(key1.GetPubKey().GetID()), amount);
+    CMutableTransaction txFrom = BuildCreditingTransaction(GetScriptForDestination(
+                                                               key1.GetPubKey().GetID()),
+                                                           amount);
     CMutableTransaction txTo = BuildSpendingTransaction(CScript(), txFrom);
     txTo.vout[0].scriptPubKey = GetScriptForDestination(key1.GetPubKey().GetID());
 
@@ -168,4 +187,3 @@ bsv::CMutableTransactionExtended BuildReguarTransaction(const std::string& netwo
     eTX.mtx = std::move(txTo);
     return eTX;
 }
-

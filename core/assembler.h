@@ -4,9 +4,9 @@
 // Created by m.fletcher on 10/07/2020.
 //
 
-#include <string>
 #include <cstdint>
 #include <span>
+#include <string>
 #include <vector>
 
 class CScript;
@@ -22,4 +22,3 @@ namespace bsv
     // Convert a binary to hex string
     std::string Bin2Hex(const std::vector<uint8_t>& data);
 }
-

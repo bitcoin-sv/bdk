@@ -1,17 +1,12 @@
-#include <bdkcgo/txvalidator_cgo.h>
 #include <bdkcgo/src/abiguard.hpp>
+#include <bdkcgo/txvalidator_cgo.h>
 #include <core/cancellation.hpp>
 #include <core/txvalidator.hpp>
 #include <core/validatearg.hpp>
 
+int TxValidator_CPP_SCRIPT_ERR_ERROR_COUNT() { return bsv::CPP_SCRIPT_ERR_ERROR_COUNT(); }
 
-int TxValidator_CPP_SCRIPT_ERR_ERROR_COUNT(){
-    return bsv::CPP_SCRIPT_ERR_ERROR_COUNT();
-}
-
-uint64_t TxValidator_ABI_EchoLength(uint64_t len){
-    return len;
-}
+uint64_t TxValidator_ABI_EchoLength(uint64_t len) { return len; }
 
 // Internal helper to emit a diagnostic from a catch handler.
 // Stream insertion and the explicit flush can allocate, so they can throw — and a
@@ -20,8 +15,10 @@ uint64_t TxValidator_ABI_EchoLength(uint64_t len){
 // fails, the diagnostic is dropped and the caller still gets its documented result.
 // The flush is deliberate: the Go side may abort right after this returns, and an
 // unflushed stdout buffer would lose the only record of the exception.
-static void helper_log_cgo_exception(const char* where, const char* what) noexcept {
-    try {
+static void helper_log_cgo_exception(const char* where, const char* what) noexcept
+{
+    try
+    {
         std::cout << "CGO EXCEPTION : " << where << " " << what << '\n' << std::flush;
     }
     catch(...) // NOLINT(bugprone-empty-catch)
@@ -38,28 +35,38 @@ static const char* helper_string2char(const std::string& stdStr)
     char* charPtr = nullptr;
     // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
     charPtr = new char[stdStr.size() + 1];
-    std::memcpy(charPtr, stdStr.c_str(), stdStr.size() + 1); // includes the terminating NUL
+    std::memcpy(charPtr,
+                stdStr.c_str(),
+                stdStr.size() + 1); // includes the terminating NUL
     return charPtr;
 }
 
-TxValidatorCGO TxValidator_CreateV2(const char* networkNamePtr, uint64_t networkNameLen){
-    try {
-        const std::span<const uint8_t> nameSpan = bdkcgo::byte_span(networkNamePtr, networkNameLen);
+TxValidatorCGO TxValidator_CreateV2(const char* networkNamePtr, uint64_t networkNameLen)
+{
+    try
+    {
+        const std::span<const uint8_t> nameSpan = bdkcgo::byte_span(networkNamePtr,
+                                                                    networkNameLen);
         std::string networkName;
-        if (!nameSpan.empty()) {
-            networkName.assign(reinterpret_cast<const char*>(nameSpan.data()), nameSpan.size());
+        if(!nameSpan.empty())
+        {
+            networkName.assign(reinterpret_cast<const char*>(nameSpan.data()),
+                               nameSpan.size());
         }
         // NOLINTNEXTLINE(cppcoreguidelines-owning-memory)
         return new bsv::CTxValidator(networkName);
     }
-    catch (const std::exception& e) {
+    catch(const std::exception& e)
+    {
         helper_log_cgo_exception(__FILE__ " at TxValidator_CreateV2", e.what());
         return nullptr;
     }
-    catch (...) {
+    catch(...)
+    {
         // Nothing may cross the extern "C" boundary; a non-std exception takes the
         // same channel as any other construction failure.
-        helper_log_cgo_exception(__FILE__ " at TxValidator_CreateV2", "unknown exception");
+        helper_log_cgo_exception(__FILE__ " at TxValidator_CreateV2",
+                                 "unknown exception");
         return nullptr;
     }
 }
@@ -71,78 +78,111 @@ void TxValidator_Destroy(TxValidatorCGO cgoEngine)
     delete ptr;
 }
 
-const char* TxValidator_SetMaxOpsPerScriptPolicy(TxValidatorCGO cgoEngine, int64_t maxOpsPerScriptPolicyIn)
+const char* TxValidator_SetMaxOpsPerScriptPolicy(TxValidatorCGO cgoEngine,
+                                                 int64_t maxOpsPerScriptPolicyIn)
 {
     std::string err;
-    static_cast<bsv::CTxValidator*>(cgoEngine)->SetMaxOpsPerScriptPolicy(maxOpsPerScriptPolicyIn, &err);
+    static_cast<bsv::CTxValidator*>(cgoEngine)
+        ->SetMaxOpsPerScriptPolicy(maxOpsPerScriptPolicyIn, &err);
     return helper_string2char(err);
 }
 
-const char* TxValidator_SetMaxScriptNumLengthPolicy(TxValidatorCGO cgoEngine, int64_t maxScriptNumLengthIn)
+const char* TxValidator_SetMaxScriptNumLengthPolicy(TxValidatorCGO cgoEngine,
+                                                    int64_t maxScriptNumLengthIn)
 {
     std::string err;
-    static_cast<bsv::CTxValidator*>(cgoEngine)->SetMaxScriptNumLengthPolicy(maxScriptNumLengthIn, &err);
+    static_cast<bsv::CTxValidator*>(cgoEngine)
+        ->SetMaxScriptNumLengthPolicy(maxScriptNumLengthIn, &err);
     return helper_string2char(err);
 }
 
-const char* TxValidator_SetMaxScriptSizePolicy(TxValidatorCGO cgoEngine, int64_t maxScriptSizePolicyIn)
+const char* TxValidator_SetMaxScriptSizePolicy(TxValidatorCGO cgoEngine,
+                                               int64_t maxScriptSizePolicyIn)
 {
     std::string err;
-    static_cast<bsv::CTxValidator*>(cgoEngine)->SetMaxScriptSizePolicy(maxScriptSizePolicyIn, &err);
+    static_cast<bsv::CTxValidator*>(cgoEngine)
+        ->SetMaxScriptSizePolicy(maxScriptSizePolicyIn, &err);
     return helper_string2char(err);
 }
 
-const char* TxValidator_SetMaxPubKeysPerMultiSigPolicy(TxValidatorCGO cgoEngine, int64_t maxPubKeysPerMultiSigIn)
+const char* TxValidator_SetMaxPubKeysPerMultiSigPolicy(TxValidatorCGO cgoEngine,
+                                                       int64_t maxPubKeysPerMultiSigIn)
 {
     std::string err;
-    static_cast<bsv::CTxValidator*>(cgoEngine)->SetMaxPubKeysPerMultiSigPolicy(maxPubKeysPerMultiSigIn, &err);
+    static_cast<bsv::CTxValidator*>(cgoEngine)
+        ->SetMaxPubKeysPerMultiSigPolicy(maxPubKeysPerMultiSigIn, &err);
     return helper_string2char(err);
 }
 
-const char* TxValidator_SetMaxStackMemoryUsage(TxValidatorCGO cgoEngine, int64_t maxStackMemoryUsageConsensusIn, int64_t maxStackMemoryUsagePolicyIn)
+const char* TxValidator_SetMaxStackMemoryUsage(TxValidatorCGO cgoEngine,
+                                               int64_t maxStackMemoryUsageConsensusIn,
+                                               int64_t maxStackMemoryUsagePolicyIn)
 {
     std::string err;
-    static_cast<bsv::CTxValidator*>(cgoEngine)->SetMaxStackMemoryUsage(maxStackMemoryUsageConsensusIn, maxStackMemoryUsagePolicyIn, &err);
+    static_cast<bsv::CTxValidator*>(cgoEngine)
+        ->SetMaxStackMemoryUsage(maxStackMemoryUsageConsensusIn,
+                                 maxStackMemoryUsagePolicyIn,
+                                 &err);
     return helper_string2char(err);
 }
 
-const char* TxValidator_SetGenesisActivationHeight(TxValidatorCGO cgoEngine, int32_t genesisActivationHeightIn)
+const char* TxValidator_SetGenesisActivationHeight(TxValidatorCGO cgoEngine,
+                                                   int32_t genesisActivationHeightIn)
 {
     std::string err;
-    static_cast<bsv::CTxValidator*>(cgoEngine)->SetGenesisActivationHeight(genesisActivationHeightIn, &err);
+    static_cast<bsv::CTxValidator*>(cgoEngine)
+        ->SetGenesisActivationHeight(genesisActivationHeightIn, &err);
     return helper_string2char(err);
 }
 
-const char* TxValidator_SetChronicleActivationHeight(TxValidatorCGO cgoEngine, int32_t chronicleActivationHeightIn)
+const char* TxValidator_SetChronicleActivationHeight(TxValidatorCGO cgoEngine,
+                                                     int32_t chronicleActivationHeightIn)
 {
     std::string err;
-    static_cast<bsv::CTxValidator*>(cgoEngine)->SetChronicleActivationHeight(chronicleActivationHeightIn, &err);
+    static_cast<bsv::CTxValidator*>(cgoEngine)
+        ->SetChronicleActivationHeight(chronicleActivationHeightIn, &err);
     return helper_string2char(err);
 }
 
-uint64_t TxValidator_GetMaxOpsPerScript(TxValidatorCGO cgoEngine, bool isGenesisEnabled, bool isConsensus)
+uint64_t TxValidator_GetMaxOpsPerScript(TxValidatorCGO cgoEngine,
+                                        bool isGenesisEnabled,
+                                        bool isConsensus)
 {
-    return static_cast<bsv::CTxValidator*>(cgoEngine)->GetMaxOpsPerScript(isGenesisEnabled, isConsensus);
+    return static_cast<bsv::CTxValidator*>(cgoEngine)
+        ->GetMaxOpsPerScript(isGenesisEnabled, isConsensus);
 }
 
-uint64_t TxValidator_GetMaxScriptNumLength(TxValidatorCGO cgoEngine, bool isGenesisEnabled, bool isChronicleEnabled, bool isConsensus)
+uint64_t TxValidator_GetMaxScriptNumLength(TxValidatorCGO cgoEngine,
+                                           bool isGenesisEnabled,
+                                           bool isChronicleEnabled,
+                                           bool isConsensus)
 {
-    return static_cast<bsv::CTxValidator*>(cgoEngine)->GetMaxScriptNumLength(isGenesisEnabled, isChronicleEnabled, isConsensus);
+    return static_cast<bsv::CTxValidator*>(cgoEngine)
+        ->GetMaxScriptNumLength(isGenesisEnabled, isChronicleEnabled, isConsensus);
 }
 
-uint64_t TxValidator_GetMaxScriptSize(TxValidatorCGO cgoEngine, bool isGenesisEnabled, bool isConsensus)
+uint64_t TxValidator_GetMaxScriptSize(TxValidatorCGO cgoEngine,
+                                      bool isGenesisEnabled,
+                                      bool isConsensus)
 {
-    return static_cast<bsv::CTxValidator*>(cgoEngine)->GetMaxScriptSize(isGenesisEnabled, isConsensus);
+    return static_cast<bsv::CTxValidator*>(cgoEngine)->GetMaxScriptSize(isGenesisEnabled,
+                                                                        isConsensus);
 }
 
-uint64_t TxValidator_GetMaxPubKeysPerMultiSig(TxValidatorCGO cgoEngine, bool isGenesisEnabled, bool isConsensus)
+uint64_t TxValidator_GetMaxPubKeysPerMultiSig(TxValidatorCGO cgoEngine,
+                                              bool isGenesisEnabled,
+                                              bool isConsensus)
 {
-    return static_cast<bsv::CTxValidator*>(cgoEngine)->GetMaxPubKeysPerMultiSig(isGenesisEnabled, isConsensus);
+    return static_cast<bsv::CTxValidator*>(cgoEngine)
+        ->GetMaxPubKeysPerMultiSig(isGenesisEnabled, isConsensus);
 }
 
-uint64_t TxValidator_GetMaxStackMemoryUsage(TxValidatorCGO cgoEngine, bool isGenesisEnabled, bool isConsensus)
+uint64_t TxValidator_GetMaxStackMemoryUsage(TxValidatorCGO cgoEngine,
+                                            bool isGenesisEnabled,
+                                            bool isConsensus)
 {
-    return static_cast<bsv::CTxValidator*>(cgoEngine)->GetMaxStackMemoryUsage(isGenesisEnabled, isConsensus);
+    return static_cast<bsv::CTxValidator*>(cgoEngine)
+        ->GetMaxStackMemoryUsage(isGenesisEnabled, isConsensus);
 }
 
 int32_t TxValidator_GetGenesisActivationHeight(TxValidatorCGO cgoEngine)
@@ -165,17 +205,21 @@ uint64_t TxValidator_GetChronicleGracefulPeriod(TxValidatorCGO cgoEngine)
     return static_cast<bsv::CTxValidator*>(cgoEngine)->GetChronicleGracefulPeriod();
 }
 
-const char* TxValidator_SetGenesisGracefulPeriod(TxValidatorCGO cgoEngine, int64_t genesisGracefulPeriodIn)
+const char* TxValidator_SetGenesisGracefulPeriod(TxValidatorCGO cgoEngine,
+                                                 int64_t genesisGracefulPeriodIn)
 {
     std::string err;
-    static_cast<bsv::CTxValidator*>(cgoEngine)->SetGenesisGracefulPeriod(genesisGracefulPeriodIn, &err);
+    static_cast<bsv::CTxValidator*>(cgoEngine)
+        ->SetGenesisGracefulPeriod(genesisGracefulPeriodIn, &err);
     return helper_string2char(err);
 }
 
-const char* TxValidator_SetChronicleGracefulPeriod(TxValidatorCGO cgoEngine, int64_t chronicleGracefulPeriodIn)
+const char* TxValidator_SetChronicleGracefulPeriod(TxValidatorCGO cgoEngine,
+                                                   int64_t chronicleGracefulPeriodIn)
 {
     std::string err;
-    static_cast<bsv::CTxValidator*>(cgoEngine)->SetChronicleGracefulPeriod(chronicleGracefulPeriodIn, &err);
+    static_cast<bsv::CTxValidator*>(cgoEngine)
+        ->SetChronicleGracefulPeriod(chronicleGracefulPeriodIn, &err);
     return helper_string2char(err);
 }
 
@@ -186,10 +230,12 @@ const char* TxValidator_SetMaxTxSizePolicy(TxValidatorCGO cgoEngine, int64_t val
     return helper_string2char(err);
 }
 
-const char* TxValidator_SetMaxSigOpsPostGenesisPolicy(TxValidatorCGO cgoEngine, int64_t value)
+const char* TxValidator_SetMaxSigOpsPostGenesisPolicy(TxValidatorCGO cgoEngine,
+                                                      int64_t value)
 {
     std::string err;
-    static_cast<bsv::CTxValidator*>(cgoEngine)->SetMaxSigOpsPostGenesisPolicy(value, &err);
+    static_cast<bsv::CTxValidator*>(cgoEngine)->SetMaxSigOpsPostGenesisPolicy(value,
+                                                                              &err);
     return helper_string2char(err);
 }
 
@@ -205,14 +251,17 @@ const char* TxValidator_SetMinConsolidationFactor(TxValidatorCGO cgoEngine, int6
     return helper_string2char(err);
 }
 
-const char* TxValidator_SetMaxConsolidationInputScriptSize(TxValidatorCGO cgoEngine, int64_t value)
+const char* TxValidator_SetMaxConsolidationInputScriptSize(TxValidatorCGO cgoEngine,
+                                                           int64_t value)
 {
     std::string err;
-    static_cast<bsv::CTxValidator*>(cgoEngine)->SetMaxConsolidationInputScriptSize(value, &err);
+    static_cast<bsv::CTxValidator*>(cgoEngine)->SetMaxConsolidationInputScriptSize(value,
+                                                                                   &err);
     return helper_string2char(err);
 }
 
-const char* TxValidator_SetMinConfConsolidationInput(TxValidatorCGO cgoEngine, int64_t value)
+const char* TxValidator_SetMinConfConsolidationInput(TxValidatorCGO cgoEngine,
+                                                     int64_t value)
 {
     std::string err;
     static_cast<bsv::CTxValidator*>(cgoEngine)->SetMinConfConsolidationInput(value, &err);
@@ -261,9 +310,14 @@ void TxValidator_ResetDefault(TxValidatorCGO cgoEngine)
     static_cast<bsv::CTxValidator*>(cgoEngine)->ResetDefault();
 }
 
-uint64_t TxValidator_GetMaxTxSize(TxValidatorCGO cgoEngine, bool isGenesisEnabled, bool isChronicleEnabled, bool isConsensus)
+uint64_t TxValidator_GetMaxTxSize(TxValidatorCGO cgoEngine,
+                                  bool isGenesisEnabled,
+                                  bool isChronicleEnabled,
+                                  bool isConsensus)
 {
-    return static_cast<bsv::CTxValidator*>(cgoEngine)->GetMaxTxSize(isGenesisEnabled, isChronicleEnabled, isConsensus);
+    return static_cast<bsv::CTxValidator*>(cgoEngine)->GetMaxTxSize(isGenesisEnabled,
+                                                                    isChronicleEnabled,
+                                                                    isConsensus);
 }
 
 uint64_t TxValidator_GetDataCarrierSize(TxValidatorCGO cgoEngine)
@@ -276,9 +330,12 @@ bool TxValidator_GetDataCarrier(TxValidatorCGO cgoEngine)
     return static_cast<bsv::CTxValidator*>(cgoEngine)->GetDataCarrier();
 }
 
-bool TxValidator_GetAcceptNonStandardOutput(TxValidatorCGO cgoEngine, bool isGenesisEnabled, bool isChronicleEnabled)
+bool TxValidator_GetAcceptNonStandardOutput(TxValidatorCGO cgoEngine,
+                                            bool isGenesisEnabled,
+                                            bool isChronicleEnabled)
 {
-    return static_cast<bsv::CTxValidator*>(cgoEngine)->GetAcceptNonStandardOutput(isGenesisEnabled, isChronicleEnabled);
+    return static_cast<bsv::CTxValidator*>(cgoEngine)
+        ->GetAcceptNonStandardOutput(isGenesisEnabled, isChronicleEnabled);
 }
 
 bool TxValidator_GetRequireStandard(TxValidatorCGO cgoEngine)
@@ -304,31 +361,45 @@ uint64_t TxValidator_GetSigOpCount(TxValidatorCGO cgoEngine,
 {
     try
     {
-        const std::span<const uint8_t> extendedTx = bdkcgo::byte_span(extendedTxPtr, extendedTxLen);
+        const std::span<const uint8_t> extendedTx = bdkcgo::byte_span(extendedTxPtr,
+                                                                      extendedTxLen);
         const std::span<const int32_t> hUTXOs = bdkcgo::int32_span(hUTXOsPtr, hUTXOsLen);
 
-        return static_cast<bsv::CTxValidator*>(cgoEngine)->GetSigOpCount(extendedTx, hUTXOs, blockHeight, countP2SHSigOps, consensus);
+        return static_cast<bsv::CTxValidator*>(cgoEngine)->GetSigOpCount(extendedTx,
+                                                                         hUTXOs,
+                                                                         blockHeight,
+                                                                         countP2SHSigOps,
+                                                                         consensus);
     }
-    catch (const std::exception& e) {
+    catch(const std::exception& e)
+    {
         // This entry point has no TxError channel: an ABI rejection is reported as a
         // diagnostic string with a count of 0, like any other failure here.
-        if (errStr != nullptr) {
+        if(errStr != nullptr)
+        {
             *errStr = strdup(e.what());
         }
         return uint64_t{0};
     }
-    catch (...) {
+    catch(...)
+    {
         // Same channel for an exception carrying no message, so that nothing escapes.
-        if (errStr != nullptr) {
+        if(errStr != nullptr)
+        {
             *errStr = strdup("unknown exception at the cgo boundary");
         }
         return uint64_t{0};
     }
 }
 
-uint32_t TxValidator_CalculateFlags(TxValidatorCGO cgoEngine, int32_t utxoHeight, int32_t blockHeight, bool consensus)
+uint32_t TxValidator_CalculateFlags(TxValidatorCGO cgoEngine,
+                                    int32_t utxoHeight,
+                                    int32_t blockHeight,
+                                    bool consensus)
 {
-    return static_cast<bsv::CTxValidator*>(cgoEngine)->CalculateFlags(utxoHeight, blockHeight, consensus);
+    return static_cast<bsv::CTxValidator*>(cgoEngine)->CalculateFlags(utxoHeight,
+                                                                      blockHeight,
+                                                                      consensus);
 }
 
 TxError TxValidator_VerifyScript(TxValidatorCGO cgoEngine,
@@ -342,124 +413,166 @@ TxError TxValidator_VerifyScript(TxValidatorCGO cgoEngine,
 {
     try
     {
-        const std::span<const uint8_t> extendedTx = bdkcgo::byte_span(extendedTxPtr, extendedTxLen);
+        const std::span<const uint8_t> extendedTx = bdkcgo::byte_span(extendedTxPtr,
+                                                                      extendedTxLen);
         const std::span<const int32_t> hUTXOs = bdkcgo::int32_span(hUTXOsPtr, hUTXOsLen);
-        return static_cast<bsv::CTxValidator*>(cgoEngine)->VerifyScript(extendedTx, hUTXOs, blockHeight, consensus);
+        return static_cast<bsv::CTxValidator*>(cgoEngine)->VerifyScript(extendedTx,
+                                                                        hUTXOs,
+                                                                        blockHeight,
+                                                                        consensus);
     }
-    catch (const bdkcgo::AbiArgumentError& e) {
+    catch(const bdkcgo::AbiArgumentError& e)
+    {
         return bsv::AbiErrorToTxError(e.code());
     }
-    catch (...) {
+    catch(...)
+    {
         return bsv::TxErrorException();
     }
 }
 
-TxError TxValidator_VerifyScriptWithCustomFlags(TxValidatorCGO cgoEngine,
-                                                const char* extendedTxPtr,
-                                                uint64_t extendedTxLen,
-                                                const int32_t* hUTXOsPtr,
-                                                // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-                                                uint64_t hUTXOsLen,
-                                                int32_t blockHeight,
-                                                bool consensus,
-                                                const uint32_t* cFlagsPtr,
-                                                uint64_t cFlagsLen)
+TxError TxValidator_VerifyScriptWithCustomFlags(
+    TxValidatorCGO cgoEngine,
+    const char* extendedTxPtr,
+    uint64_t extendedTxLen,
+    const int32_t* hUTXOsPtr,
+    // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+    uint64_t hUTXOsLen,
+    int32_t blockHeight,
+    bool consensus,
+    const uint32_t* cFlagsPtr,
+    uint64_t cFlagsLen)
 {
     try
     {
-        const std::span<const uint8_t> extendedTx = bdkcgo::byte_span(extendedTxPtr, extendedTxLen);
+        const std::span<const uint8_t> extendedTx = bdkcgo::byte_span(extendedTxPtr,
+                                                                      extendedTxLen);
         const std::span<const int32_t> hUTXOs = bdkcgo::int32_span(hUTXOsPtr, hUTXOsLen);
-        const std::span<const uint32_t> cFlags = bdkcgo::uint32_span(cFlagsPtr, cFlagsLen);
-        return static_cast<bsv::CTxValidator*>(cgoEngine)->VerifyScript(extendedTx, hUTXOs, blockHeight, consensus, cFlags);
+        const std::span<const uint32_t> cFlags = bdkcgo::uint32_span(cFlagsPtr,
+                                                                     cFlagsLen);
+        return static_cast<bsv::CTxValidator*>(cgoEngine)->VerifyScript(extendedTx,
+                                                                        hUTXOs,
+                                                                        blockHeight,
+                                                                        consensus,
+                                                                        cFlags);
     }
-    catch (const bdkcgo::AbiArgumentError& e) {
+    catch(const bdkcgo::AbiArgumentError& e)
+    {
         return bsv::AbiErrorToTxError(e.code());
     }
-    catch (...) {
+    catch(...)
+    {
         return bsv::TxErrorException();
     }
 }
 
-TxError TxValidator_ValidateTransaction(TxValidatorCGO cgoEngine,
-                                        const char* extendedTxPtr,
-                                        uint64_t extendedTxLen,
-                                        const int32_t* hUTXOsPtr,
-                                        // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-                                        uint64_t hUTXOsLen,
-                                        int32_t blockHeight,
-                                        bool consensus)
+TxError TxValidator_ValidateTransaction(
+    TxValidatorCGO cgoEngine,
+    const char* extendedTxPtr,
+    uint64_t extendedTxLen,
+    const int32_t* hUTXOsPtr,
+    // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+    uint64_t hUTXOsLen,
+    int32_t blockHeight,
+    bool consensus)
 {
     try
     {
-        const std::span<const uint8_t> extendedTx = bdkcgo::byte_span(extendedTxPtr, extendedTxLen);
+        const std::span<const uint8_t> extendedTx = bdkcgo::byte_span(extendedTxPtr,
+                                                                      extendedTxLen);
         const std::span<const int32_t> hUTXOs = bdkcgo::int32_span(hUTXOsPtr, hUTXOsLen);
-        return static_cast<bsv::CTxValidator*>(cgoEngine)->ValidateTransaction(extendedTx, hUTXOs, blockHeight, consensus);
+        return static_cast<bsv::CTxValidator*>(cgoEngine)
+            ->ValidateTransaction(extendedTx, hUTXOs, blockHeight, consensus);
     }
-    catch (const bdkcgo::AbiArgumentError& e) {
+    catch(const bdkcgo::AbiArgumentError& e)
+    {
         return bsv::AbiErrorToTxError(e.code());
     }
-    catch (...) {
+    catch(...)
+    {
         return bsv::TxErrorException();
     }
 }
 
-TxError TxValidator_VerifyScriptCancellable(TxValidatorCGO cgoEngine,
-                                            const char* extendedTxPtr,
-                                            uint64_t extendedTxLen,
-                                            const int32_t* hUTXOsPtr,
-                                            // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-                                            uint64_t hUTXOsLen,
-                                            int32_t blockHeight,
-                                            bool consensus,
-                                            const uint32_t* cFlagsPtr,
-                                            uint64_t cFlagsLen,
-                                            const int32_t* cancelFlag)
+TxError TxValidator_VerifyScriptCancellable(
+    TxValidatorCGO cgoEngine,
+    const char* extendedTxPtr,
+    uint64_t extendedTxLen,
+    const int32_t* hUTXOsPtr,
+    // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+    uint64_t hUTXOsLen,
+    int32_t blockHeight,
+    bool consensus,
+    const uint32_t* cFlagsPtr,
+    uint64_t cFlagsLen,
+    const int32_t* cancelFlag)
 {
     try
     {
-        const std::span<const uint8_t> extendedTx = bdkcgo::byte_span(extendedTxPtr, extendedTxLen);
+        const std::span<const uint8_t> extendedTx = bdkcgo::byte_span(extendedTxPtr,
+                                                                      extendedTxLen);
         const std::span<const int32_t> hUTXOs = bdkcgo::int32_span(hUTXOsPtr, hUTXOsLen);
-        const std::span<const uint32_t> cFlags = bdkcgo::uint32_span(cFlagsPtr, cFlagsLen);
-        return static_cast<bsv::CTxValidator*>(cgoEngine)->VerifyScript(extendedTx, hUTXOs, blockHeight, consensus, cFlags, bsv::MakeFlagCancellationToken(cancelFlag));
+        const std::span<const uint32_t> cFlags = bdkcgo::uint32_span(cFlagsPtr,
+                                                                     cFlagsLen);
+        return static_cast<bsv::CTxValidator*>(cgoEngine)
+            ->VerifyScript(extendedTx,
+                           hUTXOs,
+                           blockHeight,
+                           consensus,
+                           cFlags,
+                           bsv::MakeFlagCancellationToken(cancelFlag));
     }
-    catch (const bdkcgo::AbiArgumentError& e) {
+    catch(const bdkcgo::AbiArgumentError& e)
+    {
         return bsv::AbiErrorToTxError(e.code());
     }
-    catch (...) {
+    catch(...)
+    {
         return bsv::TxErrorException();
     }
 }
 
-TxError TxValidator_ValidateTransactionCancellable(TxValidatorCGO cgoEngine,
-                                                   const char* extendedTxPtr,
-                                                   uint64_t extendedTxLen,
-                                                   const int32_t* hUTXOsPtr,
-                                                   // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-                                                   uint64_t hUTXOsLen,
-                                                   int32_t blockHeight,
-                                                   bool consensus,
-                                                   const int32_t* cancelFlag)
+TxError TxValidator_ValidateTransactionCancellable(
+    TxValidatorCGO cgoEngine,
+    const char* extendedTxPtr,
+    uint64_t extendedTxLen,
+    const int32_t* hUTXOsPtr,
+    // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+    uint64_t hUTXOsLen,
+    int32_t blockHeight,
+    bool consensus,
+    const int32_t* cancelFlag)
 {
     try
     {
-        const std::span<const uint8_t> extendedTx = bdkcgo::byte_span(extendedTxPtr, extendedTxLen);
+        const std::span<const uint8_t> extendedTx = bdkcgo::byte_span(extendedTxPtr,
+                                                                      extendedTxLen);
         const std::span<const int32_t> hUTXOs = bdkcgo::int32_span(hUTXOsPtr, hUTXOsLen);
-        return static_cast<bsv::CTxValidator*>(cgoEngine)->ValidateTransaction(extendedTx, hUTXOs, blockHeight, consensus, bsv::MakeFlagCancellationToken(cancelFlag));
+        return static_cast<bsv::CTxValidator*>(cgoEngine)
+            ->ValidateTransaction(extendedTx,
+                                  hUTXOs,
+                                  blockHeight,
+                                  consensus,
+                                  bsv::MakeFlagCancellationToken(cancelFlag));
     }
-    catch (const bdkcgo::AbiArgumentError& e) {
+    catch(const bdkcgo::AbiArgumentError& e)
+    {
         return bsv::AbiErrorToTxError(e.code());
     }
-    catch (...) {
+    catch(...)
+    {
         return bsv::TxErrorException();
     }
 }
 
 // Internal helper building the single-element array TxValidator_ValidateBatch uses to
 // report a failure that has no per-entry result to attach itself to.
-static TxError* helper_single_result(TxError result, uint64_t* resultSize) {
+static TxError* helper_single_result(TxError result, uint64_t* resultSize)
+{
     // NOLINTNEXTLINE(cppcoreguidelines-no-malloc, cppcoreguidelines-owning-memory)
     auto* resultArray = static_cast<TxError*>(malloc(sizeof(TxError)));
-    if (resultArray == nullptr) {
+    if(resultArray == nullptr)
+    {
         *resultSize = 0;
         return nullptr;
     }
@@ -468,7 +581,10 @@ static TxError* helper_single_result(TxError result, uint64_t* resultSize) {
     return resultArray;
 }
 
-TxError* TxValidator_ValidateBatch(TxValidatorCGO cgoEngine, ValidateBatchCGO cgoBatch, uint64_t* resultSize) {
+TxError* TxValidator_ValidateBatch(TxValidatorCGO cgoEngine,
+                                   ValidateBatchCGO cgoBatch,
+                                   uint64_t* resultSize)
+{
     return TxValidator_ValidateBatchCancellable(cgoEngine, cgoBatch, resultSize, nullptr);
 }
 
@@ -479,7 +595,8 @@ TxError* TxValidator_ValidateBatchCancellable(TxValidatorCGO cgoEngine,
                                               const int32_t* cancelFlag)
 // NOLINTEND(bugprone-easily-swappable-parameters)
 {
-    if (resultSize == nullptr) {
+    if(resultSize == nullptr)
+    {
         return nullptr;
     }
     *resultSize = 0;
@@ -493,36 +610,46 @@ TxError* TxValidator_ValidateBatchCancellable(TxValidatorCGO cgoEngine,
         const bsv::CTxValidator* engine = static_cast<bsv::CTxValidator*>(cgoEngine);
         const bsv::ValidateBatch* batch = static_cast<bsv::ValidateBatch*>(cgoBatch);
 
-        std::vector<TxError> results = engine->ValidateBatch(*batch, bsv::MakeFlagCancellationToken(cancelFlag));
+        std::vector<TxError>
+            results = engine->ValidateBatch(*batch,
+                                            bsv::MakeFlagCancellationToken(cancelFlag));
 
         const size_t size = results.size();
-        if (size == 0) {
+        if(size == 0)
+        {
             return nullptr;
         }
 
         // The result count comes from the batch, but the allocation is sized by it: check
         // the multiplication before performing it.
-        if (size > SIZE_MAX / sizeof(TxError)) {
-            return helper_single_result(bsv::AbiErrorToTxError(bsv::AbiError_t::LengthOverflow), resultSize);
+        if(size > SIZE_MAX / sizeof(TxError))
+        {
+            return helper_single_result(bsv::AbiErrorToTxError(
+                                            bsv::AbiError_t::LengthOverflow),
+                                        resultSize);
         }
 
         // NOLINTNEXTLINE(cppcoreguidelines-no-malloc, cppcoreguidelines-owning-memory)
         auto* resultArray = static_cast<TxError*>(malloc(size * sizeof(TxError)));
-        if (resultArray == nullptr) {
+        if(resultArray == nullptr)
+        {
             return nullptr;
         }
         *resultSize = static_cast<uint64_t>(size);
 
-        for (size_t i = 0; i < size; ++i) {
+        for(size_t i = 0; i < size; ++i)
+        {
             resultArray[i] = results[i];
         }
 
         return resultArray;
     }
-    catch (const bdkcgo::AbiArgumentError& e) {
+    catch(const bdkcgo::AbiArgumentError& e)
+    {
         return helper_single_result(bsv::AbiErrorToTxError(e.code()), resultSize);
     }
-    catch (...) {
+    catch(...)
+    {
         return helper_single_result(bsv::TxErrorException(), resultSize);
     }
 }

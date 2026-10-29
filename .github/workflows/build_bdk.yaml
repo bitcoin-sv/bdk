@@ -37,8 +37,9 @@ env:
 
 jobs:
   build-bdk:
-    ## The C++ gate runs first: a clang-tidy finding or a compiler warning in
-    ## first-party code fails one job instead of every leg below
+    ## The C++ gates run first: a formatting diff, a clang-tidy finding or a
+    ## compiler warning in first-party code fails one job instead of every leg
+    ## below (clang-tidy needs clang-format, so this needs both)
     needs: clang-tidy
     strategy:
       matrix:
@@ -363,6 +364,33 @@ jobs:
           done
           echo "arm64: ARMv8 SHA-2 only; x86_64: SHA-NI only; both select at load"
 
+  ## Formatting gate: every first-party C++ file (core/, module/, test/, minus the
+  ## upstream-derived files in BDK_UPSTREAM_DERIVED_SOURCES) must match the root
+  ## .clang-format, checked with the clang-format of the same LLVM major as the
+  ## clang-tidy job so a local run with clang-format-N reproduces CI. Needs only
+  ## the checkout and one package, so it runs in about a minute; the log carries
+  ## the diff. Locally: python3 scripts/check_clang_format.py --fix
+  clang-format:
+    runs-on: ubuntu-22.04
+
+    env:
+      LLVM_VERSION: 23
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install clang-format ${{ env.LLVM_VERSION }}
+        run: |
+          wget -q https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh ${{ env.LLVM_VERSION }}
+          sudo apt-get install -y clang-format-${{ env.LLVM_VERSION }}
+          clang-format-${{ env.LLVM_VERSION }} --version
+
+      - name: Check C++ formatting
+        run: python3 scripts/check_clang_format.py --clang-format clang-format-${{ env.LLVM_VERSION }}
+
   ## Static-analysis gate: C++ only. Compiles every first-party C++ target (core,
   ## examples, C++ tests, and the Go/Rust cgo and C-ABI shims) with clang and
   ## CMAKE_CXX_CLANG_TIDY (see cmake/BDKClangTidy.cmake and the root .clang-tidy),
@@ -373,8 +401,10 @@ jobs:
   ## (configure only warns and skips the Go test registration), and cargo is only
   ## required to exist at configure time, which the runner satisfies. The
   ## toolchain is pinned to one LLVM major from apt.llvm.org so local runs with
-  ## the same clang-tidy-N reproduce CI exactly.
+  ## the same clang-tidy-N reproduce CI exactly. Runs after the clang-format job;
+  ## the build matrix and sanitiser jobs need this one, and so both, transitively.
   clang-tidy:
+    needs: clang-format
     runs-on: ubuntu-22.04
 
     env:

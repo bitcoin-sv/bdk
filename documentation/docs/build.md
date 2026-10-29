@@ -43,6 +43,7 @@ a build. A newer version is not automatically a tested version.
 | Node.js, WASM tests | Must be on PATH when configuring; the workflow does not pin a version | `test/types/CMakeLists.txt`, `BDK_NODE_EXECUTABLE` |
 | Native CI hosts | ubuntu-22.04, ubuntu-22.04-arm, macos-15 | `build_bdk.yaml`, build matrix |
 | clang / clang-tidy, static-analysis gate only | LLVM 23 from apt.llvm.org on ubuntu-22.04 | `build_bdk.yaml`, `clang-tidy` job, `LLVM_VERSION` |
+| clang-format, formatting gate only | LLVM 23 from apt.llvm.org on ubuntu-22.04 | `build_bdk.yaml`, `clang-format` job, `LLVM_VERSION`; `scripts/check_clang_format.py` |
 
 The Rust gating workflow uses the pinned toolchain. The scheduled Rust toolchain
 canary deliberately tests floating `stable`; the archive-refresh workflow also
@@ -187,6 +188,44 @@ Additional build-facing variables live in the `cmake/` helpers and the GoBDK mod
 - **`CUSTOM_SYSTEM_OS_NAME`** — used for packaging to embed a precise OS name in the installer file
   name (`CMakeLists.txt`), e.g. `-DCUSTOM_SYSTEM_OS_NAME=Ubuntu`.
 - **`BDK_DOC_PYTHON_EXECUTABLE`** — Python interpreter used by CMake to find MkDocs and all enabled Markdown extensions.
+
+## Formatting (clang-format)
+
+First-party C++ (`core/`, `module/`, `test/`) is formatted with the root
+`.clang-format`. It is bitcoin-sv's `src/.clang-format` as of node develop commit
+`09f5c3297` (2026-09-25), plus two lines BDK added that the node did not have at
+that commit: `InsertNewlineAtEOF: true` and `SeparateDefinitionBlocks: Always`.
+The intent is one config for both projects; the two additions are being carried
+to the node, and the node commit BDK builds against (`DEFAULT_BITCOIN_SV_COMMIT`
+in `build_bdk.yaml`) is older than `09f5c3297` and still carries the node's 2017
+config. When the node's file changes, update this one to match, keeping any
+line above the node still lacks, and name the node commit in the commit message.
+
+The `clang-format` job in `build_bdk.yaml` runs `scripts/check_clang_format.py`
+with `clang-format-23`, the same LLVM major as the analysis gate. It needs only
+the checkout and one package, so it finishes in about a minute. The `clang-tidy`
+job needs it, and the build matrix needs `clang-tidy`, so a formatting diff
+stops the run before anything is compiled. Any first-party file whose formatted
+form differs from the checked-in text fails the job; the log carries the diff. The
+upstream-derived files in `BDK_UPSTREAM_DERIVED_SOURCES`
+(`cmake/BDKBuildSetting.cmake`) keep their upstream layout and are skipped, as
+are the bitcoin-sv sources.
+
+Locally, with clang-format 20 or later on PATH (the config uses options that
+need it; use the CI major to reproduce CI exactly):
+
+```sh
+python3 scripts/check_clang_format.py                       # report, exit 1 on a diff
+python3 scripts/check_clang_format.py --fix                 # rewrite in place
+python3 scripts/check_clang_format.py --clang-format clang-format-23
+```
+
+Two things to know when formatting touches a `NOLINT` comment. Comments reflow
+at the column limit, so keep a `NOLINTNEXTLINE(...)` short enough to stay on
+one line and put any explanation on the line above it. And a statement that
+clang-format splits across lines moves the finding away from the line after
+`NOLINTNEXTLINE`; bracket such a statement with `NOLINTBEGIN`/`NOLINTEND`
+instead.
 
 ## Static analysis (clang-tidy)
 

@@ -8,7 +8,10 @@
 // this is an empty translation unit. Whether the CPU can run them is decided at
 // run time in sha256_backend.cpp.
 
-#if defined(__aarch64__) && (defined(__GNUC__) || defined(__clang__)) && !defined(_MSC_VER) && !defined(__EMSCRIPTEN__)
+#if defined(__aarch64__)                                                                 \
+    && (defined(__GNUC__) || defined(__clang__))                                         \
+    && !defined(_MSC_VER)                                                                \
+    && !defined(__EMSCRIPTEN__)
 
 // The included source's own headers, first, so their inline functions keep the
 // default target

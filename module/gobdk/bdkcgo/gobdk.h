@@ -4,13 +4,13 @@
  *  File globing all headers to a single one
  */
 
-#include <bdkcgo/secp256k1_cloned.h>
-#include <bdkcgo/asm_cgo.h>
-#include <bdkcgo/script_error_cgo.h>
-#include <bdkcgo/version_cgo.h>
-#include <bdkcgo/sha256_cgo.h>
-#include <bdkcgo/validatebatch_cgo.h>
-#include <bdkcgo/txerror_cgo.h>
-#include <bdkcgo/doserror_cgo.h>
 #include <bdkcgo/abierror_cgo.h>
+#include <bdkcgo/asm_cgo.h>
+#include <bdkcgo/doserror_cgo.h>
+#include <bdkcgo/script_error_cgo.h>
+#include <bdkcgo/secp256k1_cloned.h>
+#include <bdkcgo/sha256_cgo.h>
+#include <bdkcgo/txerror_cgo.h>
 #include <bdkcgo/txvalidator_cgo.h>
+#include <bdkcgo/validatebatch_cgo.h>
+#include <bdkcgo/version_cgo.h>

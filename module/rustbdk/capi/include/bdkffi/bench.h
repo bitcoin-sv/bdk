@@ -4,12 +4,13 @@
 #include <stdint.h>
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
 #ifdef BDKFFI_ENABLE_BENCH
-void bdkffi_bench_noop(void);
-uint64_t bdkffi_bench_sum_bytes(const unsigned char* data, int data_len);
+    void bdkffi_bench_noop(void);
+    uint64_t bdkffi_bench_sum_bytes(const unsigned char* data, int data_len);
 #endif
 
 #ifdef __cplusplus

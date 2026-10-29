@@ -12,16 +12,21 @@
 
 #define WINDOW_G ECMULT_WINDOW_SIZE
 
+/* secp256k1_ge_storage and ECMULT_TABLE_SIZE; included after the guard above so
+ * this header is self-contained whatever the including file's include order. */
+#include "ecmult.h"
+
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
-extern secp256k1_ge_storage secp256k1_pre_g[ECMULT_TABLE_SIZE(WINDOW_G)];
-extern secp256k1_ge_storage secp256k1_pre_g_128[ECMULT_TABLE_SIZE(WINDOW_G)];
-void bdk_secp256k1_prepare_verification_tables(void);
-size_t bdk_secp256k1_verification_table_snapshot_size(void);
-int bdk_secp256k1_export_verification_tables(unsigned char* output, size_t size);
-int bdk_secp256k1_import_verification_tables(const unsigned char* input, size_t size);
+    extern secp256k1_ge_storage secp256k1_pre_g[ECMULT_TABLE_SIZE(WINDOW_G)];
+    extern secp256k1_ge_storage secp256k1_pre_g_128[ECMULT_TABLE_SIZE(WINDOW_G)];
+    void bdk_secp256k1_prepare_verification_tables(void);
+    size_t bdk_secp256k1_verification_table_snapshot_size(void);
+    int bdk_secp256k1_export_verification_tables(unsigned char* output, size_t size);
+    int bdk_secp256k1_import_verification_tables(const unsigned char* input, size_t size);
 
 #ifdef __cplusplus
 }

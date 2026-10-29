@@ -6,32 +6,36 @@
 #include "core_io.h"
 #include "script.h"
 
-namespace bsv {
+namespace bsv
+{
 
-    CScript from_asm(const std::string& script)
-    {
-        return ParseScript(script);
-    }
+    CScript from_asm(const std::string& script) { return ParseScript(script); }
 
     std::string to_asm(const std::span<const uint8_t> script)
     {
         return FormatScript(CScript(script.data(), script.data() + script.size()));
     }
 
-    std::string Bin2Hex(const std::vector<uint8_t>& data) {
-        //std::stringstream ss;
+    std::string Bin2Hex(const std::vector<uint8_t>& data)
+    {
+        // std::stringstream ss;
         //// Iterate over each byte in the vector and convert to hex
-        //for (const auto& byte : data) {
-        //    ss << std::hex << std::setw(2) << std::setfill('0') << (int)byte;
-        //}
-        //return ss.str();
-        constexpr std::array<char, 16> hexmap = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f' };
+        // for (const auto& byte : data) {
+        //     ss << std::hex << std::setw(2) << std::setfill('0') << (int)byte;
+        // }
+        // return ss.str();
+        // clang-format off
+        constexpr std::array<char, 16> hexmap = {'0', '1', '2', '3', '4', '5', '6', '7',
+                                                 '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
+        // clang-format on
         const size_t len = data.size();
-        std::string hex; hex.reserve(2 * len);
+        std::string hex;
+        hex.reserve(2 * len);
         for(const uint8_t byte : data)
         {
-            hex.push_back(hexmap[byte >> 4]);          // Upper nibble (4 bits): uint8_t >> 4 is already 0..15
-            hex.push_back(hexmap[byte & 0x0F]);        // Lower nibble (4 bits)
+            hex.push_back(hexmap[byte >> 4]);   // Upper nibble (4 bits): uint8_t >> 4 is
+                                                // already 0..15
+            hex.push_back(hexmap[byte & 0x0F]); // Lower nibble (4 bits)
         }
         return hex;
     }

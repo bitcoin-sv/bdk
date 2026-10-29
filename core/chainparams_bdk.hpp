@@ -1,9 +1,9 @@
 #pragma once
 
-#include <string>
-#include <string_view>
 #include <functional>
 #include <memory>
+#include <string>
+#include <string_view>
 
 struct CustomChainParams
 {
@@ -49,17 +49,20 @@ namespace bsv
     // Create ChainParams global helper using its name
     std::unique_ptr<CChainParams> CreateCustomChainParams(std::string_view name);
 
-    // Registration helper template. To register your custom MyChainParams, in your cpp file
+    // Registration helper template. To register your custom MyChainParams, in your cpp
+    // file
     //
-    //     static bsv::RegisterCustomChainParams<MyChainParams> myChainParamsReg("myChainParamsName");
-    template <typename T>
-    class RegisterCustomChainParams {
+    //     static bsv::RegisterCustomChainParams<MyChainParams>
+    //     myChainParamsReg("myChainParamsName");
+    template<typename T>
+    class RegisterCustomChainParams
+    {
     public:
         explicit RegisterCustomChainParams(std::string_view name)
         {
             ChainParamsRegistry::Instance().Register(std::string{name},
-                                                     [] { return std::make_unique<T>(); });
+                                                     []
+                                                     { return std::make_unique<T>(); });
         }
     };
 }
-
