@@ -247,10 +247,11 @@ jobs:
           cmake --build build --config Release --parallel 4
           ctest --output-on-failure --test-dir build -C Release --parallel 4
 
-  ## ThreadSanitizer check that the first SHA-256 backend selection cannot race
-  ## with hashing: GCC, Linux, both architectures. BDK force-sets CMAKE_CXX_FLAGS,
-  ## so -fsanitize=thread goes in through a compiler launcher. The positive
-  ## control hashes without selecting first and must be reported.
+  ## ThreadSanitizer check that the load-time SHA-256 backend selection cannot
+  ## race with hashing: GCC, Linux, both architectures. BDK force-sets
+  ## CMAKE_CXX_FLAGS, so -fsanitize=thread goes in through a compiler launcher.
+  ## The positive control writes the dispatch pointer while the other threads
+  ## hash and must be reported.
   tsan-sha256-selection:
     needs: clang-tidy
     if: github.event_name == 'pull_request'

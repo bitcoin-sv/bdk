@@ -74,8 +74,8 @@ struct BasicTestingSetup {
     ConfigInit& testConfig;
     BasicTestingSetup():testConfig(GlobalConfig::GetModifiableGlobalConfig())
     {
-        // The bindings select the SHA-256 backend when they construct a
-        // CTxValidator; this suite must run on the same transforms
+        // BDK selected the SHA-256 backend while this program loaded, as it
+        // does under the bindings; log which transforms this suite runs on
         static const bool logged = [] {
             std::cout << "SHA-256 backend: " << bsv::SelectSha256Backend() << '\n';
             return true;

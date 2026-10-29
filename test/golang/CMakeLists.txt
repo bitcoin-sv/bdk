@@ -65,7 +65,7 @@ add_test(NAME test_GoBDKSHA256Backend_scalar${_tpost_fix}
 set_tests_properties(test_GoBDKSHA256Backend_scalar${_tpost_fix} PROPERTIES
   WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}" DEPENDS test_GoBDKSetup
   ENVIRONMENT "BDK_SHA256_FORCE_SCALAR=1" TIMEOUT 600)
-## Hard stop for the concurrent first-selection test
+## Hard stop for the concurrent backend getter test
 foreach(_t test_GoBDKSHA256Backend test_GoBDKSHA256Backendd)
   if(TEST ${_t})
     set_tests_properties(${_t} PROPERTIES TIMEOUT 600)
