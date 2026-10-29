@@ -140,6 +140,25 @@ jobs:
           cmake --build build --parallel 4
           ctest --output-on-failure --test-dir build
 
+      ## The merged GoBDK and bdkffi archives are rebuilt only when one of their
+      ## input archives changed (module/gobdk/bdkcgo and module/rustbdk/capi
+      ## CMakeLists.txt): building again with nothing changed must leave them, and
+      ## the in-source GoBDK copy, untouched. One leg is enough.
+      - name: A no-op rebuild leaves the merged archives alone
+        if: matrix.os == 'ubuntu-22.04'
+        timeout-minutes: 5
+        run: |
+          set -o pipefail
+          archives=(build/x64/release/libGoBDK_*.a build/x64/release/libbdkffi_*.a module/gobdk/bdkcgo/libGoBDK_linux_x86_64.a)
+          stat -c '%n %y' "${archives[@]}" | tee "${{ runner.temp }}/merged-before.txt"
+          cmake --build build --parallel 4 | tee "${{ runner.temp }}/noop-build.log"
+          stat -c '%n %y' "${archives[@]}" > "${{ runner.temp }}/merged-after.txt"
+          diff "${{ runner.temp }}/merged-before.txt" "${{ runner.temp }}/merged-after.txt"
+          if grep 'Merge all in one' "${{ runner.temp }}/noop-build.log"; then
+            echo "a build with nothing changed merged an archive again"
+            exit 1
+          fi
+
       - name: Report SHA-256 backend and throughput
         if: runner.os != 'Windows'
         run: |
