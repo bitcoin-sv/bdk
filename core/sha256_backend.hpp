@@ -39,6 +39,14 @@ namespace bsv
      * runs any init function and before any thread can hash. Every CTxValidator
      * constructor calls it as well; after load that is a no-op.
      *
+     * If the selection fails (it allocates, so at load it can run out of memory),
+     * the scalar transforms stay installed for good and the result is "standard".
+     * It is never tried again, so the pointers are still written only at load (on
+     * this path up to twice: the faster transforms, then the scalar ones put back).
+     * Keeping the scalar transforms allocates nothing; only building the
+     * "standard" string may, after it. If that throws too, this call throws, and
+     * the next one builds the string again without selecting again.
+     *
      * BDK_SHA256_FORCE_SCALAR is read at that point, at load. Set to anything other
      * than "" or "0" in the environment the process starts with, it keeps the
      * scalar transforms and the result is "standard(forced)". Setting it later, for

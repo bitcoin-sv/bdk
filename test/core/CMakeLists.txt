@@ -216,6 +216,16 @@ add_executable(test_sha256_select_race "${CMAKE_CURRENT_SOURCE_DIR}/test_sha256_
 target_link_libraries(test_sha256_select_race PRIVATE bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT})
 bdk_add_unit_test(test_sha256_select_race)
 
+## A load-time selection that throws. The test builds its own copy of
+## core/sha256_backend.cpp with a hook that throws once; it defines every symbol
+## of bdk_core's sha256_backend object, so the linker never pulls that object,
+## while bdk_core still supplies the load-time initializer and everything else.
+## That needs bdk_core to be an archive, which bdk_add_core_library() makes it.
+add_executable(test_sha256_select_fallback "${CMAKE_CURRENT_SOURCE_DIR}/test_sha256_select_fallback.cpp" "${CMAKE_SOURCE_DIR}/core/sha256_backend.cpp" "${BSV_APPLICATION_HDR_FILES}" "${BSV_APPLICATION_SRC_FILES}")
+target_compile_definitions(test_sha256_select_fallback PRIVATE BDK_SHA256_SELECTION_TEST_HOOK)
+target_link_libraries(test_sha256_select_fallback PRIVATE bdk_core secp256k1 univalue OpenSSL::Crypto OpenSSL::SSL Boost::thread Boost::filesystem Boost::program_options Boost::chrono ${CMAKE_DL_LIBS} ${CMAKE_THREAD_LIBS_INIT})
+bdk_add_unit_test(test_sha256_select_fallback)
+
 ## The same suites again with the scalar SHA-256 transforms forced, so the
 ## fallback is proven on every runner as well as the hardware backend
 foreach(_t test_sha256_backends test_sha256_select_race test_txvalidator test_bsv)
@@ -236,7 +246,8 @@ foreach(_case validator_by_network_has_sha256_backend:network_has_backend
 endforeach()
 
 ## Hard stops for the new timed and multi-threaded suites
-foreach(_t test_sha256_backends test_sha256_backendsd test_sha256_select_race test_sha256_select_raced)
+foreach(_t test_sha256_backends test_sha256_backendsd test_sha256_select_race test_sha256_select_raced
+           test_sha256_select_fallback test_sha256_select_fallbackd)
   if(TEST ${_t})
     set_tests_properties(${_t} PROPERTIES TIMEOUT 300)
   endif()
@@ -255,6 +266,7 @@ if(CMAKE_CONFIGURATION_TYPES)
   set_target_properties(test_cancellation PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")# On dual build mode system, need to add postfix _d
   set_target_properties(test_sha256_backends PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")
   set_target_properties(test_sha256_select_race PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")
+  set_target_properties(test_sha256_select_fallback PROPERTIES FOLDER "test/core" DEBUG_POSTFIX "_d")
 else()
   set_target_properties(test_bsv PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
   set_target_properties(test_assembler PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
@@ -268,6 +280,7 @@ else()
   set_target_properties(test_cancellation PROPERTIES DEBUG_POSTFIX "")# Works well on Linux debug mode
   set_target_properties(test_sha256_backends PROPERTIES DEBUG_POSTFIX "")
   set_target_properties(test_sha256_select_race PROPERTIES DEBUG_POSTFIX "")
+  set_target_properties(test_sha256_select_fallback PROPERTIES DEBUG_POSTFIX "")
 endif()
 
 ## Timing tests in test_txvalidator are disabled by default and labelled

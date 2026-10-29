@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <span>
+#include <utility>
 
 #include "crypto/sha256_stream_scalar.h"
 
@@ -51,6 +52,19 @@ namespace sha256_arm_shani
 namespace sha256d64_arm_shani
 {
     void Transform_2way(unsigned char* output, const unsigned char* input);
+}
+#endif
+
+#if defined(BDK_SHA256_SELECTION_TEST_HOOK)
+// Defined by test/core/test_sha256_select_fallback.cpp, the only build with the
+// hooks. AfterTransformsInstalled() runs once the transforms are installed and
+// throws on its first call. FallbackKept() runs after the scalar transforms are
+// put back and before SelectSha256Backend() builds the "standard" string; the
+// test relies on that order to fail the allocation for that string
+namespace sha256_test
+{
+    void AfterTransformsInstalled();
+    void FallbackKept();
 }
 #endif
 
@@ -189,6 +203,64 @@ namespace
         const char* v = std::getenv("BDK_SHA256_FORCE_SCALAR");
         return v != nullptr && v[0] != '\0' && std::strcmp(v, "0") != 0;
     }
+
+#if !defined(__EMSCRIPTEN__)
+    // Installs the fastest transforms this CPU supports into the
+    // sha256_dispatch pointers, or keeps the scalar ones when forced, and
+    // returns what it installed
+    std::string InstallSha256Backend()
+    {
+        if(ForceScalar())
+            return "standard(forced)";
+#if defined(BDK_SHA256_X86_HW)
+        // SV Node's own dispatcher installs SSE4 / SHA-NI by CPUID
+        return sha256_dispatch::AutoDetect();
+#else
+        const bsv::Sha256Backend& best = bsv::Sha256SupportedBackends().back();
+        sha256_dispatch::stream = best.stream;
+        std::string ret{best.name};
+        if(best.d_block_2way != nullptr)
+        {
+            sha256_dispatch::d_block_2way = best.d_block_2way;
+            ret += std::string{","} + best.name + "(2way)";
+        }
+        return ret;
+#endif
+    }
+
+    // Selects the backend once, the only place that writes the sha256_dispatch
+    // pointers, and returns the description of what it installed, in static
+    // storage and never destroyed. If the selection throws (out of memory, in
+    // practice at load) it puts the scalar transforms back, keeps them for good
+    // and returns nullptr. The fallback allocates nothing, so the initializer
+    // cannot throw and no later call selects again.
+    const std::string* InstalledSha256Backend() noexcept
+    {
+        static const std::string* const installed = []() noexcept -> const std::string*
+        {
+            try
+            {
+                std::string name = InstallSha256Backend();
+#if defined(BDK_SHA256_SELECTION_TEST_HOOK)
+                sha256_test::AfterTransformsInstalled();
+#endif
+                const std::string& kept = *new std::string(std::move(name));
+                return &kept;
+            }
+            catch(...)
+            {
+                // Faster transforms may be installed already
+                sha256_dispatch::stream = sha256_stream_scalar::Transform;
+                sha256_dispatch::d_block_2way = nullptr;
+#if defined(BDK_SHA256_SELECTION_TEST_HOOK)
+                sha256_test::FallbackKept();
+#endif
+                return nullptr;
+            }
+        }();
+        return installed;
+    }
+#endif
 }
 
 const std::vector<bsv::Sha256Backend>& bsv::Sha256SupportedBackends()
@@ -225,27 +297,15 @@ const std::string& bsv::SelectSha256Backend()
     static const std::string selected{"standard"};
 #else
     // Never destroyed: the Go and Rust getters hand out pointers into it, and a
-    // thread may still read one while the process exits
-    static const std::string& selected = *new std::string(
-        []() -> std::string
-        {
-            if(ForceScalar())
-                return "standard(forced)";
-#if defined(BDK_SHA256_X86_HW)
-            // SV Node's own dispatcher installs SSE4 / SHA-NI by CPUID
-            return sha256_dispatch::AutoDetect();
-#else
-            const Sha256Backend& best = Sha256SupportedBackends().back();
-            sha256_dispatch::stream = best.stream;
-            std::string ret{best.name};
-            if(best.d_block_2way != nullptr)
-            {
-                sha256_dispatch::d_block_2way = best.d_block_2way;
-                ret += std::string{","} + best.name + "(2way)";
-            }
-            return ret;
-#endif
-        }());
+    // thread may still read one while the process exits.
+    // After a failed selection the name is built here, outside the selection's
+    // guard: if that throws as well, the next call builds the name again and
+    // never selects again.
+    static const std::string& selected = []() -> const std::string&
+    {
+        const std::string* installed = InstalledSha256Backend();
+        return installed != nullptr ? *installed : *new std::string{"standard"};
+    }();
 #endif
     return selected;
 }
