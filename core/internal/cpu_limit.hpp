@@ -55,7 +55,9 @@ namespace bsv::internal
     // is in, read from the files under `root` ("/" on a live system): cgroup v2
     // cpu.max, or cgroup v1 cpu.cfs_quota_us / cpu.cfs_period_us of the hierarchy
     // with the cpu controller, located through the cgroup and mountinfo files of
-    // proc/thread-self, else of proc/self. nullopt when there is no limit, or when
+    // proc/self, as Go reads them, or of proc/thread-self when
+    // proc/self/mountinfo does not read (once the main thread has exited); both
+    // from the same directory. nullopt when there is no limit, or when
     // any file is missing, does not parse, or (a value file) is 64 bytes or more,
     // as Go reads those with one 64-byte pread. A zero or negative quota is a
     // limit, and a zero period gives +Inf, -Inf or NaN, as in Go.
@@ -80,8 +82,11 @@ namespace bsv::internal
     // sched_getaffinity mask (the main thread's, whichever thread calls; once the
     // main thread has exited, its mask as it was then), as Go counts them, else
     // hardware_concurrency(); lowered by LimitCpuCount to the cgroup limit read
-    // under `cgroupRoot` ("/" on a live system; tests pass a temporary root). At
-    // least 1. Reads the system on every call, so callers that need it often
+    // under `cgroupRoot` ("/" on a live system; tests pass a temporary root):
+    // the main thread's cgroup, as Go reads it. Once the main thread has exited,
+    // the cgroup is the calling thread's while the mask stays the main thread's,
+    // so a thread moved to a cpu cgroup of its own then gets a count of its own.
+    // At least 1. Reads the system on every call, so callers that need it often
     // should keep the result. Throws std::bad_alloc when out of memory, and
     // nothing else.
     size_t EffectiveCpuCount(const std::filesystem::path& cgroupRoot = "/");

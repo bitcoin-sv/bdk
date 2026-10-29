@@ -18,8 +18,9 @@
 //   kernel does not write.
 // - a mount point with stray backslashes, which Go's parser indexes out of
 //   range on; the kernel writes '\' as \134.
-// - the cgroup and mountinfo files: proc/thread-self's, not proc/self's, so
-//   they still read after the main thread exits (see ReadProcFile).
+// - once the main thread has exited, proc/self/mountinfo no longer opens; BDK
+//   then reads the cgroup and mountinfo files of proc/thread-self, the calling
+//   thread's (see ReadProcFiles).
 // Go also re-reads the limit and the affinity mask periodically; BDK reads
 // them on every EffectiveCpuCount call.
 
@@ -31,12 +32,14 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <initializer_list>
 #include <limits>
 #include <memory>
 #include <sstream>
 #include <string>
 #include <string_view>
 #include <thread>
+#include <utility>
 #include <vector>
 
 #include <utilstrencodings.h>
@@ -347,35 +350,53 @@ static std::optional<std::string> ReadValueFile(const std::filesystem::path& pat
     return content;
 }
 
-// proc/thread-self/<name>, else proc/self/<name> (kernels before 3.17 have no
-// thread-self). Once the main thread has exited, proc/self is that exited
-// thread's: its mountinfo no longer opens (EINVAL, as exit_task_namespaces has
-// cleared its nsproxy, which mounts_open_common requires), and on a cgroup v1
-// hierarchy its cgroup reads as "/" (proc_cgroup_show prints that for an
-// exiting task). Go never meets this, as it reads both files at startup.
-// thread-self's files are the calling thread's, the same as the process's
-// unless a thread has its own mount namespace or was moved to another cgroup
-// on its own.
-static std::optional<std::string> ReadProcFile(const std::filesystem::path& root,
-                                               std::string_view name)
+namespace
 {
-    if(auto content = ReadFile(root / "proc/thread-self" / name))
-        return content;
-    return ReadFile(root / "proc/self" / name);
+
+    struct ProcFiles
+    {
+        std::string cgroup;
+        std::string mountinfo;
+    };
+
+} // namespace
+
+// The cgroup and mountinfo files, both from proc/self, the main thread's, as
+// Go reads them; or both from proc/thread-self, the calling thread's, when
+// proc/self/mountinfo does not read. That happens once the main thread has
+// exited: proc/self is then that exited thread's, and its mountinfo no longer
+// opens (EINVAL, as exit_task_namespaces has cleared its nsproxy, which
+// mounts_open_common requires). On a cgroup v1 hierarchy its cgroup then reads
+// as "/" (proc_cgroup_show prints that for an exiting task), so the cgroup
+// file comes from the same directory as mountinfo, never from the other one.
+// Go never meets this, as it reads both files at startup. thread-self's files
+// are the process's unless the calling thread has its own mount namespace or
+// was moved to another cgroup on its own. Kernels before 3.17 have no
+// thread-self.
+static std::optional<ProcFiles> ReadProcFiles(const std::filesystem::path& root)
+{
+    for(const std::string_view dir : {"proc/self", "proc/thread-self"})
+    {
+        auto mountinfo = ReadFile(root / dir / "mountinfo");
+        if(!mountinfo)
+            continue;
+        auto cgroup = ReadFile(root / dir / "cgroup");
+        if(!cgroup)
+            return std::nullopt;
+        return ProcFiles{std::move(*cgroup), std::move(*mountinfo)};
+    }
+    return std::nullopt;
 }
 
 std::optional<double> bsv::internal::CgroupCpuLimit(const std::filesystem::path& root)
 {
-    const auto cgroupFile = ReadProcFile(root, "cgroup");
-    if(!cgroupFile)
+    const auto files = ReadProcFiles(root);
+    if(!files)
         return std::nullopt;
-    const auto cgroup = FindCpuCgroup(*cgroupFile);
+    const auto cgroup = FindCpuCgroup(files->cgroup);
     if(!cgroup)
         return std::nullopt;
-    const auto mountinfo = ReadProcFile(root, "mountinfo");
-    if(!mountinfo)
-        return std::nullopt;
-    const auto dir = FindCpuCgroupDir(*mountinfo, *cgroup);
+    const auto dir = FindCpuCgroupDir(files->mountinfo, *cgroup);
     if(!dir)
         return std::nullopt;
     // `dir` is absolute; operator/ would let it replace `root`.

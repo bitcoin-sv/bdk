@@ -489,26 +489,36 @@ BOOST_AUTO_TEST_CASE(cgroup_cpu_limit_reads_the_v1_files)
     BOOST_CHECK(!CgroupCpuLimit(root.Path()).has_value());
 }
 
-// CgroupCpuLimit reads the cgroup and mountinfo files of proc/thread-self, and
-// each one it cannot read there from proc/self, as on kernels before 3.17.
-BOOST_AUTO_TEST_CASE(cgroup_cpu_limit_reads_thread_self_then_self)
+// CgroupCpuLimit reads the cgroup and mountinfo files of proc/self, as Go
+// does, or, when proc/self/mountinfo does not read (once the main thread has
+// exited), both of proc/thread-self. It never takes one file from each: the
+// cgroup directories that a mix would select hold their own limits.
+BOOST_AUTO_TEST_CASE(cgroup_cpu_limit_reads_self_else_thread_self)
 {
     using bsv::internal::CgroupCpuLimit;
     const TempRoot root;
-    root.Write("proc/thread-self/cgroup", "0::/thread\n");
-    root.Write("proc/thread-self/mountinfo", Concat({ROOT_MOUNT, CGROUP2_MOUNT}));
     root.Write("proc/self/cgroup", "0::/process\n");
     root.Write("proc/self/mountinfo",
                Concat(
                    {ROOT_MOUNT, "31 23 0:26 / /mnt/cgroup rw - cgroup2 cgroup2 rw\n"}));
+    root.Write("proc/thread-self/cgroup", "0::/thread\n");
+    root.Write("proc/thread-self/mountinfo", Concat({ROOT_MOUNT, CGROUP2_MOUNT}));
+    root.Write("mnt/cgroup/process/cpu.max", "50000 100000\n");
     root.Write("sys/fs/cgroup/thread/cpu.max", "150000 100000\n");
     root.Write("mnt/cgroup/thread/cpu.max", "250000 100000\n");
-    root.Write("mnt/cgroup/process/cpu.max", "50000 100000\n");
-    BOOST_CHECK_EQUAL(1.5, CgroupCpuLimit(root.Path()).value_or(-1.0));
-    std::filesystem::remove(root.Path() / "proc/thread-self/mountinfo");
-    BOOST_CHECK_EQUAL(2.5, CgroupCpuLimit(root.Path()).value_or(-1.0));
-    std::filesystem::remove(root.Path() / "proc/thread-self/cgroup");
+    root.Write("sys/fs/cgroup/process/cpu.max", "350000 100000\n");
     BOOST_CHECK_EQUAL(0.5, CgroupCpuLimit(root.Path()).value_or(-1.0));
+    // proc/self/mountinfo reads, so its cgroup file is the one.
+    std::filesystem::remove(root.Path() / "proc/self/cgroup");
+    BOOST_CHECK(!CgroupCpuLimit(root.Path()).has_value());
+    root.Write("proc/self/cgroup", "0::/process\n");
+    std::filesystem::remove(root.Path() / "proc/self/mountinfo");
+    BOOST_CHECK_EQUAL(1.5, CgroupCpuLimit(root.Path()).value_or(-1.0));
+    std::filesystem::remove(root.Path() / "proc/thread-self/cgroup");
+    BOOST_CHECK(!CgroupCpuLimit(root.Path()).has_value());
+    root.Write("proc/thread-self/cgroup", "0::/thread\n");
+    std::filesystem::remove(root.Path() / "proc/thread-self/mountinfo");
+    BOOST_CHECK(!CgroupCpuLimit(root.Path()).has_value());
 }
 
 // Go's default GOMAXPROCS rule (runtime/cgroup_linux.go, the same from go1.25.0 on,
@@ -629,9 +639,10 @@ constexpr int OTHER_LIMIT = 2;
 constexpr int MAIN_THREAD_RUNNING = 3;
 
 // The cgroup limit read from another thread after the main thread has exited:
-// proc/self is then the exited thread's, and its mountinfo no longer opens.
-// The root's proc is the live one; the cgroup's directory under the root holds
-// a known limit, so the test does not depend on the machine's.
+// proc/self is then the exited thread's, and its mountinfo no longer opens, so
+// CgroupCpuLimit reads proc/thread-self's files. The root's proc is the live one; the
+// cgroup's directory under the root holds a known limit, so the test does not depend on
+// the machine's.
 BOOST_AUTO_TEST_CASE(cgroup_cpu_limit_after_the_main_thread_exits)
 {
     using bsv::internal::CgroupCpuLimit;
