@@ -100,8 +100,11 @@ function(bdk_add_core_library target)
     endif()
   endforeach()
 
-  ## Build the core variant as a library using bsv source code
-  add_library(${target}
+  ## Build the core variant as a static library using bsv source code. Always
+  ## static, whatever BUILD_SHARED_LIBS says: the Go and Rust modules merge it
+  ## into their own archives, and test_sha256_select_fallback overrides one of
+  ## its objects
+  add_library(${target} STATIC
     ${BITCOIN_CONFIG_FILE} ${BDK_VERSION_CPP}
     ${_core_extra_hdr_files} ${_bsv_hdr_files}
     ${_core_extra_src_files} ${_bsv_src_files})

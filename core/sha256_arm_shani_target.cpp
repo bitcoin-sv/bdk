@@ -31,7 +31,10 @@
 #include <arm_neon.h>
 #endif
 
-#define ENABLE_ARM_SHANI 1
+// No value: the included source only tests whether it is defined
+#define ENABLE_ARM_SHANI
+// The vendored source is compiled here, inside the target pragma, and nowhere else
+// NOLINTNEXTLINE(bugprone-suspicious-include)
 #include "sha256_arm_shani.cpp"
 
 #if defined(__clang__)

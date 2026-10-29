@@ -164,17 +164,25 @@ if(UNIX)
   endif()
   string(TOLOWER ${OsArch} os_arch)
   set(mergedArchive "libGoBDK_${os_arch}.a")
-  add_custom_target(MergeGoBDK ALL
+  ## Merged only when one of the archives above changed: the file-level
+  ## dependencies on them (and on the targets, which order the build) make a
+  ## no-op build leave the merged archive alone, and a bdk_core-only change
+  ## re-extract and re-merge it
+  add_custom_command(OUTPUT "${buildDir}/${mergedArchive}"
                   ${extractCommands}
                   COMMAND ${CMAKE_COMMAND} -E rm -f "${mergedArchive}"
                   COMMAND ${CMAKE_AR} rcs "${mergedArchive}" "${buildDir}/merge_gobdk/*/*.o"
-                  DEPENDS static-${_GO_MODULE_NAME}
+                  DEPENDS ${listArchive} univalue secp256k1 bdk_core static-${_GO_MODULE_NAME}
                   WORKING_DIRECTORY ${buildDir}
                   COMMENT "Merge all in one ${mergedArchive}")
+  add_custom_target(MergeGoBDK ALL DEPENDS "${buildDir}/${mergedArchive}")
 
   install(FILES "${buildDir}/${mergedArchive}" DESTINATION "lib/bdkcgo" COMPONENT GoModules)
   if (BUILD_MODULE_GOLANG_INSTALL_INSOURCE)
-    add_custom_command(TARGET MergeGoBDK POST_BUILD COMMAND cp "${buildDir}/${mergedArchive}" "${CMAKE_SOURCE_DIR}/module/gobdk/bdkcgo/${mergedArchive}"
+    ## Runs on every build of the target; copy_if_different leaves the in-source
+    ## archive untouched when the merged one did not change
+    add_custom_command(TARGET MergeGoBDK POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different "${buildDir}/${mergedArchive}" "${CMAKE_SOURCE_DIR}/module/gobdk/bdkcgo/${mergedArchive}"
       COMMENT "Install insource ${mergedArchive}"
     )
   endif()

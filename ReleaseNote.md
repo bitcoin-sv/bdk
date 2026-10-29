@@ -128,9 +128,9 @@ installed alongside the package (`CMakeLists.txt`).
 - **Built against bitcoin-sv 1.2.3** (`6504a3aff65ba97c0f6c80962b033e35ecbfed4b`, tag `v1.2.3`),
   up from 1.2.2. `BSV_CLIENT_VERSION_REVISION` is now `3`. The curated source list gains the
   new SHA-256 dispatcher's header, its scalar stream transform and its scalar 1-way double-SHA-256
-  transform; merkle hashing calls the 1-way transform twice, since the 2-way pointer stays null. (Superseded by the hardware SHA-256
-  entry above: the dispatcher's `AutoDetect()` and its SSE4 and SHA-NI transforms are now built
-  and used.) Behaviour
+  transform. (Superseded by the hardware SHA-256 entry above: the dispatcher's `AutoDetect()`
+  and its SSE4 and SHA-NI transforms are now built and used, and merkle hashing calls the 1-way
+  transform twice only when no 2-way transform is installed.) Behaviour
   changes from upstream that reach BDK: `CScriptNum` now throws `scriptnum_overflow_error` for non-big-int numbers that overflow `int64_t`,
   `OP_SPLIT` rejects split positions above `INT32_MAX`, and `CScriptBase` grows from 28
   to 32 inline bytes. `sizeof(CScript)` stays 40 on 64-bit and wasm32.

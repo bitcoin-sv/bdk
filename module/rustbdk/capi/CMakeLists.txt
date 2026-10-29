@@ -159,20 +159,27 @@ if(UNIX)
     # cctools ar rejects ("illegal option -- D"). Archive byte-reproducibility is
     # not relied on anywhere (the refresh bot gates on a source hash and the archive
     # is never committed), so plain 'rcs' is both portable and sufficient.
-    add_custom_target(MergeBDKFFI ALL
+    # Merged only when one of the archives above changed: the file-level
+    # dependencies on them (and on the targets, which order the build) make a
+    # no-op build leave the merged archive alone, and a bdk_core-only change
+    # re-extract and re-merge it.
+    add_custom_command(OUTPUT "${buildDir}/${mergedArchive}"
         ${extractCommands}
         COMMAND ${CMAKE_COMMAND} -E rm -f "${mergedArchive}"
         COMMAND ${CMAKE_AR} rcs "${mergedArchive}" "${buildDir}/merge_bdkffi/*/*.o"
-        DEPENDS static-bdkffi
+        DEPENDS ${listArchive} ${_BDKFFI_BUILD_TARGETS}
         WORKING_DIRECTORY ${buildDir}
         COMMENT "Merge all in one ${mergedArchive}")
+    add_custom_target(MergeBDKFFI ALL DEPENDS "${buildDir}/${mergedArchive}")
 
     install(FILES "${buildDir}/${mergedArchive}" DESTINATION "lib/bdkffi" COMPONENT RustModules)
 
     if(BUILD_MODULE_RUST_INSTALL_INSOURCE AND CARGO_EXECUTABLE)
+        # Runs on every build of the target; copy_if_different leaves the
+        # in-source archive untouched when the merged one did not change
         add_custom_command(TARGET MergeBDKFFI POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_SOURCE_DIR}/module/rustbdk/bdk-sys/lib"
-            COMMAND ${CMAKE_COMMAND} -E copy "${buildDir}/${mergedArchive}" "${CMAKE_SOURCE_DIR}/module/rustbdk/bdk-sys/lib/${mergedArchive}"
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different "${buildDir}/${mergedArchive}" "${CMAKE_SOURCE_DIR}/module/rustbdk/bdk-sys/lib/${mergedArchive}"
             COMMENT "Install insource ${mergedArchive}")
     elseif(BUILD_MODULE_RUST_INSTALL_INSOURCE)
         message(STATUS "cargo not found: skipping Rust module install-insource copy")

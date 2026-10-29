@@ -422,7 +422,10 @@ static Consensus::Params consensusParameters(bsv::TxValidationNetwork network)
 bsv::CTxValidator::CTxValidator(std::string_view chainName):
     source{task::CCancellationSource::Make()}
 {
-    // Before the chain params below, which already hash the genesis block
+    // BDK selected the SHA-256 backend while it was loaded, so this is a no-op.
+    // It matters only to a validator built from another static initializer that
+    // runs first, which still gets the selection before the chain params below
+    // hash the genesis block.
     bsv::SelectSha256Backend();
 
     // SV's CStnParams does not initialize BIP65Height, BIP66Height or
@@ -459,6 +462,7 @@ bsv::CTxValidator::CTxValidator(const Consensus::Params& consensusParamsIn,
     consensusParams{consensusParamsIn},
     source{task::CCancellationSource::Make()}
 {
+    // A no-op after load, as in the constructor above
     bsv::SelectSha256Backend();
 
     std::string errStr;

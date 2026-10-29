@@ -26,8 +26,10 @@ namespace
         }
         catch(...) // NOLINT(bugprone-empty-catch)
         {
-            // Out of memory at load: the scalar transforms stay installed, and
-            // the next SelectSha256Backend() call tries again
+            // When the selection fails, SelectSha256Backend() keeps the scalar
+            // transforms for good, then builds its "standard" result, which
+            // can run out of memory too. This only stops that exception from
+            // ending the program at load; a later call builds the result again.
         }
     }
 

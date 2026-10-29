@@ -1,6 +1,6 @@
 # clang-tidy configuration for BDK's first-party C++ (core/, module/, test/).
 #
-# CI runs this with LLVM 23 (job `clang-tidy` in .github/workflows/build_bdk.yaml).
+# CI runs this with LLVM 23 on x86-64 and ARM64 (job `clang-tidy` in .github/workflows/build_bdk.yaml).
 # Locally: cmake -S . -B ../build -DCMAKE_CXX_COMPILER=clang++-23 -DBDK_ENABLE_CLANG_TIDY=ON
 # The CMake option also passes --header-filter/--exclude-header-filter as absolute
 # paths, which is why no HeaderFilterRegex lives here: BSV_ROOT can be anywhere.
