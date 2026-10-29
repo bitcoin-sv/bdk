@@ -206,6 +206,14 @@ jobs:
           ls -l "$BDK_LIB_DIR"
           test -f "$BDK_LIB_DIR/libbdkffi_${OS_ARCH}.a"
 
+      ## GCC only (cmake/BDKBuildSetting.cmake, bdkSetLoopAlignment): the per-byte
+      ## script loop in the CTxIn/CTxOut vector destructors must start on a 32-byte
+      ## boundary in every copy shipped in the libbdkffi archive
+      - name: Check the script loop alignment in the libbdkffi archive
+        if: runner.os == 'Linux'
+        timeout-minutes: 5
+        run: python3 .github/scripts/check_loop_alignment.py "$BDK_LIB_DIR/libbdkffi_${OS_ARCH}.a"
+
       - name: Upload rustbdk static library artifact
         if: runner.os != 'Windows'
         uses: actions/upload-artifact@v4
