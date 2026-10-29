@@ -42,7 +42,7 @@ a build. A newer version is not automatically a tested version.
 | Emscripten, WASM only | 4.0.23 | `build_wasm.yaml`, `Install Emscripten 4.0.23` |
 | Node.js, WASM tests | Must be on PATH when configuring; the workflow does not pin a version | `test/types/CMakeLists.txt`, `BDK_NODE_EXECUTABLE` |
 | Native CI hosts | ubuntu-22.04, ubuntu-22.04-arm, macos-15 | `build_bdk.yaml`, build matrix |
-| clang / clang-tidy, static-analysis gate only | LLVM 23 from apt.llvm.org on ubuntu-22.04 | `build_bdk.yaml`, `clang-tidy` job, `LLVM_VERSION` |
+| clang / clang-tidy, static-analysis gate only | LLVM 23 from apt.llvm.org on ubuntu-22.04 and ubuntu-22.04-arm | `build_bdk.yaml`, `clang-tidy` job, `LLVM_VERSION` |
 | clang-format, formatting gate only | LLVM 23 from apt.llvm.org on ubuntu-22.04 | `build_bdk.yaml`, `clang-format` job, `LLVM_VERSION`; `scripts/check_clang_format.py` |
 
 The Rust gating workflow uses the pinned toolchain. The scheduled Rust toolchain
@@ -230,13 +230,15 @@ instead.
 ## Static analysis (clang-tidy)
 
 CI job `clang-tidy` in `build_bdk.yaml` compiles every first-party C++ target
-(core, examples, C++ tests, and the Go/Rust shims) on ubuntu-22.04 with clang and
-clang-tidy from apt.llvm.org, pinned to **LLVM 23** (`LLVM_VERSION` in the job).
+(core, examples, C++ tests, and the Go/Rust shims) on ubuntu-22.04 (x86-64) and
+ubuntu-22.04-arm (ARM64) with clang and clang-tidy from apt.llvm.org, pinned to
+**LLVM 23** (`LLVM_VERSION` in the job). Each leg compiles, and so lints, only its
+own architecture's code, such as the SHA-256 hardware transforms.
 It is C++ only: no ctest, so no `go test` or `cargo` runs, and Go is not installed. The check list lives in the root `.clang-tidy`; `WarningsAsErrors: '*'`
-It runs first: the build matrix and the SHA-256 sanitiser jobs in the same workflow
-wait for it, so a C++ finding fails one job rather than every leg.
 there turns every finding into a compile error, so the job goes red on any new
-finding in `core/`, `module/` or `test/`. bitcoin-sv, secp256k1, univalue, leveldb and
+finding in `core/`, `module/` or `test/`.
+It runs first: the build matrix and the SHA-256 sanitiser jobs in the same workflow
+wait for it, so a C++ finding fails one job rather than every leg. bitcoin-sv, secp256k1, univalue, leveldb and
 generated sources are never linted, and neither are the first-party files that are
 copies or close derivatives of upstream code: the `BDK_UPSTREAM_DERIVED_SOURCES`
 list in `cmake/BDKBuildSetting.cmake` (the modified bitcoin-sv script tests, the vendored

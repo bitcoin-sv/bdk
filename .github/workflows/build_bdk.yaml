@@ -420,11 +420,17 @@ jobs:
   ## (configure only warns and skips the Go test registration), and cargo is only
   ## required to exist at configure time, which the runner satisfies. The
   ## toolchain is pinned to one LLVM major from apt.llvm.org so local runs with
-  ## the same clang-tidy-N reproduce CI exactly. Runs after the clang-format job;
-  ## the build matrix and sanitiser jobs need this one, and so both, transitively.
+  ## the same clang-tidy-N reproduce CI exactly. Runs on x86-64 and on ARM64:
+  ## each compiles and lints only its own architecture's SHA-256 code. Runs after
+  ## the clang-format job; the build matrix and sanitiser jobs need this one, and
+  ## so both, transitively.
   clang-tidy:
     needs: clang-format
-    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        os: [ubuntu-22.04, ubuntu-22.04-arm]
+      fail-fast: false
+    runs-on: ${{ matrix.os }}
 
     env:
       LLVM_VERSION: 23
@@ -469,11 +475,12 @@ jobs:
         run: |
           echo "BSV_ROOT=${{ github.workspace }}/bitcoin-sv" >> $GITHUB_ENV
           sudo apt-get install -y build-essential wget
-          wget https://github.com/bitcoin-sv/bdk/releases/download/depcy/dependancies_linux_x86_64.tar.gz
-          tar -xzf dependancies_linux_x86_64.tar.gz
-          echo "DEPENDENCIES_DIR=${{ github.workspace }}/dependancies_linux_x86_64" >> $GITHUB_ENV
-          echo "BOOST_ROOT=${{ github.workspace }}/dependancies_linux_x86_64/boost_1.85.0" >> $GITHUB_ENV
-          echo "OPENSSL_ROOT_DIR=${{ github.workspace }}/dependancies_linux_x86_64/openssl_3.4.0" >> $GITHUB_ENV
+          arch="$(uname -m)"
+          wget "https://github.com/bitcoin-sv/bdk/releases/download/depcy/dependancies_linux_${arch}.tar.gz"
+          tar -xzf "dependancies_linux_${arch}.tar.gz"
+          echo "DEPENDENCIES_DIR=${{ github.workspace }}/dependancies_linux_${arch}" >> $GITHUB_ENV
+          echo "BOOST_ROOT=${{ github.workspace }}/dependancies_linux_${arch}/boost_1.85.0" >> $GITHUB_ENV
+          echo "OPENSSL_ROOT_DIR=${{ github.workspace }}/dependancies_linux_${arch}/openssl_3.4.0" >> $GITHUB_ENV
 
       - name: Build BDK with clang-tidy
         run: |

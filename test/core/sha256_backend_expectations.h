@@ -51,7 +51,7 @@ namespace sha256_test
         std::string line;
         while(std::getline(cpuinfo, line))
         {
-            if(line.rfind("Features", 0) != 0)
+            if(!line.starts_with("Features"))
                 continue;
             std::istringstream features{line.substr(line.find(':') + 1)};
             std::string feature;

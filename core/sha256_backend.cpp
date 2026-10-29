@@ -17,13 +17,14 @@
 //                       sha256_x86_shani.cpp)
 //   BDK_SHA256_ARM_HW : the ARMv8 SHA-2 transforms (sha256_arm_shani_target.cpp)
 // Neither for the wasm variant or MSVC-compatible compilers (including clang-cl).
+// No values: they gate #includes, so only whether they are defined is tested.
 #if (defined(__GNUC__) || defined(__clang__))                                            \
     && !defined(_MSC_VER)                                                                \
     && !defined(__EMSCRIPTEN__)
 #if defined(__x86_64__) || defined(__amd64__)
-#define BDK_SHA256_X86_HW 1 // NOLINT(cppcoreguidelines-macro-usage)
+#define BDK_SHA256_X86_HW
 #elif defined(__aarch64__)
-#define BDK_SHA256_ARM_HW 1
+#define BDK_SHA256_ARM_HW
 #endif
 #endif
 

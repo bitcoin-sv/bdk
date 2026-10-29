@@ -16,7 +16,8 @@
 // default target
 #include <attributes.h>
 
-#define ENABLE_X86_SHANI 1 // NOLINT(cppcoreguidelines-macro-usage)
+// No value: the included source only tests whether it is defined
+#define ENABLE_X86_SHANI
 
 #if defined(__clang__)
 #pragma clang attribute push(__attribute__((target("sha,sse4.1,ssse3"))),                \
