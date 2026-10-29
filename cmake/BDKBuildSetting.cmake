@@ -265,6 +265,55 @@ function(bdkSetThreadSafetyAnnotations)
   message(STATUS "Thread-safety annotations disabled: ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION} cannot expand parameter packs in them")
 endfunction()
 
+#### Align the per-byte loop that destroys a script, GCC only. bitcoin-sv's
+#### prevector::erase pops a script one byte per iteration; GCC inlines that
+#### loop into the std::vector<CTxIn> and std::vector<CTxOut> destructors
+#### (17 bytes on x86-64, 20 on aarch64). Where the link puts those
+#### destructors decides whether the loop crosses a 64-byte line: unchanged
+#### code measured 11-16% slower validating large scripts on Zen 3 and Sapphire
+#### Rapids when it did.
+#### GCC aligns a loop under -falign-loops only when it expects at least
+#### align-loop-iterations (default 4) iterations, and it skips this one;
+#### --param=align-loop-iterations=1 makes it start the loop on a 32-byte
+#### boundary, so the loop stays in one line wherever the function lands.
+#### CI disassembles both destructors and fails if that stops holding
+#### (.github/scripts/check_loop_alignment.py).
+#### Clang and AppleClang turn the loop into a single store (seen on Clang 23
+#### and AppleClang 21), so there is nothing to align; MSVC, clang-cl and
+#### Emscripten (ID Clang) are not GNU.
+#### The real fix is in bitcoin-sv: drop this, BDK_ALIGN_LOOPS and the CI check
+#### once prevector::erase stops looping per element for trivially
+#### destructible types.
+#### Kept out of bdkSetCompilationOptions(): its cached guard skips it on a
+#### re-configure, and directory compile options are not cached.
+function(bdkSetLoopAlignment)
+  if(NOT BDK_ALIGN_LOOPS)
+    message(STATUS "Loop alignment: off (BDK_ALIGN_LOOPS=OFF)")
+    return()
+  endif()
+  set(_align_flags -falign-loops=32 --param=align-loop-iterations=1)
+  set(_langs)
+  set(_versions)
+  foreach(_lang C CXX)
+    if(CMAKE_${_lang}_COMPILER_ID STREQUAL "GNU")
+      foreach(_flag IN LISTS _align_flags)
+        add_compile_options("$<$<COMPILE_LANGUAGE:${_lang}>:${_flag}>")
+      endforeach()
+      list(APPEND _langs ${_lang})
+      list(APPEND _versions "GCC ${CMAKE_${_lang}_COMPILER_VERSION}")
+    endif()
+  endforeach()
+  if(_langs)
+    list(JOIN _align_flags " " _flags_str)
+    list(JOIN _langs "," _langs_str)
+    list(REMOVE_DUPLICATES _versions)
+    list(JOIN _versions ", " _versions_str)
+    message(STATUS "Loop alignment: ${_flags_str} for ${_langs_str} (${_versions_str})")
+  else()
+    message(STATUS "Loop alignment: off (compiler is ${CMAKE_CXX_COMPILER_ID}, not GCC)")
+  endif()
+endfunction()
+
 ## First-party paths that are copies or close derivatives of upstream code. They
 ## are held to upstream's style, not ours, and every edit widens the diff against
 ## their origin, so both the warning policy below and clang-tidy treat them like

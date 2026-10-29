@@ -166,6 +166,7 @@ Defaults appear in the table's second column.
 | `BDK_INSTALL_CORE_ARCHIVE` | `ON` | Install the canonical core archive. |
 | `BDK_INSTALL_BSV_HEADERS` | `ON` | Install BSV headers and bundled support files. |
 | `BDK_ENABLE_CLANG_TIDY` | `OFF` | Run clang-tidy on first-party C++ during the compile; any finding fails the build. Needs CMake 3.27+ and clang-tidy 19+ (see [Static analysis](#static-analysis-clang-tidy)). |
+| `BDK_ALIGN_LOOPS` | `ON` | GCC only: compile C and C++ with `-falign-loops=32 --param=align-loop-iterations=1`, so the per-byte script loop in the `CTxIn`/`CTxOut` vector destructors starts on a 32-byte boundary wherever they are linked. No effect with other compilers. |
 | `BDK_WARNINGS_AS_ERRORS` | `OFF` | Add `-Werror` to the warning set that first-party C++ always gets (bitcoin-sv's own `-Wall -Wextra -Wcast-align -Wformat -Wformat-security -Wshadow -Wvla -Wsuggest-override`). bitcoin-sv sources keep upstream's policy (see [Static analysis](#static-analysis-clang-tidy)). |
 
 Disabling a parent option forces dependent options OFF. In particular, `BDK_BUILD_CORE=OFF` disables native modules, native tests and native install gates; `BDK_BUILD_CORE_ONLY=ON` also omits documentation. See the flag-hierarchy blocks in the root `CMakeLists.txt`.

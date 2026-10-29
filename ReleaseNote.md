@@ -10,6 +10,18 @@ generated version values (declared in `core/BDKVersion.h` and exposed by
 For the detailed list of changes, see the project's commit history / changelog. This file is
 installed alongside the package (`CMakeLists.txt`).
 
+## Unreleased
+
+- **GCC builds align the per-byte script loop to 32 bytes** (`-falign-loops=32
+  --param=align-loop-iterations=1`, option `BDK_ALIGN_LOOPS`, default ON; Clang, MSVC and
+  WASM builds are unchanged). bitcoin-sv's `prevector::erase` loop, inlined into the
+  `CTxIn`/`CTxOut` vector destructors, otherwise crosses a 64-byte line at some link
+  layouts, which measured 11-16% slower on large-script transactions on Zen 3 and Sapphire
+  Rapids. On CI-built archives the placement slowdown is gone on Zen 3 and Sapphire Rapids,
+  and Graviton4 is unchanged; Sapphire Rapids pays 1-5% on one large-output shape (1,000 ×
+  1 KB outputs). CI checks the loop's placement in the gobdk and libbdkffi archives. The real
+  fix belongs in bitcoin-sv's `prevector::erase`.
+
 ## 1.4.0
 
 - **Hardware SHA-256** on x86-64 and ARM64, selected at load time with known-answer
