@@ -87,8 +87,8 @@ namespace bsv::internal
     // the cgroup is the calling thread's while the mask stays the main thread's,
     // so a thread moved to a cpu cgroup of its own then gets a count of its own.
     // At least 1. Reads the system on every call, so callers that need it often
-    // should keep the result. Throws std::bad_alloc when out of memory, and
-    // nothing else.
+    // should keep the result. Reading the mask allocates nothing; reading the
+    // cgroup files throws std::bad_alloc when out of memory. Throws nothing else.
     size_t EffectiveCpuCount(const std::filesystem::path& cgroupRoot = "/");
 
 } // namespace bsv::internal

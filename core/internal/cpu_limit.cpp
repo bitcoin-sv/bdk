@@ -27,14 +27,14 @@
 #include <internal/cpu_limit.hpp>
 
 #include <algorithm>
-#include <cerrno>
+#include <array>
+#include <climits>
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <initializer_list>
 #include <limits>
-#include <memory>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -424,37 +424,28 @@ size_t bsv::internal::LimitCpuCount(size_t cpus, std::optional<double> cgroupLim
 }
 
 #if defined(__linux__) && !defined(__EMSCRIPTEN__)
-// CPUs in the process's affinity mask, sized for any CPU count. getpid()
-// names the main thread (its thread ID is the process ID), so every caller
-// reads the main thread's mask, whichever thread it runs on. Go reads the
-// same mask: runtime/os_linux.go getCPUCount calls sched_getaffinity(0) from
-// the main thread at startup (osinit). Once the main thread has exited, its
-// mask no longer changes: cpuset updates skip exiting tasks
+// CPUs in the process's affinity mask. getpid() names the main thread (its
+// thread ID is the process ID), so every caller reads the main thread's mask,
+// whichever thread it runs on. Go reads the same mask: runtime/os_linux.go
+// getCPUCount calls sched_getaffinity(0) from the main thread at startup
+// (osinit), into a fixed buffer of the same size. Once the main thread has
+// exited, its mask no longer changes: cpuset updates skip exiting tasks
 // (cpuset_update_tasks_cpumask), so the count is the mask as it was then.
+// The kernel fails the call (EINVAL) only for a buffer with fewer bits than
+// nr_cpu_ids, which CONFIG_NR_CPUS caps at 8192 on x86-64 and 4096 on arm64, so
+// room for 65536 CPUs is enough for one call. If a kernel ever had more, the
+// count falls back to hardware_concurrency().
 static std::optional<size_t> AffinityCpuCount()
 {
-    constexpr int INITIAL_AFFINITY_CPUS = 1024;
-    // Bound probing to a 128 KiB mask even if the kernel rejects its size.
-    constexpr int MAX_AFFINITY_CPUS = 1 << 20;
-    const auto freeMask = [](cpu_set_t* mask) { CPU_FREE(mask); };
-    for(int ncpus = INITIAL_AFFINITY_CPUS; ncpus <= MAX_AFFINITY_CPUS; ncpus *= 2)
-    {
-        const std::unique_ptr<cpu_set_t, decltype(freeMask)> mask{CPU_ALLOC(ncpus),
-                                                                  freeMask};
-        if(mask == nullptr)
-            return std::nullopt;
-        const size_t size = CPU_ALLOC_SIZE(ncpus);
-        CPU_ZERO_S(size, mask.get());
-        const int rc = sched_getaffinity(getpid(), size, mask.get());
-        const int saved = errno;
-        const int count = rc == 0 ? CPU_COUNT_S(size, mask.get()) : 0;
-        if(rc == 0)
-            return count > 0 ? std::optional<size_t>(static_cast<size_t>(count))
-                             : std::nullopt;
-        if(saved != EINVAL)
-            return std::nullopt; // EINVAL: the mask is too small, try a larger one
-    }
-    return std::nullopt;
+    constexpr size_t MAX_AFFINITY_CPUS = 65536;
+    std::array<cpu_set_t, MAX_AFFINITY_CPUS / CPU_SETSIZE> mask{};
+    static_assert(sizeof(mask) * CHAR_BIT == MAX_AFFINITY_CPUS);
+    if(sched_getaffinity(getpid(), sizeof(mask), mask.data()) != 0)
+        return std::nullopt;
+    int count = 0;
+    for(const cpu_set_t& set : mask)
+        count += CPU_COUNT(&set);
+    return count > 0 ? std::optional<size_t>(static_cast<size_t>(count)) : std::nullopt;
 }
 #endif
 
