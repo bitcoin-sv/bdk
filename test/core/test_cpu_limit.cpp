@@ -75,7 +75,7 @@ static std::string Concat(std::initializer_list<std::string_view> parts)
     return out;
 }
 
-// Each proc/self/cgroup and the cgroup Go 1.26's parseCPUCgroup finds in it.
+// Each proc/self/cgroup and the cgroup FindCpuCgroup finds in it.
 BOOST_AUTO_TEST_CASE(find_cpu_cgroup)
 {
     const std::vector<std::pair<std::string, std::optional<CpuCgroup>>> cases{
@@ -126,8 +126,8 @@ BOOST_AUTO_TEST_CASE(find_cpu_cgroup)
     }
 }
 
-// Each proc/self/mountinfo and cgroup, and the directory Go 1.26's
-// parseCPUMount builds from them.
+// Each proc/self/mountinfo and cgroup, and the directory FindCpuCgroupDir
+// builds from them.
 BOOST_AUTO_TEST_CASE(find_cpu_cgroup_dir)
 {
     const CpuCgroup v2Root{CgroupVersion::V2, "/"};
@@ -173,7 +173,7 @@ BOOST_AUTO_TEST_CASE(find_cpu_cgroup_dir)
             // A malformed line (no " - " separator, or no filesystem type after
             // it), a blank line, a bad \ooo escape in the selected mount point, or
             // an escape above \377 in the root of a cgroup2 mount makes the file
-            // unreadable even when a valid cgroup2 mount follows, as in Go.
+            // unreadable even when a valid cgroup2 mount follows.
             {Concat({ROOT_MOUNT, "31 23 0:27 / /mnt/broken rw\n", CGROUP2_MOUNT}),
              v2Root,
              std::nullopt},
@@ -195,8 +195,8 @@ BOOST_AUTO_TEST_CASE(find_cpu_cgroup_dir)
                      CGROUP2_MOUNT}),
              v2Root,
              std::nullopt},
-            // Go rejects mountinfo when the root of any mount, not only a cgroup
-            // mount, does not start with '/'; an nsfs bind mount is enough.
+            // A mount whose root does not start with '/', cgroup or not, rejects
+            // the file; an nsfs bind mount is enough.
             {Concat({ROOT_MOUNT,
                      "31 23 0:27 kubepods /sys/fs/cgroup-k rw,relatime shared:5 - "
                      "cgroup2 cgroup2 rw\n",
@@ -309,7 +309,7 @@ BOOST_AUTO_TEST_CASE(find_cpu_cgroup_dir)
     }
 }
 
-// Each cpu.max and the limit Go 1.26's parseV2Limit reads from it. Every
+// Each cpu.max and the limit ParseV2Limit reads from it. Every
 // limit is quota / period of decimal integers, so it compares exactly.
 BOOST_AUTO_TEST_CASE(parse_v2_limit)
 {
@@ -353,8 +353,8 @@ BOOST_AUTO_TEST_CASE(parse_v2_limit)
     }
 }
 
-// Each cpu.cfs_quota_us and cpu.cfs_period_us, and the limit Go 1.26 reads
-// from them (parseV1Number on each, then ReadCPULimit).
+// Each cpu.cfs_quota_us and cpu.cfs_period_us, and the limit ParseV1Limit
+// reads from them.
 BOOST_AUTO_TEST_CASE(parse_v1_limit)
 {
     const std::vector<std::tuple<std::string, std::string, std::optional<double>>> cases{
@@ -442,8 +442,7 @@ BOOST_AUTO_TEST_CASE(cgroup_cpu_limit_reads_the_v2_files)
     BOOST_CHECK_EQUAL(bsv::internal::LimitCpuCount(unlimited, 1.5),
                       bsv::internal::EffectiveCpuCount(root.Path()));
 #endif
-    // Go reads a value file with one 64-byte pread and rejects it if that
-    // fills the buffer: 63 bytes are parsed, 64 are not.
+    // A value file of 63 bytes is parsed, one of 64 is not.
     root.Write("sys/fs/cgroup/ctr/cpu.max", "150000 100000\n" + std::string(49, '0'));
     BOOST_CHECK_EQUAL(1.5, CgroupCpuLimit(root.Path()).value_or(-1.0));
     root.Write("sys/fs/cgroup/ctr/cpu.max", "150000 100000\n" + std::string(50, '0'));
@@ -489,10 +488,10 @@ BOOST_AUTO_TEST_CASE(cgroup_cpu_limit_reads_the_v1_files)
     BOOST_CHECK(!CgroupCpuLimit(root.Path()).has_value());
 }
 
-// CgroupCpuLimit reads the cgroup and mountinfo files of proc/self, as Go
-// does, or, when proc/self/mountinfo does not read (once the main thread has
-// exited), both of proc/thread-self. It never takes one file from each: the
-// cgroup directories that a mix would select hold their own limits.
+// CgroupCpuLimit reads the cgroup and mountinfo files of proc/self, or, when
+// proc/self/mountinfo does not read (once the main thread has exited), both of
+// proc/thread-self. It never takes one file from each: the cgroup directories that a mix
+// would select hold their own limits.
 BOOST_AUTO_TEST_CASE(cgroup_cpu_limit_reads_self_else_thread_self)
 {
     using bsv::internal::CgroupCpuLimit;
@@ -521,9 +520,6 @@ BOOST_AUTO_TEST_CASE(cgroup_cpu_limit_reads_self_else_thread_self)
     BOOST_CHECK(!CgroupCpuLimit(root.Path()).has_value());
 }
 
-// Go's default GOMAXPROCS rule (runtime/cgroup_linux.go, the same from go1.25.0 on,
-// adjustCgroupGOMAXPROCS): the CPUs available to the process, lowered to the
-// cgroup limit rounded up, and never below 2 because of the limit.
 // On this machine, whatever its cgroup: at least one CPU. On Linux this reads
 // the live affinity mask and cgroup, which hardware_concurrency() need not
 // bound (musl counts the calling thread's mask, and only up to 1024 CPUs);
@@ -700,9 +696,9 @@ BOOST_AUTO_TEST_CASE(cgroup_cpu_limit_after_the_main_thread_exits)
 }
 #endif
 
-// cgroup integers are whole-string base 10 with an optional sign, as Go's
-// strconv.ParseInt(s, 10, 64), which SV Node's ParseInt64 matches: anything
-// after the digits, and any surrounding whitespace, rejects the value.
+// cgroup integers are whole-string base 10 with an optional sign, as ParseInt64
+// parses them: anything after the digits, and any surrounding whitespace,
+// rejects the value.
 BOOST_AUTO_TEST_CASE(cgroup_integers_parse_the_whole_string)
 {
     constexpr int64_t max = std::numeric_limits<int64_t>::max();
@@ -751,7 +747,9 @@ BOOST_AUTO_TEST_CASE(cgroup_integers_parse_the_whole_string)
     }
 }
 
-BOOST_AUTO_TEST_CASE(cpu_count_rounds_the_limit_like_gomaxprocs)
+// The CPUs available to the process, lowered to the cgroup limit rounded up,
+// and never below 2 because of the limit.
+BOOST_AUTO_TEST_CASE(cpu_count_rounds_the_limit_up_to_at_least_two)
 {
     const double inf = std::numeric_limits<double>::infinity();
     // {CPUs, cgroup limit, expected count}
@@ -766,8 +764,7 @@ BOOST_AUTO_TEST_CASE(cpu_count_rounds_the_limit_like_gomaxprocs)
         {16, 0.5, 2},
         {16, 0.0, 2},
         {16, -1.0, 2},
-        // Go: max(ceil(-Inf), 2) is 2. Go's int32 conversion of +Inf and NaN
-        // is platform-specific; BDK leaves the count unchanged.
+        // max(ceil(-Inf), 2) is 2; +Inf and NaN leave the count unchanged.
         {16, -inf, 2},
         {16, inf, 16},
         {16, std::numeric_limits<double>::quiet_NaN(), 16},
@@ -786,7 +783,7 @@ BOOST_AUTO_TEST_CASE(cpu_count_rounds_the_limit_like_gomaxprocs)
     }
 }
 
-// The process's affinity mask decides, as in Go, not hardware_concurrency():
+// The process's affinity mask decides, not hardware_concurrency():
 // on musl that is sched_getaffinity(0), the calling thread's mask, so a
 // thread pinned to one CPU sees 1.
 BOOST_AUTO_TEST_CASE(cpu_count_takes_the_affinity_mask_over_hardware_concurrency)

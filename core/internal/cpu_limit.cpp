@@ -1,16 +1,10 @@
-// CPUs available to this process, for sizing the input verification pool.
-// The cgroup lookup is a port of Go 1.26's internal/runtime/cgroup: cgroup.go
-// parseCPUCgroup, parseCPUMount, hasPathPrefix, unescapePath, parseV1Number
-// and parseV2Limit, and cgroup_linux.go FindCPU and ReadCPULimit. It matches
-// the mount whose root contains the cgroup, strips that root, skips paths
-// outside the cgroup namespace and takes the first match; Go 1.25 ignored the
-// mount root and kept the last cgroup2 mount. The rounding is Go's default
-// GOMAXPROCS rule (runtime/cgroup_linux.go adjustCgroupGOMAXPROCS), unchanged
-// since go1.25.0. With GOMAXPROCS unset and Go 1.26 or later, BDK and the Go
-// runtime in one process derive the same CPU count from the same files.
-// FindCpuCgroup, FindCpuCgroupDir, ParseV2Limit and ParseV1Limit each port one
-// Go function and take file contents; CgroupCpuLimit only reads the files.
-// Known differences:
+// CPUs available to this process, for sizing the input verification pool: the
+// affinity mask, lowered to the CPU bandwidth limit of the process's cgroup.
+// FindCpuCgroup, FindCpuCgroupDir, ParseV2Limit and ParseV1Limit take file
+// contents; CgroupCpuLimit only reads the files. The lookup takes the first
+// mount whose root contains the cgroup, strips that root, and skips cgroups
+// outside the namespace's view of the mount.
+// Known differences from Go 1.26's runtime:
 // - a limit of +Inf or NaN (a zero period; the kernel's minimum is 1 ms) or
 //   above 2^31 CPUs: Go converts it to int32, which is platform-specific; BDK
 //   leaves the count unchanged, as such a limit could not lower it anyway.
@@ -21,8 +15,8 @@
 // - once the main thread has exited, proc/self/mountinfo no longer opens; BDK
 //   then reads the cgroup and mountinfo files of proc/thread-self, the calling
 //   thread's (see ReadProcFiles).
-// Go also re-reads the limit and the affinity mask periodically; BDK reads
-// them on every EffectiveCpuCount call.
+// - Go reads the cgroup files once and re-reads the limit and the affinity
+//   mask periodically; BDK reads them on every EffectiveCpuCount call.
 
 #include <internal/cpu_limit.hpp>
 
@@ -51,11 +45,10 @@
 
 // CPUs in the process's affinity mask. getpid() names the main thread (its
 // thread ID is the process ID), so every caller reads the main thread's mask,
-// whichever thread it runs on. Go reads the same mask: runtime/os_linux.go
-// getCPUCount calls sched_getaffinity(0) from the main thread at startup
-// (osinit), into a fixed buffer of the same size. Once the main thread has
-// exited, its mask no longer changes: cpuset updates skip exiting tasks
-// (cpuset_update_tasks_cpumask), so the count is the mask as it was then.
+// whichever thread it runs on. Mirrors Go's getCPUCount, down to the buffer
+// size. Once the main thread has exited, its mask no longer changes: cpuset
+// updates skip exiting tasks (cpuset_update_tasks_cpumask), so the count is the
+// mask as it was then.
 // The kernel fails the call (EINVAL) only for a buffer with fewer bits than
 // nr_cpu_ids, which CONFIG_NR_CPUS caps at 8192 on x86-64 and 4096 on arm64, so
 // room for 65536 CPUs is enough for one call. If a kernel ever had more, the
@@ -128,8 +121,8 @@ namespace
 
 } // namespace
 
-// The lines of a /proc file as Go's lineReader (line_reader.go) returns them:
-// nothing after a final '\n', and a last line without one is incomplete.
+// The lines of a /proc file: nothing after a final '\n', and a last line
+// without one is incomplete.
 static std::vector<Line> Lines(std::string_view content)
 {
     std::vector<Line> lines;
@@ -204,7 +197,6 @@ static std::optional<std::string> UnescapeMountPath(std::string_view text)
 using bsv::internal::CgroupVersion;
 using bsv::internal::CpuCgroup;
 
-// Go 1.26 internal/runtime/cgroup/cgroup.go parseCPUCgroup.
 // Lines are "hierarchy-ID:controller-list:cgroup-path". Any line up to the v1
 // match that is malformed or has no '\n' rejects the file.
 std::optional<CpuCgroup> bsv::internal::FindCpuCgroup(std::string_view cgroupFile)
@@ -232,8 +224,7 @@ std::optional<CpuCgroup> bsv::internal::FindCpuCgroup(std::string_view cgroupFil
     return v2;
 }
 
-// Go 1.26 internal/runtime/cgroup/cgroup.go parseCPUMount, which also builds
-// the directory. A line is
+// Finds the mount and builds the directory under it. A line is
 //   ID parent-ID major:minor root mount-point options [optional...] - type source
 //   super-options
 // Every line up to the match needs a root starting with '/', a " - "
@@ -307,14 +298,14 @@ std::optional<std::string> bsv::internal::FindCpuCgroupDir(std::string_view moun
         const auto unescapedMountPoint = UnescapeMountPath(*mountPoint);
         if(!unescapedMountPoint)
             return std::nullopt;
-        // Concatenated, as Go builds it: the matching above is Go's byte-wise,
-        // lexical one, and the result is the same bytes.
+        // Concatenated, not joined with operator/: the matching above is
+        // byte-wise and lexical, and so is the result.
         return *unescapedMountPoint + std::string(rel);
     }
     return std::nullopt;
 }
 
-// quota / period in CPUs, as Go's float64 division gives it: a zero or
+// quota / period in CPUs, as double division gives it: a zero or
 // negative quota is a limit, which the rounding raises to 2, and a zero period
 // gives +Inf, -Inf or NaN (spelled out here, as dividing by zero is undefined
 // in C++).
@@ -330,9 +321,8 @@ static double QuotaPerPeriod(int64_t quota, int64_t period)
     return static_cast<double>(quota) / static_cast<double>(period);
 }
 
-// Go 1.26 internal/runtime/cgroup/cgroup.go parseV2Limit. Go's integers are
-// strconv.ParseInt(s, 10, 64): base 10, an optional '+' or '-', the whole
-// string, int64 range. SV Node's ParseInt64 accepts exactly the same strings.
+// Integers are SV Node's ParseInt64: base 10, an optional '+' or '-', the
+// whole string, int64 range.
 std::optional<double> bsv::internal::ParseV2Limit(std::string_view cpuMax)
 {
     const size_t space = cpuMax.find(' ');
@@ -351,8 +341,7 @@ std::optional<double> bsv::internal::ParseV2Limit(std::string_view cpuMax)
     return QuotaPerPeriod(quota, period);
 }
 
-// Go 1.26 internal/runtime/cgroup/cgroup.go parseV1Number: cpu.cfs_quota_us
-// or cpu.cfs_period_us, "<value>\n".
+// cpu.cfs_quota_us or cpu.cfs_period_us, "<value>\n".
 static std::optional<int64_t> ParseV1Number(std::string_view content)
 {
     const auto line = SingleLine(content);
@@ -362,8 +351,7 @@ static std::optional<int64_t> ParseV1Number(std::string_view content)
     return value;
 }
 
-// Go 1.26 internal/runtime/cgroup/cgroup_linux.go ReadCPULimit, cgroup v1.
-// NOLINTNEXTLINE(bugprone-easily-swappable-parameters): the two files, named as in Go
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters): the two files, by name
 std::optional<double> bsv::internal::ParseV1Limit(std::string_view quota,
                                                   std::string_view period)
 {
@@ -376,8 +364,7 @@ std::optional<double> bsv::internal::ParseV1Limit(std::string_view quota,
     return QuotaPerPeriod(*quotaValue, *periodValue);
 }
 
-// A cgroup value file. Go reads one with a single 64-byte pread and rejects it
-// if that fills the buffer.
+// A cgroup value file: one short line, so 64 bytes or more is rejected.
 static std::optional<std::string> ReadValueFile(const std::filesystem::path& path)
 {
     constexpr size_t MAX_VALUE_FILE_SIZE = 63;
@@ -398,18 +385,17 @@ namespace
 
 } // namespace
 
-// The cgroup and mountinfo files, both from proc/self, the main thread's, as
-// Go reads them; or both from proc/thread-self, the calling thread's, when
-// proc/self/mountinfo does not read. That happens once the main thread has
-// exited: proc/self is then that exited thread's, and its mountinfo no longer
-// opens (EINVAL, as exit_task_namespaces has cleared its nsproxy, which
-// mounts_open_common requires). On a cgroup v1 hierarchy its cgroup then reads
-// as "/" (proc_cgroup_show prints that for an exiting task), so the cgroup
-// file comes from the same directory as mountinfo, never from the other one.
-// Go never meets this, as it reads both files at startup. thread-self's files
-// are the process's unless the calling thread has its own mount namespace or
-// was moved to another cgroup on its own. Kernels before 3.17 have no
-// thread-self.
+// The cgroup and mountinfo files, both from proc/self, the main thread's; or
+// both from proc/thread-self, the calling thread's, when proc/self/mountinfo
+// does not read. That happens once the main thread has exited: proc/self is
+// then that exited thread's, and its mountinfo no longer opens (EINVAL, as
+// exit_task_namespaces has cleared its nsproxy, which mounts_open_common
+// requires). On a cgroup v1 hierarchy its cgroup then reads as "/"
+// (proc_cgroup_show prints that for an exiting task), so the cgroup file comes
+// from the same directory as mountinfo, never from the other one.
+// thread-self's files are the process's unless the calling thread has its own
+// mount namespace or was moved to another cgroup on its own. Kernels before
+// 3.17 have no thread-self.
 static std::optional<ProcFiles> ReadProcFiles(const std::filesystem::path& root)
 {
     for(const std::string_view dir : {"proc/self", "proc/thread-self"})
