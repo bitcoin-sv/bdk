@@ -265,6 +265,85 @@ function(bdkSetThreadSafetyAnnotations)
   message(STATUS "Thread-safety annotations disabled: ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION} cannot expand parameter packs in them")
 endfunction()
 
+#### Align the per-byte loop that destroys a script, GCC only. bitcoin-sv's
+#### prevector::erase pops a script one byte per iteration; GCC inlines that
+#### loop into the std::vector<CTxIn> and std::vector<CTxOut> destructors
+#### (17 bytes on x86-64, 20 on aarch64). Where the link puts those
+#### destructors decides whether the loop crosses a 64-byte line: unchanged
+#### code measured 11-16% slower validating large scripts on Zen 3 and Sapphire
+#### Rapids when it did.
+#### GCC aligns a loop under -falign-loops only when it expects at least
+#### align-loop-iterations (default 4) iterations, and it skips this one;
+#### --param=align-loop-iterations=1 makes it start the loop on a 32-byte
+#### boundary, so in both destructors the loop stays in one line wherever the
+#### function lands. This does not hold for every inlined copy: GCC still skips
+#### loops whose block it estimates below align-threshold. On the validation
+#### path that leaves EvalScript's copies, aligned by
+#### bdkSetEvalScriptLoopAlignment() below.
+#### CI disassembles both destructors and EvalScript and fails if that stops
+#### holding (.github/scripts/check_loop_alignment.py).
+#### Clang and AppleClang turn the loop into a single store (seen on Clang 23
+#### and AppleClang 21), so there is nothing to align; MSVC, clang-cl and
+#### Emscripten (ID Clang) are not GNU.
+#### The real fix is in bitcoin-sv: drop this, BDK_ALIGN_LOOPS and the CI check
+#### once prevector::erase stops looping per element for trivially
+#### destructible types.
+#### Kept out of bdkSetCompilationOptions(): its cached guard skips it on a
+#### re-configure, and directory compile options are not cached.
+function(bdkSetLoopAlignment)
+  if(NOT BDK_ALIGN_LOOPS)
+    message(STATUS "Loop alignment: off (BDK_ALIGN_LOOPS=OFF)")
+    return()
+  endif()
+  set(_align_flags -falign-loops=32 --param=align-loop-iterations=1)
+  set(_langs)
+  set(_versions)
+  foreach(_lang C CXX)
+    if(CMAKE_${_lang}_COMPILER_ID STREQUAL "GNU")
+      foreach(_flag IN LISTS _align_flags)
+        add_compile_options("$<$<COMPILE_LANGUAGE:${_lang}>:${_flag}>")
+      endforeach()
+      list(APPEND _langs ${_lang})
+      list(APPEND _versions "GCC ${CMAKE_${_lang}_COMPILER_VERSION}")
+    endif()
+  endforeach()
+  if(_langs)
+    list(JOIN _align_flags " " _flags_str)
+    list(JOIN _langs "," _langs_str)
+    list(REMOVE_DUPLICATES _versions)
+    list(JOIN _versions ", " _versions_str)
+    message(STATUS "Loop alignment: ${_flags_str} for ${_langs_str} (${_versions_str})")
+  else()
+    message(STATUS "Loop alignment: off (compiler is ${CMAKE_CXX_COMPILER_ID}, not GCC)")
+  endif()
+endfunction()
+
+#### The same per-byte loop is inlined into EvalScript (bitcoin-sv
+#### src/script/interpreter.cpp), where it destroys the script code after each
+#### OP_CHECKSIG/OP_CHECKMULTISIG: one iteration per byte of script code per
+#### signature check. Unaligned, the OP_CHECKSIG copy crossed a 64-byte line at
+#### one of the two placements interpreter.cpp's 32-byte aligned .text can take,
+#### measured 7-10% slower on large script code on Zen 3 and Sapphire Rapids.
+#### GCC aligns a loop only when its header runs at least
+#### count_max / align-threshold (default 100, i.e. 1% of the function's hottest
+#### block) by its static estimate; EvalScript's copies sit at 0.07-0.57%.
+#### 4000 aligns the OP_CHECKSIG copy and both OP_CHECKMULTISIG copies, with 2.7x
+#### margin over the lowest (0.0665%, needs 1504). The fourth copy, on the
+#### early-return path, is in a block GCC treats as cold and is never aligned at
+#### any threshold; it runs at most once per failing script. interpreter.cpp
+#### only.
+#### Source properties are directory-scoped: call from the directory that builds
+#### the bdk_core variant, after bdkApplySourceWarningPolicy() (which sets
+#### COMPILE_OPTIONS on every bitcoin-sv source).
+function(bdkSetEvalScriptLoopAlignment)
+  if(NOT BDK_ALIGN_LOOPS OR NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    return()
+  endif()
+  set_property(SOURCE "${BDK_BSV_ROOT_DIR}/src/script/interpreter.cpp"
+    APPEND PROPERTY COMPILE_OPTIONS --param=align-threshold=4000)
+  message(STATUS "Loop alignment: --param=align-threshold=4000 for src/script/interpreter.cpp")
+endfunction()
+
 ## First-party paths that are copies or close derivatives of upstream code. They
 ## are held to upstream's style, not ours, and every edit widens the diff against
 ## their origin, so both the warning policy below and clang-tidy treat them like

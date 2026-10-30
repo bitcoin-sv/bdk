@@ -10,6 +10,27 @@ generated version values (declared in `core/BDKVersion.h` and exposed by
 For the detailed list of changes, see the project's commit history / changelog. This file is
 installed alongside the package (`CMakeLists.txt`).
 
+## Unreleased
+
+- **GCC builds align the per-byte script loop to 32 bytes** (`-falign-loops=32
+  --param=align-loop-iterations=1`, plus `--param=align-threshold=4000` on bitcoin-sv's
+  `src/script/interpreter.cpp`; option `BDK_ALIGN_LOOPS`, default ON; Clang, MSVC and WASM
+  builds are unchanged). bitcoin-sv's `prevector::erase` loop is inlined into the
+  `CTxIn`/`CTxOut` vector destructors and into `EvalScript`, which frees the script code
+  after each signature check. Unaligned, it crosses a 64-byte line at some link layouts,
+  measured on Zen 3 and Sapphire Rapids at 11-16% slower on large-script transactions
+  (destructors) and 7-10% slower on signature checks over large script code (`EvalScript`).
+  Now aligned: both destructors, and `EvalScript`'s copies on the `OP_CHECKSIG` path and
+  both `OP_CHECKMULTISIG` copies. Not aligned: the copy on `EvalScript`'s early-return path,
+  which GCC treats as cold and which runs at most once per failing script. On CI-built
+  archives no loop on these paths crosses a line, Zen 3 is flat across placements, and
+  Graviton4 was unchanged by the destructor alignment (the `EvalScript` threshold was
+  benchmarked on x86-64 only). Two effects remain, on Sapphire Rapids only and neither a
+  line crossing: `EvalScript` on large script code differs by about 8% between
+  interpreter.cpp's two 32-byte placements, and 1,000 × 1 KB outputs is 2-4% slower than
+  1.4.0. CI checks the loop's placement in the gobdk and libbdkffi archives. The complete
+  fix belongs in bitcoin-sv's `prevector::erase`.
+
 ## 1.4.0
 
 - **Hardware SHA-256** on x86-64 and ARM64, selected at load time with known-answer
