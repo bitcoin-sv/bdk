@@ -44,9 +44,46 @@
 
 #include <utilstrencodings.h>
 
+// The affinity mask and cgroups are Linux's; elsewhere neither is read.
 #if defined(__linux__) && !defined(__EMSCRIPTEN__)
 #include <sched.h>
 #include <unistd.h>
+
+// CPUs in the process's affinity mask. getpid() names the main thread (its
+// thread ID is the process ID), so every caller reads the main thread's mask,
+// whichever thread it runs on. Go reads the same mask: runtime/os_linux.go
+// getCPUCount calls sched_getaffinity(0) from the main thread at startup
+// (osinit), into a fixed buffer of the same size. Once the main thread has
+// exited, its mask no longer changes: cpuset updates skip exiting tasks
+// (cpuset_update_tasks_cpumask), so the count is the mask as it was then.
+// The kernel fails the call (EINVAL) only for a buffer with fewer bits than
+// nr_cpu_ids, which CONFIG_NR_CPUS caps at 8192 on x86-64 and 4096 on arm64, so
+// room for 65536 CPUs is enough for one call. If a kernel ever had more, the
+// count falls back to hardware_concurrency().
+static std::optional<size_t> AffinityCpuCount()
+{
+    constexpr size_t MAX_AFFINITY_CPUS = 65536;
+    std::array<cpu_set_t, MAX_AFFINITY_CPUS / CPU_SETSIZE> mask{};
+    static_assert(sizeof(mask) * CHAR_BIT == MAX_AFFINITY_CPUS);
+    if(sched_getaffinity(getpid(), sizeof(mask), mask.data()) != 0)
+        return std::nullopt;
+    int count = 0;
+    for(const cpu_set_t& set : mask)
+        count += CPU_COUNT(&set);
+    return count > 0 ? std::optional<size_t>(static_cast<size_t>(count)) : std::nullopt;
+}
+
+static std::optional<double> SystemCgroupCpuLimit(const std::filesystem::path& root)
+{
+    return bsv::internal::CgroupCpuLimit(root);
+}
+#else
+static std::optional<size_t> AffinityCpuCount() { return std::nullopt; }
+
+static std::optional<double> SystemCgroupCpuLimit(const std::filesystem::path& /*root*/)
+{
+    return std::nullopt;
+}
 #endif
 
 static std::optional<std::string> ReadFile(const std::filesystem::path& path)
@@ -423,32 +460,6 @@ size_t bsv::internal::LimitCpuCount(size_t cpus, std::optional<double> cgroupLim
     return limit < static_cast<double>(cpus) ? static_cast<size_t>(limit) : cpus;
 }
 
-#if defined(__linux__) && !defined(__EMSCRIPTEN__)
-// CPUs in the process's affinity mask. getpid() names the main thread (its
-// thread ID is the process ID), so every caller reads the main thread's mask,
-// whichever thread it runs on. Go reads the same mask: runtime/os_linux.go
-// getCPUCount calls sched_getaffinity(0) from the main thread at startup
-// (osinit), into a fixed buffer of the same size. Once the main thread has
-// exited, its mask no longer changes: cpuset updates skip exiting tasks
-// (cpuset_update_tasks_cpumask), so the count is the mask as it was then.
-// The kernel fails the call (EINVAL) only for a buffer with fewer bits than
-// nr_cpu_ids, which CONFIG_NR_CPUS caps at 8192 on x86-64 and 4096 on arm64, so
-// room for 65536 CPUs is enough for one call. If a kernel ever had more, the
-// count falls back to hardware_concurrency().
-static std::optional<size_t> AffinityCpuCount()
-{
-    constexpr size_t MAX_AFFINITY_CPUS = 65536;
-    std::array<cpu_set_t, MAX_AFFINITY_CPUS / CPU_SETSIZE> mask{};
-    static_assert(sizeof(mask) * CHAR_BIT == MAX_AFFINITY_CPUS);
-    if(sched_getaffinity(getpid(), sizeof(mask), mask.data()) != 0)
-        return std::nullopt;
-    int count = 0;
-    for(const cpu_set_t& set : mask)
-        count += CPU_COUNT(&set);
-    return count > 0 ? std::optional<size_t>(static_cast<size_t>(count)) : std::nullopt;
-}
-#endif
-
 size_t bsv::internal::CpuCountFrom(std::optional<size_t> affinityCpus,
                                    size_t hardwareConcurrency,
                                    std::optional<double> cgroupLimit)
@@ -461,11 +472,7 @@ size_t bsv::internal::CpuCountFrom(std::optional<size_t> affinityCpus,
 
 size_t bsv::internal::EffectiveCpuCount(const std::filesystem::path& cgroupRoot)
 {
-    const size_t hardware = std::thread::hardware_concurrency();
-#if defined(__linux__) && !defined(__EMSCRIPTEN__)
-    return CpuCountFrom(AffinityCpuCount(), hardware, CgroupCpuLimit(cgroupRoot));
-#else
-    (void)cgroupRoot;
-    return CpuCountFrom(std::nullopt, hardware, std::nullopt);
-#endif
+    return CpuCountFrom(AffinityCpuCount(),
+                        std::thread::hardware_concurrency(),
+                        SystemCgroupCpuLimit(cgroupRoot));
 }
