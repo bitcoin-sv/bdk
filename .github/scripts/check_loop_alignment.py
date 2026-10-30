@@ -10,6 +10,16 @@ bdkSetLoopAlignment). This script disassembles every copy of both destructors in
 the given archives or objects and fails if the loop is not 32-byte aligned, or
 if it would cross a 64-byte line at any start the section alignment permits.
 
+The same loop is inlined into EvalScript, which destroys the script code after
+each signature check (interpreter.cpp built with --param=align-threshold=4000,
+bdkSetEvalScriptLoopAlignment). EvalScript must hold exactly EVALSCRIPT_LOOPS
+copies, and at most one of them may be unaligned: the copy on the early-return
+path, which GCC places in a block it treats as cold and never aligns at any
+threshold. Which copy that is depends on block order, so the rule counts
+rather than naming positions; a silent pass would need GCC to treat a hot copy
+as cold and the cold copy to land aligned by chance. A different count fails,
+so a compiler or bitcoin-sv change gets looked at rather than passing.
+
 Usage: check_loop_alignment.py [--objdump PATH] FILE...  (ELF, x86-64 or aarch64)
 """
 
@@ -22,6 +32,9 @@ DESTRUCTORS = {
     "_ZNSt6vectorI5CTxInSaIS0_EED2Ev": "std::vector<CTxIn>::~vector",
     "_ZNSt6vectorI6CTxOutSaIS0_EED2Ev": "std::vector<CTxOut>::~vector",
 }
+EVALSCRIPT = "_Z10EvalScriptRK18eval_script_paramsRKN4task18CCancellationTokenER12LimitedStackRK7CScriptPS9_jRK20BaseSignatureCheckerS7_RlR19conditional_tracker"
+EVALSCRIPT_LOOPS = 4
+EVALSCRIPT_UNALIGNED_MAX = 1
 LINE = 64
 ALIGN = 32
 MAX_LOOP_INSNS = 8
@@ -75,10 +88,29 @@ def disassemble(tool, path, section):
     return out
 
 
-def byte_loop(insns, size):
-    """(start, end) of the innermost backward-branch loop whose first
-    instruction decrements by one and that makes no call, else None."""
-    best = None
+def disassemble_symbol(tool, path, symbol):
+    """(member, instructions) of `symbol` in .text, addresses relative to the
+    member's .text, one per member that defines it, in order."""
+    out, member, cur = [], None, None
+    for line in objdump(tool, ["-d", "--no-show-raw-insn", f"--disassemble={symbol}", "-j", ".text",
+                               path]).splitlines():
+        m = MEMBER_RE.match(line)
+        if m:
+            member, cur = m.group(1), None
+        elif line.rstrip().endswith(f"<{symbol}>:"):
+            cur = []
+            out.append((member, cur))
+        elif cur is not None:
+            m = INSN_RE.match(line)
+            if m:
+                cur.append((int(m.group(1), 16), m.group(2).strip()))
+    return out
+
+
+def byte_loops(insns, size):
+    """(start, end) of every backward-branch loop whose first instruction
+    decrements by one and that makes no call, innermost only, in order."""
+    found = []
     for i, (addr, text) in enumerate(insns):
         m = BRANCH_RE.match(text)
         if not m:
@@ -90,15 +122,51 @@ def byte_loop(insns, size):
         if not DEC_RE.match(body[0]) or any(CALL_RE.match(t) for t in body):
             continue
         end = insns[i + 1][0] if i + 1 < len(insns) else size
-        if best is None or end - target < best[1] - best[0]:
-            best = (target, end)
-    return best
+        found.append((target, end))
+    return sorted({(s, e) for s, e in found if not any(s <= s2 and e2 <= e and (s2, e2) != (s, e)
+                                                       for s2, e2 in found)})
+
+
+def byte_loop(insns, size):
+    """(start, end) of the shortest loop byte_loops() finds, else None."""
+    return min(byte_loops(insns, size), key=lambda l: l[1] - l[0], default=None)
 
 
 def crossing_starts(align, start, end):
     """Function starts (mod 64) the section alignment permits at which
     [start, end) crosses a 64-byte line."""
     return [p for p in range(0, LINE, align) if (p + start) // LINE != (p + end - 1) // LINE]
+
+
+def check_evalscript(tool, path):
+    """Failures and loop count for EvalScript's copies of the loop in `path`."""
+    failures, checked = [], 0
+    aligns = {member: (align, size) for member, align, size in section_aligns(tool, path, ".text")}
+    copies = disassemble_symbol(tool, path, EVALSCRIPT)
+    if not copies:
+        return [f"{path}: no EvalScript found"], 0
+    for member, insns in copies:
+        align, size = aligns[member]
+        where = f"{path}({member}) EvalScript" if member != path else f"{path} EvalScript"
+        loops = byte_loops(insns, size)
+        unaligned = []
+        for start, end in loops:
+            cross = crossing_starts(align, start, end)
+            checked += 1
+            print(f"{where}: loop +{start:#x}..+{end:#x} ({end - start} B) in .text, section align {align}, "
+                  f"start mod {ALIGN} = {start % ALIGN}, crosses a {LINE}-byte line at section "
+                  f"start(s) mod {LINE}: {cross or 'none'}")
+            if start % ALIGN or align < ALIGN:
+                unaligned.append((start, cross))
+        if len(loops) != EVALSCRIPT_LOOPS:
+            failures.append(f"{where}: {len(loops)} per-byte loops, expected {EVALSCRIPT_LOOPS}. Check which "
+                            "are on the validation path before changing EVALSCRIPT_LOOPS")
+        if len(unaligned) > EVALSCRIPT_UNALIGNED_MAX:
+            failures.append(f"{where}: {len(unaligned)} loops not {ALIGN}-byte aligned (at "
+                            f"{', '.join(f'+{s:#x}' for s, _ in unaligned)}), at most "
+                            f"{EVALSCRIPT_UNALIGNED_MAX} allowed; check that interpreter.cpp got "
+                            "--param=align-threshold (bdkSetEvalScriptLoopAlignment)")
+    return failures, checked
 
 
 def main():
@@ -138,6 +206,9 @@ def main():
                 if cross:
                     failures.append(f"{where}: loop crosses a {LINE}-byte line when the function starts at "
                                     f"{', '.join(map(str, cross))} mod {LINE}")
+        failures_es, n = check_evalscript(args.objdump, path)
+        failures += failures_es
+        checked += n
     if failures:
         print(f"\nFAIL: {len(failures)} problem(s). The per-byte script loop is not kept inside one "
               f"{LINE}-byte line; check that bdkSetLoopAlignment() (cmake/BDKBuildSetting.cmake) applied "
@@ -145,7 +216,8 @@ def main():
         for f in failures:
             print("  " + f)
         return 1
-    print(f"OK: {checked} destructor copies, loop {ALIGN}-byte aligned and inside one {LINE}-byte line")
+    print(f"OK: {checked} copies; every destructor loop, and all EvalScript loops but at most "
+          f"{EVALSCRIPT_UNALIGNED_MAX}, {ALIGN}-byte aligned and inside one {LINE}-byte line")
     return 0
 
 

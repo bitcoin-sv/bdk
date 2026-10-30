@@ -140,9 +140,10 @@ jobs:
           cmake --build build --parallel 4
           ctest --output-on-failure --test-dir build
 
-      ## GCC only (cmake/BDKBuildSetting.cmake, bdkSetLoopAlignment): the per-byte
-      ## script loop in the CTxIn/CTxOut vector destructors must start on a 32-byte
-      ## boundary in every copy shipped in the gobdk archive
+      ## GCC only (cmake/BDKBuildSetting.cmake, bdkSetLoopAlignment and
+      ## bdkSetEvalScriptLoopAlignment): the per-byte script loop must start on a
+      ## 32-byte boundary in every copy of the CTxIn/CTxOut vector destructors shipped
+      ## in the gobdk archive, and in all of EvalScript's copies but the cold one
       - name: Check the script loop alignment in the gobdk archive
         if: runner.os == 'Linux'
         timeout-minutes: 5

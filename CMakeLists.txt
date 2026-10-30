@@ -47,7 +47,8 @@ option(BDK_INSTALL_BSV_HEADERS "Install Bitcoin SV headers and bundled support f
 option(BDK_ENABLE_CLANG_TIDY "Run clang-tidy on core/, module/ and test/ sources as part of the build" OFF)
 # Upstream-style warning set is always on for first-party C++ (cmake/BDKBuildSetting.cmake); this adds -Werror
 option(BDK_WARNINGS_AS_ERRORS "Treat compiler warnings in core/, module/ and test/ sources as errors" OFF)
-# GCC only: start the per-byte script loop on a 32-byte boundary (cmake/BDKBuildSetting.cmake, bdkSetLoopAlignment)
+# GCC only: start the per-byte script loop in the CTxIn/CTxOut vector destructors and EvalScript on a 32-byte
+# boundary (cmake/BDKBuildSetting.cmake, bdkSetLoopAlignment and bdkSetEvalScriptLoopAlignment)
 option(BDK_ALIGN_LOOPS "Align loops to 32 bytes under GCC, including low-trip-count ones" ON)
 
 # Language binding modules are all built by default. Activate one will deactivate other

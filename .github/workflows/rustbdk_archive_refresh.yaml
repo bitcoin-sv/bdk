@@ -206,9 +206,10 @@ jobs:
           ls -l "$BDK_LIB_DIR"
           test -f "$BDK_LIB_DIR/libbdkffi_${OS_ARCH}.a"
 
-      ## GCC only (cmake/BDKBuildSetting.cmake, bdkSetLoopAlignment): the per-byte
-      ## script loop in the CTxIn/CTxOut vector destructors must start on a 32-byte
-      ## boundary in every copy shipped in the libbdkffi archive
+      ## GCC only (cmake/BDKBuildSetting.cmake, bdkSetLoopAlignment and
+      ## bdkSetEvalScriptLoopAlignment): the per-byte script loop must start on a
+      ## 32-byte boundary in every copy of the CTxIn/CTxOut vector destructors shipped
+      ## in the libbdkffi archive, and in all of EvalScript's copies but the cold one
       - name: Check the script loop alignment in the libbdkffi archive
         if: runner.os == 'Linux'
         timeout-minutes: 5
