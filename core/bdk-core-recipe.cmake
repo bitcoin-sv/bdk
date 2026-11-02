@@ -125,6 +125,8 @@ function(bdk_add_core_library target)
   endif()
   ## first-party sources get the warning set (+ -Werror), bitcoin-sv sources keep upstream's
   bdkApplySourceWarningPolicy()
+  ## GCC only: align the script-code destructor loops inlined into EvalScript
+  bdkSetEvalScriptLoopAlignment()
   if(WIN32)
     target_link_libraries(${target} PRIVATE Crypt32.lib Ws2_32)
   endif()

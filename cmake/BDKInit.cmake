@@ -132,6 +132,7 @@ macro(bdkInitCMake)
   include(BDKBuildSetting)
   bdkSetCompilationOptions()
   bdkSetThreadSafetyAnnotations()
+  bdkSetLoopAlignment()
   bdkSetOutputDirectories()
   bdkSetBuildVersion()
 
