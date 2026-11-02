@@ -595,6 +595,7 @@ BOOST_AUTO_TEST_CASE(effective_cpu_count_ignores_the_calling_threads_mask)
             CPU_ZERO(&mask);
             if(sched_getaffinity(0, sizeof(mask), &mask) != 0)
                 return;
+
             int first = 0;
             while(first < CPU_SETSIZE && !CPU_ISSET(first, &mask))
                 ++first;
@@ -652,6 +653,7 @@ BOOST_AUTO_TEST_CASE(cgroup_cpu_limit_after_the_main_thread_exits)
         BOOST_TEST_MESSAGE("no cgroup directory with a cpu controller here");
         return;
     }
+
     const TempRoot root;
     std::filesystem::create_directory_symlink("/proc", root.Path() / "proc");
     const std::filesystem::path cgroupDir = std::filesystem::path(*dir).relative_path();

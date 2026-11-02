@@ -60,6 +60,7 @@ static std::optional<size_t> AffinityCpuCount()
     static_assert(sizeof(mask) * CHAR_BIT == MAX_AFFINITY_CPUS);
     if(sched_getaffinity(getpid(), sizeof(mask), mask.data()) != 0)
         return std::nullopt;
+
     int count = 0;
     for(const cpu_set_t& set : mask)
         count += CPU_COUNT(&set);
@@ -84,6 +85,7 @@ static std::optional<std::string> ReadFile(const std::filesystem::path& path)
     const std::ifstream in(path, std::ios::binary);
     if(!in)
         return std::nullopt;
+
     std::ostringstream content;
     // A read error (EISDIR, EIO) ends the copy and sets failbit on `content`,
     // not on `in`. So does copying nothing: an empty file is no data either,
@@ -91,6 +93,7 @@ static std::optional<std::string> ReadFile(const std::filesystem::path& path)
     content << in.rdbuf();
     if(!content)
         return std::nullopt;
+
     return content.str();
 }
 
@@ -106,6 +109,7 @@ static std::vector<std::string_view> Split(std::string_view text, char sep)
                                                                   : end - start));
         if(end == std::string_view::npos)
             return parts;
+
         start = end + 1;
     }
 }
@@ -146,6 +150,7 @@ static std::optional<std::string_view> SingleLine(std::string_view content)
     const size_t newline = content.find('\n');
     if(newline == std::string_view::npos)
         return std::nullopt;
+
     return content.substr(0, newline);
 }
 
@@ -160,6 +165,7 @@ static bool HasPathPrefix(std::string_view path, std::string_view root)
 {
     if(root.size() == 1)
         return true;
+
     return path.starts_with(root)
         && (path.size() == root.size() || path[root.size()] == '/');
 }
@@ -178,16 +184,19 @@ static std::optional<std::string> UnescapeMountPath(std::string_view text)
         }
         if(i + 3 >= text.size())
             return std::nullopt;
+
         int value = 0;
         for(size_t k = 1; k <= 3; ++k)
         {
             const char c = text[i + k];
             if(c < '0' || c > '7')
                 return std::nullopt;
+
             value = (value * 8) + (c - '0');
         }
         if(value > MAX_ESCAPED_BYTE)
             return std::nullopt;
+
         out.push_back(static_cast<char>(value));
         i += 3;
     }
@@ -206,16 +215,19 @@ std::optional<CpuCgroup> bsv::internal::FindCpuCgroup(std::string_view cgroupFil
     {
         if(!complete)
             return std::nullopt;
+
         const size_t first = line.find(':');
         const size_t second = first == std::string_view::npos ? first
                                                               : line.find(':', first + 1);
         if(second == std::string_view::npos)
             return std::nullopt;
+
         const std::string_view hierarchy = line.substr(0, first);
         const std::string_view controllers = line.substr(first + 1, second - first - 1);
         const std::string_view path = line.substr(second + 1);
         if(path.empty() || path[0] != '/')
             return std::nullopt;
+
         if(hierarchy == "0")
             v2 = CpuCgroup{.version = CgroupVersion::V2, .path = std::string(path)};
         else if(ContainsCpu(controllers))
@@ -243,23 +255,28 @@ std::optional<std::string> bsv::internal::FindCpuCgroupDir(std::string_view moun
             const size_t space = line.find(' ');
             if(space == std::string_view::npos)
                 return std::nullopt;
+
             const std::string_view field = line.substr(0, space);
             line.remove_prefix(space + 1);
             return field;
         };
         if(!next() || !next() || !next()) // ID, parent ID, major:minor
             return std::nullopt;
+
         const auto root = next();
         if(!root || root->empty() || (*root)[0] != '/')
             return std::nullopt;
+
         const auto mountPoint = next();
         if(!mountPoint)
             return std::nullopt;
+
         for(;;)
         { // options and optional fields, up to " - "
             const size_t space = line.find(' ');
             if(space == std::string_view::npos || space + 3 >= line.size())
                 return std::nullopt;
+
             if(line.substr(space, 3) == " - ")
             {
                 line.remove_prefix(space + 3);
@@ -270,12 +287,14 @@ std::optional<std::string> bsv::internal::FindCpuCgroupDir(std::string_view moun
         const auto fsType = next();
         if(!fsType)
             return std::nullopt;
+
         if(cgroup.version == CgroupVersion::V1)
         {
             if(*fsType != "cgroup")
                 continue;
             if(!next()) // source
                 return std::nullopt;
+
             if(!ContainsCpu(line)) // super options, the rest of the line
                 continue;
         }
@@ -287,6 +306,7 @@ std::optional<std::string> bsv::internal::FindCpuCgroupDir(std::string_view moun
         const auto unescapedRoot = UnescapeMountPath(*root);
         if(!unescapedRoot)
             return std::nullopt;
+
         if(!HasPathPrefix(cgroup.path, *unescapedRoot))
             continue;
         std::string_view rel = std::string_view(cgroup.path)
@@ -298,6 +318,7 @@ std::optional<std::string> bsv::internal::FindCpuCgroupDir(std::string_view moun
         const auto unescapedMountPoint = UnescapeMountPath(*mountPoint);
         if(!unescapedMountPoint)
             return std::nullopt;
+
         // Concatenated, not joined with operator/: the matching above is
         // byte-wise and lexical, and so is the result.
         return *unescapedMountPoint + std::string(rel);
@@ -315,9 +336,11 @@ static double QuotaPerPeriod(int64_t quota, int64_t period)
     {
         if(quota == 0)
             return std::numeric_limits<double>::quiet_NaN();
+
         return quota > 0 ? std::numeric_limits<double>::infinity()
                          : -std::numeric_limits<double>::infinity();
     }
+
     return static_cast<double>(quota) / static_cast<double>(period);
 }
 
@@ -328,16 +351,20 @@ std::optional<double> bsv::internal::ParseV2Limit(std::string_view cpuMax)
     const size_t space = cpuMax.find(' ');
     if(space == std::string_view::npos)
         return std::nullopt;
+
     if(cpuMax.substr(0, space) == "max")
         return std::nullopt;
+
     const auto periodLine = SingleLine(cpuMax.substr(space + 1));
     if(!periodLine)
         return std::nullopt;
+
     int64_t quota{};
     int64_t period{};
     if(!ParseInt64(std::string(cpuMax.substr(0, space)), &quota)
        || !ParseInt64(std::string(*periodLine), &period))
         return std::nullopt;
+
     return QuotaPerPeriod(quota, period);
 }
 
@@ -348,6 +375,7 @@ static std::optional<int64_t> ParseV1Number(std::string_view content)
     int64_t value{};
     if(!line || !ParseInt64(std::string(*line), &value))
         return std::nullopt;
+
     return value;
 }
 
@@ -358,9 +386,11 @@ std::optional<double> bsv::internal::ParseV1Limit(std::string_view quota,
     const auto quotaValue = ParseV1Number(quota);
     if(!quotaValue || *quotaValue < 0)
         return std::nullopt; // negative, usually -1: no limit
+
     const auto periodValue = ParseV1Number(period);
     if(!periodValue)
         return std::nullopt;
+
     return QuotaPerPeriod(*quotaValue, *periodValue);
 }
 
@@ -371,6 +401,7 @@ static std::optional<std::string> ReadValueFile(const std::filesystem::path& pat
     auto content = ReadFile(path);
     if(content && content->size() > MAX_VALUE_FILE_SIZE)
         return std::nullopt;
+
     return content;
 }
 
@@ -406,6 +437,7 @@ static std::optional<ProcFiles> ReadProcFiles(const std::filesystem::path& root)
         auto cgroup = ReadFile(root / dir / "cgroup");
         if(!cgroup)
             return std::nullopt;
+
         return ProcFiles{std::move(*cgroup), std::move(*mountinfo)};
     }
     return std::nullopt;
@@ -416,12 +448,15 @@ std::optional<double> bsv::internal::CgroupCpuLimit(const std::filesystem::path&
     const auto files = ReadProcFiles(root);
     if(!files)
         return std::nullopt;
+
     const auto cgroup = FindCpuCgroup(files->cgroup);
     if(!cgroup)
         return std::nullopt;
+
     const auto dir = FindCpuCgroupDir(files->mountinfo, *cgroup);
     if(!dir)
         return std::nullopt;
+
     // `dir` is absolute; operator/ would let it replace `root`.
     const std::filesystem::path cgroupDir = root
                                           / std::filesystem::path(*dir).relative_path();
@@ -431,10 +466,12 @@ std::optional<double> bsv::internal::CgroupCpuLimit(const std::filesystem::path&
         const auto cpuMax = ReadValueFile(cgroupDir / "cpu.max");
         return cpuMax ? ParseV2Limit(*cpuMax) : std::nullopt;
     }
+
     const auto quota = ReadValueFile(cgroupDir / "cpu.cfs_quota_us");
     const auto period = ReadValueFile(cgroupDir / "cpu.cfs_period_us");
     if(!quota || !period)
         return std::nullopt;
+
     return ParseV1Limit(*quota, *period);
 }
 
@@ -442,6 +479,7 @@ size_t bsv::internal::LimitCpuCount(size_t cpus, std::optional<double> cgroupLim
 {
     if(!cgroupLimit)
         return cpus;
+
     const double limit = std::max(std::ceil(*cgroupLimit), 2.0);
     return limit < static_cast<double>(cpus) ? static_cast<size_t>(limit) : cpus;
 }
