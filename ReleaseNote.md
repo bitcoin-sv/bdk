@@ -23,7 +23,7 @@ installed alongside the package (`CMakeLists.txt`).
   Now aligned: both destructors, and `EvalScript`'s copies on the `OP_CHECKSIG` path and
   both `OP_CHECKMULTISIG` copies. Not aligned: the copy on `EvalScript`'s early-return path,
   which GCC treats as cold and which runs at most once per failing script. On CI-built
-  archives no loop on these paths crosses a line, Zen 3 is flat across placements, and
+  archives no hot copy of the loop crosses a line, Zen 3 is flat across placements, and
   Graviton4 was unchanged by the destructor alignment (the `EvalScript` threshold was
   benchmarked on x86-64 only). Two effects remain, on Sapphire Rapids only and neither a
   line crossing: `EvalScript` on large script code differs by about 8% between

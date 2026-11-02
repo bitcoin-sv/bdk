@@ -330,8 +330,8 @@ endfunction()
 #### 4000 aligns the OP_CHECKSIG copy and both OP_CHECKMULTISIG copies, with 2.7x
 #### margin over the lowest (0.0665%, needs 1504). The fourth copy, on the
 #### early-return path, is in a block GCC treats as cold and is never aligned at
-#### any threshold; it runs at most once per failing script. interpreter.cpp
-#### only.
+#### any threshold, so it can cross a line; it runs at most once per failing
+#### script. interpreter.cpp only.
 #### Source properties are directory-scoped: call from the directory that builds
 #### the bdk_core variant, after bdkApplySourceWarningPolicy() (which sets
 #### COMPILE_OPTIONS on every bitcoin-sv source).
