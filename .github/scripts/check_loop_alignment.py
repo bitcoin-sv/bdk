@@ -13,12 +13,14 @@ if it would cross a 64-byte line at any start the section alignment permits.
 The same loop is inlined into EvalScript, which destroys the script code after
 each signature check (interpreter.cpp built with --param=align-threshold=4000,
 bdkSetEvalScriptLoopAlignment). EvalScript must hold exactly EVALSCRIPT_LOOPS
-copies, and at most one of them may be unaligned: the copy on the early-return
-path, which GCC places in a block it treats as cold and never aligns at any
-threshold. Which copy that is depends on block order, so the rule counts
-rather than naming positions; a silent pass would need GCC to treat a hot copy
-as cold and the cold copy to land aligned by chance. A different count fails,
-so a compiler or bitcoin-sv change gets looked at rather than passing.
+copies. Every aligned copy gets the destructors' check, so it also fails if it
+would cross a 64-byte line. At most one copy may be unaligned, and it is exempt
+from both checks: the copy on the early-return path, which GCC places in a
+block it treats as cold and never aligns at any threshold. Which copy that is
+depends on block order, so the rule counts rather than naming positions; a
+silent pass would need GCC to treat a hot copy as cold and the cold copy to
+land aligned by chance. A different count fails, so a compiler or bitcoin-sv
+change gets looked at rather than passing.
 
 Usage: check_loop_alignment.py [--objdump PATH] FILE...  (ELF, x86-64 or aarch64)
 """
@@ -138,6 +140,24 @@ def crossing_starts(align, start, end):
     return [p for p in range(0, LINE, align) if (p + start) // LINE != (p + end - 1) // LINE]
 
 
+def check_copy(where, label, align, start, end):
+    """Print one copy of the loop and return its failures: not 32-byte
+    aligned, or crossing a 64-byte line at any start the section alignment
+    permits. Every copy that must be aligned goes through here."""
+    cross = crossing_starts(align, start, end)
+    print(f"{where}: loop +{start:#x}..+{end:#x} ({end - start} B){label}, section align {align}, "
+          f"start mod {ALIGN} = {start % ALIGN}, crosses a {LINE}-byte line at section "
+          f"start(s) mod {LINE}: {cross or 'none'}")
+    failures = []
+    if start % ALIGN or align < ALIGN:
+        failures.append(f"{where}: loop at +{start:#x} in a {align}-byte aligned section is not "
+                        f"{ALIGN}-byte aligned")
+    if cross:
+        failures.append(f"{where}: loop at +{start:#x} ({end - start} B) crosses a {LINE}-byte line when "
+                        f"the section starts at {', '.join(map(str, cross))} mod {LINE}")
+    return failures
+
+
 def check_evalscript(tool, path):
     """Failures and loop count for EvalScript's copies of the loop in `path`."""
     failures, checked = [], 0
@@ -151,19 +171,20 @@ def check_evalscript(tool, path):
         loops = byte_loops(insns, size)
         unaligned = []
         for start, end in loops:
-            cross = crossing_starts(align, start, end)
             checked += 1
-            print(f"{where}: loop +{start:#x}..+{end:#x} ({end - start} B) in .text, section align {align}, "
-                  f"start mod {ALIGN} = {start % ALIGN}, crosses a {LINE}-byte line at section "
-                  f"start(s) mod {LINE}: {cross or 'none'}")
+            copy_failures = check_copy(where, " in .text", align, start, end)
+            # the cold early-return copy is never aligned; it is exempt from
+            # both checks, and the count below allows at most one such copy
             if start % ALIGN or align < ALIGN:
-                unaligned.append((start, cross))
+                unaligned.append(start)
+            else:
+                failures += copy_failures
         if len(loops) != EVALSCRIPT_LOOPS:
             failures.append(f"{where}: {len(loops)} per-byte loops, expected {EVALSCRIPT_LOOPS}. Check which "
                             "are on the validation path before changing EVALSCRIPT_LOOPS")
         if len(unaligned) > EVALSCRIPT_UNALIGNED_MAX:
             failures.append(f"{where}: {len(unaligned)} loops not {ALIGN}-byte aligned (at "
-                            f"{', '.join(f'+{s:#x}' for s, _ in unaligned)}), at most "
+                            f"{', '.join(f'+{s:#x}' for s in unaligned)}), at most "
                             f"{EVALSCRIPT_UNALIGNED_MAX} allowed; check that interpreter.cpp got "
                             "--param=align-threshold (bdkSetEvalScriptLoopAlignment)")
     return failures, checked
@@ -194,25 +215,16 @@ def main():
                     failures.append(f"{where}: no per-byte loop found. If bitcoin-sv's prevector::erase "
                                     "no longer loops, drop BDK_ALIGN_LOOPS and this check")
                     continue
-                start, end = loop
-                cross = crossing_starts(align, start, end)
                 checked += 1
-                print(f"{where}: loop +{start:#x}..+{end:#x} ({end - start} B), section align {align}, "
-                      f"start mod {ALIGN} = {start % ALIGN}, crosses a {LINE}-byte line at function "
-                      f"start(s) mod {LINE}: {cross or 'none'}")
-                if start % ALIGN or align < ALIGN:
-                    failures.append(f"{where}: loop at +{start:#x} in a {align}-byte aligned section is not "
-                                    f"{ALIGN}-byte aligned")
-                if cross:
-                    failures.append(f"{where}: loop crosses a {LINE}-byte line when the function starts at "
-                                    f"{', '.join(map(str, cross))} mod {LINE}")
+                failures += check_copy(where, "", align, *loop)
         failures_es, n = check_evalscript(args.objdump, path)
         failures += failures_es
         checked += n
     if failures:
         print(f"\nFAIL: {len(failures)} problem(s). The per-byte script loop is not kept inside one "
               f"{LINE}-byte line; check that bdkSetLoopAlignment() (cmake/BDKBuildSetting.cmake) applied "
-              "-falign-loops=32 --param=align-loop-iterations=1 to this GCC build.")
+              "-falign-loops=32 --param=align-loop-iterations=1 to this GCC build, and "
+              "bdkSetEvalScriptLoopAlignment() --param=align-threshold to interpreter.cpp.")
         for f in failures:
             print("  " + f)
         return 1
