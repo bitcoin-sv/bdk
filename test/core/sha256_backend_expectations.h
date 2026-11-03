@@ -17,7 +17,6 @@
 
 #if (defined(__x86_64__) || defined(__amd64__))                                          \
     && (defined(__GNUC__) || defined(__clang__))                                         \
-    && !defined(_MSC_VER)                                                                \
     && !defined(__EMSCRIPTEN__)
 #include <cpuid.h>
 #endif
@@ -30,9 +29,7 @@ namespace sha256_test
     // implements FEAT_SHA256.
     inline std::string_view ExpectedBestBackend()
     {
-#if (defined(__GNUC__) || defined(__clang__))                                            \
-    && !defined(_MSC_VER)                                                                \
-    && !defined(__EMSCRIPTEN__)
+#if (defined(__GNUC__) || defined(__clang__)) && !defined(__EMSCRIPTEN__)
 #if defined(__x86_64__) || defined(__amd64__)
         uint32_t eax{}, ebx{}, ecx{}, edx{};
         const bool sse41 = __get_cpuid(1, &eax, &ebx, &ecx, &edx) != 0

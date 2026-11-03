@@ -19,10 +19,6 @@
 
 #include <boost/test/unit_test.hpp>
 
-#if defined(_MSC_VER) && !defined(__clang__)
-#include <intrin.h>
-#endif
-
 #include "chainparamsbase.h"
 #include "hash.h"
 #include "key.h"
@@ -77,11 +73,7 @@ namespace
     // NOLINTNEXTLINE(misc-const-correctness, readability-non-const-parameter)
     void StoreFlagRelaxed(int32_t* flag, const int32_t value)
     {
-#if defined(_MSC_VER) && !defined(__clang__)
-        __iso_volatile_store32(reinterpret_cast<volatile __int32*>(flag), value);
-#else
         __atomic_store_n(flag, value, __ATOMIC_RELAXED);
-#endif
     }
 
     bool IsCancelled(const TxError& r)

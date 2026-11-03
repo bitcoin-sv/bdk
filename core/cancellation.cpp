@@ -1,9 +1,5 @@
 #include <memory>
 
-#if defined(_MSC_VER) && !defined(__clang__)
-#include <intrin.h>
-#endif
-
 #include <cancellation.hpp>
 
 namespace
@@ -14,11 +10,7 @@ namespace
     // rather than through std::atomic_ref, which needs a non-const object and libc++ 19.
     int32_t LoadRelaxed(const int32_t* flag)
     {
-#if defined(_MSC_VER) && !defined(__clang__)
-        return __iso_volatile_load32(reinterpret_cast<const volatile __int32*>(flag));
-#else
         return __atomic_load_n(flag, __ATOMIC_RELAXED);
-#endif
     }
 
     // A cancellation source whose state lives in caller memory.
