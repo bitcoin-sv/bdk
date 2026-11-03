@@ -175,8 +175,8 @@ committed static archives — one per supported platform/arch:
 
 The native CI matrix refreshes all three: Linux x86_64, Linux aarch64 and macOS arm64. The GoBDK module no longer ships a macOS Intel (x86_64) archive.
 
-There is **no Windows archive** (Windows is experimental/unsupported — see
-[build.md](build.md#windows-experimental-unsupported)).
+There is **no Windows archive**: native Windows builds are not supported (see
+[build.md](build.md#windows)).
 
 CI can rebuild and **auto-commit** these archives, but only under a specific gate — **not** on
 every build. The gate lives in the single `commit-built-artifacts` job of `build_bdk.yaml`, which
