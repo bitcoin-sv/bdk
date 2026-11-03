@@ -162,7 +162,6 @@ jobs:
           echo "Successfully checked out bitcoin-sv commit ${{ steps.define-bitcoin-sv-commit.outputs.bsvcommit }} to bitcoin-sv"
 
       - name: Prepare Environment and Dependencies Unix
-        if: runner.os != 'Windows'
         run: |
           echo "BSV_ROOT=${{ github.workspace }}/bitcoin-sv" >> $GITHUB_ENV
           echo "OS_ARCH=$(uname -s | tr 'A-Z' 'a-z')_$(uname -m)" >> $GITHUB_ENV
@@ -196,7 +195,6 @@ jobs:
         run: python3 scripts/check_rustbdk_independence.py
 
       - name: Build libbdkffi Unix
-        if: runner.os != 'Windows'
         run: |
           mkdir -p "build"
           rm -fR ./build/* && rm -fR ./module/rustbdk/bdk-sys/lib/*
@@ -207,7 +205,6 @@ jobs:
           test -f "$BDK_LIB_DIR/libbdkffi_${OS_ARCH}.a"
 
       - name: Upload rustbdk static library artifact
-        if: runner.os != 'Windows'
         uses: actions/upload-artifact@v4
         with:
           name: libbdkffi_${{ env.OS_ARCH }}.a
