@@ -10,8 +10,6 @@ if(FindOpenSSLHelper_Include)
 endif()
 set(FindOpenSSLHelper_Include TRUE)
 
-## For Windows, download binary prebuilt OpenSSL and set %OPENSSL_ROOT_DIR% pointing to the root of the installed directory
-## Take the first suggestion from https://wiki.openssl.org/index.php/Binaries. splroweb
 ## For Linux, build from source using the command :
 ##     ./config shared --prefix=/path/to/installed/directory --openssldir=/path/to/installed/directory && make depend && make -j8 && make test && make install
 ## set $OPENSSL_ROOT_DIR pointing to the root of the installed directory
@@ -53,7 +51,6 @@ python3 -m http.server
 #### Preset some variable to find and import OpenSSL
 function(presetOpenSSLVariable)##########################################################################
   set(OPENSSL_USE_STATIC_LIBS ON CACHE BOOL "Preset variable to find OpenSSL" FORCE)## Force to use static version
-  set(OPENSSL_MSVC_STATIC_RT ON CACHE BOOL "Preset variable to find OpenSSL" FORCE)## If turn it ON, should change the windows compiler flag to build the solution in MT mode
 endfunction()
 
 #### Help to find OpenSSL. Need to define the env variable OPENSSL_ROOT_DIR pointing to the root of installed directory

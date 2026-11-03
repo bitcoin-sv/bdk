@@ -98,7 +98,6 @@ jobs:
         ## Download and setup environment varialbe
         ## BSV_ROOT, BOOST_ROOT, OPENSSL_ROOT_DIR
       - name: Prepare Environment and Dependencies Unix
-        if: runner.os != 'Windows'
         run: |
           echo "BSV_ROOT=${{ github.workspace }}/bitcoin-sv" >> $GITHUB_ENV
           python -m pip install --upgrade pip --break-system-packages
@@ -131,7 +130,6 @@ jobs:
           fi
 
       - name: Build and Test BDK Unix (all linux and mac arm)
-        if: runner.os != 'Windows'
         run: |
           mkdir -p "build"
           rm -fR ./build/* && rm -fR test/golang/vendor/*
@@ -141,7 +139,6 @@ jobs:
           ctest --output-on-failure --test-dir build
 
       - name: Report SHA-256 backend and throughput
-        if: runner.os != 'Windows'
         run: |
           uname -m
           if [[ -r /proc/cpuinfo ]]; then
@@ -155,7 +152,7 @@ jobs:
 
       - name: Check GoBDK has changed
         id: gobdk_change
-        if: runner.os != 'Windows' && github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch'
         run: |
           changed_files=$(git diff --name-only -- module/gobdk/bdkcgo/libGoBDK_*.a)
           git status
@@ -175,14 +172,14 @@ jobs:
         ## writes one job output last-writer-wins, so a leg that changed nothing can
         ## overwrite a leg that did.
       - name: Publish gobdk change status for this leg
-        if: runner.os != 'Windows' && github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch'
         run: |
           printf 'os_arch=%s\nmodified=%s\n' \
             "${{ env.OS_ARCH }}" "${{ steps.gobdk_change.outputs.modified }}" \
             > "gobdk-status-${{ env.OS_ARCH }}.txt"
 
       - name: Upload gobdk change status for this leg
-        if: runner.os != 'Windows' && github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
           name: gobdk-status-${{ env.OS_ARCH }}
@@ -192,7 +189,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload GoBDK static libraries to artifact UNIX
-        if: runner.os != 'Windows' && github.event_name == 'workflow_dispatch' && steps.gobdk_change.outputs.modified == 'true'
+        if: github.event_name == 'workflow_dispatch' && steps.gobdk_change.outputs.modified == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: libGoBDK_${{ env.OS_ARCH }}.a
@@ -204,29 +201,10 @@ jobs:
       ## own log (ctest hides a passing test's output), and the per-call cost of the Go
       ## context variants over the plain call.
       - name: Print validation cancellation numbers
-        if: runner.os != 'Windows'
         continue-on-error: true
         run: |
           grep -E '^\[(cancelled_mid_script|cancelled_during_a_signature_hash)\]' build/Testing/Temporary/LastTest.log || true
           cd test/golang && go test -count=1 -timeout 10m -run '^$' -bench '^BenchmarkContextOverhead$' -benchtime=100ms Main_test.go CancelValidation_test.go
-
-      - name: Prepare Environment and Dependencies for Windows
-        if: runner.os == 'Windows'
-        run: |
-          echo "BSV_ROOT=${{ github.workspace }}\bitcoin-sv" >> $GITHUB_ENV
-          Invoke-WebRequest -Uri "https://github.com/bitcoin-sv/bdk/releases/download/depcy/dependancies_windows_x86_64.zip" -OutFile "dependancies_windows_x86_64.zip"
-          Expand-Archive -Path "dependancies_windows_x86_64.zip" -DestinationPath "."
-
-      ## On windows, build and test only core C++ module
-      - name: Build and Test BDK Windows
-        if: runner.os == 'Windows'
-        run: |
-          mkdir "build"
-          cmake -G"Visual Studio 17 2022" -A x64 -B "build" -S "." -DBDK_BUILD_MODULES=OFF -DBOOST_ROOT="./dependancies_windows_x86_64/boost_1.85.0" -DOPENSSL_ROOT_DIR="./dependancies_windows_x86_64/openssl_3.0.14"
-          cmake --build build --config Debug --parallel 4
-          ctest --output-on-failure --test-dir build -C Debug --parallel 4
-          cmake --build build --config Release --parallel 4
-          ctest --output-on-failure --test-dir build -C Release --parallel 4
 
   ## ThreadSanitizer check that the first SHA-256 backend selection cannot race
   ## with hashing: GCC, Linux, both architectures. BDK force-sets CMAKE_CXX_FLAGS,

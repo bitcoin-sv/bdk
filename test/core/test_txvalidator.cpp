@@ -1605,16 +1605,10 @@ BOOST_AUTO_TEST_CASE(forkid_bit_uses_original_digest_before_uahf)
 // ctest runs them as their own entry (`--run_test=@timing`, see
 // test/core/CMakeLists.txt). They time CPU work in small samples, so they
 // skip in a non-optimised build (no NDEBUG), where debug code changes the
-// ratios they bound, and on Windows, whose process CPU clock (GetProcessTimes)
-// ticks every ~15.6 ms, too coarse for samples of a few milliseconds.
+// ratios they bound.
 static boost::test_tools::assertion_result OptimisedBuild(boost::unit_test::test_unit_id)
 {
-#if defined(_WIN32)
-    boost::test_tools::assertion_result skip(false);
-    skip.message() << "timing test skipped: Windows process CPU time is too coarse for "
-                      "these samples";
-    return skip;
-#elif !defined(NDEBUG)
+#if !defined(NDEBUG)
     boost::test_tools::assertion_result skip(false);
     skip.message() << "timing test skipped: not an optimised (NDEBUG) build";
     return skip;
@@ -1626,19 +1620,11 @@ static boost::test_tools::assertion_result OptimisedBuild(boost::unit_test::test
 // CPU time of the whole process, every thread, user plus kernel, in seconds.
 // Process, not thread, time: work moved to helper threads must still count.
 // Wall-clock would charge a test for time spent descheduled on a busy runner.
-// Not implemented on Windows: the timing tests skip there (see above), and no
-// CI job runs on Windows today.
 static double ProcessCpuSeconds()
 {
-#ifdef _WIN32
-    BOOST_FAIL(
-        "ProcessCpuSeconds() is not implemented on Windows; the timing tests skip there");
-    return 0.0;
-#else
     timespec now{};
     BOOST_REQUIRE(clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &now) == 0);
     return static_cast<double>(now.tv_sec) + (static_cast<double>(now.tv_nsec) * 1e-9);
-#endif
 }
 
 // An N-input tx whose input `index` spends a bare K-of-K OP_CHECKMULTISIG,

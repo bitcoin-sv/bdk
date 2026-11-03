@@ -11,25 +11,22 @@
 ##
 ## Run to build/test/install
 ##
-## On Windows
-##   cmake -G"Visual Studio 17 2022" -A x64 -DBDK_BUILD_MODULES=OFF ..\bdk && cmake --build . --target ALL_BUILD --config Debug && cmake --build . --target ALL_BUILD --config Release && ctest -C Debug && ctest -C Release && cpack -G NSIS -C Release && cpack -G NSIS -C Debug
-##
-## Windows alternative with MSBuild parallele:
-##   cmake -G"Visual Studio 17 2022" -A x64 -DBDK_BUILD_MODULES=OFF ..\bdk && msbuild bdk.sln -maxcpucount:4 /p:Configuration=Debug && msbuild bdk.sln -maxcpucount:4 /p:Configuration=Release && ctest -C Debug && ctest -C Release && cpack -G NSIS -C Release && cpack -G NSIS -C Release
-##   cmake -G"Visual Studio 17 2022" -A x64 -DBDK_BUILD_MODULES=OFF ..\bdk && msbuild bdk.sln -v:q -maxcpucount:4 /p:Configuration=Debug && msbuild bdk.sln  -v:q -maxcpucount:4 /p:Configuration=Release && ctest -C Debug && ctest -C Release && cpack -G NSIS -C Release && cpack -G NSIS -C Release
-##
 ## On Linux (Ubuntu)
 ##   cmake ../bdk -DCMAKE_BUILD_TYPE=Debug -DCUSTOM_SYSTEM_OS_NAME=Ubuntu; time -p make -j8 ; ctest ; make install; cpack -G TGZ
 ##   R_=buildrelease;D_=builddebug;OS_=Ubuntu; mkdir $R_ $D_;cd $R_; cmake ../../bdk -DCUSTOM_SYSTEM_OS_NAME=$OS_;time -p make -j8;cd ../$D_;cmake ../../bdk -DCMAKE_BUILD_TYPE=Debug -DCUSTOM_SYSTEM_OS_NAME=$OS_;time -p make -j8;ctest;cd ../$R_;ctest;cpack -G TGZ;cd ../$D_;cpack -G TGZ;cd ..;
 ##
 ## Packaging :
-##   Windows : cpack -G NSIS -C Release ## Require to install NSIS
-##             cpack --config CPackSourceConfig.cmake -G ZIP
-##   Linus   : cpack -G TGZ ## use at cmake time to get the precise os type installer name : -DCUSTOM_SYSTEM_OS_NAME=Ubuntu
+##   Linux   : cpack -G TGZ ## use at cmake time to get the precise os type installer name : -DCUSTOM_SYSTEM_OS_NAME=Ubuntu
 ##             cpack --config CPackSourceConfig.cmake -G TGZ
 
 cmake_minimum_required(VERSION 3.16)
 project(bdk)
+
+## Native Windows builds (MSVC, clang-cl, MinGW) are not supported. WIN32 and
+## MSVC describe the target, so an Emscripten build on any host passes.
+if(WIN32 OR MSVC)
+  message(FATAL_ERROR "Windows is not supported; use the WASM build (module/typesbdk/wasm) on Windows hosts")
+endif()
 
 option(BDK_LOG_BSV_FILES "Log used bitcoin sv file to build" ON)
 option(BDK_BUILD_LEVELDB "Activate the build of leveldb" OFF)
@@ -141,10 +138,6 @@ set(BDK_VERSION_PATCH "0" CACHE INTERNAL "Bitcoin Development Kit patch version"
 
 set(CMAKE_INCLUDE_CURRENT_DIR ON)## Always include the current directory
 
-if(MSVC)
-  add_definitions(-D_SCL_SECURE_NO_WARNINGS -DNOMINMAX -D_SILENCE_CXX20_OLD_SHARED_PTR_ATOMIC_SUPPORT_DEPRECATION_WARNING)
-endif()
-
 ## Init CMake, find all external packages and eventually build them if necessary
 include(cmake/BDKInit.cmake)
 bdkInitCMake()
@@ -186,8 +179,6 @@ endif()
 ## (No else-branch warnings needed: the flag-hierarchy block above already
 ## forced the subordinate flags OFF, with a WARNING for each one that was ON.)
 
-## On Widows, need to download NSIS https://nsis.sourceforge.io/Download
-## Possible to do WIX generator for MSI installer
 set(BDK_CPACK_CONFIG_IN "${CMAKE_SOURCE_DIR}/cmake/BDKCPackConfig.cpack.in")
 set(BDK_CPACK_CONFIG "${CMAKE_BINARY_DIR}/BDKCPackConfig.cpack")
 configure_file(${BDK_CPACK_CONFIG_IN} ${BDK_CPACK_CONFIG} @ONLY)

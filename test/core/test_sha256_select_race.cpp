@@ -168,11 +168,7 @@ BOOST_AUTO_TEST_CASE(selected_at_load_before_threads_hash,
 
     // BDK_SHA256_FORCE_SCALAR was read at load: changing it now changes nothing
     const bool forced_at_start = sha256_test::ForcedScalar();
-#if defined(_WIN32)
-    ::_putenv_s("BDK_SHA256_FORCE_SCALAR", forced_at_start ? "0" : "1");
-#else
     ::setenv("BDK_SHA256_FORCE_SCALAR", forced_at_start ? "0" : "1", 1);
-#endif
     BOOST_TEST(bsv::SelectSha256Backend() == expected);
     sha256_test::CheckInstalledBackend(forced_at_start);
 }

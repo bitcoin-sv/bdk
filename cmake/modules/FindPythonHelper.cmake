@@ -83,13 +83,8 @@ endfunction()
 function(bdkCollectDocPythonCandidates output)
   set(_candidates "")
 
-  if(WIN32)
-    set(_py_names python.exe python3.exe)
-    set(_venv_subdir Scripts)
-  else()
-    set(_py_names python3 python)
-    set(_venv_subdir bin)
-  endif()
+  set(_py_names python3 python)
+  set(_venv_subdir bin)
 
   ## 1. Explicit user override, always wins
   if(BDK_DOC_PYTHON_EXECUTABLE)
@@ -173,11 +168,9 @@ function(HelpFindMkdocs)
     ## the one that matches. Reported for convenience, the build still goes through -m mkdocs.
     get_filename_component(_py_dir "${_py}" DIRECTORY)
     set(_launcher "")
-    foreach(_name mkdocs mkdocs.exe)
-      if(NOT _launcher AND EXISTS "${_py_dir}/${_name}")
-        set(_launcher "${_py_dir}/${_name}")
-      endif()
-    endforeach()
+    if(EXISTS "${_py_dir}/mkdocs")
+      set(_launcher "${_py_dir}/mkdocs")
+    endif()
 
     set(mkdocs_PYTHON_EXECUTABLE "${_py}" CACHE FILEPATH
         "Python interpreter providing mkdocs and the documentation markdown extensions" FORCE)

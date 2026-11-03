@@ -545,24 +545,9 @@ files, and the module CMake files. Distinguish a version requested by a workflow
 from a version assumed to exist on a runner. Run build/test commands locally in
 a disposable checkout; do not dispatch publication workflows for documentation checks.
 
-## Windows (experimental / unsupported)
+## Windows
 
-Windows is absent from the native CI matrix, and no Windows GoBDK archive is
-shipped. The following C++ configuration is experimental and is not a supported
-Rust or Go binding recipe. Run it from a Visual Studio 2022 developer command
-prompt with C++20 support and matching Boost/OpenSSL installations:
-
-```bat
-cmake -G "Visual Studio 17 2022" -A x64 -S . -B ..\build-windows ^
-  -DBUILD_MODULE_GOLANG=OFF -DBUILD_MODULE_GOLANG_INSTALL_INSOURCE=OFF ^
-  -DBUILD_MODULE_RUST=OFF -DBUILD_MODULE_RUST_INSTALL_INSOURCE=OFF ^
-  -DBSV_ROOT="C:\path\to\bitcoin-sv" ^
-  -DBOOST_ROOT="C:\path\to\boost_1.85.0" ^
-  -DOPENSSL_ROOT_DIR="C:\path\to\openssl_3.4.0"
-cmake --build ..\build-windows --config Release --parallel 4
-cd ..\build-windows
-ctest --output-on-failure -C Release
-```
-
-Replace the dependency paths with actual installations and pin bitcoin-sv as above.
-This recipe requires a Windows validation run before it can be described as tested.
+Native Windows builds are not supported. Configuring BDK for a Windows target
+(MSVC, clang-cl or MinGW) stops with an error. On a Windows host, use the
+[standalone WASM build](#the-standalone-wasm-build): it is built on Linux and runs
+on any host.

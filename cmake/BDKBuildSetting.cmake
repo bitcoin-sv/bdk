@@ -12,20 +12,10 @@ set(BDKBuildSetting_Include TRUE)
 macro(bdkSetCompilationOptions)## This has to be macro instead of a function because of add_definitions scope is local
   if(NOT BDK_SET_COMPILATION_OPTIONS_DONE)
     ## Set common compile options
-    set(CMAKE_CXX_STANDARD 20 CACHE INTERNAL "Use of C++20" FORCE)#TODO : change to C++20 when visual studio support
+    set(CMAKE_CXX_STANDARD 20 CACHE INTERNAL "Use of C++20" FORCE)
     set(CMAKE_CXX_STANDARD_REQUIRED ON CACHE INTERNAL "Require C++ standard" FORCE)
     set(CMAKE_CXX_EXTENSIONS OFF CACHE INTERNAL "Do not use C++ extension" FORCE)
     set(CMAKE_DEBUG_POSTFIX d CACHE INTERNAL "Use d as debug postfix for  targets" FORCE)
-
-    if (MSVC)
-      bdk_add_compiler_flag(/Gm- /MP /wd4251 /wd4244 /wd4307)## TODO test if DNOMINMAX can move here
-      ## Using MSVC STATIC RUNTIME)
-      ##foreach(flag_var CMAKE_CXX_FLAGS CMAKE_CXX_FLAGS_DEBUG CMAKE_CXX_FLAGS_RELEASE CMAKE_CXX_FLAGS_MINSIZEREL CMAKE_CXX_FLAGS_RELWITHDEBINFO)
-      ##  if(${flag_var} MATCHES "/MD")
-      ##    string(REGEX REPLACE "/MD" "/MT" ${flag_var} "${${flag_var}}")
-      ##  endif(${flag_var} MATCHES "/MD")
-      ##endforeach()
-    endif()
 
     if(UNIX)
       set(CMAKE_CXX_FLAGS "-fPIC -fvisibility=default" CACHE STRING "compilation flags for C++" FORCE)
@@ -55,7 +45,7 @@ function(bdkSetOutputDirectories)
 
   if(NOT DEFINED BDK_SYSTEM_BUILD_ARCHI)
     message("  SetBuildFolders : variable [BDK_SYSTEM_BUILD_ARCHI] is not defined")
-    message(FATAL_ERROR "On Windows, [BDK_SYSTEM_BUILD_ARCHI] should be defined x64 or x86")
+    message(FATAL_ERROR "[BDK_SYSTEM_BUILD_ARCHI] should be defined 64 or 32 (bdkGetOSInfo)")
   endif()
 
   if(CMAKE_BUILD_TYPE)
@@ -286,9 +276,6 @@ set(BDK_UPSTREAM_DERIVED_SOURCES
 ####     inside them (e.g. clang's -Wreturn-type on streams.h under NDEBUG, a
 ####     configuration upstream never builds).
 function(bdkApplySourceWarningPolicy)
-  if(MSVC)
-    return()
-  endif()
   get_property(_fp_all GLOBAL PROPERTY BDK_FIRST_PARTY_SRC_FILES)
   if(NOT _fp_all)
     file(GLOB_RECURSE _fp_all
