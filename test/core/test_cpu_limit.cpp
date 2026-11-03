@@ -15,6 +15,7 @@
 #include <thread>
 #include <tuple>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #ifdef NDEBUG
@@ -43,8 +44,11 @@
 // system.
 BOOST_AUTO_TEST_SUITE(container_cpu_limit)
 
+using bsv::internal::CgroupError;
 using bsv::internal::CgroupVersion;
 using bsv::internal::CpuCgroup;
+using bsv::internal::Parsed;
+using enum bsv::internal::CgroupError;
 
 // mountinfo lines as the kernel writes them.
 constexpr std::string_view
@@ -75,10 +79,54 @@ static std::string Concat(std::initializer_list<std::string_view> parts)
     return out;
 }
 
+// How a parser result reads in a failure message. Limits are compared exactly,
+// as hexadecimal floating point; every NaN reads the same.
+static std::string Describe(CgroupError error)
+{
+    switch(error)
+    {
+    case CgroupError::NoCgroup:
+        return "NoCgroup";
+    case CgroupError::MalformedFile:
+        return "MalformedFile";
+    case CgroupError::InvalidEscape:
+        return "InvalidEscape";
+    case CgroupError::IncompleteLine:
+        return "IncompleteLine";
+    }
+    return "CgroupError " + std::to_string(static_cast<int>(error));
+}
+
+static std::string Describe(const CpuCgroup& cgroup)
+{
+    return (cgroup.version == CgroupVersion::V1 ? "v1 " : "v2 ") + cgroup.path;
+}
+
+static std::string Describe(const std::string& dir) { return "dir '" + dir + "'"; }
+
+static std::string Describe(const std::optional<double>& limit)
+{
+    if(!limit)
+        return "no limit";
+
+    if(std::isnan(*limit))
+        return "limit nan";
+
+    std::ostringstream out;
+    out << "limit " << std::hexfloat << *limit;
+    return out.str();
+}
+
+template<typename T>
+static std::string Describe(const Parsed<T>& parsed)
+{
+    return std::visit([](const auto& value) { return Describe(value); }, parsed);
+}
+
 // Each proc/self/cgroup and the cgroup FindCpuCgroup finds in it.
 BOOST_AUTO_TEST_CASE(find_cpu_cgroup)
 {
-    const std::vector<std::pair<std::string, std::optional<CpuCgroup>>> cases{
+    const std::vector<std::pair<std::string, Parsed<CpuCgroup>>> cases{
         {"0::/\n", CpuCgroup{CgroupVersion::V2, "/"}},
         {"0::/system.slice/node.service\n",
          CpuCgroup{CgroupVersion::V2, "/system.slice/node.service"}},
@@ -96,32 +144,33 @@ BOOST_AUTO_TEST_CASE(find_cpu_cgroup)
         // first one counts.
         {"0::/b\n11:cpu,cpuacct:/a\n", CpuCgroup{CgroupVersion::V1, "/a"}},
         {"11:cpu,cpuacct:/a\n12:cpu:/b\n", CpuCgroup{CgroupVersion::V1, "/a"}},
-        // v2 is hierarchy 0 exactly; other hierarchies without cpu don't count.
-        {"5::/x\n", std::nullopt},
-        {"10:cpuacct:/a\n", std::nullopt},
-        {"0123:cpuacct:/a\n", std::nullopt},
-        // Malformed: a line without two colons, a blank line, a last line
-        // without its newline, a path not starting with '/', nothing at all.
-        // Each rejects the file even when a valid line follows.
-        {"not a cgroup line\n", std::nullopt},
-        {"/a/b\n0::/\n", std::nullopt},
-        {"\n0::/\n", std::nullopt},
-        {"0::/", std::nullopt},
-        {"0::relative\n", std::nullopt},
-        {"0::relative\n0::/\n", std::nullopt},
-        {"", std::nullopt},
+        // v2 is hierarchy 0 exactly; other hierarchies without cpu don't count,
+        // and neither does an empty file.
+        {"5::/x\n", NoCgroup},
+        {"10:cpuacct:/a\n", NoCgroup},
+        {"0123:cpuacct:/a\n", NoCgroup},
+        {"", NoCgroup},
+        // Malformed: a line without two colons, a blank line, a path not
+        // starting with '/'. Each rejects the file even when a valid line
+        // follows.
+        {"not a cgroup line\n", MalformedFile},
+        {"/a/b\n0::/\n", MalformedFile},
+        {"0:cpu\n0::/\n", MalformedFile},
+        {"\n0::/\n", MalformedFile},
+        {"0::relative\n", MalformedFile},
+        {"0::relative\n0::/\n", MalformedFile},
+        // A last line without its newline is incomplete, whatever it holds,
+        // unless the v1 cpu hierarchy comes first.
+        {"0::/", IncompleteLine},
+        {"0:cpu", IncompleteLine},
+        {"11:cpu:/a\n0::/", CpuCgroup{CgroupVersion::V1, "/a"}},
     };
     for(const auto& [cgroupFile, expected] : cases)
     {
         BOOST_TEST_CONTEXT("cgroup file '" << cgroupFile << "'")
         {
-            const auto actual = bsv::internal::FindCpuCgroup(cgroupFile);
-            BOOST_CHECK_EQUAL(expected.has_value(), actual.has_value());
-            if(expected && actual)
-            {
-                BOOST_CHECK(expected->version == actual->version);
-                BOOST_CHECK_EQUAL(expected->path, actual->path);
-            }
+            BOOST_CHECK_EQUAL(Describe(expected),
+                              Describe(bsv::internal::FindCpuCgroup(cgroupFile)));
         }
     }
 }
@@ -131,180 +180,183 @@ BOOST_AUTO_TEST_CASE(find_cpu_cgroup)
 BOOST_AUTO_TEST_CASE(find_cpu_cgroup_dir)
 {
     const CpuCgroup v2Root{CgroupVersion::V2, "/"};
-    const std::vector<std::tuple<std::string, CpuCgroup, std::optional<std::string>>>
-        cases{
-            {Concat({ROOT_MOUNT, CGROUP2_MOUNT}), v2Root, "/sys/fs/cgroup"},
-            {Concat({ROOT_MOUNT, CGROUP2_MOUNT}),
-             {CgroupVersion::V2, "/system.slice/node.service"},
-             "/sys/fs/cgroup/system.slice/node.service"},
-            // A space in the mount point is escaped as \040.
-            {Concat({ROOT_MOUNT,
-                     "30 23 0:26 / /sys/fs/cgroup\\040unified "
-                     "rw,nosuid,nodev,noexec,relatime shared:4 - cgroup2 cgroup2 rw\n"}),
-             v2Root,
-             "/sys/fs/cgroup unified"},
-            // A cgroup shown as /../.. lies outside the mount this namespace sees.
-            {Concat({ROOT_MOUNT, CGROUP2_MOUNT}),
-             {CgroupVersion::V2, "/../../other"},
-             std::nullopt},
-            // A mount rooted at /kubepods/podA does not contain /kubepods/podAB/ctr;
-            // the next mount, rooted at /, does.
-            {Concat({ROOT_MOUNT,
-                     "31 23 0:27 /kubepods/podA /sys/fs/cgroup-a rw,relatime shared:5 - "
-                     "cgroup2 cgroup2 rw\n",
-                     CGROUP2_MOUNT}),
-             {CgroupVersion::V2, "/kubepods/podAB/ctr"},
-             "/sys/fs/cgroup/kubepods/podAB/ctr"},
-            // A mount rooted at the cgroup itself.
-            {Concat({ROOT_MOUNT, V1_MOUNTS}),
-             {CgroupVersion::V1, "/kubepods/burstable/pod1/ctr"},
-             "/sys/fs/cgroup/cpu,cpuacct"},
-            // v1: only a cgroup mount whose super options contain "cpu" counts.
-            {Concat({ROOT_MOUNT,
-                     "42 30 0:37 /kubepods/pod1/ctr /sys/fs/cgroup/cpuset "
-                     "ro,nosuid,nodev,noexec,relatime master:18 - cgroup cgroup "
-                     "rw,cpuset\n"
-                     "41 30 0:36 /kubepods/pod1/ctr /sys/fs/cgroup/cpu,cpuacct "
-                     "ro,nosuid,nodev,noexec,relatime master:17 - cgroup "
-                     "cgroup rw,cpu,cpuacct\n"}),
-             {CgroupVersion::V1, "/kubepods/pod1/ctr"},
-             "/sys/fs/cgroup/cpu,cpuacct"},
-            {Concat({ROOT_MOUNT, CGROUP2_MOUNT}), {CgroupVersion::V1, "/"}, std::nullopt},
-            // A malformed line (no " - " separator, or no filesystem type after
-            // it), a blank line, a bad \ooo escape in the selected mount point, or
-            // an escape above \377 in the root of a cgroup2 mount makes the file
-            // unreadable even when a valid cgroup2 mount follows.
-            {Concat({ROOT_MOUNT, "31 23 0:27 / /mnt/broken rw\n", CGROUP2_MOUNT}),
-             v2Root,
-             std::nullopt},
-            {Concat({ROOT_MOUNT,
-                     "31 23 0:27 / /sys/fs/cgroup-t rw,relatime shared:5 - cgroup2\n",
-                     CGROUP2_MOUNT}),
-             v2Root,
-             std::nullopt},
-            {Concat({ROOT_MOUNT,
-                     "31 23 0:27 / /sys/fs/cgroup\\09x rw,relatime shared:5 - cgroup2 "
-                     "cgroup2 rw\n",
-                     CGROUP2_MOUNT}),
-             v2Root,
-             std::nullopt},
-            {Concat({ROOT_MOUNT, "\n", CGROUP2_MOUNT}), v2Root, std::nullopt},
-            {Concat({ROOT_MOUNT,
-                     "31 23 0:27 /x\\777 /sys/fs/cgroup-x rw,relatime shared:5 - cgroup2 "
-                     "cgroup2 rw\n",
-                     CGROUP2_MOUNT}),
-             v2Root,
-             std::nullopt},
-            // A mount whose root does not start with '/', cgroup or not, rejects
-            // the file; an nsfs bind mount is enough.
-            {Concat({ROOT_MOUNT,
-                     "31 23 0:27 kubepods /sys/fs/cgroup-k rw,relatime shared:5 - "
-                     "cgroup2 cgroup2 rw\n",
-                     CGROUP2_MOUNT}),
-             v2Root,
-             std::nullopt},
-            {Concat({ROOT_MOUNT,
-                     "41 25 0:4 net:[4026532296] /run/netns/ns1 rw shared:12 - nsfs nsfs "
-                     "rw\n",
-                     CGROUP2_MOUNT}),
-             v2Root,
-             std::nullopt},
-            // Only the selected mount's mount point is unescaped: a bad escape on
-            // a cgroup2 mount whose root does not contain the cgroup is not read.
-            {Concat({ROOT_MOUNT,
-                     "31 23 0:27 /elsewhere /mnt/bad\\09x rw,relatime shared:5 - cgroup2 "
-                     "cgroup2 rw\n",
-                     CGROUP2_MOUNT}),
-             {CgroupVersion::V2, "/kubepods/ctr"},
-             "/sys/fs/cgroup/kubepods/ctr"},
-            // A cgroup2 mount needs its filesystem type and the space after it,
-            // not the source or super options. The last line needs no newline.
-            {"22 1 259:1 / / rw,relatime shared:1 - ext4 /dev/nvme0n1p1\n"
-             "30 23 0:26 / /sys/fs/cgroup rw,nosuid,nodev,noexec,relatime shared:4 - "
-             "cgroup2 cgroup2\n",
-             v2Root,
-             "/sys/fs/cgroup"},
-            {Concat({ROOT_MOUNT, CGROUP2_MOUNT.substr(0, CGROUP2_MOUNT.size() - 1)}),
-             v2Root,
-             "/sys/fs/cgroup"},
-            {std::string(ROOT_MOUNT), v2Root, std::nullopt},
-            // A V2 cgroup with v1 cgroup mounts listed first (a hybrid host).
-            {Concat({ROOT_MOUNT, V1_CPU_MOUNT, CGROUP2_MOUNT}),
-             {CgroupVersion::V2, "/x"},
-             "/sys/fs/cgroup/x"},
-            // A v1 cgroup mount needs its source; without one the file is
-            // malformed, even when the mount is not the cpu one.
-            {Concat({ROOT_MOUNT,
-                     "40 30 0:35 / /sys/fs/cgroup/z rw - cgroup\n",
-                     V1_CPU_MOUNT}),
-             {CgroupVersion::V1, "/x"},
-             std::nullopt},
-            {Concat({ROOT_MOUNT,
-                     "40 30 0:35 / /sys/fs/cgroup/z rw - cgroup cgroup\n",
-                     V1_CPU_MOUNT}),
-             {CgroupVersion::V1, "/x"},
-             std::nullopt},
-            // Roots are unescaped only on mounts of the wanted type: a bad escape
-            // on an ext4 root is not read.
-            {Concat({"22 1 259:1 /a\\777 / rw - ext4 /dev/x rw\n", CGROUP2_MOUNT}),
-             v2Root,
-             "/sys/fs/cgroup"},
-            // A mount that can only reach the cgroup through /.. is skipped, and
-            // the next one matches.
-            {Concat({ROOT_MOUNT,
-                     "31 23 0:27 /x /m1 rw - cgroup2 cgroup2 rw\n32 23 0:28 / /m2 rw - "
-                     "cgroup2 cgroup2 rw\n"}),
-             {CgroupVersion::V2, "/x/../../y"},
-             "/m2/x/../../y"},
-            // /.. is matched on a path boundary: a directory named ..foo is inside.
-            {Concat({ROOT_MOUNT, "31 23 0:27 /x /m1 rw - cgroup2 cgroup2 rw\n"}),
-             {CgroupVersion::V2, "/x/..foo"},
-             "/m1/..foo"},
-            // The first matching mount wins.
-            {Concat({ROOT_MOUNT,
-                     "31 23 0:27 / /m1 rw - cgroup2 cgroup2 rw\n32 23 0:28 / /m2 rw - "
-                     "cgroup2 cgroup2 rw\n"}),
-             {CgroupVersion::V2, "/c"},
-             "/m1/c"},
-            // A root matches as a prefix of the cgroup, not by its length alone.
-            {Concat({ROOT_MOUNT,
-                     "31 23 0:27 /aaa /m1 rw - cgroup2 cgroup2 rw\n32 23 0:28 / /m2 rw - "
-                     "cgroup2 cgroup2 rw\n"}),
-             {CgroupVersion::V2, "/bbb/ctr"},
-             "/m2/bbb/ctr"},
-            // \ooo escapes: octal digits only, at most \377.
-            {Concat({ROOT_MOUNT,
-                     "31 23 0:27 / /m\\089 rw - cgroup2 cgroup2 rw\n",
-                     CGROUP2_MOUNT}),
-             v2Root,
-             std::nullopt},
-            {Concat({ROOT_MOUNT,
-                     "31 23 0:27 / /m\\0/0 rw - cgroup2 cgroup2 rw\n",
-                     CGROUP2_MOUNT}),
-             v2Root,
-             std::nullopt},
-            {Concat({ROOT_MOUNT,
-                     "31 23 0:27 /x\\400 /m rw - cgroup2 cgroup2 rw\n",
-                     CGROUP2_MOUNT}),
-             v2Root,
-             std::nullopt},
-            {Concat({ROOT_MOUNT, "31 23 0:27 / /m\\377 rw - cgroup2 cgroup2 rw\n"}),
-             v2Root,
-             "/m\xff"},
-            // An escaped root that contains the cgroup: \134 is a backslash.
-            {Concat({ROOT_MOUNT, "31 23 0:27 /a\\134b /m rw - cgroup2 cgroup2 rw\n"}),
-             {CgroupVersion::V2, "/a\\b/ctr"},
-             "/m/ctr"},
+    const std::vector<std::tuple<std::string, CpuCgroup, Parsed<std::string>>> cases{
+        {Concat({ROOT_MOUNT, CGROUP2_MOUNT}), v2Root, "/sys/fs/cgroup"},
+        {Concat({ROOT_MOUNT, CGROUP2_MOUNT}),
+         {CgroupVersion::V2, "/system.slice/node.service"},
+         "/sys/fs/cgroup/system.slice/node.service"},
+        // A space in the mount point is escaped as \040.
+        {Concat({ROOT_MOUNT,
+                 "30 23 0:26 / /sys/fs/cgroup\\040unified "
+                 "rw,nosuid,nodev,noexec,relatime shared:4 - cgroup2 cgroup2 rw\n"}),
+         v2Root,
+         "/sys/fs/cgroup unified"},
+        // A cgroup shown as /../.. lies outside the mount this namespace sees.
+        {Concat({ROOT_MOUNT, CGROUP2_MOUNT}),
+         {CgroupVersion::V2, "/../../other"},
+         NoCgroup},
+        // A mount rooted at /kubepods/podA does not contain /kubepods/podAB/ctr;
+        // the next mount, rooted at /, does.
+        {Concat({ROOT_MOUNT,
+                 "31 23 0:27 /kubepods/podA /sys/fs/cgroup-a rw,relatime shared:5 - "
+                 "cgroup2 cgroup2 rw\n",
+                 CGROUP2_MOUNT}),
+         {CgroupVersion::V2, "/kubepods/podAB/ctr"},
+         "/sys/fs/cgroup/kubepods/podAB/ctr"},
+        // A mount rooted at the cgroup itself.
+        {Concat({ROOT_MOUNT, V1_MOUNTS}),
+         {CgroupVersion::V1, "/kubepods/burstable/pod1/ctr"},
+         "/sys/fs/cgroup/cpu,cpuacct"},
+        // v1: only a cgroup mount whose super options contain "cpu" counts.
+        {Concat({ROOT_MOUNT,
+                 "42 30 0:37 /kubepods/pod1/ctr /sys/fs/cgroup/cpuset "
+                 "ro,nosuid,nodev,noexec,relatime master:18 - cgroup cgroup "
+                 "rw,cpuset\n"
+                 "41 30 0:36 /kubepods/pod1/ctr /sys/fs/cgroup/cpu,cpuacct "
+                 "ro,nosuid,nodev,noexec,relatime master:17 - cgroup "
+                 "cgroup rw,cpu,cpuacct\n"}),
+         {CgroupVersion::V1, "/kubepods/pod1/ctr"},
+         "/sys/fs/cgroup/cpu,cpuacct"},
+        {Concat({ROOT_MOUNT, CGROUP2_MOUNT}), {CgroupVersion::V1, "/"}, NoCgroup},
+        // A malformed line (no " - " separator, or no filesystem type after
+        // it), a blank line, a bad \ooo escape in the selected mount point, or
+        // an escape above \377 in the root of a cgroup2 mount makes the file
+        // unreadable even when a valid cgroup2 mount follows.
+        {Concat({ROOT_MOUNT, "31 23 0:27 / /mnt/broken rw\n", CGROUP2_MOUNT}),
+         v2Root,
+         MalformedFile},
+        {Concat({ROOT_MOUNT,
+                 "31 23 0:27 / /sys/fs/cgroup-t rw,relatime shared:5 - cgroup2\n",
+                 CGROUP2_MOUNT}),
+         v2Root,
+         MalformedFile},
+        {Concat({ROOT_MOUNT,
+                 "31 23 0:27 / /sys/fs/cgroup\\09x rw,relatime shared:5 - cgroup2 "
+                 "cgroup2 rw\n",
+                 CGROUP2_MOUNT}),
+         v2Root,
+         InvalidEscape},
+        {Concat({ROOT_MOUNT, "\n", CGROUP2_MOUNT}), v2Root, MalformedFile},
+        {Concat({ROOT_MOUNT,
+                 "31 23 0:27 /x\\777 /sys/fs/cgroup-x rw,relatime shared:5 - cgroup2 "
+                 "cgroup2 rw\n",
+                 CGROUP2_MOUNT}),
+         v2Root,
+         InvalidEscape},
+        // A mount whose root does not start with '/', cgroup or not, rejects
+        // the file; an nsfs bind mount is enough, with or without a cgroup2
+        // mount after it.
+        {Concat({ROOT_MOUNT,
+                 "31 23 0:27 kubepods /sys/fs/cgroup-k rw,relatime shared:5 - "
+                 "cgroup2 cgroup2 rw\n",
+                 CGROUP2_MOUNT}),
+         v2Root,
+         MalformedFile},
+        {Concat({ROOT_MOUNT,
+                 "41 25 0:4 net:[4026532296] /run/netns/ns1 rw shared:12 - nsfs nsfs "
+                 "rw\n",
+                 CGROUP2_MOUNT}),
+         v2Root,
+         MalformedFile},
+        {Concat({ROOT_MOUNT,
+                 "41 25 0:4 net:[4026532296] /run/netns/ns1 rw shared:12 - nsfs nsfs "
+                 "rw\n"}),
+         v2Root,
+         MalformedFile},
+        // Only the selected mount's mount point is unescaped: a bad escape on
+        // a cgroup2 mount whose root does not contain the cgroup is not read.
+        {Concat({ROOT_MOUNT,
+                 "31 23 0:27 /elsewhere /mnt/bad\\09x rw,relatime shared:5 - cgroup2 "
+                 "cgroup2 rw\n",
+                 CGROUP2_MOUNT}),
+         {CgroupVersion::V2, "/kubepods/ctr"},
+         "/sys/fs/cgroup/kubepods/ctr"},
+        // A cgroup2 mount needs its filesystem type and the space after it,
+        // not the source or super options. The last line needs no newline.
+        {"22 1 259:1 / / rw,relatime shared:1 - ext4 /dev/nvme0n1p1\n"
+         "30 23 0:26 / /sys/fs/cgroup rw,nosuid,nodev,noexec,relatime shared:4 - "
+         "cgroup2 cgroup2\n",
+         v2Root,
+         "/sys/fs/cgroup"},
+        {Concat({ROOT_MOUNT, CGROUP2_MOUNT.substr(0, CGROUP2_MOUNT.size() - 1)}),
+         v2Root,
+         "/sys/fs/cgroup"},
+        {std::string(ROOT_MOUNT), v2Root, NoCgroup},
+        // A V2 cgroup with v1 cgroup mounts listed first (a hybrid host).
+        {Concat({ROOT_MOUNT, V1_CPU_MOUNT, CGROUP2_MOUNT}),
+         {CgroupVersion::V2, "/x"},
+         "/sys/fs/cgroup/x"},
+        // A v1 cgroup mount needs its source; without one the file is
+        // malformed, even when the mount is not the cpu one.
+        {Concat(
+             {ROOT_MOUNT, "40 30 0:35 / /sys/fs/cgroup/z rw - cgroup\n", V1_CPU_MOUNT}),
+         {CgroupVersion::V1, "/x"},
+         MalformedFile},
+        {Concat({ROOT_MOUNT,
+                 "40 30 0:35 / /sys/fs/cgroup/z rw - cgroup cgroup\n",
+                 V1_CPU_MOUNT}),
+         {CgroupVersion::V1, "/x"},
+         MalformedFile},
+        // Roots are unescaped only on mounts of the wanted type: a bad escape
+        // on an ext4 root is not read.
+        {Concat({"22 1 259:1 /a\\777 / rw - ext4 /dev/x rw\n", CGROUP2_MOUNT}),
+         v2Root,
+         "/sys/fs/cgroup"},
+        // A mount that can only reach the cgroup through /.. is skipped, and
+        // the next one matches.
+        {Concat({ROOT_MOUNT,
+                 "31 23 0:27 /x /m1 rw - cgroup2 cgroup2 rw\n32 23 0:28 / /m2 rw - "
+                 "cgroup2 cgroup2 rw\n"}),
+         {CgroupVersion::V2, "/x/../../y"},
+         "/m2/x/../../y"},
+        // /.. is matched on a path boundary: a directory named ..foo is inside.
+        {Concat({ROOT_MOUNT, "31 23 0:27 /x /m1 rw - cgroup2 cgroup2 rw\n"}),
+         {CgroupVersion::V2, "/x/..foo"},
+         "/m1/..foo"},
+        // The first matching mount wins.
+        {Concat({ROOT_MOUNT,
+                 "31 23 0:27 / /m1 rw - cgroup2 cgroup2 rw\n32 23 0:28 / /m2 rw - "
+                 "cgroup2 cgroup2 rw\n"}),
+         {CgroupVersion::V2, "/c"},
+         "/m1/c"},
+        // A root matches as a prefix of the cgroup, not by its length alone.
+        {Concat({ROOT_MOUNT,
+                 "31 23 0:27 /aaa /m1 rw - cgroup2 cgroup2 rw\n32 23 0:28 / /m2 rw - "
+                 "cgroup2 cgroup2 rw\n"}),
+         {CgroupVersion::V2, "/bbb/ctr"},
+         "/m2/bbb/ctr"},
+        // \ooo escapes: octal digits only, at most \377.
+        {Concat({ROOT_MOUNT,
+                 "31 23 0:27 / /m\\089 rw - cgroup2 cgroup2 rw\n",
+                 CGROUP2_MOUNT}),
+         v2Root,
+         InvalidEscape},
+        {Concat({ROOT_MOUNT,
+                 "31 23 0:27 / /m\\0/0 rw - cgroup2 cgroup2 rw\n",
+                 CGROUP2_MOUNT}),
+         v2Root,
+         InvalidEscape},
+        {Concat({ROOT_MOUNT,
+                 "31 23 0:27 /x\\400 /m rw - cgroup2 cgroup2 rw\n",
+                 CGROUP2_MOUNT}),
+         v2Root,
+         InvalidEscape},
+        {Concat({ROOT_MOUNT, "31 23 0:27 / /m\\377 rw - cgroup2 cgroup2 rw\n"}),
+         v2Root,
+         "/m\xff"},
+        // An escaped root that contains the cgroup: \134 is a backslash.
+        {Concat({ROOT_MOUNT, "31 23 0:27 /a\\134b /m rw - cgroup2 cgroup2 rw\n"}),
+         {CgroupVersion::V2, "/a\\b/ctr"},
+         "/m/ctr"},
     };
     for(const auto& [mountinfo, cgroup, expected] : cases)
     {
         BOOST_TEST_CONTEXT(
             "cgroup " << cgroup.path << ", mountinfo '" << mountinfo << "'")
         {
-            const auto actual = bsv::internal::FindCpuCgroupDir(mountinfo, cgroup);
-            BOOST_CHECK_EQUAL(expected.has_value(), actual.has_value());
-            if(expected && actual)
-                BOOST_CHECK_EQUAL(*expected, *actual);
+            BOOST_CHECK_EQUAL(Describe(expected),
+                              Describe(
+                                  bsv::internal::FindCpuCgroupDir(mountinfo, cgroup)));
         }
     }
 }
@@ -314,14 +366,17 @@ BOOST_AUTO_TEST_CASE(find_cpu_cgroup_dir)
 BOOST_AUTO_TEST_CASE(parse_v2_limit)
 {
     const double inf = std::numeric_limits<double>::infinity();
-    const std::vector<std::pair<std::string, std::optional<double>>> cases{
+    const std::vector<std::pair<std::string, Parsed<std::optional<double>>>> cases{
         {"250000 100000\n", 2.5},
         {"150000 100000\n", 1.5},
         {"120000 100000\n", 1.2},
         {"300000 100000\n", 3.0},
+        // "max" is no limit, checked before the period and its newline; a
+        // file without the space is malformed.
         {"max 100000\n", std::nullopt},
-        {"max\n", std::nullopt},
-        {"two and a half\n", std::nullopt},
+        {"max 100000", std::nullopt},
+        {"max\n", MalformedFile},
+        {"two and a half\n", MalformedFile},
         // A zero quota is a limit, which the rounding raises to 2. A negative
         // one too.
         {"0 100000\n", 0.0},
@@ -333,22 +388,18 @@ BOOST_AUTO_TEST_CASE(parse_v2_limit)
         // The period ends at its newline; anything after it is not parsed. The
         // 64-byte limit on the file is the reader's (see the v2 file test).
         {"250000 100000\n00000000000000000000000000000000000000000000000000\n", 2.5},
-        {"250000 100000", std::nullopt},
-        {"250000 100000\r\n", std::nullopt},
-        {"250000  100000\n", std::nullopt},
+        {"250000 100000", MalformedFile},
+        {"250000 100000\r\n", MalformedFile},
+        {"250000  100000\n", MalformedFile},
         {"+250000 +100000\n", 2.5},
-        {"", std::nullopt},
+        {"", MalformedFile},
     };
     for(const auto& [cpuMax, expected] : cases)
     {
         BOOST_TEST_CONTEXT("cpu.max '" << cpuMax << "'")
         {
-            const auto actual = bsv::internal::ParseV2Limit(cpuMax);
-            BOOST_CHECK_EQUAL(expected.has_value(), actual.has_value());
-            if(expected && actual && std::isnan(*expected))
-                BOOST_CHECK(std::isnan(*actual));
-            else if(expected && actual)
-                BOOST_CHECK_EQUAL(*expected, *actual);
+            BOOST_CHECK_EQUAL(Describe(expected),
+                              Describe(bsv::internal::ParseV2Limit(cpuMax)));
         }
     }
 }
@@ -357,28 +408,28 @@ BOOST_AUTO_TEST_CASE(parse_v2_limit)
 // reads from them.
 BOOST_AUTO_TEST_CASE(parse_v1_limit)
 {
-    const std::vector<std::tuple<std::string, std::string, std::optional<double>>> cases{
-        {"200000\n", "100000\n", 2.0},
-        {"50000\n", "100000\n", 0.5},
-        // A negative quota, usually -1, is no limit, whatever the period.
-        {"-1\n", "100000\n", std::nullopt},
-        {"-1\n", "garbage", std::nullopt},
-        // A zero quota is a limit, which the rounding raises to 2.
-        {"0\n", "100000\n", 0.0},
-        {"200000\n", "0\n", std::numeric_limits<double>::infinity()},
-        {"200000", "100000\n", std::nullopt},
-        {"200000\n", "100000", std::nullopt},
-        {"200000\r\n", "100000\n", std::nullopt},
-        {"max\n", "100000\n", std::nullopt},
+    const std::vector<std::tuple<std::string, std::string, Parsed<std::optional<double>>>>
+        cases{
+            {"200000\n", "100000\n", 2.0},
+            {"50000\n", "100000\n", 0.5},
+            // A negative quota, usually -1, is no limit, whatever the period.
+            {"-1\n", "100000\n", std::nullopt},
+            {"-1\n", "garbage", std::nullopt},
+            // A zero quota is a limit, which the rounding raises to 2.
+            {"0\n", "100000\n", 0.0},
+            {"200000\n", "0\n", std::numeric_limits<double>::infinity()},
+            {"200000", "100000\n", MalformedFile},
+            {"-1", "100000\n", MalformedFile},
+            {"200000\n", "100000", MalformedFile},
+            {"200000\r\n", "100000\n", MalformedFile},
+            {"max\n", "100000\n", MalformedFile},
     };
     for(const auto& [quota, period, expected] : cases)
     {
         BOOST_TEST_CONTEXT("quota '" << quota << "', period '" << period << "'")
         {
-            const auto actual = bsv::internal::ParseV1Limit(quota, period);
-            BOOST_CHECK_EQUAL(expected.has_value(), actual.has_value());
-            if(expected && actual)
-                BOOST_CHECK_EQUAL(*expected, *actual);
+            BOOST_CHECK_EQUAL(Describe(expected),
+                              Describe(bsv::internal::ParseV1Limit(quota, period)));
         }
     }
 }
@@ -643,20 +694,24 @@ constexpr int MAIN_THREAD_RUNNING = 3;
 BOOST_AUTO_TEST_CASE(cgroup_cpu_limit_after_the_main_thread_exits)
 {
     using bsv::internal::CgroupCpuLimit;
-    const auto cgroup = bsv::internal::FindCpuCgroup(ReadText("/proc/self/cgroup"));
+    const auto found = bsv::internal::FindCpuCgroup(ReadText("/proc/self/cgroup"));
+    const auto* cgroup = std::get_if<CpuCgroup>(&found);
     const auto dir = cgroup
                        ? bsv::internal::FindCpuCgroupDir(ReadText("/proc/self/mountinfo"),
                                                          *cgroup)
-                       : std::nullopt;
-    if(!dir)
+                       : Parsed<std::string>(NoCgroup);
+    const auto* dirPath = std::get_if<std::string>(&dir);
+    if(!dirPath)
     {
-        BOOST_TEST_MESSAGE("no cgroup directory with a cpu controller here");
+        BOOST_TEST_MESSAGE(
+            "no cgroup directory with a cpu controller here: " << Describe(dir));
         return;
     }
 
     const TempRoot root;
     std::filesystem::create_directory_symlink("/proc", root.Path() / "proc");
-    const std::filesystem::path cgroupDir = std::filesystem::path(*dir).relative_path();
+    const std::filesystem::path cgroupDir = std::filesystem::path(*dirPath)
+                                                .relative_path();
     if(cgroup->version == CgroupVersion::V2)
     {
         root.Write(cgroupDir / "cpu.max", "150000 100000\n");

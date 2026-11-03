@@ -34,6 +34,7 @@
 #include <string_view>
 #include <thread>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include <utilstrencodings.h>
@@ -170,8 +171,13 @@ static bool HasPathPrefix(std::string_view path, std::string_view root)
         && (path.size() == root.size() || path[root.size()] == '/');
 }
 
+using bsv::internal::CgroupError;
+using bsv::internal::CgroupVersion;
+using bsv::internal::CpuCgroup;
+using bsv::internal::Parsed;
+
 // mountinfo escapes space, tab, newline and backslash as \ooo.
-static std::optional<std::string> UnescapeMountPath(std::string_view text)
+static Parsed<std::string> UnescapeMountPath(std::string_view text)
 {
     constexpr int MAX_ESCAPED_BYTE = 0xFF;
     std::string out;
@@ -183,19 +189,19 @@ static std::optional<std::string> UnescapeMountPath(std::string_view text)
             continue;
         }
         if(i + 3 >= text.size())
-            return std::nullopt;
+            return CgroupError::InvalidEscape;
 
         int value = 0;
         for(size_t k = 1; k <= 3; ++k)
         {
             const char c = text[i + k];
             if(c < '0' || c > '7')
-                return std::nullopt;
+                return CgroupError::InvalidEscape;
 
             value = (value * 8) + (c - '0');
         }
         if(value > MAX_ESCAPED_BYTE)
-            return std::nullopt;
+            return CgroupError::InvalidEscape;
 
         out.push_back(static_cast<char>(value));
         i += 3;
@@ -203,37 +209,37 @@ static std::optional<std::string> UnescapeMountPath(std::string_view text)
     return out;
 }
 
-using bsv::internal::CgroupVersion;
-using bsv::internal::CpuCgroup;
-
 // Lines are "hierarchy-ID:controller-list:cgroup-path". Any line up to the v1
 // match that is malformed or has no '\n' rejects the file.
-std::optional<CpuCgroup> bsv::internal::FindCpuCgroup(std::string_view cgroupFile)
+Parsed<CpuCgroup> bsv::internal::FindCpuCgroup(std::string_view cgroupFile)
 {
     std::optional<CpuCgroup> v2;
     for(const auto& [line, complete] : Lines(cgroupFile))
     {
         if(!complete)
-            return std::nullopt;
+            return CgroupError::IncompleteLine;
 
         const size_t first = line.find(':');
         const size_t second = first == std::string_view::npos ? first
                                                               : line.find(':', first + 1);
         if(second == std::string_view::npos)
-            return std::nullopt;
+            return CgroupError::MalformedFile;
 
         const std::string_view hierarchy = line.substr(0, first);
         const std::string_view controllers = line.substr(first + 1, second - first - 1);
         const std::string_view path = line.substr(second + 1);
         if(path.empty() || path[0] != '/')
-            return std::nullopt;
+            return CgroupError::MalformedFile;
 
         if(hierarchy == "0")
             v2 = CpuCgroup{.version = CgroupVersion::V2, .path = std::string(path)};
         else if(ContainsCpu(controllers))
             return CpuCgroup{.version = CgroupVersion::V1, .path = std::string(path)};
     }
-    return v2;
+    if(!v2)
+        return CgroupError::NoCgroup;
+
+    return *v2;
 }
 
 // Finds the mount and builds the directory under it. A line is
@@ -243,8 +249,8 @@ std::optional<CpuCgroup> bsv::internal::FindCpuCgroup(std::string_view cgroupFil
 // separator and a type followed by a space; a cgroup mount also needs its
 // source. Roots are unescaped on mounts of the wanted type, and the mount
 // point on the match only.
-std::optional<std::string> bsv::internal::FindCpuCgroupDir(std::string_view mountinfo,
-                                                           const CpuCgroup& cgroup)
+Parsed<std::string> bsv::internal::FindCpuCgroupDir(std::string_view mountinfo,
+                                                    const CpuCgroup& cgroup)
 {
     for(const auto& entry : Lines(mountinfo))
     {
@@ -261,21 +267,21 @@ std::optional<std::string> bsv::internal::FindCpuCgroupDir(std::string_view moun
             return field;
         };
         if(!next() || !next() || !next()) // ID, parent ID, major:minor
-            return std::nullopt;
+            return CgroupError::MalformedFile;
 
         const auto root = next();
         if(!root || root->empty() || (*root)[0] != '/')
-            return std::nullopt;
+            return CgroupError::MalformedFile;
 
         const auto mountPoint = next();
         if(!mountPoint)
-            return std::nullopt;
+            return CgroupError::MalformedFile;
 
         for(;;)
         { // options and optional fields, up to " - "
             const size_t space = line.find(' ');
             if(space == std::string_view::npos || space + 3 >= line.size())
-                return std::nullopt;
+                return CgroupError::MalformedFile;
 
             if(line.substr(space, 3) == " - ")
             {
@@ -286,14 +292,14 @@ std::optional<std::string> bsv::internal::FindCpuCgroupDir(std::string_view moun
         }
         const auto fsType = next();
         if(!fsType)
-            return std::nullopt;
+            return CgroupError::MalformedFile;
 
         if(cgroup.version == CgroupVersion::V1)
         {
             if(*fsType != "cgroup")
                 continue;
             if(!next()) // source
-                return std::nullopt;
+                return CgroupError::MalformedFile;
 
             if(!ContainsCpu(line)) // super options, the rest of the line
                 continue;
@@ -304,26 +310,26 @@ std::optional<std::string> bsv::internal::FindCpuCgroupDir(std::string_view moun
         }
 
         const auto unescapedRoot = UnescapeMountPath(*root);
-        if(!unescapedRoot)
-            return std::nullopt;
+        if(const auto* error = std::get_if<CgroupError>(&unescapedRoot))
+            return *error;
 
-        if(!HasPathPrefix(cgroup.path, *unescapedRoot))
+        const auto& rootPath = std::get<std::string>(unescapedRoot);
+        if(!HasPathPrefix(cgroup.path, rootPath))
             continue;
-        std::string_view rel = std::string_view(cgroup.path)
-                                   .substr(unescapedRoot->size());
-        if(unescapedRoot->size() == 1 && cgroup.path.size() > 1)
+        std::string_view rel = std::string_view(cgroup.path).substr(rootPath.size());
+        if(rootPath.size() == 1 && cgroup.path.size() > 1)
             rel = cgroup.path;
         if(HasPathPrefix(rel, "/.."))
             continue; // outside this cgroup namespace's view of the mount
         const auto unescapedMountPoint = UnescapeMountPath(*mountPoint);
-        if(!unescapedMountPoint)
-            return std::nullopt;
+        if(const auto* error = std::get_if<CgroupError>(&unescapedMountPoint))
+            return *error;
 
         // Concatenated, not joined with operator/: the matching above is
         // byte-wise and lexical, and so is the result.
-        return *unescapedMountPoint + std::string(rel);
+        return std::get<std::string>(unescapedMountPoint) + std::string(rel);
     }
-    return std::nullopt;
+    return CgroupError::NoCgroup;
 }
 
 // quota / period in CPUs, as double division gives it: a zero or
@@ -346,52 +352,55 @@ static double QuotaPerPeriod(int64_t quota, int64_t period)
 
 // Integers are SV Node's ParseInt64: base 10, an optional '+' or '-', the
 // whole string, int64 range.
-std::optional<double> bsv::internal::ParseV2Limit(std::string_view cpuMax)
+Parsed<std::optional<double>> bsv::internal::ParseV2Limit(std::string_view cpuMax)
 {
     const size_t space = cpuMax.find(' ');
     if(space == std::string_view::npos)
-        return std::nullopt;
+        return CgroupError::MalformedFile;
 
     if(cpuMax.substr(0, space) == "max")
-        return std::nullopt;
+        return std::optional<double>(); // no limit
 
     const auto periodLine = SingleLine(cpuMax.substr(space + 1));
     if(!periodLine)
-        return std::nullopt;
+        return CgroupError::MalformedFile;
 
     int64_t quota{};
     int64_t period{};
     if(!ParseInt64(std::string(cpuMax.substr(0, space)), &quota)
        || !ParseInt64(std::string(*periodLine), &period))
-        return std::nullopt;
+        return CgroupError::MalformedFile;
 
     return QuotaPerPeriod(quota, period);
 }
 
 // cpu.cfs_quota_us or cpu.cfs_period_us, "<value>\n".
-static std::optional<int64_t> ParseV1Number(std::string_view content)
+static Parsed<int64_t> ParseV1Number(std::string_view content)
 {
     const auto line = SingleLine(content);
     int64_t value{};
     if(!line || !ParseInt64(std::string(*line), &value))
-        return std::nullopt;
+        return CgroupError::MalformedFile;
 
     return value;
 }
 
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters): the two files, by name
-std::optional<double> bsv::internal::ParseV1Limit(std::string_view quota,
-                                                  std::string_view period)
+Parsed<std::optional<double>> bsv::internal::ParseV1Limit(std::string_view quota,
+                                                          std::string_view period)
 {
     const auto quotaValue = ParseV1Number(quota);
-    if(!quotaValue || *quotaValue < 0)
-        return std::nullopt; // negative, usually -1: no limit
+    if(const auto* error = std::get_if<CgroupError>(&quotaValue))
+        return *error;
+
+    if(std::get<int64_t>(quotaValue) < 0)
+        return std::optional<double>(); // negative, usually -1: no limit
 
     const auto periodValue = ParseV1Number(period);
-    if(!periodValue)
-        return std::nullopt;
+    if(const auto* error = std::get_if<CgroupError>(&periodValue))
+        return *error;
 
-    return QuotaPerPeriod(*quotaValue, *periodValue);
+    return QuotaPerPeriod(std::get<int64_t>(quotaValue), std::get<int64_t>(periodValue));
 }
 
 // A cgroup value file: one short line, so 64 bytes or more is rejected.
@@ -443,28 +452,39 @@ static std::optional<ProcFiles> ReadProcFiles(const std::filesystem::path& root)
     return std::nullopt;
 }
 
+// The limit; nullopt for no limit and for any error, as CgroupCpuLimit then
+// applies none, whatever the reason.
+static std::optional<double> LimitOf(const Parsed<std::optional<double>>& parsed)
+{
+    const auto* limit = std::get_if<std::optional<double>>(&parsed);
+    return limit ? *limit : std::nullopt;
+}
+
 std::optional<double> bsv::internal::CgroupCpuLimit(const std::filesystem::path& root)
 {
     const auto files = ReadProcFiles(root);
     if(!files)
         return std::nullopt;
 
-    const auto cgroup = FindCpuCgroup(files->cgroup);
+    const auto found = FindCpuCgroup(files->cgroup);
+    const auto* cgroup = std::get_if<CpuCgroup>(&found);
     if(!cgroup)
         return std::nullopt;
 
     const auto dir = FindCpuCgroupDir(files->mountinfo, *cgroup);
-    if(!dir)
+    const auto* dirPath = std::get_if<std::string>(&dir);
+    if(!dirPath)
         return std::nullopt;
 
-    // `dir` is absolute; operator/ would let it replace `root`.
+    // `dirPath` is absolute; operator/ would let it replace `root`.
     const std::filesystem::path cgroupDir = root
-                                          / std::filesystem::path(*dir).relative_path();
+                                          / std::filesystem::path(*dirPath)
+                                                .relative_path();
 
     if(cgroup->version == CgroupVersion::V2)
     {
         const auto cpuMax = ReadValueFile(cgroupDir / "cpu.max");
-        return cpuMax ? ParseV2Limit(*cpuMax) : std::nullopt;
+        return cpuMax ? LimitOf(ParseV2Limit(*cpuMax)) : std::nullopt;
     }
 
     const auto quota = ReadValueFile(cgroupDir / "cpu.cfs_quota_us");
@@ -472,7 +492,7 @@ std::optional<double> bsv::internal::CgroupCpuLimit(const std::filesystem::path&
     if(!quota || !period)
         return std::nullopt;
 
-    return ParseV1Limit(*quota, *period);
+    return LimitOf(ParseV1Limit(*quota, *period));
 }
 
 size_t bsv::internal::LimitCpuCount(size_t cpus, std::optional<double> cgroupLimit)

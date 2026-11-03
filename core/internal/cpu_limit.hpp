@@ -14,6 +14,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <variant>
 
 namespace bsv::internal
 {
@@ -31,27 +32,46 @@ namespace bsv::internal
         std::string path; // relative to its hierarchy's root, starts with '/'
     };
 
+    // Why a parser below rejected its input. Each is the error the Go function it
+    // mirrors returns for the same input.
+    enum class CgroupError : uint8_t
+    {
+        NoCgroup,       // ErrNoCgroup
+        MalformedFile,  // errMalformedFile
+        InvalidEscape,  // errInvalidEscape
+        IncompleteLine, // errIncompleteLine
+    };
+
+    // A parser's result: the value, or why the input was rejected.
+    template<typename T>
+    using Parsed = std::variant<T, CgroupError>;
+
     // From the contents of proc/self/cgroup: the v1 hierarchy with the cpu
-    // controller, else the v2 hierarchy (ID 0); nullopt when there is neither or
-    // the file is malformed. Mirrors Go's parseCPUCgroup.
-    std::optional<CpuCgroup> FindCpuCgroup(std::string_view cgroupFile);
+    // controller, else the v2 hierarchy (ID 0). NoCgroup when there is neither;
+    // IncompleteLine for a line without its '\n', and MalformedFile for any other
+    // malformed line, up to the v1 match. Mirrors Go's parseCPUCgroup.
+    Parsed<CpuCgroup> FindCpuCgroup(std::string_view cgroupFile);
 
     // From the contents of proc/self/mountinfo: the directory holding `cgroup`'s
     // files, under the first cgroup2 mount, or cgroup mount with the cpu super
-    // option, whose root contains the cgroup; nullopt when there is none or the
-    // file is malformed. Mirrors Go's parseCPUMount.
-    std::optional<std::string> FindCpuCgroupDir(std::string_view mountinfo,
-                                                const CpuCgroup& cgroup);
+    // option, whose root contains the cgroup. NoCgroup when there is none;
+    // InvalidEscape for a bad \ooo escape in a root that is unescaped or in the
+    // selected mount point, and MalformedFile for a malformed line, up to the
+    // match. Mirrors Go's parseCPUMount.
+    Parsed<std::string> FindCpuCgroupDir(std::string_view mountinfo,
+                                         const CpuCgroup& cgroup);
 
     // From the contents of cgroup v2 cpu.max, "<quota> <period>\n": quota / period
-    // in CPUs; nullopt for quota "max" or a malformed file. Mirrors Go's
-    // parseV2Limit.
-    std::optional<double> ParseV2Limit(std::string_view cpuMax);
+    // in CPUs; nullopt (no limit) for quota "max"; MalformedFile otherwise.
+    // Mirrors Go's parseV2Limit.
+    Parsed<std::optional<double>> ParseV2Limit(std::string_view cpuMax);
 
     // From the contents of cgroup v1 cpu.cfs_quota_us and cpu.cfs_period_us, each
-    // "<value>\n": quota / period in CPUs; nullopt for a negative quota or a
-    // malformed file. Mirrors Go's parseV1Number and ReadCPULimit.
-    std::optional<double> ParseV1Limit(std::string_view quota, std::string_view period);
+    // "<value>\n": quota / period in CPUs; nullopt (no limit) for a negative
+    // quota, whatever the period; MalformedFile otherwise. Mirrors Go's
+    // parseV1Number and ReadCPULimit.
+    Parsed<std::optional<double>> ParseV1Limit(std::string_view quota,
+                                               std::string_view period);
 
     // The CPU bandwidth limit (quota / period, in CPUs) of the cgroup this process
     // is in, read from the files under `root` ("/" on a live system): cgroup v2
