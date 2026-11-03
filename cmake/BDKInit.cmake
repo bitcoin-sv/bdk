@@ -26,7 +26,7 @@ macro(bdkInitModulePaths)
   list(APPEND CMAKE_MODULE_PATH ${dirlist})
 endmacro()
 
-#### Force the CMAKE_BUILD_TYPE on UNIX like (not visual studio) system AND user doesn't specify the build type
+#### Force the CMAKE_BUILD_TYPE on single-configuration generators when the user doesn't specify the build type
 #### TODO add option build production vs dev. If prod --> default to release build, if dev --> default to debug build
 function(bdkSetCMakeBuildType)
   if(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
@@ -48,14 +48,10 @@ macro(bdkGetOSInfo)
 
   ## BDK_SYSTEM_OS used for package name.
   ## Users can define -DCUSTOM_SYSTEM_OS_NAME=Ubuntu for example to have the customized os name on the installer
-  if(WIN32) #Windows
-    set(BDK_SYSTEM_OS win CACHE STRING "System OS type")
-  else()    # UNIX
-    if(APPLE)
-        set(BDK_SYSTEM_OS mac CACHE STRING "System OS type")
-    else()
-        set(BDK_SYSTEM_OS linux CACHE STRING "System OS type")
-    endif()
+  if(APPLE)
+    set(BDK_SYSTEM_OS mac CACHE STRING "System OS type")
+  else()
+    set(BDK_SYSTEM_OS linux CACHE STRING "System OS type")
   endif()
 endmacro()
 

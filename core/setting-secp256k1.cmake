@@ -18,17 +18,6 @@ endif()
 
 #######################################################################
 
-## The MSVC build for secp256k1 has set for coverage build, which we don't need that anyway
-## This setting make the build broken, cmake complain that CMAKE_MODULE_LINKER_FLAGS_COVERAGE
-## is required but not set. We just set it here to satisfy cmake, that'd fix the msvc cmake run
-if(MSVC)
-  set(CMAKE_MODULE_LINKER_FLAGS_COVERAGE "${CMAKE_MODULE_LINKER_FLAGS_COVERAGE} --coverage" CACHE STRING
-    "Flags used by the shared libraries linker during \"Coverage\" builds."
-    FORCE
-  )
-  mark_as_advanced(CMAKE_MODULE_LINKER_FLAGS_COVERAGE)
-endif()
-
 # Disable the secp256k1 test build by default -- it is not this recipe's job.
 # Guarded so a caller may opt in by pre-defining either option: the native core
 # defines neither, so both stay OFF and its behaviour is byte-for-byte unchanged;

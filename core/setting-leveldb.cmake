@@ -15,34 +15,13 @@ if(TARGET leveldb)
   return()
 endif()
 
-macro(FindSHLWAPI)
-# Try to find the SHLWAPI librairy
-# SHLWAPI_FOUND - system has SHLWAPI lib
-# SHLWAPI_INCLUDE_DIR - the SHLWAPI include directory
-# SHLWAPI_LIBRARY - Libraries needed to use SHLWAPI
-  if(SHLWAPI_INCLUDE_DIR AND SHLWAPI_LIBRARY)
-    # Already in cache, be silent
-    set(SHLWAPI_FIND_QUIETLY TRUE)
-  endif()
-  find_path(SHLWAPI_INCLUDE_DIR NAMES shlwapi.h)
-  find_library(SHLWAPI_LIBRARY NAMES shlwapi)
-  message(STATUS "SHLWAPI lib: " ${SHLWAPI_LIBRARY})
-  include(FindPackageHandleStandardArgs)
-  find_package_handle_standard_args(GMP DEFAULT_MSG SHLWAPI_INCLUDE_DIR SHLWAPI_LIBRARY)
-  mark_as_advanced(SHLWAPI_INCLUDE_DIR SHLWAPI_LIBRARY)
-  set(SHLWAPI_LIBRARIES ${SHLWAPI_LIBRARY})
-  set(SHLWAPI_INCLUDE_DIRS ${SHLWAPI_INCLUDE_DIR})
-endmacro()
-
 # This file is mainly copied from ${BDK_BSV_ROOT_DIR}/sv/src/leveldb/CMakeLists.txt with slightl modifications
 #######################################################################
 
-if(NOT MSVC)
-  ## leveldb use a different set of compilation flags
-  bdk_add_compiler_flag(-Wno-sign-compare -Wno-implicit-fallthrough)
-  bdk_add_c_compiler_flag(-Wno-strict-prototypes)
-  bdk_remove_compiler_flags(-Wstrict-prototypes)
-endif()
+## leveldb use a different set of compilation flags
+bdk_add_compiler_flag(-Wno-sign-compare -Wno-implicit-fallthrough)
+bdk_add_c_compiler_flag(-Wno-strict-prototypes)
+bdk_remove_compiler_flags(-Wstrict-prototypes)
 
 set(BDK_BSV_LEVELDB_ROOT "${BDK_BSV_ROOT_DIR}/src/leveldb")
 
@@ -100,59 +79,39 @@ target_link_libraries(leveldb leveldb-sse4.2)
 # The libmemenv library.
 add_library(memenv "${BDK_BSV_LEVELDB_ROOT}/helpers/memenv/memenv.cc")
 
-# Select the proper port: posix or Windows.
-if(${CMAKE_SYSTEM_NAME} MATCHES "Windows")
-    set(LEVELDB_PLATFORM WINDOWS)
-    set(LEVELDB_OS WINDOWS)
-    target_sources(leveldb
-        PRIVATE
-          "${BDK_BSV_LEVELDB_ROOT}/util/env_win.cc"
-          "${BDK_BSV_LEVELDB_ROOT}/port/port_win.cc"
-    )
-    target_compile_definitions(leveldb
-        PRIVATE
-            WINVER=0x0500
-            __USE_MINGW_ANSI_STDIO=1
-    )
+# Use the POSIX port.
+set(LEVELDB_PLATFORM POSIX)
+target_sources(leveldb PRIVATE "${BDK_BSV_LEVELDB_ROOT}/port/port_posix.cc")
 
-    #FindSHLWAPI()
-    #target_link_libraries(leveldb ${SHLWAPI_LIBRARY})
-    #target_include_directories(leveldb PUBLIC ${SHLWAPI_INCLUDE_DIR})
-    target_link_libraries(leveldb shlwapi)
+set(THREADS_PREFER_PTHREAD_FLAG ON)
+find_package(Threads REQUIRED)
+target_link_libraries(leveldb Threads::Threads)
+
+if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
+    set(LEVELDB_OS LINUX)
+elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+    set(LEVELDB_OS MACOSX)
+elseif(${CMAKE_SYSTEM_NAME} MATCHES "(Solaris|SunOS)")
+    set(LEVELDB_OS SOLARIS)
+elseif(${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
+    set(LEVELDB_OS FREEBSD)
+elseif(${CMAKE_SYSTEM_NAME} MATCHES "NetBSD")
+    set(LEVELDB_OS NETBSD)
+elseif(${CMAKE_SYSTEM_NAME} MATCHES "OpenBSD")
+    set(LEVELDB_OS OPENBSD)
+elseif(${CMAKE_SYSTEM_NAME} MATCHES "DragonFly")
+    set(LEVELDB_OS DRAGONFLYBSD)
+elseif(${CMAKE_SYSTEM_NAME} MATCHES "Android")
+    set(LEVELDB_OS ANDROID)
+elseif(${CMAKE_SYSTEM_NAME} MATCHES "HPUX")
+    # No idea what's the proper system name is here.
+    set(LEVELDB_OS HPUX)
+elseif(${CMAKE_SYSTEM_NAME} MATCHES "iOS")
+    # No idea what's the proper system name is here.
+    set(LEVELDB_OS IOS)
 else()
-    set(LEVELDB_PLATFORM POSIX)
-    target_sources(leveldb PRIVATE "${BDK_BSV_LEVELDB_ROOT}/port/port_posix.cc")
-
-    set(THREADS_PREFER_PTHREAD_FLAG ON)
-    find_package(Threads REQUIRED)
-    target_link_libraries(leveldb Threads::Threads)
-
-    if(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
-        set(LEVELDB_OS LINUX)
-    elseif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-        set(LEVELDB_OS MACOSX)
-    elseif(${CMAKE_SYSTEM_NAME} MATCHES "(Solaris|SunOS)")
-        set(LEVELDB_OS SOLARIS)
-    elseif(${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
-        set(LEVELDB_OS FREEBSD)
-    elseif(${CMAKE_SYSTEM_NAME} MATCHES "NetBSD")
-        set(LEVELDB_OS NETBSD)
-    elseif(${CMAKE_SYSTEM_NAME} MATCHES "OpenBSD")
-        set(LEVELDB_OS OPENBSD)
-    elseif(${CMAKE_SYSTEM_NAME} MATCHES "DragonFly")
-        set(LEVELDB_OS DRAGONFLYBSD)
-    elseif(${CMAKE_SYSTEM_NAME} MATCHES "Android")
-        set(LEVELDB_OS ANDROID)
-    elseif(${CMAKE_SYSTEM_NAME} MATCHES "HPUX")
-        # No idea what's the proper system name is here.
-        set(LEVELDB_OS HPUX)
-    elseif(${CMAKE_SYSTEM_NAME} MATCHES "iOS")
-        # No idea what's the proper system name is here.
-        set(LEVELDB_OS IOS)
-    else()
-        # Unknown plateform, assume linux.
-        set(LEVELDB_OS LINUX)
-    endif()
+    # Unknown plateform, assume linux.
+    set(LEVELDB_OS LINUX)
 endif()
 
 # Right now this is not used but the latest version of leveldb uses this
@@ -188,9 +147,7 @@ set_property(TARGET memenv PROPERTY FOLDER "core/leveldb")
 set(CMAKE_REQUIRED_FLAGS -msse4.2)
 check_c_source_compiles("
     #include <stdint.h>
-    #if defined(_MSC_VER)
-    #include <intrin.h>
-    #elif defined(__GNUC__) && defined(__SSE4_2__)
+    #if defined(__GNUC__) && defined(__SSE4_2__)
     #include <nmmintrin.h>
     #endif
     int main() {
@@ -217,8 +174,6 @@ install(TARGETS leveldb leveldb-sse4.2 memenv DESTINATION "lib" COMPONENT leveld
 ###############################################
 
 
-if(NOT MSVC)
-  ## leveldb restore compiler flags as it is
-  bdk_add_c_compiler_flag(-Wstrict-prototypes)
-  bdk_remove_compiler_flags(-Wno-sign-compare -Wno-implicit-fallthrough -Wno-strict-prototypes)
-endif()
+## leveldb restore compiler flags as it is
+bdk_add_c_compiler_flag(-Wstrict-prototypes)
+bdk_remove_compiler_flags(-Wno-sign-compare -Wno-implicit-fallthrough -Wno-strict-prototypes)

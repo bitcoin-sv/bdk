@@ -125,9 +125,6 @@ function(bdk_add_core_library target)
   endif()
   ## first-party sources get the warning set (+ -Werror), bitcoin-sv sources keep upstream's
   bdkApplySourceWarningPolicy()
-  if(WIN32)
-    target_link_libraries(${target} PRIVATE Crypt32.lib Ws2_32)
-  endif()
   set_property(TARGET ${target} PROPERTY FOLDER "core")
 
   ## Export the extra-header list for the caller's install/unified-header blocks

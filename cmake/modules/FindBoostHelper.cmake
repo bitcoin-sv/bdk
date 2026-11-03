@@ -20,13 +20,11 @@ set(FindBoostHelper_Include TRUE)
 ####       https://github.com/boostorg/boost/releases/download/boost-1.85.0/boost-1.85.0-cmake.7z
 ####   Build command on linux
 ####       cmake ../boost_1_85_0_cmake -DCMAKE_INSTALL_PREFIX=/path/to/install/dir/boost_1_85_0_cmake -DCMAKE_POSITION_INDEPENDENT_CODE=ON && make -j8 && make install
-####   Build command on Windows (same?)
-####       cmake ..\boost_1_85_0_cmake -G"Visual Studio 17 2022" -A x64 -DCMAKE_INSTALL_PREFIX=C:\Path\To\Install\Folder\boost_1_85_0_cmake -DCMAKE_POSITION_INDEPENDENT_CODE=ON && msbuild Boost.sln -maxcpucount:4 /p:Configuration=Debug && msbuild Boost.sln -maxcpucount:4 /p:Configuration=Release && cmake --install . --config Debug && cmake --install . --config Release
-#### TODO better document how to fully build boost on Linux and Windows
+#### TODO better document how to fully build boost on Linux
 ####     Make sure special component like Boost::python, Boost::mpi (not priority) are built correctly
 ####
 #### Note :
-####     Linking with boost 1.86.0 works only on linux and windows. On Mac OS, the clang compiler doesn't
+####     Linking with boost 1.86.0 works only on linux. On Mac OS, the clang compiler doesn't
 ####     like the change of boost::uuid::uuid data type, which will fail due to the reinterpret_cast
 ####     in the file ${BDK_BSV_ROOT_DIR}/src/serialize.h line 989 and 999
 
@@ -76,9 +74,7 @@ macro(bdkLinkTargetToBoost)##################################################
   
 endmacro()
 
-#### Boost imported target wrongly on windows by setting the .lib file for the property IMPORTED_LOCATION_<CONFIG>
-#### Need to find the corresponding .dll file to copy and install to runtime directories
-
+#### Copy a dynamically imported Boost component to the runtime directories
 function(_CopyAndInstallSharedBoostComp _Boost_Comp)############################################################
   isStaticImported(_IS_STATIC_IMPORTED Boost ${_Boost_Comp})
   if(Boost_USE_STATIC_LIBS OR ${_IS_STATIC_IMPORTED})
@@ -98,11 +94,8 @@ function(_CopyAndInstallSharedBoostComp _Boost_Comp)############################
       message(FATAL_ERROR "Boost::${_Boost_Comp}::${_IMPORTED_LOCATION_PROPERTY} file [${_lib_File}] doesn't exist")
     endif()
     set(_dll_File "${_lib_File}")
-    if(WIN32)## Fix imported location for boost, which should be dll instead of lib
-      string(REPLACE ".lib" ".dll" _dll_File "${_lib_File}")
-    endif()
     get_filename_component(_dll_EXT "${_dll_File}" EXT)
-    if(${_dll_EXT} STREQUAL ".dll" OR ${_dll_EXT} STREQUAL ".dylib" OR ${_dll_EXT} MATCHES ".so")
+    if(${_dll_EXT} STREQUAL ".dylib" OR ${_dll_EXT} MATCHES ".so")
       if(CMAKE_CONFIGURATION_TYPES)#config-like system
         string(REGEX REPLACE "IMPORTED_LOCATION_" "" _BUILD_TYPE "${_IMPORTED_LOCATION_PROPERTY}")
         bdkGetBuildTypeFromBUILDTYPE(_BuildType "${_BUILD_TYPE}")

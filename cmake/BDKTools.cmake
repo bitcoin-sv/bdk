@@ -151,11 +151,11 @@ endfunction()
 ####    _BuildType could be "" Debug Release. _BuildType shouldn't be empty on config-like system
 ####    _subDir is the child dir, usually "."
 #### Usage :
-####    bdkCopyInstallSharedLib(${my_file_dll} Debug ".")
+####    bdkCopyInstallSharedLib(${my_file_dylib} Debug ".")
 ####    bdkCopyInstallSharedLib(${my_file_so} "" ".")
 function(bdkCopyInstallSharedLib _file _BuildType _subDir)
   get_filename_component(_lib_EXT "${_file}" EXT)
-  if(NOT (${_lib_EXT} STREQUAL ".dll" OR ${_lib_EXT} STREQUAL ".dylib" OR ${_lib_EXT} MATCHES ".so"))
+  if(NOT (${_lib_EXT} STREQUAL ".dylib" OR ${_lib_EXT} MATCHES ".so"))
     message(FATAL_ERROR "BDKTools.cmake::bdkCopyInstallSharedLib _subDir[${_subDir}] _BuildType[${_BuildType}] File[${_file}] is not a shared library")
   endif()
 

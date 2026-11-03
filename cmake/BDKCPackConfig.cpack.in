@@ -64,12 +64,6 @@ set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "${CMAKE_PROJECT_NAME} ${BDK_PACKAGE_VERSI
 set(CPACK_PACKAGE_INSTALL_DIRECTORY "${CMAKE_PROJECT_NAME}-${BDK_PACKAGE_VERSION}")
 
 
-## Specific NSIS ##################################
-## Note: the contrib/ directory (which held BDKLogo.ico) has been removed; the NSIS
-## installer builds without a custom icon. Windows/NSIS packaging is experimental-only.
-set(CPACK_NSIS_DISPLAY_NAME "${CMAKE_PROJECT_NAME} version ${BDK_PACKAGE_VERSION}")
-set(CPACK_NSIS_PACKAGE_NAME "${CMAKE_PROJECT_NAME} ${BDK_PACKAGE_VERSION}")
-
 ## Specific source ##################################
 set(CPACK_SOURCE_IGNORE_FILES "tests/;/\\\\.git/")
 set(CPACK_SOURCE_PACKAGE_FILE_NAME "${BDK_BASE_PACKAGE_FIXEDNAME}_source")

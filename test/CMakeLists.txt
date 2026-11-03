@@ -20,7 +20,6 @@ macro(bdk_add_unit_test _targetName)
 
   if(CMAKE_CONFIGURATION_TYPES)
     set(_tpost_fix ${CMAKE_DEBUG_POSTFIX})
-    ## Note at the moment, on Windows Py Module can be loaded only in release build. There are problem in debug build
     add_test(NAME ${_targetName} COMMAND $<TARGET_FILE:${_targetName}> --report_format=HRF --report_level=detailed --log_format=JUNIT --log_sink=$<TARGET_FILE:${_targetName}>.xml CONFIGURATIONS Release)
     add_test(NAME ${_targetName}${_tpost_fix} COMMAND $<TARGET_FILE:${_targetName}> --report_format=HRF --report_level=detailed --log_format=JUNIT --log_sink=$<TARGET_FILE:${_targetName}>.xml CONFIGURATIONS Debug)
   else()
@@ -36,7 +35,7 @@ if(BDK_BUILD_CORE_TESTS)## Broken now as dependencies has been reduce to minimal
 endif()
 
 ## Test binding modules
-if(BUILD_MODULE_GOLANG AND NOT MSVC)
+if(BUILD_MODULE_GOLANG)
   add_subdirectory(golang)
   ## The cgo shim itself, exercised natively against the static-GoBDK target
   add_subdirectory(gobdkshim)
@@ -44,7 +43,7 @@ else()
   message(STATUS "Testing Golang module has been disabled")
 endif()
 
-if(BUILD_MODULE_RUST AND NOT MSVC)
+if(BUILD_MODULE_RUST)
   add_subdirectory(rust)
 else()
   message(STATUS "Testing Rust module has been disabled")
