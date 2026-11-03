@@ -22,6 +22,12 @@
 cmake_minimum_required(VERSION 3.16)
 project(bdk)
 
+## Native Windows builds (MSVC, clang-cl, MinGW) are not supported. WIN32 and
+## MSVC describe the target, so an Emscripten build on any host passes.
+if(WIN32 OR MSVC)
+  message(FATAL_ERROR "Windows is not supported; use the WASM build (module/typesbdk/wasm) on Windows hosts")
+endif()
+
 option(BDK_LOG_BSV_FILES "Log used bitcoin sv file to build" ON)
 option(BDK_BUILD_LEVELDB "Activate the build of leveldb" OFF)
 option(BDK_BUILD_UNIVALUE "Activate the build of univalue" ON)
