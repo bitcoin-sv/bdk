@@ -497,12 +497,10 @@ BOOST_AUTO_TEST_CASE(cgroup_cpu_limit_reads_the_v2_files)
     root.Write("proc/self/mountinfo", Concat({ROOT_MOUNT, CGROUP2_MOUNT}));
     root.Write("sys/fs/cgroup/ctr/cpu.max", "150000 100000\n");
     BOOST_CHECK_EQUAL(Describe(1.5), LimitUnder(root.Path()));
-#if defined(__linux__)
     // EffectiveCpuCount applies the limit under the root it is given.
     const size_t unlimited = bsv::internal::EffectiveCpuCount(root.Path() / "missing");
     BOOST_CHECK_EQUAL(bsv::internal::LimitCpuCount(unlimited, 1.5),
                       bsv::internal::EffectiveCpuCount(root.Path()));
-#endif
     root.Write("sys/fs/cgroup/ctr/cpu.max", "max 100000\n");
     BOOST_CHECK_EQUAL(Describe(std::numeric_limits<double>::infinity()),
                       LimitUnder(root.Path()));

@@ -29,6 +29,7 @@
 #include <filesystem>
 #include <initializer_list>
 #include <limits>
+#include <ranges>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -41,7 +42,8 @@
 
 #include <utilstrencodings.h>
 
-// The affinity mask and cgroups are Linux's; elsewhere neither is read.
+// The affinity mask is Linux's; elsewhere it is not read. The cgroup files are
+// read on every platform; off Linux they are not there, and no limit applies.
 #if defined(__linux__) && !defined(__EMSCRIPTEN__)
 #include <sched.h>
 
@@ -69,37 +71,9 @@ static std::optional<size_t> AffinityCpuCount()
     return count > 0 ? std::optional<size_t>(static_cast<size_t>(count)) : std::nullopt;
 }
 
-static std::variant<double, bsv::internal::CgroupError> SystemCgroupCpuLimit(
-    const std::filesystem::path& root)
-{
-    return bsv::internal::CgroupCpuLimit(root);
-}
 #else
 static std::optional<size_t> AffinityCpuCount() { return std::nullopt; }
-
-static std::variant<double, bsv::internal::CgroupError> SystemCgroupCpuLimit(
-    const std::filesystem::path& /*root*/)
-{
-    return std::numeric_limits<double>::infinity();
-}
 #endif
-
-static std::vector<std::string_view> Split(std::string_view text, char sep)
-{
-    std::vector<std::string_view> parts;
-    size_t start = 0;
-    for(;;)
-    {
-        const size_t end = text.find(sep, start);
-        parts.push_back(text.substr(start,
-                                    end == std::string_view::npos ? std::string_view::npos
-                                                                  : end - start));
-        if(end == std::string_view::npos)
-            return parts;
-
-        start = end + 1;
-    }
-}
 
 namespace
 {
@@ -143,8 +117,9 @@ static std::optional<std::string_view> SingleLine(std::string_view content)
 
 static bool ContainsCpu(std::string_view commaSeparated)
 {
-    return std::ranges::any_of(Split(commaSeparated, ','),
-                               [](std::string_view item) { return item == "cpu"; });
+    static constexpr std::string_view CPU{"cpu"};
+    return std::ranges::any_of(std::views::split(commaSeparated, ','),
+                               [](auto item) { return std::ranges::equal(item, CPU); });
 }
 
 // cgroup path `path` is `root` or below it. `root` starts with '/'.
@@ -587,7 +562,7 @@ size_t bsv::internal::CpuCountFrom(std::optional<size_t> affinityCpus,
 
 size_t bsv::internal::EffectiveCpuCount(const std::filesystem::path& cgroupRoot)
 {
-    const auto limit = SystemCgroupCpuLimit(cgroupRoot);
+    const auto limit = CgroupCpuLimit(cgroupRoot);
     const auto* value = std::get_if<double>(&limit);
     return CpuCountFrom(AffinityCpuCount(),
                         std::thread::hardware_concurrency(),
