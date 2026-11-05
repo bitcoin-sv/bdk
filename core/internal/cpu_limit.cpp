@@ -14,7 +14,7 @@
 //   range on; the kernel writes '\' as \134.
 // - once the main thread has exited, proc/self/mountinfo no longer opens; BDK
 //   then reads the cgroup and mountinfo files of proc/thread-self, the calling
-//   thread's (see ReadProcFiles).
+//   thread's (see ReadCgroupAndMounts).
 // - Go reads the cgroup files once and re-reads the limit and the affinity
 //   mask periodically; BDK reads them on every EffectiveCpuCount call.
 
@@ -22,14 +22,13 @@
 
 #include <algorithm>
 #include <array>
+#include <cerrno>
 #include <climits>
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
-#include <fstream>
 #include <initializer_list>
 #include <limits>
-#include <sstream>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -37,12 +36,14 @@
 #include <variant>
 #include <vector>
 
+#include <fcntl.h>
+#include <unistd.h>
+
 #include <utilstrencodings.h>
 
 // The affinity mask and cgroups are Linux's; elsewhere neither is read.
 #if defined(__linux__) && !defined(__EMSCRIPTEN__)
 #include <sched.h>
-#include <unistd.h>
 
 // CPUs in the process's affinity mask. getpid() names the main thread (its
 // thread ID is the process ID), so every caller reads the main thread's mask,
@@ -68,35 +69,20 @@ static std::optional<size_t> AffinityCpuCount()
     return count > 0 ? std::optional<size_t>(static_cast<size_t>(count)) : std::nullopt;
 }
 
-static std::optional<double> SystemCgroupCpuLimit(const std::filesystem::path& root)
+static std::variant<double, bsv::internal::CgroupError> SystemCgroupCpuLimit(
+    const std::filesystem::path& root)
 {
     return bsv::internal::CgroupCpuLimit(root);
 }
 #else
 static std::optional<size_t> AffinityCpuCount() { return std::nullopt; }
 
-static std::optional<double> SystemCgroupCpuLimit(const std::filesystem::path& /*root*/)
+static std::variant<double, bsv::internal::CgroupError> SystemCgroupCpuLimit(
+    const std::filesystem::path& /*root*/)
 {
-    return std::nullopt;
+    return std::numeric_limits<double>::infinity();
 }
 #endif
-
-static std::optional<std::string> ReadFile(const std::filesystem::path& path)
-{
-    const std::ifstream in(path, std::ios::binary);
-    if(!in)
-        return std::nullopt;
-
-    std::ostringstream content;
-    // A read error (EISDIR, EIO) ends the copy and sets failbit on `content`,
-    // not on `in`. So does copying nothing: an empty file is no data either,
-    // which every parser rejects anyway.
-    content << in.rdbuf();
-    if(!content)
-        return std::nullopt;
-
-    return content.str();
-}
 
 static std::vector<std::string_view> Split(std::string_view text, char sep)
 {
@@ -174,10 +160,9 @@ static bool HasPathPrefix(std::string_view path, std::string_view root)
 using bsv::internal::CgroupError;
 using bsv::internal::CgroupVersion;
 using bsv::internal::CpuCgroup;
-using bsv::internal::Parsed;
 
 // mountinfo escapes space, tab, newline and backslash as \ooo.
-static Parsed<std::string> UnescapeMountPath(std::string_view text)
+static std::variant<std::string, CgroupError> UnescapeMountPath(std::string_view text)
 {
     constexpr int MAX_ESCAPED_BYTE = 0xFF;
     std::string out;
@@ -211,7 +196,8 @@ static Parsed<std::string> UnescapeMountPath(std::string_view text)
 
 // Lines are "hierarchy-ID:controller-list:cgroup-path". Any line up to the v1
 // match that is malformed or has no '\n' rejects the file.
-Parsed<CpuCgroup> bsv::internal::FindCpuCgroup(std::string_view cgroupFile)
+std::variant<CpuCgroup, CgroupError> bsv::internal::FindCpuCgroup(
+    std::string_view cgroupFile)
 {
     std::optional<CpuCgroup> v2;
     for(const auto& [line, complete] : Lines(cgroupFile))
@@ -249,8 +235,9 @@ Parsed<CpuCgroup> bsv::internal::FindCpuCgroup(std::string_view cgroupFile)
 // separator and a type followed by a space; a cgroup mount also needs its
 // source. Roots are unescaped on mounts of the wanted type, and the mount
 // point on the match only.
-Parsed<std::string> bsv::internal::FindCpuCgroupDir(std::string_view mountinfo,
-                                                    const CpuCgroup& cgroup)
+std::variant<std::string, CgroupError> bsv::internal::FindCpuCgroupDir(
+    std::string_view mountinfo,
+    const CpuCgroup& cgroup)
 {
     for(const auto& entry : Lines(mountinfo))
     {
@@ -352,14 +339,14 @@ static double QuotaPerPeriod(int64_t quota, int64_t period)
 
 // Integers are SV Node's ParseInt64: base 10, an optional '+' or '-', the
 // whole string, int64 range.
-Parsed<std::optional<double>> bsv::internal::ParseV2Limit(std::string_view cpuMax)
+std::variant<double, CgroupError> bsv::internal::ParseV2Limit(std::string_view cpuMax)
 {
     const size_t space = cpuMax.find(' ');
     if(space == std::string_view::npos)
         return CgroupError::MalformedFile;
 
     if(cpuMax.substr(0, space) == "max")
-        return std::optional<double>(); // no limit
+        return std::numeric_limits<double>::infinity(); // no limit
 
     const auto periodLine = SingleLine(cpuMax.substr(space + 1));
     if(!periodLine)
@@ -375,7 +362,7 @@ Parsed<std::optional<double>> bsv::internal::ParseV2Limit(std::string_view cpuMa
 }
 
 // cpu.cfs_quota_us or cpu.cfs_period_us, "<value>\n".
-static Parsed<int64_t> ParseV1Number(std::string_view content)
+static std::variant<int64_t, CgroupError> ParseV1Number(std::string_view content)
 {
     const auto line = SingleLine(content);
     int64_t value{};
@@ -386,15 +373,15 @@ static Parsed<int64_t> ParseV1Number(std::string_view content)
 }
 
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters): the two files, by name
-Parsed<std::optional<double>> bsv::internal::ParseV1Limit(std::string_view quota,
-                                                          std::string_view period)
+std::variant<double, CgroupError> bsv::internal::ParseV1Limit(std::string_view quota,
+                                                              std::string_view period)
 {
     const auto quotaValue = ParseV1Number(quota);
     if(const auto* error = std::get_if<CgroupError>(&quotaValue))
         return *error;
 
     if(std::get<int64_t>(quotaValue) < 0)
-        return std::optional<double>(); // negative, usually -1: no limit
+        return std::numeric_limits<double>::infinity(); // negative, usually -1: no limit
 
     const auto periodValue = ParseV1Number(period);
     if(const auto* error = std::get_if<CgroupError>(&periodValue))
@@ -403,110 +390,187 @@ Parsed<std::optional<double>> bsv::internal::ParseV1Limit(std::string_view quota
     return QuotaPerPeriod(std::get<int64_t>(quotaValue), std::get<int64_t>(periodValue));
 }
 
-// A cgroup value file: one short line, so 64 bytes or more is rejected.
-static std::optional<std::string> ReadValueFile(const std::filesystem::path& path)
-{
-    constexpr size_t MAX_VALUE_FILE_SIZE = 63;
-    auto content = ReadFile(path);
-    if(content && content->size() > MAX_VALUE_FILE_SIZE)
-        return std::nullopt;
-
-    return content;
-}
-
 namespace
 {
 
-    struct ProcFiles
+    // A file descriptor from open(), closed with this; -1 when open() failed.
+    class File
     {
-        std::string cgroup;
-        std::string mountinfo;
+    public:
+        explicit File(const std::filesystem::path& path):
+            fd_{open(path.c_str(), O_RDONLY | O_CLOEXEC)}
+        {
+        }
+
+        ~File()
+        {
+            if(fd_ >= 0)
+                close(fd_);
+        }
+
+        File(const File&) = delete;
+        File& operator=(const File&) = delete;
+        File(File&&) = delete;
+        File& operator=(File&&) = delete;
+
+        [[nodiscard]] int Fd() const { return fd_; }
+
+    private:
+        int fd_;
     };
 
 } // namespace
 
-// The cgroup and mountinfo files, both from proc/self, the main thread's; or
-// both from proc/thread-self, the calling thread's, when proc/self/mountinfo
-// does not read. That happens once the main thread has exited: proc/self is
-// then that exited thread's, and its mountinfo no longer opens (EINVAL, as
-// exit_task_namespaces has cleared its nsproxy, which mounts_open_common
-// requires). On a cgroup v1 hierarchy its cgroup then reads as "/"
-// (proc_cgroup_show prints that for an exiting task), so the cgroup file comes
-// from the same directory as mountinfo, never from the other one.
+// The contents of proc/self/cgroup or proc/self/mountinfo, opened and read as
+// Go's FindCPUCgroup and FindCPUMountPoint do: NoCgroup when the file does not
+// exist, SyscallFailed when it does not open or read.
+static std::variant<std::string, CgroupError> ReadProcFile(
+    const std::filesystem::path& path)
+{
+    const File file(path);
+    if(file.Fd() < 0)
+        return errno == ENOENT ? CgroupError::NoCgroup : CgroupError::SyscallFailed;
+
+    constexpr size_t CHUNK_SIZE = 4096;
+    std::string content;
+    for(;;)
+    {
+        const size_t size = content.size();
+        content.resize(size + CHUNK_SIZE);
+        const ssize_t bytes = read(file.Fd(), content.data() + size, CHUNK_SIZE);
+        if(bytes < 0)
+            return CgroupError::SyscallFailed;
+
+        content.resize(size + static_cast<size_t>(bytes));
+        if(bytes == 0)
+            return content;
+    }
+}
+
+// A cgroup value file, read from the start with one 64-byte pread as Go's
+// readV1Number and readV2Limit do: SyscallFailed when the read fails,
+// MalformedFile when the file fills the buffer.
+static std::variant<std::string, CgroupError> ReadValueFile(const File& file)
+{
+    std::array<char, 64> buffer{};
+    const ssize_t bytes = pread(file.Fd(), buffer.data(), buffer.size(), 0);
+    if(bytes < 0)
+        return CgroupError::SyscallFailed;
+
+    if(static_cast<size_t>(bytes) == buffer.size())
+        return CgroupError::MalformedFile;
+
+    return std::string(buffer.data(), static_cast<size_t>(bytes));
+}
+
+// The cgroup in a proc/self/cgroup file: its read error, or FindCpuCgroup's
+// result.
+static std::variant<CpuCgroup, CgroupError> ReadCpuCgroup(
+    const std::filesystem::path& path)
+{
+    const auto content = ReadProcFile(path);
+    if(const auto* error = std::get_if<CgroupError>(&content))
+        return *error;
+
+    return bsv::internal::FindCpuCgroup(std::get<std::string>(content));
+}
+
+// The cgroup and the mountinfo file to find it in, both from proc/self, the
+// main thread's; or both from proc/thread-self, the calling thread's, when
+// proc/self/mountinfo does not read. That happens once the main thread has
+// exited: proc/self is then that exited thread's, and its mountinfo no longer
+// opens (EINVAL, as exit_task_namespaces has cleared its nsproxy, which
+// mounts_open_common requires). On a cgroup v1 hierarchy its cgroup then reads
+// as "/" (proc_cgroup_show prints that for an exiting task), so the cgroup file
+// comes from the same directory as mountinfo, never from the other one.
 // thread-self's files are the process's unless the calling thread has its own
 // mount namespace or was moved to another cgroup on its own. Kernels before
-// 3.17 have no thread-self.
-static std::optional<ProcFiles> ReadProcFiles(const std::filesystem::path& root)
+// 3.17 have no thread-self. proc/self's files are read in Go's order, the
+// cgroup file read and parsed before mountinfo is opened, so the first error
+// is the one Go reports; when neither mountinfo reads, that is proc/self's.
+static std::variant<std::pair<CpuCgroup, std::string>, CgroupError> ReadCgroupAndMounts(
+    const std::filesystem::path& root)
 {
-    for(const std::string_view dir : {"proc/self", "proc/thread-self"})
+    auto cgroup = ReadCpuCgroup(root / "proc/self/cgroup");
+    if(const auto* error = std::get_if<CgroupError>(&cgroup))
+        return *error;
+
+    auto mountinfo = ReadProcFile(root / "proc/self/mountinfo");
+    if(const auto* error = std::get_if<CgroupError>(&mountinfo))
     {
-        auto mountinfo = ReadFile(root / dir / "mountinfo");
-        if(!mountinfo)
-            continue;
-        auto cgroup = ReadFile(root / dir / "cgroup");
-        if(!cgroup)
-            return std::nullopt;
+        auto threadSelf = ReadProcFile(root / "proc/thread-self/mountinfo");
+        if(std::holds_alternative<CgroupError>(threadSelf))
+            return *error;
 
-        return ProcFiles{std::move(*cgroup), std::move(*mountinfo)};
+        cgroup = ReadCpuCgroup(root / "proc/thread-self/cgroup");
+        if(const auto* cgroupError = std::get_if<CgroupError>(&cgroup))
+            return *cgroupError;
+
+        mountinfo = std::move(threadSelf);
     }
-    return std::nullopt;
+    return std::pair{std::move(std::get<CpuCgroup>(cgroup)),
+                     std::move(std::get<std::string>(mountinfo))};
 }
 
-// The limit; nullopt for no limit and for any error, as CgroupCpuLimit then
-// applies none, whatever the reason.
-static std::optional<double> LimitOf(const Parsed<std::optional<double>>& parsed)
+std::variant<double, CgroupError> bsv::internal::CgroupCpuLimit(
+    const std::filesystem::path& root)
 {
-    const auto* limit = std::get_if<std::optional<double>>(&parsed);
-    return limit ? *limit : std::nullopt;
-}
+    const auto files = ReadCgroupAndMounts(root);
+    if(const auto* error = std::get_if<CgroupError>(&files))
+        return *error;
 
-std::optional<double> bsv::internal::CgroupCpuLimit(const std::filesystem::path& root)
-{
-    const auto files = ReadProcFiles(root);
-    if(!files)
-        return std::nullopt;
+    const auto& [cgroup, mountinfo] = std::get<std::pair<CpuCgroup, std::string>>(files);
+    const auto dir = FindCpuCgroupDir(mountinfo, cgroup);
+    if(const auto* error = std::get_if<CgroupError>(&dir))
+        return *error;
 
-    const auto found = FindCpuCgroup(files->cgroup);
-    const auto* cgroup = std::get_if<CpuCgroup>(&found);
-    if(!cgroup)
-        return std::nullopt;
+    // The directory is absolute; operator/ would let it replace `root`.
+    const std::filesystem::path
+        cgroupDir = root
+                  / std::filesystem::path(std::get<std::string>(dir)).relative_path();
 
-    const auto dir = FindCpuCgroupDir(files->mountinfo, *cgroup);
-    const auto* dirPath = std::get_if<std::string>(&dir);
-    if(!dirPath)
-        return std::nullopt;
-
-    // `dirPath` is absolute; operator/ would let it replace `root`.
-    const std::filesystem::path cgroupDir = root
-                                          / std::filesystem::path(*dirPath)
-                                                .relative_path();
-
-    if(cgroup->version == CgroupVersion::V2)
+    // Each value file is opened before any is read, as in Go's OpenCPU.
+    if(cgroup.version == CgroupVersion::V2)
     {
-        const auto cpuMax = ReadValueFile(cgroupDir / "cpu.max");
-        return cpuMax ? LimitOf(ParseV2Limit(*cpuMax)) : std::nullopt;
+        const File cpuMax(cgroupDir / "cpu.max");
+        if(cpuMax.Fd() < 0)
+            return CgroupError::SyscallFailed;
+
+        const auto content = ReadValueFile(cpuMax);
+        if(const auto* error = std::get_if<CgroupError>(&content))
+            return *error;
+
+        return ParseV2Limit(std::get<std::string>(content));
     }
 
-    const auto quota = ReadValueFile(cgroupDir / "cpu.cfs_quota_us");
-    const auto period = ReadValueFile(cgroupDir / "cpu.cfs_period_us");
-    if(!quota || !period)
-        return std::nullopt;
+    const File quota(cgroupDir / "cpu.cfs_quota_us");
+    const File period(cgroupDir / "cpu.cfs_period_us");
+    if(quota.Fd() < 0 || period.Fd() < 0)
+        return CgroupError::SyscallFailed;
 
-    return LimitOf(ParseV1Limit(*quota, *period));
+    // Go's ReadCPULimit reports any v1 read error as MalformedFile, and reads
+    // the period only after a quota that is a limit. A file that does not read
+    // is passed on as empty, which ParseV1Limit treats the same way on both
+    // counts.
+    const auto contentOrEmpty = [](const File& file)
+    {
+        auto content = ReadValueFile(file);
+        auto* text = std::get_if<std::string>(&content);
+        return text ? std::move(*text) : std::string();
+    };
+    return ParseV1Limit(contentOrEmpty(quota), contentOrEmpty(period));
 }
 
-size_t bsv::internal::LimitCpuCount(size_t cpus, std::optional<double> cgroupLimit)
+// NOLINTNEXTLINE(bugprone-easily-swappable-parameters): a count and a limit, by name
+size_t bsv::internal::LimitCpuCount(size_t cpus, double cgroupLimit)
 {
-    if(!cgroupLimit)
-        return cpus;
-
-    const double limit = std::max(std::ceil(*cgroupLimit), 2.0);
+    const double limit = std::max(std::ceil(cgroupLimit), 2.0);
     return limit < static_cast<double>(cpus) ? static_cast<size_t>(limit) : cpus;
 }
 
 size_t bsv::internal::CpuCountFrom(std::optional<size_t> affinityCpus,
                                    size_t hardwareConcurrency,
-                                   std::optional<double> cgroupLimit)
+                                   double cgroupLimit)
 {
     // hardware_concurrency() is 0 when it cannot tell.
     return std::max<size_t>(LimitCpuCount(affinityCpus.value_or(hardwareConcurrency),
@@ -516,7 +580,9 @@ size_t bsv::internal::CpuCountFrom(std::optional<size_t> affinityCpus,
 
 size_t bsv::internal::EffectiveCpuCount(const std::filesystem::path& cgroupRoot)
 {
+    const auto limit = SystemCgroupCpuLimit(cgroupRoot);
+    const auto* value = std::get_if<double>(&limit);
     return CpuCountFrom(AffinityCpuCount(),
                         std::thread::hardware_concurrency(),
-                        SystemCgroupCpuLimit(cgroupRoot));
+                        value ? *value : std::numeric_limits<double>::infinity());
 }
