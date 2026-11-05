@@ -564,8 +564,15 @@ std::variant<double, CgroupError> bsv::internal::CgroupCpuLimit(
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters): a count and a limit, by name
 size_t bsv::internal::LimitCpuCount(size_t cpus, double cgroupLimit)
 {
-    const double limit = std::max(std::ceil(cgroupLimit), 2.0);
-    return limit < static_cast<double>(cpus) ? static_cast<size_t>(limit) : cpus;
+    // NaN, +Inf and every limit of at least `cpus` leave it unchanged, which
+    // also keeps the conversion below in range.
+    const double rounded = std::ceil(cgroupLimit);
+    if(std::isnan(rounded) || rounded >= static_cast<double>(cpus))
+        return cpus;
+
+    // -Inf, zero and negative limits count as no CPUs, raised to the minimum.
+    const size_t count = rounded > 0 ? static_cast<size_t>(rounded) : 0;
+    return std::min(std::max(count, MIN_LIMITED_CPUS), cpus);
 }
 
 size_t bsv::internal::CpuCountFrom(std::optional<size_t> affinityCpus,

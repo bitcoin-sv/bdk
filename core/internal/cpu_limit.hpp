@@ -85,9 +85,16 @@ namespace bsv::internal
     // SyscallFailed when cpu.max does not read.
     std::variant<double, CgroupError> CgroupCpuLimit(const std::filesystem::path& root);
 
+    // The fewest CPUs a cgroup limit lowers the count to. One would leave the
+    // pool no parallelism, and a quota under one CPU usually marks a bursty
+    // workload, which can use more for short spells. Go's runtime has the same
+    // minimum (adjustCgroupGOMAXPROCS).
+    constexpr size_t MIN_LIMITED_CPUS = 2;
+
     // Lowers a CPU count to a cgroup limit: the limit is rounded up to a whole
-    // CPU and to at least 2, and only ever lowers `cpus`. -Inf gives 2; +Inf (no
-    // limit) and NaN leave `cpus` unchanged. Mirrors Go's adjustCgroupGOMAXPROCS.
+    // CPU and to at least MIN_LIMITED_CPUS, and only ever lowers `cpus`. -Inf
+    // gives MIN_LIMITED_CPUS; +Inf (no limit) and NaN leave `cpus` unchanged.
+    // Mirrors Go's adjustCgroupGOMAXPROCS.
     size_t LimitCpuCount(size_t cpus, double cgroupLimit);
 
     // The CPU count EffectiveCpuCount returns, from what it read: the CPUs in the

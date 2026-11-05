@@ -859,10 +859,14 @@ BOOST_AUTO_TEST_CASE(cgroup_integers_parse_the_whole_string)
 }
 
 // The CPUs available to the process, lowered to the cgroup limit rounded up,
-// and never below 2 because of the limit.
-BOOST_AUTO_TEST_CASE(cpu_count_rounds_the_limit_up_to_at_least_two)
+// and never below MIN_LIMITED_CPUS because of the limit.
+BOOST_AUTO_TEST_CASE(cpu_count_rounds_the_limit_up_to_min_limited_cpus)
 {
+    using bsv::internal::MIN_LIMITED_CPUS;
     const double inf = std::numeric_limits<double>::infinity();
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+    constexpr size_t maxCpus = std::numeric_limits<size_t>::max();
+    static_assert(MIN_LIMITED_CPUS == 2, "the rows below round to 3");
     // {CPUs, cgroup limit, expected count}
     const std::vector<std::tuple<size_t, double, size_t>> cases{
         {16, 4.0, 4},
@@ -870,16 +874,27 @@ BOOST_AUTO_TEST_CASE(cpu_count_rounds_the_limit_up_to_at_least_two)
         {16, 2.5, 3},
         {16, 2.2, 3},
         {16, 2.00001, 3},
-        {16, 1.01, 2},
-        {16, 0.5, 2},
-        {16, 0.0, 2},
-        {16, -1.0, 2},
-        // max(ceil(-Inf), 2) is 2; +Inf and NaN leave the count unchanged.
-        {16, -inf, 2},
+        {16, 15.5, 16},
+        // Never below the minimum, whatever the limit.
+        {16, 1.01, MIN_LIMITED_CPUS},
+        {16, 0.5, MIN_LIMITED_CPUS},
+        {16, 0.0, MIN_LIMITED_CPUS},
+        {16, -0.5, MIN_LIMITED_CPUS},
+        {16, -1.0, MIN_LIMITED_CPUS},
+        {16, -inf, MIN_LIMITED_CPUS},
+        // +Inf (no limit), NaN and limits too large for a CPU count leave the
+        // count unchanged.
         {16, inf, 16},
-        {16, std::numeric_limits<double>::quiet_NaN(), 16},
+        {16, nan, 16},
+        {16, 1e300, 16},
+        {16, std::numeric_limits<double>::max(), 16},
+        {maxCpus, inf, maxCpus},
+        {maxCpus, nan, maxCpus},
+        {maxCpus, 1e9 + 0.5, 1'000'000'001},
+        // The limit only lowers the count, the minimum included.
         {4, 8.0, 4},
         {1, 0.5, 1},
+        {0, 0.5, 0},
     };
     for(const auto& [cpus, limit, expected] : cases)
     {
