@@ -479,7 +479,7 @@ namespace
         std::filesystem::path path_;
     };
 
-} // namespace
+}
 
 // CgroupCpuLimit under `root`, as Describe reads it.
 static std::string LimitUnder(const std::filesystem::path& root)

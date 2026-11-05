@@ -59,7 +59,7 @@
 // count falls back to hardware_concurrency().
 static std::optional<size_t> AffinityCpuCount()
 {
-    constexpr size_t MAX_AFFINITY_CPUS = 65536;
+    constexpr size_t MAX_AFFINITY_CPUS = 65'536;
     std::array<cpu_set_t, MAX_AFFINITY_CPUS / CPU_SETSIZE> mask{};
     static_assert(sizeof(mask) * CHAR_BIT == MAX_AFFINITY_CPUS);
     if(sched_getaffinity(getpid(), sizeof(mask), mask.data()) != 0)
@@ -84,7 +84,7 @@ namespace
         bool complete;         // false for a last line with no '\n'
     };
 
-} // namespace
+}
 
 // The lines of a /proc file: nothing after a final '\n', and a last line
 // without one is incomplete.
@@ -106,7 +106,7 @@ static std::vector<Line> Lines(std::string_view content)
 }
 
 // The single line of a cgroup file, without its newline.
-static std::optional<std::string_view> SingleLine(std::string_view content)
+static std::optional<std::string_view> SingleLine(const std::string_view content)
 {
     const size_t newline = content.find('\n');
     if(newline == std::string_view::npos)
@@ -115,7 +115,7 @@ static std::optional<std::string_view> SingleLine(std::string_view content)
     return content.substr(0, newline);
 }
 
-static bool ContainsCpu(std::string_view commaSeparated)
+static bool ContainsCpu(const std::string_view commaSeparated)
 {
     static constexpr std::string_view CPU{"cpu"};
     return std::ranges::any_of(std::views::split(commaSeparated, ','),
@@ -123,7 +123,7 @@ static bool ContainsCpu(std::string_view commaSeparated)
 }
 
 // cgroup path `path` is `root` or below it. `root` starts with '/'.
-static bool HasPathPrefix(std::string_view path, std::string_view root)
+static bool HasPathPrefix(const std::string_view path, const std::string_view root)
 {
     if(root.size() == 1)
         return true;
@@ -137,7 +137,8 @@ using bsv::internal::CgroupVersion;
 using bsv::internal::CpuCgroup;
 
 // mountinfo escapes space, tab, newline and backslash as \ooo.
-static std::variant<std::string, CgroupError> UnescapeMountPath(std::string_view text)
+static std::variant<std::string, CgroupError> UnescapeMountPath(
+    const std::string_view text)
 {
     constexpr int MAX_ESCAPED_BYTE = 0xFF;
     std::string out;
@@ -172,7 +173,7 @@ static std::variant<std::string, CgroupError> UnescapeMountPath(std::string_view
 // Lines are "hierarchy-ID:controller-list:cgroup-path". Any line up to the v1
 // match that is malformed or has no '\n' rejects the file.
 std::variant<CpuCgroup, CgroupError> bsv::internal::FindCpuCgroup(
-    std::string_view cgroupFile)
+    const std::string_view cgroupFile)
 {
     std::optional<CpuCgroup> v2;
     for(const auto& [line, complete] : Lines(cgroupFile))
@@ -211,7 +212,7 @@ std::variant<CpuCgroup, CgroupError> bsv::internal::FindCpuCgroup(
 // source. Roots are unescaped on mounts of the wanted type, and the mount
 // point on the match only.
 std::variant<std::string, CgroupError> bsv::internal::FindCpuCgroupDir(
-    std::string_view mountinfo,
+    const std::string_view mountinfo,
     const CpuCgroup& cgroup)
 {
     for(const auto& entry : Lines(mountinfo))
@@ -298,7 +299,7 @@ std::variant<std::string, CgroupError> bsv::internal::FindCpuCgroupDir(
 // negative quota is a limit, which the rounding raises to 2, and a zero period
 // gives +Inf, -Inf or NaN (spelled out here, as dividing by zero is undefined
 // in C++).
-static double QuotaPerPeriod(int64_t quota, int64_t period)
+static double QuotaPerPeriod(const int64_t quota, const int64_t period)
 {
     if(period == 0)
     {
@@ -314,7 +315,8 @@ static double QuotaPerPeriod(int64_t quota, int64_t period)
 
 // Integers are SV Node's ParseInt64: base 10, an optional '+' or '-', the
 // whole string, int64 range.
-std::variant<double, CgroupError> bsv::internal::ParseV2Limit(std::string_view cpuMax)
+std::variant<double, CgroupError> bsv::internal::ParseV2Limit(
+    const std::string_view cpuMax)
 {
     const size_t space = cpuMax.find(' ');
     if(space == std::string_view::npos)
@@ -337,7 +339,7 @@ std::variant<double, CgroupError> bsv::internal::ParseV2Limit(std::string_view c
 }
 
 // cpu.cfs_quota_us or cpu.cfs_period_us, "<value>\n".
-static std::variant<int64_t, CgroupError> ParseV1Number(std::string_view content)
+static std::variant<int64_t, CgroupError> ParseV1Number(const std::string_view content)
 {
     const auto line = SingleLine(content);
     int64_t value{};
@@ -347,9 +349,11 @@ static std::variant<int64_t, CgroupError> ParseV1Number(std::string_view content
     return value;
 }
 
-// NOLINTNEXTLINE(bugprone-easily-swappable-parameters): the two files, by name
-std::variant<double, CgroupError> bsv::internal::ParseV1Limit(std::string_view quota,
-                                                              std::string_view period)
+// NOLINTBEGIN(bugprone-easily-swappable-parameters): the two files, by name
+std::variant<double, CgroupError> bsv::internal::ParseV1Limit(
+    const std::string_view quota,
+    const std::string_view period)
+// NOLINTEND(bugprone-easily-swappable-parameters)
 {
     const auto quotaValue = ParseV1Number(quota);
     if(const auto* error = std::get_if<CgroupError>(&quotaValue))
@@ -394,7 +398,7 @@ namespace
         int fd_;
     };
 
-} // namespace
+}
 
 // The contents of proc/self/cgroup or proc/self/mountinfo, opened and read as
 // Go's FindCPUCgroup and FindCPUMountPoint do: NoCgroup when the file does not
@@ -537,7 +541,7 @@ std::variant<double, CgroupError> bsv::internal::CgroupCpuLimit(
 }
 
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters): a count and a limit, by name
-size_t bsv::internal::LimitCpuCount(size_t cpus, double cgroupLimit)
+size_t bsv::internal::LimitCpuCount(const size_t cpus, const double cgroupLimit)
 {
     // NaN, +Inf and every limit of at least `cpus` leave it unchanged, which
     // also keeps the conversion below in range.
@@ -550,9 +554,9 @@ size_t bsv::internal::LimitCpuCount(size_t cpus, double cgroupLimit)
     return std::min(std::max(count, MIN_LIMITED_CPUS), cpus);
 }
 
-size_t bsv::internal::CpuCountFrom(std::optional<size_t> affinityCpus,
-                                   size_t hardwareConcurrency,
-                                   double cgroupLimit)
+size_t bsv::internal::CpuCountFrom(const std::optional<size_t> affinityCpus,
+                                   const size_t hardwareConcurrency,
+                                   const double cgroupLimit)
 {
     // hardware_concurrency() is 0 when it cannot tell.
     return std::max<size_t>(LimitCpuCount(affinityCpus.value_or(hardwareConcurrency),

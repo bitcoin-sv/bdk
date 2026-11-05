@@ -118,4 +118,4 @@ namespace bsv::internal
     // of memory. Throws nothing else.
     size_t EffectiveCpuCount(const std::filesystem::path& cgroupRoot = "/");
 
-} // namespace bsv::internal
+}
