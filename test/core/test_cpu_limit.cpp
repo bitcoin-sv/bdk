@@ -111,6 +111,7 @@ using bsv::internal::CgroupCpuLimit;
 using bsv::internal::CgroupError;
 using bsv::internal::CgroupVersion;
 using bsv::internal::CpuCgroup;
+using bsv::internal::VALUE_FILE_SIZE_LIMIT;
 using enum bsv::internal::CgroupError;
 
 // mountinfo lines as the kernel writes them.
@@ -133,6 +134,12 @@ constexpr std::string_view
 constexpr std::string_view
     V1_CPU_MOUNT = "41 30 0:36 / /sys/fs/cgroup/cpu,cpuacct rw,relatime master:17 - "
                    "cgroup cgroup rw,cpu,cpuacct\n";
+
+// `content` followed by '0's up to `size` bytes; the parsers stop at the newline.
+static std::string PaddedTo(const std::string& content, const size_t size)
+{
+    return content + std::string(size - content.size(), '0');
+}
 
 static std::string Concat(std::initializer_list<std::string_view> parts)
 {
@@ -397,15 +404,16 @@ BOOST_AUTO_TEST_CASE(parse_v2_limit)
         {"max 100000", inf},
         {"max\n", MalformedFile},
         {"two and a half\n", MalformedFile},
-        // A zero quota is a limit, which the rounding raises to 2. A negative
-        // one too.
+        // A zero quota is a limit, which the rounding raises to MIN_LIMITED_CPUS.
+        // A negative one too.
         {"0 100000\n", 0.0},
         {"-1 100000\n", -1e-05},
-        // A zero period divides as float64 does; the kernel's minimum is 1 ms.
+        // A zero period gives what double division gives (0 / 0, NaN, is
+        // checked below); the kernel's minimum is 1 ms.
         {"250000 0\n", inf},
         {"-250000 0\n", -inf},
-        // The period ends at its newline; anything after it is not parsed. The
-        // 64-byte limit on the file is the reader's (see the v2 file test).
+        // The period ends at its newline; anything after it is not parsed.
+        // CgroupCpuLimit applies VALUE_FILE_SIZE_LIMIT (see the v2 file test).
         {"250000 100000\n00000000000000000000000000000000000000000000000000\n", 2.5},
         {"250000 100000", MalformedFile},
         {"250000 100000\r\n", MalformedFile},
@@ -441,7 +449,8 @@ BOOST_AUTO_TEST_CASE(parse_v1_limit)
             // period.
             {"-1\n", "100000\n", inf},
             {"-1\n", "garbage", inf},
-            // A zero quota is a limit, which the rounding raises to 2.
+            // A zero quota is a limit, which the rounding raises to
+            // MIN_LIMITED_CPUS.
             {"0\n", "100000\n", 0.0},
             {"200000\n", "0\n", inf},
             {"200000", "100000\n", MalformedFile},
@@ -504,7 +513,7 @@ namespace
 
 // CgroupCpuLimit reads proc/self/cgroup, proc/self/mountinfo and cpu.max under
 // the root it is given, the cgroup's directory joined below the root. Each
-// file that does not read gives the error Go's runtime reports for it.
+// file that does not read gives the CgroupError for its case.
 BOOST_AUTO_TEST_CASE(cgroup_cpu_limit_reads_the_v2_files)
 {
     const TempRoot root;
@@ -521,12 +530,14 @@ BOOST_AUTO_TEST_CASE(cgroup_cpu_limit_reads_the_v2_files)
     BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(
                           std::numeric_limits<double>::infinity())),
                       CgroupCpuLimit(root.Path()));
-    // A value file of 63 bytes is parsed, one of 64 is not. An empty one reads
-    // and does not parse.
-    root.Write("sys/fs/cgroup/ctr/cpu.max", "150000 100000\n" + std::string(49, '0'));
+    // A value file one byte under VALUE_FILE_SIZE_LIMIT is parsed, one of the
+    // limit is not. An empty one reads and does not parse.
+    root.Write("sys/fs/cgroup/ctr/cpu.max",
+               PaddedTo("150000 100000\n", VALUE_FILE_SIZE_LIMIT - 1));
     BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(1.5)),
                       CgroupCpuLimit(root.Path()));
-    root.Write("sys/fs/cgroup/ctr/cpu.max", "150000 100000\n" + std::string(50, '0'));
+    root.Write("sys/fs/cgroup/ctr/cpu.max",
+               PaddedTo("150000 100000\n", VALUE_FILE_SIZE_LIMIT));
     BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(MalformedFile)),
                       CgroupCpuLimit(root.Path()));
     root.Write("sys/fs/cgroup/ctr/cpu.max", "");
@@ -576,7 +587,8 @@ BOOST_AUTO_TEST_CASE(cgroup_cpu_limit_reads_the_v2_files)
     std::filesystem::create_directory(root.Path() / "proc/self/mountinfo");
     BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(SyscallFailed)),
                       CgroupCpuLimit(root.Path()));
-    // As in Go, the cgroup file is read and parsed before mountinfo is opened.
+    // The cgroup file is read and parsed before mountinfo is opened, so its
+    // errors come first.
     std::filesystem::remove(root.Path() / "proc/self/cgroup");
     BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(NoCgroup)),
                       CgroupCpuLimit(root.Path()));
@@ -586,7 +598,7 @@ BOOST_AUTO_TEST_CASE(cgroup_cpu_limit_reads_the_v2_files)
 }
 
 // For cgroup v1, CgroupCpuLimit reads cpu.cfs_quota_us and cpu.cfs_period_us
-// from the cpu hierarchy's directory. As in Go, both files are opened first,
+// from the cpu hierarchy's directory. Both files are opened first,
 // either one that does not read is malformed, and the period is not read for a
 // quota that is no limit.
 BOOST_AUTO_TEST_CASE(cgroup_cpu_limit_reads_the_v1_files)
@@ -600,18 +612,19 @@ BOOST_AUTO_TEST_CASE(cgroup_cpu_limit_reads_the_v1_files)
     root.Write(dir / "cpu.cfs_period_us", "100000\n");
     BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(0.5)),
                       CgroupCpuLimit(root.Path()));
-    // Both files have the 64-byte limit: 63 bytes are parsed, 64 are not.
-    root.Write(dir / "cpu.cfs_quota_us", "50000\n" + std::string(57, '0'));
+    // Both files have the size limit.
+    root.Write(dir / "cpu.cfs_quota_us", PaddedTo("50000\n", VALUE_FILE_SIZE_LIMIT - 1));
     BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(0.5)),
                       CgroupCpuLimit(root.Path()));
-    root.Write(dir / "cpu.cfs_quota_us", "50000\n" + std::string(58, '0'));
+    root.Write(dir / "cpu.cfs_quota_us", PaddedTo("50000\n", VALUE_FILE_SIZE_LIMIT));
     BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(MalformedFile)),
                       CgroupCpuLimit(root.Path()));
     root.Write(dir / "cpu.cfs_quota_us", "50000\n");
-    root.Write(dir / "cpu.cfs_period_us", "100000\n" + std::string(56, '0'));
+    root.Write(dir / "cpu.cfs_period_us",
+               PaddedTo("100000\n", VALUE_FILE_SIZE_LIMIT - 1));
     BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(0.5)),
                       CgroupCpuLimit(root.Path()));
-    root.Write(dir / "cpu.cfs_period_us", "100000\n" + std::string(57, '0'));
+    root.Write(dir / "cpu.cfs_period_us", PaddedTo("100000\n", VALUE_FILE_SIZE_LIMIT));
     BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(MalformedFile)),
                       CgroupCpuLimit(root.Path()));
     // ... unless the quota is no limit, as the period is then not read.

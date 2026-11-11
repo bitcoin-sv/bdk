@@ -4,7 +4,8 @@
 // contents; CgroupCpuLimit only reads the files. The lookup takes the first
 // mount whose root contains the cgroup, strips that root, and skips cgroups
 // outside the namespace's view of the mount.
-// Known differences from Go 1.26's runtime:
+// The cgroup parsing and the rounding were checked against Go 1.26's runtime
+// with a differential test. Known differences:
 // - a limit of +Inf or NaN (a zero period; the kernel's minimum is 1 ms) or
 //   above 2^31 CPUs: Go converts it to int32, which is platform-specific; BDK
 //   leaves the count unchanged, as such a limit could not lower it anyway.
@@ -50,14 +51,13 @@
 
 // CPUs in the process's affinity mask. getpid() names the main thread (its
 // thread ID is the process ID), so every caller reads the main thread's mask,
-// whichever thread it runs on. Mirrors Go's getCPUCount, down to the buffer
-// size. Once the main thread has exited, its mask no longer changes: cpuset
-// updates skip exiting tasks (cpuset_update_tasks_cpumask), so the count is the
-// mask as it was then.
+// whichever thread it runs on. Once the main thread has exited, its mask no
+// longer changes: cpuset updates skip exiting tasks
+// (cpuset_update_tasks_cpumask), so the count is the mask as it was then.
 // The kernel fails the call (EINVAL) only for a buffer with fewer bits than
 // nr_cpu_ids, which CONFIG_NR_CPUS caps at 8192 on x86-64 and 4096 on arm64, so
 // room for 65536 CPUs is enough for one call. If a kernel ever had more, the
-// count falls back to hardware_concurrency().
+// count falls back to hardware_concurrency(). Mirrors Go's getCPUCount.
 static std::optional<size_t> AffinityCpuCount()
 {
     constexpr size_t MAX_AFFINITY_CPUS = 65'536;
@@ -296,10 +296,10 @@ std::variant<std::string, CgroupError> bsv::internal::FindCpuCgroupDir(
     return CgroupError::NoCgroup;
 }
 
-// quota / period in CPUs, as double division gives it: a zero or
-// negative quota is a limit, which the rounding raises to 2, and a zero period
-// gives +Inf, -Inf or NaN (spelled out here, as dividing by zero is undefined
-// in C++).
+// quota / period in CPUs, as double division gives it: a zero or negative quota
+// is a limit, which the rounding raises to MIN_LIMITED_CPUS, and a zero period
+// gives +Inf, -Inf or NaN (spelled out here, as dividing by zero is undefined in
+// C++).
 static double QuotaPerPeriod(const int64_t quota, const int64_t period)
 {
     if(period == 0)
@@ -381,9 +381,10 @@ static std::variant<UniqueFileDescriptor, int> OpenReadOnly(
     return UniqueFileDescriptor{fd};
 }
 
-// The contents of proc/self/cgroup or proc/self/mountinfo, opened and read as
-// Go's FindCPUCgroup and FindCPUMountPoint do: NoCgroup when the file does not
-// exist, SyscallFailed when it does not open or read.
+// The contents of a cgroup or mountinfo file under proc: NoCgroup when the file
+// does not exist, SyscallFailed when it does not open or read. Read with open()
+// and read(), not a stream, as only open()'s errno tells a missing file from one
+// that does not open.
 static std::variant<std::string, CgroupError> ReadProcFile(
     const std::filesystem::path& path)
 {
@@ -408,13 +409,13 @@ static std::variant<std::string, CgroupError> ReadProcFile(
     }
 }
 
-// A cgroup value file, read from the start with one 64-byte pread as Go's
-// readV1Number and readV2Limit do: SyscallFailed when the read fails,
-// MalformedFile when the file fills the buffer.
+// A cgroup value file, read from the start with one pread into a buffer of
+// VALUE_FILE_SIZE_LIMIT bytes: SyscallFailed when the read fails, MalformedFile
+// when the file fills the buffer.
 static std::variant<std::string, CgroupError> ReadValueFile(
     const UniqueFileDescriptor& file)
 {
-    std::array<char, 64> buffer{};
+    std::array<char, bsv::internal::VALUE_FILE_SIZE_LIMIT> buffer{};
     const ssize_t bytes = pread(file.Get(), buffer.data(), buffer.size(), 0);
     if(bytes < 0)
         return CgroupError::SyscallFailed;
@@ -447,9 +448,9 @@ static std::variant<CpuCgroup, CgroupError> ReadCpuCgroup(
 // comes from the same directory as mountinfo, never from the other one.
 // thread-self's files are the process's unless the calling thread has its own
 // mount namespace or was moved to another cgroup on its own. Kernels before
-// 3.17 have no thread-self. proc/self's files are read in Go's order, the
-// cgroup file read and parsed before mountinfo is opened, so the first error
-// is the one Go reports; when neither mountinfo reads, that is proc/self's.
+// 3.17 have no thread-self. The cgroup file is read and parsed before mountinfo
+// is opened, so its errors come first; when neither mountinfo reads, the error
+// is proc/self's.
 static std::variant<std::pair<CpuCgroup, std::string>, CgroupError> ReadCgroupAndMounts(
     const std::filesystem::path& root)
 {
@@ -491,7 +492,8 @@ std::variant<double, CgroupError> bsv::internal::CgroupCpuLimit(
         cgroupDir = root
                   / std::filesystem::path(std::get<std::string>(dir)).relative_path();
 
-    // Each value file is opened before any is read, as in Go's OpenCPU.
+    // Each value file is opened before any is read, so a v1 file that does not
+    // open is SyscallFailed whatever the other one holds.
     if(cgroup.version == CgroupVersion::V2)
     {
         const auto cpuMax = OpenReadOnly(cgroupDir / "cpu.max");
@@ -513,10 +515,9 @@ std::variant<double, CgroupError> bsv::internal::CgroupCpuLimit(
     if(!quotaFile || !periodFile)
         return CgroupError::SyscallFailed;
 
-    // Go's ReadCPULimit reports any v1 read error as MalformedFile, and reads
-    // the period only after a quota that is a limit. A file that does not read
-    // is passed on as empty, which ParseV1Limit treats the same way on both
-    // counts.
+    // A v1 value file that does not read is passed on as empty, so ParseV1Limit
+    // reports it as MalformedFile, unless it is the period next to a quota that
+    // is no limit, which ParseV1Limit does not parse.
     const auto contentOrEmpty = [](const UniqueFileDescriptor& file)
     {
         auto content = ReadValueFile(file);

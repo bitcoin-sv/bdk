@@ -3,10 +3,6 @@
 // Internal to bdk_core and its tests. Not installed with the core headers
 // (core/bdk-core-recipe.cmake leaves core/internal/ out of the install list)
 // and not part of any language binding.
-//
-// The cgroup parsing and the rounding follow Go 1.26's runtime and were checked
-// against it with a differential test; cpu_limit.cpp lists the known
-// differences.
 
 #include <cstddef>
 #include <cstdint>
@@ -76,6 +72,11 @@ namespace bsv::internal
     std::variant<double, CgroupError> ParseV1Limit(std::string_view quota,
                                                    std::string_view period);
 
+    // Cgroup value files (cpu.max, cpu.cfs_quota_us, cpu.cfs_period_us) hold one
+    // or two integers and a newline. A file of this many bytes or more is not a
+    // value file: CgroupCpuLimit reads no further and reports MalformedFile.
+    constexpr size_t VALUE_FILE_SIZE_LIMIT = 64;
+
     // The CPU bandwidth limit (quota / period, in CPUs) of the cgroup this process
     // is in, read from the files under `root` ("/" on a live system): cgroup v2
     // cpu.max, or cgroup v1 cpu.cfs_quota_us / cpu.cfs_period_us of the hierarchy
@@ -83,18 +84,14 @@ namespace bsv::internal
     // proc/self, or of proc/thread-self when proc/self/mountinfo does not read
     // (once the main thread has exited); both from the same directory. +Inf when
     // there is no limit. A zero or negative quota is a limit, and a zero period
-    // gives +Inf, -Inf or NaN. Errors mirror Go's FindCPU, OpenCPU and
-    // ReadCPULimit: the parsers' errors; NoCgroup when the cgroup or mountinfo
-    // file does not exist, SyscallFailed when it does but does not read;
-    // SyscallFailed when a value file does not open; and, reading it,
-    // MalformedFile at 64 bytes or more, or when a v1 file does not read, but
-    // SyscallFailed when cpu.max does not read.
+    // gives +Inf, -Inf or NaN. The errors are the parsers', or CgroupError's
+    // cases for a file that is missing, does not open or read, or is too large.
+    // Mirrors Go's FindCPUCgroup, FindCPUMountPoint, OpenCPU and ReadCPULimit.
     std::variant<double, CgroupError> CgroupCpuLimit(const std::filesystem::path& root);
 
     // The fewest CPUs a cgroup limit lowers the count to. One would leave the
     // pool no parallelism, and a quota under one CPU usually marks a bursty
-    // workload, which can use more for short spells. Go's runtime has the same
-    // minimum (adjustCgroupGOMAXPROCS).
+    // workload, which can use more for short spells.
     constexpr size_t MIN_LIMITED_CPUS = 2;
 
     // Lowers a CPU count to a cgroup limit: the limit is rounded up to a whole
