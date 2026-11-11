@@ -7,6 +7,7 @@
 #include <initializer_list>
 #include <limits>
 #include <optional>
+#include <ostream>
 #include <random>
 #include <sstream>
 #include <string>
@@ -14,6 +15,7 @@
 #include <system_error>
 #include <thread>
 #include <tuple>
+#include <type_traits>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -37,6 +39,67 @@
 #include <unistd.h>
 #endif
 
+// How cgroup results print when a check fails. In bsv::internal, where
+// Boost.Test finds them by argument-dependent lookup.
+namespace bsv::internal
+{
+
+    static std::ostream& operator<<(std::ostream& out, const CgroupError error)
+    {
+        switch(error)
+        {
+        case CgroupError::NoCgroup:
+            return out << "NoCgroup";
+        case CgroupError::MalformedFile:
+            return out << "MalformedFile";
+        case CgroupError::InvalidEscape:
+            return out << "InvalidEscape";
+        case CgroupError::IncompleteLine:
+            return out << "IncompleteLine";
+        case CgroupError::SyscallFailed:
+            return out << "SyscallFailed";
+        }
+        return out << "CgroupError " << static_cast<int>(error);
+    }
+
+    static std::ostream& operator<<(std::ostream& out, const CpuCgroup& cgroup)
+    {
+        return out
+            << (cgroup.version == CgroupVersion::V1 ? "v1 " : "v2 ")
+            << cgroup.path;
+    }
+
+    // A limit prints with every digit, so two limits that differ print differently.
+    template<typename T>
+    static std::ostream& operator<<(std::ostream& out,
+                                    const std::variant<T, CgroupError>& result)
+    {
+        std::visit(
+            [&out](const auto& value)
+            {
+                using Value = std::decay_t<decltype(value)>;
+                if constexpr(std::is_same_v<Value, double>)
+                {
+                    const std::streamsize precision = out.precision(
+                        std::numeric_limits<double>::max_digits10);
+                    out << value;
+                    out.precision(precision);
+                }
+                else if constexpr(std::is_same_v<Value, std::string>)
+                {
+                    out << '\'' << value << '\'';
+                }
+                else
+                {
+                    out << value;
+                }
+            },
+            result);
+        return out;
+    }
+
+}
+
 // The helper pool sizes itself from the CPUs this process may use. On Linux a
 // container's CPU limit comes from its cgroup. The parsers take file contents,
 // so their cases are string tables; CgroupCpuLimit, which only reads the
@@ -44,6 +107,7 @@
 // system.
 BOOST_AUTO_TEST_SUITE(container_cpu_limit)
 
+using bsv::internal::CgroupCpuLimit;
 using bsv::internal::CgroupError;
 using bsv::internal::CgroupVersion;
 using bsv::internal::CpuCgroup;
@@ -76,49 +140,6 @@ static std::string Concat(std::initializer_list<std::string_view> parts)
     for(const std::string_view part : parts)
         out += part;
     return out;
-}
-
-// How a parser result reads in a failure message. Limits are compared exactly,
-// as hexadecimal floating point; every NaN reads the same.
-static std::string Describe(CgroupError error)
-{
-    switch(error)
-    {
-    case CgroupError::NoCgroup:
-        return "NoCgroup";
-    case CgroupError::MalformedFile:
-        return "MalformedFile";
-    case CgroupError::InvalidEscape:
-        return "InvalidEscape";
-    case CgroupError::IncompleteLine:
-        return "IncompleteLine";
-    case CgroupError::SyscallFailed:
-        return "SyscallFailed";
-    }
-    return "CgroupError " + std::to_string(static_cast<int>(error));
-}
-
-static std::string Describe(const CpuCgroup& cgroup)
-{
-    return (cgroup.version == CgroupVersion::V1 ? "v1 " : "v2 ") + cgroup.path;
-}
-
-static std::string Describe(const std::string& dir) { return "dir '" + dir + "'"; }
-
-static std::string Describe(double limit)
-{
-    if(std::isnan(limit))
-        return "limit nan";
-
-    std::ostringstream out;
-    out << "limit " << std::hexfloat << limit;
-    return out.str();
-}
-
-template<typename T>
-static std::string Describe(const std::variant<T, CgroupError>& result)
-{
-    return std::visit([](const auto& value) { return Describe(value); }, result);
 }
 
 // Each proc/self/cgroup and the cgroup FindCpuCgroup finds in it.
@@ -167,8 +188,7 @@ BOOST_AUTO_TEST_CASE(find_cpu_cgroup)
     {
         BOOST_TEST_CONTEXT("cgroup file '" << cgroupFile << "'")
         {
-            BOOST_CHECK_EQUAL(Describe(expected),
-                              Describe(bsv::internal::FindCpuCgroup(cgroupFile)));
+            BOOST_CHECK_EQUAL(expected, bsv::internal::FindCpuCgroup(cgroupFile));
         }
     }
 }
@@ -355,9 +375,8 @@ BOOST_AUTO_TEST_CASE(find_cpu_cgroup_dir)
         BOOST_TEST_CONTEXT(
             "cgroup " << cgroup.path << ", mountinfo '" << mountinfo << "'")
         {
-            BOOST_CHECK_EQUAL(Describe(expected),
-                              Describe(
-                                  bsv::internal::FindCpuCgroupDir(mountinfo, cgroup)));
+            BOOST_CHECK_EQUAL(expected,
+                              bsv::internal::FindCpuCgroupDir(mountinfo, cgroup));
         }
     }
 }
@@ -385,7 +404,6 @@ BOOST_AUTO_TEST_CASE(parse_v2_limit)
         // A zero period divides as float64 does; the kernel's minimum is 1 ms.
         {"250000 0\n", inf},
         {"-250000 0\n", -inf},
-        {"0 0\n", std::numeric_limits<double>::quiet_NaN()},
         // The period ends at its newline; anything after it is not parsed. The
         // 64-byte limit on the file is the reader's (see the v2 file test).
         {"250000 100000\n00000000000000000000000000000000000000000000000000\n", 2.5},
@@ -399,10 +417,14 @@ BOOST_AUTO_TEST_CASE(parse_v2_limit)
     {
         BOOST_TEST_CONTEXT("cpu.max '" << cpuMax << "'")
         {
-            BOOST_CHECK_EQUAL(Describe(expected),
-                              Describe(bsv::internal::ParseV2Limit(cpuMax)));
+            BOOST_CHECK_EQUAL(expected, bsv::internal::ParseV2Limit(cpuMax));
         }
     }
+    // 0 / 0 is NaN, which compares unequal to everything, itself included.
+    const auto zeroByZero = bsv::internal::ParseV2Limit("0 0\n");
+    const double* nan = std::get_if<double>(&zeroByZero);
+    BOOST_REQUIRE_MESSAGE(nan, "cpu.max '0 0' gave " << zeroByZero);
+    BOOST_CHECK(std::isnan(*nan));
 }
 
 // Each cpu.cfs_quota_us and cpu.cfs_period_us, and the limit ParseV1Limit
@@ -432,8 +454,7 @@ BOOST_AUTO_TEST_CASE(parse_v1_limit)
     {
         BOOST_TEST_CONTEXT("quota '" << quota << "', period '" << period << "'")
         {
-            BOOST_CHECK_EQUAL(Describe(expected),
-                              Describe(bsv::internal::ParseV1Limit(quota, period)));
+            BOOST_CHECK_EQUAL(expected, bsv::internal::ParseV1Limit(quota, period));
         }
     }
 }
@@ -481,12 +502,6 @@ namespace
 
 }
 
-// CgroupCpuLimit under `root`, as Describe reads it.
-static std::string LimitUnder(const std::filesystem::path& root)
-{
-    return Describe(bsv::internal::CgroupCpuLimit(root));
-}
-
 // CgroupCpuLimit reads proc/self/cgroup, proc/self/mountinfo and cpu.max under
 // the root it is given, the cgroup's directory joined below the root. Each
 // file that does not read gives the error Go's runtime reports for it.
@@ -496,59 +511,78 @@ BOOST_AUTO_TEST_CASE(cgroup_cpu_limit_reads_the_v2_files)
     root.Write("proc/self/cgroup", "0::/ctr\n");
     root.Write("proc/self/mountinfo", Concat({ROOT_MOUNT, CGROUP2_MOUNT}));
     root.Write("sys/fs/cgroup/ctr/cpu.max", "150000 100000\n");
-    BOOST_CHECK_EQUAL(Describe(1.5), LimitUnder(root.Path()));
+    BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(1.5)),
+                      CgroupCpuLimit(root.Path()));
     // EffectiveCpuCount applies the limit under the root it is given.
     const size_t unlimited = bsv::internal::EffectiveCpuCount(root.Path() / "missing");
     BOOST_CHECK_EQUAL(bsv::internal::LimitCpuCount(unlimited, 1.5),
                       bsv::internal::EffectiveCpuCount(root.Path()));
     root.Write("sys/fs/cgroup/ctr/cpu.max", "max 100000\n");
-    BOOST_CHECK_EQUAL(Describe(std::numeric_limits<double>::infinity()),
-                      LimitUnder(root.Path()));
+    BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(
+                          std::numeric_limits<double>::infinity())),
+                      CgroupCpuLimit(root.Path()));
     // A value file of 63 bytes is parsed, one of 64 is not. An empty one reads
     // and does not parse.
     root.Write("sys/fs/cgroup/ctr/cpu.max", "150000 100000\n" + std::string(49, '0'));
-    BOOST_CHECK_EQUAL(Describe(1.5), LimitUnder(root.Path()));
+    BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(1.5)),
+                      CgroupCpuLimit(root.Path()));
     root.Write("sys/fs/cgroup/ctr/cpu.max", "150000 100000\n" + std::string(50, '0'));
-    BOOST_CHECK_EQUAL(Describe(MalformedFile), LimitUnder(root.Path()));
+    BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(MalformedFile)),
+                      CgroupCpuLimit(root.Path()));
     root.Write("sys/fs/cgroup/ctr/cpu.max", "");
-    BOOST_CHECK_EQUAL(Describe(MalformedFile), LimitUnder(root.Path()));
+    BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(MalformedFile)),
+                      CgroupCpuLimit(root.Path()));
     // A missing cpu.max does not open; a directory opens but does not read.
     std::filesystem::remove(root.Path() / "sys/fs/cgroup/ctr/cpu.max");
-    BOOST_CHECK_EQUAL(Describe(SyscallFailed), LimitUnder(root.Path()));
+    BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(SyscallFailed)),
+                      CgroupCpuLimit(root.Path()));
     std::filesystem::create_directory(root.Path() / "sys/fs/cgroup/ctr/cpu.max");
-    BOOST_CHECK_EQUAL(Describe(SyscallFailed), LimitUnder(root.Path()));
+    BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(SyscallFailed)),
+                      CgroupCpuLimit(root.Path()));
     // The cgroup and mountinfo files: missing is no cgroup; empty parses to no
     // cgroup; a symlink to itself does not open; a directory opens and does not
     // read. The parsers' errors come through.
-    BOOST_CHECK_EQUAL(Describe(NoCgroup), LimitUnder(root.Path() / "missing"));
+    BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(NoCgroup)),
+                      CgroupCpuLimit(root.Path() / "missing"));
     root.Write("proc/self/cgroup", "");
-    BOOST_CHECK_EQUAL(Describe(NoCgroup), LimitUnder(root.Path()));
+    BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(NoCgroup)),
+                      CgroupCpuLimit(root.Path()));
     root.Write("proc/self/cgroup", "0::/ctr");
-    BOOST_CHECK_EQUAL(Describe(IncompleteLine), LimitUnder(root.Path()));
+    BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(IncompleteLine)),
+                      CgroupCpuLimit(root.Path()));
     std::filesystem::remove(root.Path() / "proc/self/cgroup");
-    BOOST_CHECK_EQUAL(Describe(NoCgroup), LimitUnder(root.Path()));
+    BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(NoCgroup)),
+                      CgroupCpuLimit(root.Path()));
     std::filesystem::create_symlink("cgroup", root.Path() / "proc/self/cgroup");
-    BOOST_CHECK_EQUAL(Describe(SyscallFailed), LimitUnder(root.Path()));
+    BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(SyscallFailed)),
+                      CgroupCpuLimit(root.Path()));
     std::filesystem::remove(root.Path() / "proc/self/cgroup");
     std::filesystem::create_directory(root.Path() / "proc/self/cgroup");
-    BOOST_CHECK_EQUAL(Describe(SyscallFailed), LimitUnder(root.Path()));
+    BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(SyscallFailed)),
+                      CgroupCpuLimit(root.Path()));
     std::filesystem::remove(root.Path() / "proc/self/cgroup");
     root.Write("proc/self/cgroup", "0::/ctr\n");
     root.Write("proc/self/mountinfo", "");
-    BOOST_CHECK_EQUAL(Describe(NoCgroup), LimitUnder(root.Path()));
+    BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(NoCgroup)),
+                      CgroupCpuLimit(root.Path()));
     root.Write("proc/self/mountinfo", "garbage\n");
-    BOOST_CHECK_EQUAL(Describe(MalformedFile), LimitUnder(root.Path()));
+    BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(MalformedFile)),
+                      CgroupCpuLimit(root.Path()));
     std::filesystem::remove(root.Path() / "proc/self/mountinfo");
     std::filesystem::create_symlink("mountinfo", root.Path() / "proc/self/mountinfo");
-    BOOST_CHECK_EQUAL(Describe(SyscallFailed), LimitUnder(root.Path()));
+    BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(SyscallFailed)),
+                      CgroupCpuLimit(root.Path()));
     std::filesystem::remove(root.Path() / "proc/self/mountinfo");
     std::filesystem::create_directory(root.Path() / "proc/self/mountinfo");
-    BOOST_CHECK_EQUAL(Describe(SyscallFailed), LimitUnder(root.Path()));
+    BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(SyscallFailed)),
+                      CgroupCpuLimit(root.Path()));
     // As in Go, the cgroup file is read and parsed before mountinfo is opened.
     std::filesystem::remove(root.Path() / "proc/self/cgroup");
-    BOOST_CHECK_EQUAL(Describe(NoCgroup), LimitUnder(root.Path()));
+    BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(NoCgroup)),
+                      CgroupCpuLimit(root.Path()));
     root.Write("proc/self/cgroup", "0::/ctr");
-    BOOST_CHECK_EQUAL(Describe(IncompleteLine), LimitUnder(root.Path()));
+    BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(IncompleteLine)),
+                      CgroupCpuLimit(root.Path()));
 }
 
 // For cgroup v1, CgroupCpuLimit reads cpu.cfs_quota_us and cpu.cfs_period_us
@@ -564,37 +598,48 @@ BOOST_AUTO_TEST_CASE(cgroup_cpu_limit_reads_the_v1_files)
     root.Write("proc/self/mountinfo", Concat({ROOT_MOUNT, V1_CPU_MOUNT}));
     root.Write(dir / "cpu.cfs_quota_us", "50000\n");
     root.Write(dir / "cpu.cfs_period_us", "100000\n");
-    BOOST_CHECK_EQUAL(Describe(0.5), LimitUnder(root.Path()));
+    BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(0.5)),
+                      CgroupCpuLimit(root.Path()));
     // Both files have the 64-byte limit: 63 bytes are parsed, 64 are not.
     root.Write(dir / "cpu.cfs_quota_us", "50000\n" + std::string(57, '0'));
-    BOOST_CHECK_EQUAL(Describe(0.5), LimitUnder(root.Path()));
+    BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(0.5)),
+                      CgroupCpuLimit(root.Path()));
     root.Write(dir / "cpu.cfs_quota_us", "50000\n" + std::string(58, '0'));
-    BOOST_CHECK_EQUAL(Describe(MalformedFile), LimitUnder(root.Path()));
+    BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(MalformedFile)),
+                      CgroupCpuLimit(root.Path()));
     root.Write(dir / "cpu.cfs_quota_us", "50000\n");
     root.Write(dir / "cpu.cfs_period_us", "100000\n" + std::string(56, '0'));
-    BOOST_CHECK_EQUAL(Describe(0.5), LimitUnder(root.Path()));
+    BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(0.5)),
+                      CgroupCpuLimit(root.Path()));
     root.Write(dir / "cpu.cfs_period_us", "100000\n" + std::string(57, '0'));
-    BOOST_CHECK_EQUAL(Describe(MalformedFile), LimitUnder(root.Path()));
+    BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(MalformedFile)),
+                      CgroupCpuLimit(root.Path()));
     // ... unless the quota is no limit, as the period is then not read.
     root.Write(dir / "cpu.cfs_quota_us", "-1\n");
-    BOOST_CHECK_EQUAL(Describe(inf), LimitUnder(root.Path()));
+    BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(inf)),
+                      CgroupCpuLimit(root.Path()));
     // A value file that does not read is malformed.
     std::filesystem::remove(root.Path() / dir / "cpu.cfs_period_us");
     std::filesystem::create_directory(root.Path() / dir / "cpu.cfs_period_us");
-    BOOST_CHECK_EQUAL(Describe(inf), LimitUnder(root.Path()));
+    BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(inf)),
+                      CgroupCpuLimit(root.Path()));
     root.Write(dir / "cpu.cfs_quota_us", "50000\n");
-    BOOST_CHECK_EQUAL(Describe(MalformedFile), LimitUnder(root.Path()));
+    BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(MalformedFile)),
+                      CgroupCpuLimit(root.Path()));
     std::filesystem::remove(root.Path() / dir / "cpu.cfs_period_us");
     root.Write(dir / "cpu.cfs_period_us", "100000\n");
     std::filesystem::remove(root.Path() / dir / "cpu.cfs_quota_us");
     std::filesystem::create_directory(root.Path() / dir / "cpu.cfs_quota_us");
-    BOOST_CHECK_EQUAL(Describe(MalformedFile), LimitUnder(root.Path()));
+    BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(MalformedFile)),
+                      CgroupCpuLimit(root.Path()));
     // A missing file does not open, even next to a quota that is no limit.
     std::filesystem::remove(root.Path() / dir / "cpu.cfs_quota_us");
-    BOOST_CHECK_EQUAL(Describe(SyscallFailed), LimitUnder(root.Path()));
+    BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(SyscallFailed)),
+                      CgroupCpuLimit(root.Path()));
     root.Write(dir / "cpu.cfs_quota_us", "-1\n");
     std::filesystem::remove(root.Path() / dir / "cpu.cfs_period_us");
-    BOOST_CHECK_EQUAL(Describe(SyscallFailed), LimitUnder(root.Path()));
+    BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(SyscallFailed)),
+                      CgroupCpuLimit(root.Path()));
 }
 
 // CgroupCpuLimit reads the cgroup and mountinfo files of proc/self, or, when
@@ -614,21 +659,27 @@ BOOST_AUTO_TEST_CASE(cgroup_cpu_limit_reads_self_else_thread_self)
     root.Write("sys/fs/cgroup/thread/cpu.max", "150000 100000\n");
     root.Write("mnt/cgroup/thread/cpu.max", "250000 100000\n");
     root.Write("sys/fs/cgroup/process/cpu.max", "350000 100000\n");
-    BOOST_CHECK_EQUAL(Describe(0.5), LimitUnder(root.Path()));
+    BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(0.5)),
+                      CgroupCpuLimit(root.Path()));
     // proc/self/mountinfo reads, so its cgroup file is the one.
     std::filesystem::remove(root.Path() / "proc/self/cgroup");
-    BOOST_CHECK_EQUAL(Describe(NoCgroup), LimitUnder(root.Path()));
+    BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(NoCgroup)),
+                      CgroupCpuLimit(root.Path()));
     root.Write("proc/self/cgroup", "0::/process\n");
     std::filesystem::remove(root.Path() / "proc/self/mountinfo");
-    BOOST_CHECK_EQUAL(Describe(1.5), LimitUnder(root.Path()));
+    BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(1.5)),
+                      CgroupCpuLimit(root.Path()));
     std::filesystem::remove(root.Path() / "proc/thread-self/cgroup");
-    BOOST_CHECK_EQUAL(Describe(NoCgroup), LimitUnder(root.Path()));
+    BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(NoCgroup)),
+                      CgroupCpuLimit(root.Path()));
     root.Write("proc/thread-self/cgroup", "0::/thread\n");
     // When neither mountinfo reads, the error is proc/self's.
     std::filesystem::remove(root.Path() / "proc/thread-self/mountinfo");
-    BOOST_CHECK_EQUAL(Describe(NoCgroup), LimitUnder(root.Path()));
+    BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(NoCgroup)),
+                      CgroupCpuLimit(root.Path()));
     std::filesystem::create_directory(root.Path() / "proc/self/mountinfo");
-    BOOST_CHECK_EQUAL(Describe(SyscallFailed), LimitUnder(root.Path()));
+    BOOST_CHECK_EQUAL((std::variant<double, CgroupError>(SyscallFailed)),
+                      CgroupCpuLimit(root.Path()));
 }
 
 // On this machine, whatever its cgroup: at least one CPU. On Linux this reads
@@ -644,7 +695,7 @@ BOOST_AUTO_TEST_CASE(effective_cpu_count_of_this_machine)
                        << " hardware_concurrency="
                        << hardware
                        << " cgroup_limit="
-                       << Describe(bsv::internal::CgroupCpuLimit("/")));
+                       << CgroupCpuLimit("/"));
     BOOST_CHECK_GE(effective, 1U);
 #if !defined(__linux__)
     BOOST_CHECK_EQUAL(std::max<size_t>(hardware, 1), effective);
@@ -761,8 +812,7 @@ BOOST_AUTO_TEST_CASE(cgroup_cpu_limit_after_the_main_thread_exits)
     const auto* dirPath = std::get_if<std::string>(&dir);
     if(!dirPath)
     {
-        BOOST_TEST_MESSAGE(
-            "no cgroup directory with a cpu controller here: " << Describe(dir));
+        BOOST_TEST_MESSAGE("no cgroup directory with a cpu controller here: " << dir);
         return;
     }
 
@@ -779,7 +829,8 @@ BOOST_AUTO_TEST_CASE(cgroup_cpu_limit_after_the_main_thread_exits)
         root.Write(cgroupDir / "cpu.cfs_quota_us", "150000\n");
         root.Write(cgroupDir / "cpu.cfs_period_us", "100000\n");
     }
-    BOOST_REQUIRE_EQUAL(Describe(1.5), LimitUnder(root.Path()));
+    BOOST_REQUIRE_EQUAL((std::variant<double, CgroupError>(1.5)),
+                        CgroupCpuLimit(root.Path()));
 
     const pid_t child = fork();
     BOOST_REQUIRE_NE(-1, child);
@@ -794,7 +845,7 @@ BOOST_AUTO_TEST_CASE(cgroup_cpu_limit_after_the_main_thread_exits)
                     std::this_thread::sleep_for(std::chrono::milliseconds(10));
                 if(ProcessState() != 'Z')
                     _exit(MAIN_THREAD_RUNNING);
-                const auto limit = bsv::internal::CgroupCpuLimit(path);
+                const auto limit = CgroupCpuLimit(path);
                 const auto* value = std::get_if<double>(&limit);
                 if(!value)
                     _exit(NO_LIMIT);
@@ -903,7 +954,7 @@ BOOST_AUTO_TEST_CASE(cpu_count_rounds_the_limit_up_to_min_limited_cpus)
     };
     for(const auto& [cpus, limit, expected] : cases)
     {
-        BOOST_TEST_CONTEXT("cpus " << cpus << ", " << Describe(limit))
+        BOOST_TEST_CONTEXT("cpus " << cpus << ", limit " << limit)
         {
             BOOST_CHECK_EQUAL(expected, bsv::internal::LimitCpuCount(cpus, limit));
         }

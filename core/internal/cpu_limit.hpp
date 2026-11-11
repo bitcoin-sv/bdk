@@ -30,6 +30,8 @@ namespace bsv::internal
     {
         CgroupVersion version;
         std::string path; // relative to its hierarchy's root, starts with '/'
+
+        bool operator==(const CpuCgroup&) const = default;
     };
 
     // Why a cgroup file was rejected or could not be read.
