@@ -32,15 +32,19 @@ namespace bsv::internal
         std::string path; // relative to its hierarchy's root, starts with '/'
     };
 
-    // Why a cgroup file was rejected or could not be read. Each is the error the
-    // Go function mirrored returns in the same case.
+    // Why a cgroup file was rejected or could not be read.
+    // In Go, each is err followed by its name (ErrNoCgroup for NoCgroup).
     enum class CgroupError : uint8_t
     {
-        NoCgroup,       // ErrNoCgroup
-        MalformedFile,  // errMalformedFile
-        InvalidEscape,  // errInvalidEscape
-        IncompleteLine, // errIncompleteLine
-        SyscallFailed,  // errSyscallFailed
+        NoCgroup,       // no cpu cgroup listed, or no mount holding it; also a
+                        // proc file that doesn't exist
+        MalformedFile,  // a file doesn't parse; also a value file of 64 bytes or more,
+                        // or a cgroup v1 value file that doesn't read
+        InvalidEscape,  // a bad \ooo escape in a mountinfo path
+        IncompleteLine, // a proc/self/cgroup line without its '\n', with no cgroup v1
+                        // cpu line before it
+        SyscallFailed,  // a proc file that exists but doesn't open or read, a value
+                        // file that doesn't open, or a cpu.max that doesn't read
     };
 
     // From the contents of proc/self/cgroup: the v1 hierarchy with the cpu
