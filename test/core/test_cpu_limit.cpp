@@ -518,7 +518,8 @@ BOOST_AUTO_TEST_CASE(cgroup_cpu_limit_reads_the_v2_files)
     std::filesystem::create_directory(root.Path() / "sys/fs/cgroup/ctr/cpu.max");
     BOOST_CHECK_EQUAL(Describe(SyscallFailed), LimitUnder(root.Path()));
     // The cgroup and mountinfo files: missing is no cgroup; empty parses to no
-    // cgroup; a directory does not read. The parsers' errors come through.
+    // cgroup; a symlink to itself does not open; a directory opens and does not
+    // read. The parsers' errors come through.
     BOOST_CHECK_EQUAL(Describe(NoCgroup), LimitUnder(root.Path() / "missing"));
     root.Write("proc/self/cgroup", "");
     BOOST_CHECK_EQUAL(Describe(NoCgroup), LimitUnder(root.Path()));
@@ -526,6 +527,9 @@ BOOST_AUTO_TEST_CASE(cgroup_cpu_limit_reads_the_v2_files)
     BOOST_CHECK_EQUAL(Describe(IncompleteLine), LimitUnder(root.Path()));
     std::filesystem::remove(root.Path() / "proc/self/cgroup");
     BOOST_CHECK_EQUAL(Describe(NoCgroup), LimitUnder(root.Path()));
+    std::filesystem::create_symlink("cgroup", root.Path() / "proc/self/cgroup");
+    BOOST_CHECK_EQUAL(Describe(SyscallFailed), LimitUnder(root.Path()));
+    std::filesystem::remove(root.Path() / "proc/self/cgroup");
     std::filesystem::create_directory(root.Path() / "proc/self/cgroup");
     BOOST_CHECK_EQUAL(Describe(SyscallFailed), LimitUnder(root.Path()));
     std::filesystem::remove(root.Path() / "proc/self/cgroup");
@@ -534,6 +538,9 @@ BOOST_AUTO_TEST_CASE(cgroup_cpu_limit_reads_the_v2_files)
     BOOST_CHECK_EQUAL(Describe(NoCgroup), LimitUnder(root.Path()));
     root.Write("proc/self/mountinfo", "garbage\n");
     BOOST_CHECK_EQUAL(Describe(MalformedFile), LimitUnder(root.Path()));
+    std::filesystem::remove(root.Path() / "proc/self/mountinfo");
+    std::filesystem::create_symlink("mountinfo", root.Path() / "proc/self/mountinfo");
+    BOOST_CHECK_EQUAL(Describe(SyscallFailed), LimitUnder(root.Path()));
     std::filesystem::remove(root.Path() / "proc/self/mountinfo");
     std::filesystem::create_directory(root.Path() / "proc/self/mountinfo");
     BOOST_CHECK_EQUAL(Describe(SyscallFailed), LimitUnder(root.Path()));

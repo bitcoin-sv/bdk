@@ -40,6 +40,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#include <cfile_util.h>
 #include <utilstrencodings.h>
 
 // The affinity mask is Linux's; elsewhere it is not read. The cgroup files are
@@ -369,35 +370,15 @@ std::variant<double, CgroupError> bsv::internal::ParseV1Limit(
     return QuotaPerPeriod(std::get<int64_t>(quotaValue), std::get<int64_t>(periodValue));
 }
 
-namespace
+// The descriptor, or open()'s errno.
+static std::variant<UniqueFileDescriptor, int> OpenReadOnly(
+    const std::filesystem::path& path)
 {
+    const int fd = open(path.c_str(), O_RDONLY | O_CLOEXEC);
+    if(fd < 0)
+        return errno;
 
-    // A file descriptor from open(), closed with this; -1 when open() failed.
-    class File
-    {
-    public:
-        explicit File(const std::filesystem::path& path):
-            fd_{open(path.c_str(), O_RDONLY | O_CLOEXEC)}
-        {
-        }
-
-        ~File()
-        {
-            if(fd_ >= 0)
-                close(fd_);
-        }
-
-        File(const File&) = delete;
-        File& operator=(const File&) = delete;
-        File(File&&) = delete;
-        File& operator=(File&&) = delete;
-
-        [[nodiscard]] int Fd() const { return fd_; }
-
-    private:
-        int fd_;
-    };
-
+    return UniqueFileDescriptor{fd};
 }
 
 // The contents of proc/self/cgroup or proc/self/mountinfo, opened and read as
@@ -406,17 +387,18 @@ namespace
 static std::variant<std::string, CgroupError> ReadProcFile(
     const std::filesystem::path& path)
 {
-    const File file(path);
-    if(file.Fd() < 0)
-        return errno == ENOENT ? CgroupError::NoCgroup : CgroupError::SyscallFailed;
+    const auto file = OpenReadOnly(path);
+    if(const int* error = std::get_if<int>(&file))
+        return *error == ENOENT ? CgroupError::NoCgroup : CgroupError::SyscallFailed;
 
+    const int fd = std::get<UniqueFileDescriptor>(file).Get();
     constexpr size_t CHUNK_SIZE = 4096;
     std::string content;
     for(;;)
     {
         const size_t size = content.size();
         content.resize(size + CHUNK_SIZE);
-        const ssize_t bytes = read(file.Fd(), content.data() + size, CHUNK_SIZE);
+        const ssize_t bytes = read(fd, content.data() + size, CHUNK_SIZE);
         if(bytes < 0)
             return CgroupError::SyscallFailed;
 
@@ -429,10 +411,11 @@ static std::variant<std::string, CgroupError> ReadProcFile(
 // A cgroup value file, read from the start with one 64-byte pread as Go's
 // readV1Number and readV2Limit do: SyscallFailed when the read fails,
 // MalformedFile when the file fills the buffer.
-static std::variant<std::string, CgroupError> ReadValueFile(const File& file)
+static std::variant<std::string, CgroupError> ReadValueFile(
+    const UniqueFileDescriptor& file)
 {
     std::array<char, 64> buffer{};
-    const ssize_t bytes = pread(file.Fd(), buffer.data(), buffer.size(), 0);
+    const ssize_t bytes = pread(file.Get(), buffer.data(), buffer.size(), 0);
     if(bytes < 0)
         return CgroupError::SyscallFailed;
 
@@ -511,33 +494,36 @@ std::variant<double, CgroupError> bsv::internal::CgroupCpuLimit(
     // Each value file is opened before any is read, as in Go's OpenCPU.
     if(cgroup.version == CgroupVersion::V2)
     {
-        const File cpuMax(cgroupDir / "cpu.max");
-        if(cpuMax.Fd() < 0)
+        const auto cpuMax = OpenReadOnly(cgroupDir / "cpu.max");
+        const auto* cpuMaxFile = std::get_if<UniqueFileDescriptor>(&cpuMax);
+        if(!cpuMaxFile)
             return CgroupError::SyscallFailed;
 
-        const auto content = ReadValueFile(cpuMax);
+        const auto content = ReadValueFile(*cpuMaxFile);
         if(const auto* error = std::get_if<CgroupError>(&content))
             return *error;
 
         return ParseV2Limit(std::get<std::string>(content));
     }
 
-    const File quota(cgroupDir / "cpu.cfs_quota_us");
-    const File period(cgroupDir / "cpu.cfs_period_us");
-    if(quota.Fd() < 0 || period.Fd() < 0)
+    const auto quota = OpenReadOnly(cgroupDir / "cpu.cfs_quota_us");
+    const auto period = OpenReadOnly(cgroupDir / "cpu.cfs_period_us");
+    const auto* quotaFile = std::get_if<UniqueFileDescriptor>(&quota);
+    const auto* periodFile = std::get_if<UniqueFileDescriptor>(&period);
+    if(!quotaFile || !periodFile)
         return CgroupError::SyscallFailed;
 
     // Go's ReadCPULimit reports any v1 read error as MalformedFile, and reads
     // the period only after a quota that is a limit. A file that does not read
     // is passed on as empty, which ParseV1Limit treats the same way on both
     // counts.
-    const auto contentOrEmpty = [](const File& file)
+    const auto contentOrEmpty = [](const UniqueFileDescriptor& file)
     {
         auto content = ReadValueFile(file);
         auto* text = std::get_if<std::string>(&content);
         return text ? std::move(*text) : std::string();
     };
-    return ParseV1Limit(contentOrEmpty(quota), contentOrEmpty(period));
+    return ParseV1Limit(contentOrEmpty(*quotaFile), contentOrEmpty(*periodFile));
 }
 
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters): a count and a limit, by name
