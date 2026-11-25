@@ -100,6 +100,12 @@ function(bdkSetMinimumListBSVSource)############################################
   bdkAppendToGlobalSet(BSV_INCLUDE_DIRS "${BDK_BSV_ROOT_DIR}/src")
   bdkAppendToGlobalSet(BSV_INCLUDE_DIRS "${BDK_BSV_ROOT_DIR}/src/crypto")
   bdkAppendToGlobalSet(BSV_INCLUDE_DIRS "${BDK_BSV_ROOT_DIR}/src/script")
+  ## tl::expected: the node's own from develop on, else BDK's copy of it
+  if(EXISTS "${BDK_BSV_ROOT_DIR}/src/expected/include/tl/expected.hpp")
+    bdkAppendToGlobalSet(BSV_INCLUDE_DIRS "${BDK_BSV_ROOT_DIR}/src/expected/include")
+  else()
+    bdkAppendToGlobalSet(BSV_INCLUDE_DIRS "${CMAKE_SOURCE_DIR}/third_party/expected/include")
+  endif()
 
   set(_minimal_hdr_files
       "src/amount.h"  ##  Used by [amount.cpp], [base58.cpp], [block.cpp], [chainparams.cpp], [config.cpp], [core_read.cpp], [core_write.cpp], [dstencode.cpp], [fRequireStandard.cpp], [interpreter.cpp], [merkle.cpp], [scriptcache.cpp], [sigcache.cpp], [standard.cpp], [transaction.cpp], [utilmoneystr.cpp]
