@@ -181,7 +181,7 @@ function(bdkSetMinimumListBSVSource)############################################
       "src/arith_uint256.cpp"
       "src/base58.cpp"
       "src/big_int.cpp"
-      "src/cfile_util.cpp"  ##  UniqueFileDescriptor, used by core/detail/cpu_limit.cpp
+      "src/cfile_util.cpp"  ##  UniqueFileDescriptor, used by core/detail/file_io.cpp
       "src/chainparams.cpp"
       "src/chainparamsbase.cpp"
       "src/configscriptpolicy.cpp"
