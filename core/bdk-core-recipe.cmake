@@ -131,12 +131,12 @@ function(bdk_add_core_library target)
   set_property(TARGET ${target} PROPERTY FOLDER "core")
 
   ## Export the extra-header list for the caller's install/unified-header blocks.
-  ## core/internal/ headers are built with the core and used by its tests, but
+  ## core/detail/ headers are built with the core and used by its tests, but
   ## are not installed or part of the unified header.
   set(_core_installed_hdr_files "")
   foreach(_hdr ${_core_extra_hdr_files})
-    string(FIND "${_hdr}" "${BDK_CORE_RECIPE_DIR}/internal/" _internal_pos)
-    if(NOT _internal_pos EQUAL 0)
+    string(FIND "${_hdr}" "${BDK_CORE_RECIPE_DIR}/detail/" _detail_pos)
+    if(NOT _detail_pos EQUAL 0)
       list(APPEND _core_installed_hdr_files "${_hdr}")
     endif()
   endforeach()

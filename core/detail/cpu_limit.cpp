@@ -19,7 +19,7 @@
 // - Go reads the cgroup files once and re-reads the limit and the affinity
 //   mask periodically; BDK reads them on every EffectiveCpuCount call.
 
-#include <internal/cpu_limit.hpp>
+#include <detail/cpu_limit.hpp>
 
 #include <algorithm>
 #include <array>
@@ -133,9 +133,9 @@ static bool HasPathPrefix(const std::string_view path, const std::string_view ro
         && (path.size() == root.size() || path[root.size()] == '/');
 }
 
-using bsv::internal::CgroupError;
-using bsv::internal::CgroupVersion;
-using bsv::internal::CpuCgroup;
+using bsv::detail::CgroupError;
+using bsv::detail::CgroupVersion;
+using bsv::detail::CpuCgroup;
 
 // mountinfo escapes space, tab, newline and backslash as \ooo.
 static std::variant<std::string, CgroupError> UnescapeMountPath(
@@ -173,7 +173,7 @@ static std::variant<std::string, CgroupError> UnescapeMountPath(
 
 // Lines are "hierarchy-ID:controller-list:cgroup-path". Any line up to the v1
 // match that is malformed or has no '\n' rejects the file.
-std::variant<CpuCgroup, CgroupError> bsv::internal::FindCpuCgroup(
+std::variant<CpuCgroup, CgroupError> bsv::detail::FindCpuCgroup(
     const std::string_view cgroupFile)
 {
     std::optional<CpuCgroup> v2;
@@ -212,7 +212,7 @@ std::variant<CpuCgroup, CgroupError> bsv::internal::FindCpuCgroup(
 // separator and a type followed by a space; a cgroup mount also needs its
 // source. Roots are unescaped on mounts of the wanted type, and the mount
 // point on the match only.
-std::variant<std::string, CgroupError> bsv::internal::FindCpuCgroupDir(
+std::variant<std::string, CgroupError> bsv::detail::FindCpuCgroupDir(
     const std::string_view mountinfo,
     const CpuCgroup& cgroup)
 {
@@ -316,8 +316,7 @@ static double QuotaPerPeriod(const int64_t quota, const int64_t period)
 
 // Integers are SV Node's ParseInt64: base 10, an optional '+' or '-', the
 // whole string, int64 range.
-std::variant<double, CgroupError> bsv::internal::ParseV2Limit(
-    const std::string_view cpuMax)
+std::variant<double, CgroupError> bsv::detail::ParseV2Limit(const std::string_view cpuMax)
 {
     const size_t space = cpuMax.find(' ');
     if(space == std::string_view::npos)
@@ -351,9 +350,8 @@ static std::variant<int64_t, CgroupError> ParseV1Number(const std::string_view c
 }
 
 // NOLINTBEGIN(bugprone-easily-swappable-parameters): the two files, by name
-std::variant<double, CgroupError> bsv::internal::ParseV1Limit(
-    const std::string_view quota,
-    const std::string_view period)
+std::variant<double, CgroupError> bsv::detail::ParseV1Limit(const std::string_view quota,
+                                                            const std::string_view period)
 // NOLINTEND(bugprone-easily-swappable-parameters)
 {
     const auto quotaValue = ParseV1Number(quota);
@@ -415,7 +413,7 @@ static std::variant<std::string, CgroupError> ReadProcFile(
 static std::variant<std::string, CgroupError> ReadValueFile(
     const UniqueFileDescriptor& file)
 {
-    std::array<char, bsv::internal::VALUE_FILE_SIZE_LIMIT> buffer{};
+    std::array<char, bsv::detail::VALUE_FILE_SIZE_LIMIT> buffer{};
     const ssize_t bytes = pread(file.Get(), buffer.data(), buffer.size(), 0);
     if(bytes < 0)
         return CgroupError::SyscallFailed;
@@ -435,7 +433,7 @@ static std::variant<CpuCgroup, CgroupError> ReadCpuCgroup(
     if(const auto* error = std::get_if<CgroupError>(&content))
         return *error;
 
-    return bsv::internal::FindCpuCgroup(std::get<std::string>(content));
+    return bsv::detail::FindCpuCgroup(std::get<std::string>(content));
 }
 
 // The cgroup and the mountinfo file to find it in, both from proc/self, the
@@ -475,7 +473,7 @@ static std::variant<std::pair<CpuCgroup, std::string>, CgroupError> ReadCgroupAn
                      std::move(std::get<std::string>(mountinfo))};
 }
 
-std::variant<double, CgroupError> bsv::internal::CgroupCpuLimit(
+std::variant<double, CgroupError> bsv::detail::CgroupCpuLimit(
     const std::filesystem::path& root)
 {
     const auto files = ReadCgroupAndMounts(root);
@@ -528,7 +526,7 @@ std::variant<double, CgroupError> bsv::internal::CgroupCpuLimit(
 }
 
 // NOLINTNEXTLINE(bugprone-easily-swappable-parameters): a count and a limit, by name
-size_t bsv::internal::LimitCpuCount(const size_t cpus, const double cgroupLimit)
+size_t bsv::detail::LimitCpuCount(const size_t cpus, const double cgroupLimit)
 {
     // NaN, +Inf and every limit of at least `cpus` leave it unchanged, which
     // also keeps the conversion below in range.
@@ -541,9 +539,9 @@ size_t bsv::internal::LimitCpuCount(const size_t cpus, const double cgroupLimit)
     return std::min(std::max(count, MIN_LIMITED_CPUS), cpus);
 }
 
-size_t bsv::internal::CpuCountFrom(const std::optional<size_t> affinityCpus,
-                                   const size_t hardwareConcurrency,
-                                   const double cgroupLimit)
+size_t bsv::detail::CpuCountFrom(const std::optional<size_t> affinityCpus,
+                                 const size_t hardwareConcurrency,
+                                 const double cgroupLimit)
 {
     // hardware_concurrency() is 0 when it cannot tell.
     return std::max<size_t>(LimitCpuCount(affinityCpus.value_or(hardwareConcurrency),
@@ -551,7 +549,7 @@ size_t bsv::internal::CpuCountFrom(const std::optional<size_t> affinityCpus,
                             1);
 }
 
-size_t bsv::internal::EffectiveCpuCount(const std::filesystem::path& cgroupRoot)
+size_t bsv::detail::EffectiveCpuCount(const std::filesystem::path& cgroupRoot)
 {
     const auto limit = CgroupCpuLimit(cgroupRoot);
     const auto* value = std::get_if<double>(&limit);
