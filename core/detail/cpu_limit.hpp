@@ -1,7 +1,7 @@
 #pragma once
 
 // Internal to bdk_core and its tests. Not installed with the core headers
-// (core/bdk-core-recipe.cmake leaves core/internal/ out of the install list)
+// (core/bdk-core-recipe.cmake leaves core/detail/ out of the install list)
 // and not part of any language binding.
 
 #include <cstddef>
@@ -12,7 +12,7 @@
 #include <string_view>
 #include <variant>
 
-namespace bsv::internal
+namespace bsv::detail
 {
 
     enum class CgroupVersion : uint8_t
